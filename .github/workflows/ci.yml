@@ -1,0 +1,46 @@
+name: ci
+
+# ชั้น 0 ของ git.md 6.1 — ตรวจโครงสร้างและหลักการ ไม่ใช่พฤติกรรม
+# อยู่หน้าสุดเพราะ invariant ที่แพงที่สุดของระบบ (ADR-003, ADR-028, ADR-029)
+# เป็นการตรวจโครงสร้าง ซึ่งรันเสร็จก่อนเทสต์จะเริ่มด้วยซ้ำ
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    name: ชั้น 0 · โครงสร้างและหลักการ
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: ติดตั้ง
+        run: uv sync --frozen
+
+      - name: format + lint
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+
+      - name: type check
+        run: uv run mypy
+
+      - name: กฎการพึ่งพา (invariant 1 · ADR-003)
+        run: uv run lint-imports
+
+      - name: โครงแพ็กเกจตรงกับ design.md 2
+        run: uv run pytest tests/test_package_layout.py
+
+# job ที่จะเพิ่มเมื่อมีของให้รัน — อย่าเพิ่มก่อน ไม่งั้น CI จะแดงตั้งแต่วันแรก
+# แล้วคนจะเลิกดูผล (lessons_carried.md 4.4 · ตารางใน git.md 6.5)
+#
+#   gate  · validate config          → slice 1.2
+#   gate  · check_no_wall_clock.py   → slice 0.2 (invariant 14 · ADR-028)
+#   gate  · check_llm_isolation.py   → slice 0.3 (invariant 15 · ADR-029)
+#   test  · unit + invariant + eval  → slice 1.1 (ต้องมี service postgres)

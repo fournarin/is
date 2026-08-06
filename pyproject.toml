@@ -1,0 +1,81 @@
+[project]
+name = "is-pdm"
+version = "0.0.0"
+description = "ระบบคาดการณ์ซ่อมบำรุงและออก Ticket อัตโนมัติ"
+requires-python = ">=3.12,<3.13"
+
+# ยังไม่มี runtime dependency เพราะยังไม่มีโค้ดที่ใช้
+# เพิ่มเมื่อ slice ที่ใช้มันจริงเท่านั้น — ADR-008 ห้ามเพิ่มโดยไม่มี ADR
+# และ lessons_carried.md 4.4 เตือนเรื่องคีย์คอนฟิกที่ไม่มี consumer
+dependencies = []
+
+[dependency-groups]
+# เครื่องมือพัฒนาไม่ใช่ runtime dependency — ไม่ได้ถูกติดตั้งบนเครื่องโรงงาน
+# จึงไม่เข้าข่ายข้อห้ามของ ADR-008 ซึ่งพูดถึงของที่ต้องดูแลตอน deploy
+dev = [
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "import-linter>=2.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pdm"]
+
+# ─────────────────────────────────────────────────────────────
+# ruff
+# ─────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "SIM",      # simplify
+    "TID",      # tidy-imports (relative import ที่ข้ามโมดูล)
+    "RUF",
+]
+ignore = [
+    # RUF001-003 จับอักขระ unicode ที่หน้าตาคล้ายกัน เช่น – (en dash) กับ - (hyphen)
+    # กฎนี้มีไว้กัน homoglyph attack ในตัวระบุและสตริง ซึ่งไม่ใช่ความเสี่ยงของเรา
+    # แต่โปรเจกต์นี้เขียน docstring และคอมเมนต์เป็นภาษาไทยที่ใช้ – กับ — ตามปกติ
+    # ถ้าเปิดไว้จะฟ้องแทบทุกไฟล์จนคนเลิกอ่านผล lint — ซึ่งอันตรายกว่าที่กฎนี้กัน
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# import ข้ามโมดูลต้องเขียนเป็น absolute เสมอ เพื่อให้ import-linter
+# มองเห็นเส้นทางได้ครบ — relative import ที่ยาวจะทำให้กฎใน .importlinter
+# ตรวจไม่เจอ ซึ่งเป็นการปิดตาเครื่องมือที่บังคับ ADR-003 อยู่
+ban-relative-imports = "parents"
+
+# ─────────────────────────────────────────────────────────────
+# mypy
+# ─────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+
+# ─────────────────────────────────────────────────────────────
+# pytest
+# ─────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers -q"
+markers = [
+    "heavy: ต้องใช้ LLM หรือ GPU จริง — ไม่รันใน CI ปกติ (git.md 6.1 ชั้น 3)",
+]
