@@ -13,6 +13,7 @@ Individual Study ระยะเวลา 1 เทอม ของนักศ�
 หน้าจอและเหตุผลเบื้องหลังอยู่ที่ `docs-md/ui.md`
 กลไกที่ทำให้ระบบดีขึ้นตามเวลาอยู่ที่ `docs-md/feedback_loops.md`
 วิธีทำงานและการใช้ AI กับโปรเจกต์นี้อยู่ที่ `docs-md/workflow.md`
+กฎ git workflow, รูปแบบ commit/PR และ CI/CD อยู่ที่ `docs-md/git.md`
 บทเรียนที่ขนมาจากงานเดิม (และเส้นที่ห้ามข้าม) อยู่ที่ `docs-md/lessons_carried.md`
 
 ## เป้าหมายเดียวที่ต้องยึด
