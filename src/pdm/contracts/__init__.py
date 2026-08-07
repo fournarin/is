@@ -1,5 +1,6 @@
-"""สัญญาข้อมูล 8 ตัวที่ทุกโมดูลต่อกันผ่าน (design.md 13)
+"""The eight data contracts every other module connects through.
 
-แพ็กเกจนี้เป็น leaf — ห้าม import โมดูลอื่นใน pdm เด็ดขาด
-ถ้าไม่มีข้อนี้ กราฟการพึ่งพาจะกลายเป็นตาข่ายและกฎข้ออื่นเขียนไม่ได้ (ADR-030)
+This package is a leaf: it must never import another pdm module.
+Without that rule the dependency graph becomes a mesh and none of the
+other import rules can be expressed (ADR-030).
 """

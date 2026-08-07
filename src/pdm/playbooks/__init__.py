@@ -1,6 +1,6 @@
-"""คลัง playbook และลำดับการเสิร์ฟตอน runtime (ชั้น 2)
+"""Playbook store and the runtime serving order (layer 2).
 
-หนึ่งแถวต่อหนึ่ง (symptom_code, machine_model) ไม่มีสายเวอร์ชัน
-ประวัติอยู่ที่ WorkOrder.playbook_snapshot (ADR-018)
-ใบ draft ไม่ถูกเสิร์ฟทุกกรณี แม้ไม่มีอะไรให้ช่างเลย
+One row per (symptom_code, machine_model); no version chain. History lives in
+WorkOrder.playbook_snapshot instead (ADR-018). Draft playbooks are never
+served at runtime, not even when there is nothing else to give the technician.
 """

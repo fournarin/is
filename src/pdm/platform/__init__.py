@@ -1,4 +1,5 @@
-"""ของกลางที่ทุกโมดูลใช้ได้ — Clock, config loader, job queue, auth, audit, ObjectStore
+"""Shared infrastructure: Clock, config loader, job queue, auth, audit, ObjectStore.
 
-Clock เป็น port ตัวเดียวของทั้งระบบ ห้าม domain อ่านนาฬิกาเอง (ADR-028)
+Clock is the single time port for the whole system. Domain code must never
+read the system clock directly (ADR-028).
 """

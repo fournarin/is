@@ -1,5 +1,6 @@
-"""rule engine — สัญญาณเข้า Finding ออก (ชั้น 1)
+"""Rule engine. Signals in, Findings out (layer 1).
 
-รวมทั้งการตรวจจับ (เกินเกณฑ์แล้ว) และการคาดการณ์ (trend → ETA · ADR-020)
-Finding มี lifecycle และหน้าต่างกดทับกัน alarm flood (ADR-023)
+Covers both detection (threshold already crossed) and prediction
+(trend extrapolation to an ETA, ADR-020). Findings have a lifecycle and a
+suppression window that prevents alarm floods (ADR-023).
 """

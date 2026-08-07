@@ -1,4 +1,5 @@
-"""ปลายทางของ ticket หลัง adapter interface (ชั้น 4)
+"""Ticket destinations behind an adapter interface (layer 4).
 
-scheduler ไม่รู้ว่า ticket ไปลง CMMS ระบบเราเอง หรือแชท (ADR-012)
+The scheduler never learns whether a ticket lands in a CMMS, in our own system
+or in a chat client (ADR-012).
 """

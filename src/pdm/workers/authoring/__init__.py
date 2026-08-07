@@ -1,4 +1,4 @@
-"""worker-authoring — job class authoring เท่านั้น concurrency 1
+"""worker-authoring: job_class=authoring only, concurrency 1.
 
-เป็น process เดียวที่มีเส้นทาง network ไปถึง llm-server (ADR-029)
+The only process with a network route to llm-server (ADR-029).
 """

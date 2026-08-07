@@ -1,11 +1,13 @@
-"""โครงแพ็กเกจต้องตรงกับ docs-md/design.md 2 เสมอ
+"""The package layout must always match docs/architecture (design.md section 2).
 
-เทสต์นี้ไม่ได้ตรวจพฤติกรรม แต่ตรวจ **รูปทรง** — เพราะกฎใน .importlinter
-อ้างชื่อโมดูลตรง ๆ ถ้ามีคนเปลี่ยนชื่อหรือลบโมดูลทิ้ง กฎที่อ้างชื่อนั้น
-จะเงียบไปเฉย ๆ แทนที่จะล้ม ซึ่งแปลว่า ADR-003 และ ADR-030 จะหยุดถูกบังคับ
-โดยไม่มีใครรู้
+These tests check shape, not behaviour. .importlinter refers to module names as
+literal strings, so if somebody renames or deletes a module, every rule naming it
+goes quiet instead of failing. That would mean ADR-003 and ADR-030 silently stop
+being enforced, which is the one failure mode an import linter cannot catch on
+its own.
 
-และการห้ามมีโมดูลนอกรายการ กันไม่ให้โครงค่อย ๆ งอกจนกฎ import ตามไม่ทัน
+Rejecting modules outside the list keeps the tree from growing past what the
+import rules cover.
 """
 
 import importlib
@@ -14,7 +16,8 @@ import pkgutil
 import pdm
 import pdm.workers
 
-# ต้องตรงกับตารางใน design.md 2 — แก้ที่นี่ได้ก็ต่อเมื่อแก้เอกสารด้วย
+# Must match the module table in design.md section 2. Changing this list is only
+# allowed together with a change to that document.
 EXPECTED_MODULES = frozenset(
     {
         "contracts",
@@ -34,31 +37,33 @@ EXPECTED_MODULES = frozenset(
     }
 )
 
-# ADR-026 แยก worker เป็นสองบทบาทที่ต้องแยก process กันได้
+# ADR-026 splits the worker into two roles that must be able to run as separate
+# processes.
 EXPECTED_WORKER_ROLES = frozenset({"runtime", "authoring"})
 
 
 def _submodules(package: object) -> frozenset[str]:
     path = getattr(package, "__path__", None)
-    assert path is not None, f"{package} ไม่ใช่แพ็กเกจ"
+    assert path is not None, f"{package} is not a package"
     return frozenset(info.name for info in pkgutil.iter_modules(path))
 
 
-def test_ทุกโมดูลใน_design_md_มีอยู่จริงและ_import_ได้() -> None:
+def test_every_documented_module_exists_and_imports() -> None:
     for name in sorted(EXPECTED_MODULES):
         importlib.import_module(f"pdm.{name}")
 
 
-def test_ไม่มีโมดูลนอกรายการใน_design_md() -> None:
+def test_no_modules_beyond_the_documented_set() -> None:
     assert _submodules(pdm) == EXPECTED_MODULES
 
 
-def test_worker_มีสองบทบาทตาม_adr_026() -> None:
+def test_worker_has_the_two_roles_required_by_adr_026() -> None:
     assert _submodules(pdm.workers) == EXPECTED_WORKER_ROLES
 
 
-def test_ทุกโมดูลมี_docstring_บอกหน้าที่() -> None:
-    """โมดูลเปล่าที่ไม่บอกว่ามีไว้ทำอะไร คือร่องรอยที่ lessons_carried 4.4 เตือน"""
+def test_every_module_documents_its_role() -> None:
+    """An empty module that does not say what it is for is the kind of leftover
+    that lessons_carried.md section 4.4 warns about."""
     for name in sorted(EXPECTED_MODULES):
         module = importlib.import_module(f"pdm.{name}")
-        assert module.__doc__, f"pdm.{name} ไม่มี docstring บอกหน้าที่"
+        assert module.__doc__, f"pdm.{name} has no docstring describing its role"

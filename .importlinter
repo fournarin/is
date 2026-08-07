@@ -1,8 +1,9 @@
-# กฎการพึ่งพาระหว่างโมดูล — docs-md/design.md 2.2
+# Module dependency rules. See docs/architecture (design.md section 2.2).
 #
-# ไฟล์นี้คือสิ่งที่เปลี่ยนหลักการของโปรเจกต์จาก "ข้อตกลงในเอกสาร" เป็น
-# "สิ่งที่ละเมิดไม่ได้เชิงโครงสร้าง" ถ้ากฎข้อไหนต้องผ่อน ให้เขียน ADR ก่อน
-# ห้ามแก้ไฟล์นี้เงียบ ๆ เพราะการแก้ที่นี่หนึ่งบรรทัดมีผลเท่ากับการยกเลิก ADR
+# This file is what turns the project's principles from "an agreement written in
+# a document" into "structurally impossible to violate". Relaxing any rule here
+# requires a new ADR first. Never edit it quietly: changing one line has the same
+# effect as revoking an ADR.
 
 [importlinter]
 root_package = pdm
@@ -10,10 +11,10 @@ include_external_packages = False
 
 
 # ─────────────────────────────────────────────────────────────
-# invariant 1 · ข้อที่ให้ผลตอบแทนสูงที่สุดในระบบ (design.md 12)
+# Invariant 1 - the highest-leverage rule in the system (design.md section 12)
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:llm-build-time-only]
-name = llm/ ถูก import ได้จาก authoring/ เท่านั้น (ADR-003)
+name = llm/ is importable from authoring/ only (ADR-003)
 type = forbidden
 source_modules =
     pdm.contracts
@@ -30,29 +31,31 @@ source_modules =
     pdm.workers.runtime
 forbidden_modules =
     pdm.llm
-# ตรวจทั้งเส้นทางตรงและเส้นทางอ้อม — ถ้าตั้ง allow_indirect_imports จะเปิดช่อง
-# ให้ runtime เรียก llm ผ่านโมดูลคั่นกลาง ซึ่งคือสิ่งที่ ADR-003 กันอยู่พอดี
+# Indirect paths are checked too. Setting allow_indirect_imports here would let
+# runtime code reach the LLM through an intermediate module, which is precisely
+# what ADR-003 exists to prevent.
 
 
 # ─────────────────────────────────────────────────────────────
-# ADR-001 · ชั้น 3 ไม่รู้จักชั้น 1
+# ADR-001 - layer 3 knows nothing about layer 1
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:dispatch-blind-to-triggers]
-name = dispatch/ ห้าม import triggers/ (ADR-001, ADR-030)
+name = dispatch/ must not import triggers/ (ADR-001, ADR-030)
 type = forbidden
 source_modules =
     pdm.dispatch
 forbidden_modules =
     pdm.triggers
-# ทำได้เพราะ work/ คัดลอก machine_id, severity, finding_kind, eta ลงใบงาน
-# ตอนสร้าง แล้ว dispatch อ่านจากใบงานแทนการอ่าน Finding (ADR-030)
+# Possible because work/ copies machine_id, severity, finding_kind and eta onto
+# the work order at creation time, so dispatch reads the order rather than the
+# Finding (ADR-030).
 
 
 # ─────────────────────────────────────────────────────────────
-# runtime ไม่พึ่ง build time
+# Runtime must not depend on build time
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:runtime-not-depend-on-authoring]
-name = playbooks/, work/, dispatch/ ห้าม import authoring/
+name = playbooks/, work/ and dispatch/ must not import authoring/
 type = forbidden
 source_modules =
     pdm.playbooks
@@ -63,10 +66,10 @@ forbidden_modules =
 
 
 # ─────────────────────────────────────────────────────────────
-# design.md 7 · simulator ต้องรันหลายร้อย scenario ใน CI ได้
+# design.md section 7 - the simulator must run hundreds of scenarios in CI
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:sim-touches-domain-only]
-name = sim/ แตะได้แค่ contracts, dispatch, work, platform (ADR-030)
+name = sim/ may touch only contracts, dispatch, work and platform (ADR-030)
 type = forbidden
 source_modules =
     pdm.sim
@@ -80,15 +83,15 @@ forbidden_modules =
     pdm.sinks
     pdm.api
     pdm.workers
-# ข้อจำกัดที่แคบกว่านี้ (แตะได้แค่ dispatch/domain ไม่ใช่ทั้ง dispatch/)
-# เขียนได้เมื่อไฟล์ domain.py มีจริง — เพิ่มใน slice 1.x
+# The tighter form of this rule (sim may touch dispatch/domain but not all of
+# dispatch/) becomes expressible once domain.py files exist - added in slice 1.x.
 
 
 # ─────────────────────────────────────────────────────────────
-# ADR-030 · เงื่อนไขทางเทคนิคของกฎทุกข้อข้างบน
+# ADR-030 - the technical precondition for every rule above
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:contracts-is-leaf]
-name = contracts/ ห้าม import โมดูลอื่นใน pdm (ADR-030)
+name = contracts/ must not import any other pdm module (ADR-030)
 type = forbidden
 source_modules =
     pdm.contracts
@@ -109,20 +112,24 @@ forbidden_modules =
 
 
 # ─────────────────────────────────────────────────────────────
-# ADR-026 · สอง worker role ต้องไม่ปนกัน
+# ADR-026 - the two worker roles must stay separable
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:worker-roles-independent]
-name = worker-runtime กับ worker-authoring ต้องไม่ import กันเอง (ADR-026)
+name = worker-runtime and worker-authoring must not import each other (ADR-026)
 type = independence
 modules =
     pdm.workers.runtime
     pdm.workers.authoring
-# ถ้าสองบทบาทนี้ import กัน การแยก process จะไม่มีความหมาย เพราะ
-# entrypoint หนึ่งจะลาก dependency ของอีกอันเข้ามาทั้งก้อน
+# If the two roles imported each other, splitting them into separate processes
+# would be meaningless: one entrypoint would drag in the other's dependencies.
 
 
-# กฎที่ยังเขียนไม่ได้ในตอนนี้ และจะเพิ่มเมื่อมีของให้ตรวจ:
+# Rules that cannot be expressed yet, and what they are waiting for:
 #
-#   domain.py ทุกโมดูล ห้าม import repo.py ของใครก็ตาม และห้ามแตะชั้น DB
-#   → invariant 10 · เพิ่มใน slice 1.x เมื่อไฟล์ domain.py / repo.py มีจริง
-#     (import-linter ต้องการให้โมดูลที่อ้างถึงมีอยู่จริง)
+#   domain.py in every module must not import any repo.py, nor the database layer
+#   -> invariant 10. Added in slice 1.x once domain.py and repo.py exist
+#      (import-linter requires every module named in a contract to be real).
+#
+#   src/pdm/ must not import sqlalchemy or alembic
+#   -> ADR-031, rule 8. Needs include_external_packages = True and is added in
+#      slice 1.3 when those dependencies actually arrive.

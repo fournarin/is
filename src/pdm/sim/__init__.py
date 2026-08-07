@@ -1,5 +1,5 @@
-"""discrete-event simulator ของไลน์ผลิตและทีมช่าง
+"""Discrete-event simulator of the production line and the technician roster.
 
-ต้องมี line topology และ buffer ไม่ใช่แค่คิวงาน (ADR-021)
-import ได้แค่ contracts, dispatch/domain, work/domain, platform/clock
+Models line topology and buffers, not just a work queue (ADR-021).
+May import only contracts, dispatch/domain, work/domain and platform/clock.
 """

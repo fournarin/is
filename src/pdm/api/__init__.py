@@ -1,4 +1,5 @@
-"""entrypoint ฝั่ง HTTP (FastAPI)
+"""HTTP entrypoint (FastAPI).
 
-โหลด embedding + reranker ในโปรเซส แต่เข้าถึง llm-server ไม่ได้ (ADR-029)
+Loads the embedding and reranker models in process, but has no network route
+to llm-server (ADR-029).
 """

@@ -1,5 +1,6 @@
-"""เรียกโมเดลภาษา — build time เท่านั้น
+"""Language model access. Build time only.
 
-import ได้จาก authoring/ ที่เดียว บังคับด้วย .importlinter (ADR-003)
-และ api เข้าถึง llm-server ไม่ได้ในระดับ network ด้วย (ADR-029)
+Importable from authoring/ and nowhere else, enforced by .importlinter
+(ADR-003). The api container also has no network route to llm-server, so the
+rule holds at two independent layers (ADR-029).
 """

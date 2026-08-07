@@ -1,5 +1,5 @@
-"""ชั้น 3 — load gate, scoring, assignment, คำอธิบาย
+"""Layer 3: load gate, scoring, assignment and explanation.
 
-ต้องเป็นฟังก์ชันบริสุทธิ์ ห้าม query ฐานข้อมูลข้างในอัลกอริทึม
-เป็นเงื่อนไขของทั้ง simulator และ Loop 6 (design.md 7, ADR-022)
+Must stay a pure function. No database queries inside the algorithm. This is a
+precondition for both the simulator and feedback Loop 6 (design.md 7, ADR-022).
 """

@@ -1,5 +1,5 @@
-"""WorkOrder lifecycle — สร้าง ผูก playbook ปิดงาน ส่งต่อกะ
+"""WorkOrder lifecycle: creation, playbook binding, completion, shift handover.
 
-คัดลอกข้อเท็จจริงที่ scheduler ต้องใช้ลงใบงานตอนสร้าง เพื่อให้ dispatch
-ไม่ต้องอ่าน Finding (ADR-030)
+Copies the facts the scheduler needs onto the work order at creation time so
+that dispatch never has to read a Finding (ADR-030).
 """

@@ -1,5 +1,5 @@
-"""ระบบคาดการณ์ซ่อมบำรุงและออก Ticket อัตโนมัติ
+"""Predictive maintenance and automatic work-order dispatch.
 
-รูปทรงระบบและกฎการพึ่งพาอยู่ที่ docs-md/design.md หัวข้อ 1–2
-กฎ import ถูกบังคับด้วย .importlinter ใน CI ไม่ใช่ด้วยข้อตกลง
+System shape and dependency rules: docs/architecture (design.md sections 1-2).
+Import rules are enforced by .importlinter in CI, not by convention.
 """

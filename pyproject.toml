@@ -1,17 +1,18 @@
 [project]
 name = "is-pdm"
 version = "0.0.0"
-description = "ระบบคาดการณ์ซ่อมบำรุงและออก Ticket อัตโนมัติ"
+description = "Predictive maintenance and automatic work-order dispatch"
 requires-python = ">=3.12,<3.13"
 
-# ยังไม่มี runtime dependency เพราะยังไม่มีโค้ดที่ใช้
-# เพิ่มเมื่อ slice ที่ใช้มันจริงเท่านั้น — ADR-008 ห้ามเพิ่มโดยไม่มี ADR
-# และ lessons_carried.md 4.4 เตือนเรื่องคีย์คอนฟิกที่ไม่มี consumer
+# No runtime dependencies yet, because no code uses one. Add a dependency only
+# in the slice that actually needs it: ADR-008 forbids additions without an ADR,
+# and lessons_carried.md 4.4 warns about config entries with no consumer.
 dependencies = []
 
 [dependency-groups]
-# เครื่องมือพัฒนาไม่ใช่ runtime dependency — ไม่ได้ถูกติดตั้งบนเครื่องโรงงาน
-# จึงไม่เข้าข่ายข้อห้ามของ ADR-008 ซึ่งพูดถึงของที่ต้องดูแลตอน deploy
+# Development tools are not runtime dependencies: they are never installed on
+# the factory machine, so ADR-008 (which is about what has to be maintained at
+# deploy time) does not apply to them.
 dev = [
     "ruff>=0.14",
     "mypy>=1.18",
@@ -42,23 +43,25 @@ select = [
     "UP",       # pyupgrade
     "B",        # bugbear
     "SIM",      # simplify
-    "TID",      # tidy-imports (relative import ที่ข้ามโมดูล)
+    "TID",      # tidy-imports (relative imports that cross module boundaries)
     "RUF",
 ]
 ignore = [
-    # RUF001-003 จับอักขระ unicode ที่หน้าตาคล้ายกัน เช่น – (en dash) กับ - (hyphen)
-    # กฎนี้มีไว้กัน homoglyph attack ในตัวระบุและสตริง ซึ่งไม่ใช่ความเสี่ยงของเรา
-    # แต่โปรเจกต์นี้เขียน docstring และคอมเมนต์เป็นภาษาไทยที่ใช้ – กับ — ตามปกติ
-    # ถ้าเปิดไว้จะฟ้องแทบทุกไฟล์จนคนเลิกอ่านผล lint — ซึ่งอันตรายกว่าที่กฎนี้กัน
+    # RUF001-003 flag unicode characters that look like ASCII ones, e.g. an en
+    # dash against a hyphen. The rule guards against homoglyph attacks in
+    # identifiers and strings, which is not a threat we face, while the comment
+    # banners in this repo use box-drawing and dash characters throughout.
+    # Leaving it on would flag almost every file until nobody reads lint output,
+    # which is more dangerous than what the rule protects against.
     "RUF001",
     "RUF002",
     "RUF003",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
-# import ข้ามโมดูลต้องเขียนเป็น absolute เสมอ เพื่อให้ import-linter
-# มองเห็นเส้นทางได้ครบ — relative import ที่ยาวจะทำให้กฎใน .importlinter
-# ตรวจไม่เจอ ซึ่งเป็นการปิดตาเครื่องมือที่บังคับ ADR-003 อยู่
+# Cross-module imports must be absolute so that import-linter can see the full
+# path. Deep relative imports hide edges from the rules in .importlinter, which
+# blinds the tool that enforces ADR-003.
 ban-relative-imports = "parents"
 
 # ─────────────────────────────────────────────────────────────
@@ -77,5 +80,5 @@ warn_unreachable = true
 testpaths = ["tests"]
 addopts = "--strict-markers -q"
 markers = [
-    "heavy: ต้องใช้ LLM หรือ GPU จริง — ไม่รันใน CI ปกติ (git.md 6.1 ชั้น 3)",
+    "heavy: needs a real LLM or GPU; excluded from normal CI (tier 3)",
 ]

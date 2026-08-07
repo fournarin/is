@@ -1,4 +1,5 @@
-"""entrypoint ฝั่ง background — แยกสองบทบาทตาม ADR-026
+"""Background entrypoints, split into two roles by ADR-026.
 
-แยกเพราะงาน ingest คู่มือ 20 นาทีจะหยุดการออก ticket ทั้งระบบถ้าอยู่รวมกัน
+Split because a twenty-minute manual ingest would otherwise stall ticket
+dispatch for the whole system.
 """

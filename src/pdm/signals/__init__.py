@@ -1,4 +1,5 @@
-"""SignalSource สามตัว — synthetic / replay / live (ADR-002)
+"""Three SignalSource implementations: synthetic, replay and live (ADR-002).
 
-โค้ดส่วนที่เหลือคุยกับสัญญา Signal อย่างเดียว ไม่รู้ว่าข้างหลังเป็นอะไร
+The rest of the system talks only to the Signal contract and never learns
+which source is behind it.
 """

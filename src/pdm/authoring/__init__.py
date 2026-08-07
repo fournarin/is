@@ -1,4 +1,5 @@
-"""ingest คู่มือ ร่าง playbook ส่งเข้าคิวรีวิว (build time)
+"""Ingest manuals, draft playbooks, queue them for review (build time).
 
-ตั้งค่าให้ recall นำ เพราะมีวิศวกรรีวิวทุกใบก่อนถึงมือช่าง (ADR-015)
+Tuned for recall rather than precision because an engineer reviews every
+draft before it can reach a technician (ADR-015).
 """

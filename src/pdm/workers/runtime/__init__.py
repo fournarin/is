@@ -1,4 +1,4 @@
-"""worker-runtime — trigger loop, dispatch tick, reaper, job class runtime
+"""worker-runtime: trigger loop, dispatch tick, reaper, job_class=runtime.
 
-ห้ามหยิบงาน job_class = authoring เด็ดขาด (invariant 12)
+Must never pick up a job_class=authoring job (invariant 12).
 """
