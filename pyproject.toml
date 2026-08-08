@@ -7,7 +7,9 @@ requires-python = ">=3.12,<3.13"
 # No runtime dependencies yet, because no code uses one. Add a dependency only
 # in the slice that actually needs it: ADR-008 forbids additions without an ADR,
 # and lessons_carried.md 4.4 warns about config entries with no consumer.
-dependencies = []
+dependencies = [
+    "pydantic>=2.11",
+]
 
 [dependency-groups]
 # Development tools are not runtime dependencies: they are never installed on
