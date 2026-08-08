@@ -23,6 +23,12 @@ rather than per file, because even the store must not delete a stored blob.
 Not spelled `# noqa:`: that prefix belongs to ruff, which warns about codes it
 does not recognise. A hatch that makes the linter complain is a hatch somebody
 removes by deleting the comment rather than the call.
+
+What this does **not** cover is overwriting a blob in place - `open(path, "wb")`
+on a stored file. That is guarded at runtime instead, by storing blobs read-only,
+because a static check for it would have to tell a write to a blob apart from a
+write to any other file and would flag the object store's own upload path every
+time.
 """
 
 from __future__ import annotations
@@ -31,7 +37,10 @@ import re
 import sys
 from pathlib import Path
 
-SOURCE_ROOT = Path("src/pdm")
+# Relative to this file, not to the working directory. Resolved from the cwd it
+# scans nothing and exits 0 when run from anywhere but the repository root,
+# which is a gate that reports success by finding no files.
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "pdm"
 
 BANNED = re.compile(
     r"""(
@@ -48,6 +57,10 @@ ESCAPE_HATCH = "allow: temp-file"
 
 
 def main() -> int:
+    if not SOURCE_ROOT.is_dir():
+        print(f"{SOURCE_ROOT} does not exist, so this gate checked nothing.")
+        return 1
+
     violations: list[str] = []
 
     for path in sorted(SOURCE_ROOT.rglob("*.py")):

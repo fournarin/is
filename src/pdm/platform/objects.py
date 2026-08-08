@@ -24,6 +24,13 @@ Three properties this module exists to guarantee:
                                    fifty-megabyte scan into memory to serve two
                                    pages of it
 
+A process killed mid-upload leaves its `.part` file behind, and nothing sweeps
+them. That is deliberate: a timer deleting files on the volume that holds the
+system's evidence is precisely what ADR-019 refused, and the cost of the
+alternative is a few stray files after a hard kill, which an operator can see
+and remove. They are in `incoming/` rather than among the blobs so that the
+difference is obvious from a directory listing.
+
 Nothing here authorises anything. ADR-019 requires every read to pass through
 the API so it goes through RBAC and the access log; that check belongs at the
 endpoint, and this module is what the endpoint reads through.
@@ -44,13 +51,39 @@ STORAGE_ENV = "STORAGE_DIR"
 
 # Read in 1 MiB blocks. Large enough that hashing a scanned manual is not
 # dominated by syscalls, small enough that concurrent uploads do not each hold
-# a large buffer.
-_CHUNK = 1024 * 1024
+# a large buffer. Public because every caller that streams a document has to
+# make the same trade, and two different answers to it would be an accident.
+READ_CHUNK_BYTES = 1024 * 1024
 
 # Stored blobs are read-only. It does not stop a determined `chmod`, but it
 # turns "the application must never modify or delete a blob" from a rule
 # somebody has to remember into an error somebody has to explain.
 _READ_ONLY = 0o444
+
+
+def _fsync_directory(path: Path) -> None:
+    """Make a rename survive a power cut.
+
+    The bytes are already fsynced, but on most filesystems the *directory entry*
+    the rename created is not, and losing it loses the blob. That matters here
+    more than it usually would: the document row commits durably in PostgreSQL,
+    so a crash in this window leaves a row whose file is gone - which is exactly
+    the state that writing the blob before the row is meant to make impossible.
+
+    Not every platform supports opening a directory. Where it is not available
+    the write is still atomic, just not durable across a power loss, so the
+    failure is ignored rather than turned into a failed upload.
+    """
+    try:
+        handle = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(handle)
+    except OSError:
+        pass
+    finally:
+        os.close(handle)
 
 
 class ObjectNotFound(KeyError):
@@ -135,7 +168,7 @@ class FilesystemObjectStore:
 
         try:
             with temporary.open("wb") as sink:
-                while chunk := source.read(_CHUNK):
+                while chunk := source.read(READ_CHUNK_BYTES):
                     digest.update(chunk)
                     sink.write(chunk)
                 sink.flush()
@@ -153,6 +186,7 @@ class FilesystemObjectStore:
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(temporary, target)
             target.chmod(_READ_ONLY)
+            _fsync_directory(target.parent)
             return document_id
         finally:
             # Only ever the temporary file, never a stored blob. After a

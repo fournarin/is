@@ -53,7 +53,7 @@ class Document(BaseModel):
     content_type: str = Field(min_length=1)
     size_bytes: int = Field(ge=0)
 
-    machine_model: MachineModel
+    machine_model: MachineModel = Field(min_length=1)
     title: str = Field(min_length=1)
     # As printed on the document. Free text because "Rev C", "3rd edition" and
     # "2024-06" are all things a manual says about itself, and normalising them
@@ -61,7 +61,7 @@ class Document(BaseModel):
     edition: str | None = None
 
     status: DocumentStatus = DocumentStatus.ACTIVE
-    uploaded_by: UserId
+    uploaded_by: UserId = Field(min_length=1)
     uploaded_at: datetime
     withdrawn_at: datetime | None = None
 

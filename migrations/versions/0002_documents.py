@@ -38,13 +38,13 @@ def upgrade() -> None:
             content_type  text NOT NULL CHECK (length(content_type) > 0),
             size_bytes    bigint NOT NULL CHECK (size_bytes >= 0),
 
-            machine_model text NOT NULL,
+            machine_model text NOT NULL CHECK (length(machine_model) > 0),
             title         text NOT NULL CHECK (length(title) > 0),
             edition       text,
 
             status        text NOT NULL CHECK (status IN ('active', 'withdrawn')),
 
-            uploaded_by   text NOT NULL,
+            uploaded_by   text NOT NULL CHECK (length(uploaded_by) > 0),
             uploaded_at   timestamptz NOT NULL,
             withdrawn_at  timestamptz,
 

@@ -22,6 +22,14 @@ _COLUMNS = """
 """
 
 
+class DocumentModelConflict(Exception):
+    """These bytes are already registered for a different machine model."""
+
+
+class DocumentRegistrationConflict(Exception):
+    """The row conflicted on insert and this transaction cannot see it."""
+
+
 def _to_document(row: dict[str, Any]) -> Document:
     return Document.model_validate(row)
 
@@ -77,7 +85,29 @@ def insert(
         return _to_document(row)
 
     existing = by_id(conn, document_id)
-    assert existing is not None, "the insert conflicted, so the row is there"
+    if existing is None:
+        # The insert conflicted, so a row exists - unless this transaction
+        # cannot see it, which under REPEATABLE READ is a snapshot older than
+        # the concurrent commit that caused the conflict. Rare, real, and not an
+        # assert: assertions strip under -O, and this function would then return
+        # None from a signature that promises a Document.
+        raise DocumentRegistrationConflict(document_id)
+
+    if existing.machine_model != machine_model:
+        # The same PDF registered for a second machine model. Accepting it
+        # silently is the harmful option: the caller is told the document was
+        # stored and it never appears in the new model's listing, because
+        # content addressing gives one row per file.
+        #
+        # A manual genuinely covering two models needs a link table. Nothing in
+        # the corpus is like that, so this refuses and says why rather than
+        # inventing the table now.
+        raise DocumentModelConflict(
+            f"{document_id} is already registered for {existing.machine_model}, "
+            f"not {machine_model}. One file is one document (ADR-019); a manual "
+            f"covering two machine models needs a link table that does not exist."
+        )
+
     return existing
 
 

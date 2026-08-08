@@ -7,8 +7,10 @@ enqueueing the ingest job that follows commit together (ADR-017).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from contextlib import contextmanager
+from io import BytesIO
 from typing import Any, BinaryIO
 
 from psycopg import Connection
@@ -17,7 +19,7 @@ from pdm.contracts import DocumentId, MachineModel, UserId
 from pdm.platform.clock import Clock
 from pdm.platform.documents import repo
 from pdm.platform.documents.domain import Document, DocumentStatus
-from pdm.platform.objects import ObjectNotFound, ObjectStore
+from pdm.platform.objects import READ_CHUNK_BYTES, ObjectNotFound, ObjectStore
 
 
 class DocumentLibrary:
@@ -39,6 +41,30 @@ class DocumentLibrary:
         uploaded_by: UserId,
         edition: str | None = None,
     ) -> Document:
+        """Register a manual held in memory. See `add_stream` for the rest."""
+        return self.add_stream(
+            conn,
+            source=BytesIO(content),
+            filename=filename,
+            content_type=content_type,
+            machine_model=machine_model,
+            title=title,
+            uploaded_by=uploaded_by,
+            edition=edition,
+        )
+
+    def add_stream(
+        self,
+        conn: Connection[Any],
+        *,
+        source: BinaryIO,
+        filename: str,
+        content_type: str,
+        machine_model: MachineModel,
+        title: str,
+        uploaded_by: UserId,
+        edition: str | None = None,
+    ) -> Document:
         """Store the bytes, then register them.
 
         **That order is the whole design of this method.** Blob first means a
@@ -51,14 +77,23 @@ class DocumentLibrary:
         Nothing collects the orphans. ADR-019 has no cleanup job for exactly
         this reason: a task that removes a file a snapshot might cite trades a
         few kilobytes for the evidence behind a closed work order.
+
+        Streaming is the real entry point and `add` is the convenience: a
+        scanned manual is tens of megabytes, and an upload endpoint that has to
+        buffer each one whole before storing it is a memory limit waiting to be
+        found on the plant's own hardware.
+
+        Raises `DocumentModelConflict` if these bytes are already registered
+        under a different machine model - see that exception for why it is not
+        simply accepted.
         """
-        document_id = self.store.put(content)
+        document_id = self.store.put_stream(source)
         return repo.insert(
             conn,
             document_id=document_id,
             filename=filename,
             content_type=content_type,
-            size_bytes=len(content),
+            size_bytes=self.store.size(document_id),
             machine_model=machine_model,
             title=title,
             edition=edition,
@@ -111,13 +146,23 @@ class DocumentLibrary:
         return self.store.size(document.document_id)
 
     def is_intact(self, document: Document) -> bool:
-        """Whether the blob behind a row is still there.
+        """Whether the blob behind a row is still the bytes it claims to be.
 
-        Nothing in the application deletes one, so a false answer means the
-        volume was restored from an incomplete backup or somebody worked on it
-        by hand. Worth being able to ask before an audit rather than during one.
+        Re-hashes the file rather than comparing its length, because the id *is*
+        the sha256: a size check would pass corruption that kept the same
+        length, which is most of what a damaged restore produces. It therefore
+        reads the whole document, and is for auditing a library rather than for
+        answering a request.
+
+        Nothing in the application deletes or rewrites a blob, so a false answer
+        means an incomplete restore or somebody working on the volume by hand.
+        Worth being able to ask before an audit rather than during one.
         """
+        digest = hashlib.sha256()
         try:
-            return self.store.size(document.document_id) == document.size_bytes
+            with self.store.open(document.document_id) as handle:
+                while chunk := handle.read(READ_CHUNK_BYTES):
+                    digest.update(chunk)
         except ObjectNotFound:
             return False
+        return digest.hexdigest() == document.document_id

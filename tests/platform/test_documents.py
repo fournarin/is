@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ from pdm.contracts import DocumentId, MachineModel, UserId
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.documents import Document, DocumentLibrary, DocumentStatus
 from pdm.platform.documents import repo as document_repo
+from pdm.platform.documents.repo import DocumentModelConflict
 from pdm.platform.objects import FilesystemObjectStore
 
 pytestmark = pytest.mark.db
@@ -125,6 +127,37 @@ class TestRegistering:
         assert third.document_id != fourth.document_id
         with library.open(third) as handle:
             assert handle.read() == MANUAL
+
+    def test_the_same_file_under_a_second_machine_model_is_refused(
+        self, library: DocumentLibrary, conn: Connection[Any]
+    ) -> None:
+        """Content addressing gives one row per file, so accepting this quietly
+        would report success and then never list the document under the second
+        model. A manual genuinely covering two models needs a link table, and
+        refusing says so instead of inventing one."""
+        _add(library, conn, machine_model=R2000IC)
+
+        with pytest.raises(DocumentModelConflict, match="link table"):
+            _add(library, conn, machine_model=M710IC)
+
+    def test_a_stream_is_stored_without_being_read_whole(
+        self, library: DocumentLibrary, conn: Connection[Any]
+    ) -> None:
+        """The path an upload endpoint will take. A scanned manual is tens of
+        megabytes and buffering each one before storing it is a memory limit
+        waiting to be found on the plant's own hardware."""
+        document = library.add_stream(
+            conn,
+            source=BytesIO(MANUAL),
+            filename="streamed.pdf",
+            content_type="application/pdf",
+            machine_model=R2000IC,
+            title="R-2000iC Maintenance Manual",
+            uploaded_by=OPERATOR,
+        )
+
+        assert document.size_bytes == len(MANUAL)
+        assert library.is_intact(document)
 
     def test_the_blob_is_written_before_the_row(
         self, library: DocumentLibrary, conn: Connection[Any]
@@ -267,3 +300,18 @@ class TestTheRowIsNotTheFile:
 
         detached = document.model_copy(update={"document_id": DocumentId("c" * 64)})
         assert not library.is_intact(detached)
+
+    def test_corruption_that_keeps_the_same_length_is_still_caught(
+        self, library: DocumentLibrary, conn: Connection[Any], tmp_path: Path
+    ) -> None:
+        """Why is_intact re-hashes instead of comparing sizes. Most of what a
+        damaged restore produces is the same number of bytes, differently."""
+        document = _add(library, conn)
+        blob = (
+            tmp_path / document.document_id[:2] / document.document_id[2:4] / document.document_id
+        )
+        blob.chmod(0o644)
+        blob.write_bytes(b"x" * len(MANUAL))
+
+        assert library.size(document) == document.size_bytes
+        assert not library.is_intact(document)
