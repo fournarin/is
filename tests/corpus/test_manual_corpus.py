@@ -24,6 +24,7 @@ import pytest
 
 from fixtures.corpus import CORPUS, Corpus, ManualDocument, PageRef
 from fixtures.corpus.pages import MANUALS
+from pdm.authoring.parsing import parse
 from pdm.platform.config import load_config
 
 REPO_CONFIG = Path("config")
@@ -285,6 +286,39 @@ class TestTheManifestAgreesWithTheText:
         every recorded page reference quietly wrong."""
         for manual in MANUALS:
             assert [page.number for page in manual.pages] == list(range(1, len(manual.pages) + 1))
+
+    def test_the_pdf_itself_has_the_pages_the_manifest_claims(self, corpus: Corpus) -> None:
+        """The check that was missing, and the one that mattered.
+
+        The manifest was cross-checked against pages.py and pages.py against the
+        manifest, and **neither was ever checked against the PDF**. The footer
+        was being written past the auto page-break margin, so every footer
+        landed on a page of its own: an eleven-page manual was twenty-two
+        physical pages, and every page number in the answer key pointed at the
+        wrong one. Both files agreed with each other the whole time.
+        """
+        for document in corpus.documents:
+            parsed = parse(document.path.read_bytes())
+            assert len(parsed.pages) == document.pages, (
+                f"{document.filename} has {len(parsed.pages)} physical pages, "
+                f"the manifest says {document.pages}"
+            )
+
+    def test_the_printed_page_number_matches_the_physical_page(self, corpus: Corpus) -> None:
+        """A citation names the number printed on the page; ingest resolves it
+        through the page's position in the file. If those two disagree, every
+        recorded provenance is off and the documents still look fine."""
+        for document in corpus.documents:
+            for page in parse(document.path.read_bytes()).pages:
+                assert page.text.splitlines()[-1] == f"page {page.page}"
+
+    def test_every_page_of_the_corpus_yields_text(self, corpus: Corpus) -> None:
+        """The corpus is generated text, so coverage below 1.0 means the layout
+        produced a page nothing can read - which is what a scan looks like to
+        the parser, and would silently shrink the searchable manual
+        (ADR-034)."""
+        for document in corpus.documents:
+            assert parse(document.path.read_bytes()).coverage == 1.0
 
     def test_the_lockout_page_is_the_page_about_lockout(self, corpus: Corpus) -> None:
         """Every corrective procedure in the corpus begins by citing it."""

@@ -134,11 +134,14 @@ source_modules =
     pdm.platform.jobs.domain
     pdm.platform.documents.domain
     pdm.signals.domain
+    pdm.authoring.domain
+    pdm.retrieval.domain
 forbidden_modules =
     pdm.platform.db
     pdm.platform.jobs.repo
     pdm.platform.documents.repo
     pdm.platform.objects
+    pdm.retrieval.repo
     psycopg
 # The rule that turns "dispatch() must be a pure function" from an agreement
 # into something the build refuses to accept. Extend source_modules as each

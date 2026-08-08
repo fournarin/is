@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Thirty-three decisions, in the order they were made. Each records the context that
+Thirty-four decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -45,6 +45,7 @@ entries replace parts of earlier ones, and both are kept.
 | [031](0031-plain-sql-against-postgres-no-orm.md) | Plain SQL against PostgreSQL, no ORM | |
 | [032](0032-what-the-synthetic-source-guarantees.md) | What `SyntheticSource` guarantees, and what it cannot | |
 | [033](0033-a-synthetic-manual-corpus-that-carries-its-own-answer-key.md) | A synthetic manual corpus, carrying its own answer key | |
+| [034](0034-pdf-text-with-page-provenance-and-what-happens-when-there-is-none.md) | PDF text with page provenance, and pages that yield none | |
 
 ## Where to start
 
