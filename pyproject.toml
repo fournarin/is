@@ -1,0 +1,84 @@
+[project]
+name = "is-pdm"
+version = "0.0.0"
+description = "Predictive maintenance and automatic work-order dispatch"
+requires-python = ">=3.12,<3.13"
+
+# No runtime dependencies yet, because no code uses one. Add a dependency only
+# in the slice that actually needs it: ADR-008 forbids additions without an ADR,
+# and lessons_carried.md 4.4 warns about config entries with no consumer.
+dependencies = []
+
+[dependency-groups]
+# Development tools are not runtime dependencies: they are never installed on
+# the factory machine, so ADR-008 (which is about what has to be maintained at
+# deploy time) does not apply to them.
+dev = [
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "import-linter>=2.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pdm"]
+
+# ─────────────────────────────────────────────────────────────
+# ruff
+# ─────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "SIM",      # simplify
+    "TID",      # tidy-imports (relative imports that cross module boundaries)
+    "RUF",
+]
+ignore = [
+    # RUF001-003 flag unicode characters that look like ASCII ones, e.g. an en
+    # dash against a hyphen. The rule guards against homoglyph attacks in
+    # identifiers and strings, which is not a threat we face, while the comment
+    # banners in this repo use box-drawing and dash characters throughout.
+    # Leaving it on would flag almost every file until nobody reads lint output,
+    # which is more dangerous than what the rule protects against.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Cross-module imports must be absolute so that import-linter can see the full
+# path. Deep relative imports hide edges from the rules in .importlinter, which
+# blinds the tool that enforces ADR-003.
+ban-relative-imports = "parents"
+
+# ─────────────────────────────────────────────────────────────
+# mypy
+# ─────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+
+# ─────────────────────────────────────────────────────────────
+# pytest
+# ─────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers -q"
+markers = [
+    "heavy: needs a real LLM or GPU; excluded from normal CI (tier 3)",
+]

@@ -1,0 +1,48 @@
+name: ci
+
+# Tier 0 of the test pyramid: structure and principles, not behaviour.
+# It runs first because the most expensive invariants in this system
+# (ADR-003, ADR-028, ADR-029) are structural checks that finish before the test
+# suite has even installed its dependencies.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    name: tier 0 - structure and principles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: install
+        run: uv sync --frozen
+
+      - name: format + lint
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+
+      - name: type check
+        run: uv run mypy
+
+      - name: dependency rules (invariant 1, ADR-003)
+        run: uv run lint-imports
+
+      - name: package layout matches the architecture doc
+        run: uv run pytest tests/test_package_layout.py
+
+# Steps to add once there is something for them to check. Do not add them early:
+# a CI run that is red from day one is a CI run nobody reads
+# (lessons_carried.md 4.4, and the table in git.md section 6.5).
+#
+#   gate - validate config             -> slice 1.2
+#   gate - check_no_wall_clock.py      -> slice 0.2 (invariant 14, ADR-028)
+#   gate - check_llm_isolation.py      -> slice 0.3 (invariant 15, ADR-029)
+#   test - unit + invariants + eval    -> slice 1.1 (needs a postgres service)
