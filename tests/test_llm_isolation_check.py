@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from scripts.check_llm_isolation import COMPOSE, check
 
 GOOD = """

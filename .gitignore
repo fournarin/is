@@ -33,6 +33,16 @@ manuals/
 *.pdf
 !docs-md/**/*.pdf
 
+# The one exception, deliberately narrow (ADR-033). The synthetic corpus has to
+# be committed because ADR-019 makes a document's sha256 its id, so generating
+# the files at test time would tie every id to a PDF library version. It is not
+# in a directory called manuals/ so that the rule above keeps applying to
+# anything that is.
+#
+# What notices a real manual being dropped in here is the sha256 manifest test,
+# which fails on any PDF added, changed or removed.
+!fixtures/corpus/*.pdf
+
 # ─────────────────────────────────────────────────────────────
 # Secrets
 # ─────────────────────────────────────────────────────────────
