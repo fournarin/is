@@ -1,0 +1,93 @@
+# Detection rules, and the component labels they are allowed to name.
+#
+# The two live in one file on purpose (ADR-016). Component labels are not
+# entities in the database: there is no owner for a parts taxonomy, manuals are
+# indexed per machine rather than per part, and master data with no owner becomes
+# master data that is wrong, which is worse than none. Keeping the labels beside
+# the rules that use them means they cannot drift apart, and a rule naming a label
+# that is not listed stops the boot (invariant 7).
+#
+# Thresholds below are placeholders. Real values come from the machine manuals,
+# which is where ADR-004 says they already exist - no training, no labels, and a
+# technician can read the rule and see why it fired.
+
+version: 1
+
+components:
+  R-2000iC:
+    - belt_motor
+    - servo_axis_1
+    - servo_axis_2
+    - cooling_fan
+    - hydraulic_pump
+  M-710iC:
+    - belt_motor
+    - servo_axis_1
+    - cooling_fan
+
+rules:
+  # Detection. The threshold has been crossed and the technician is told so.
+  - rule_id: R-motor-temp-high
+    machine_model: R-2000iC
+    component: belt_motor
+    symptom_code: SYM-014
+    metric_name: motor_temp_c
+    comparison: above
+    threshold: 85.0
+    # Two minutes of sustained excess, so one noisy sample is not a work order.
+    for_seconds: 120
+    severity: high
+    safety_critical: false
+
+  - rule_id: R-servo-current-high
+    machine_model: R-2000iC
+    component: servo_axis_1
+    symptom_code: SYM-021
+    metric_name: servo_current_a
+    comparison: above
+    threshold: 12.5
+    for_seconds: 60
+    severity: medium
+    safety_critical: false
+
+  # A safety-linked rule. ADR-022 forbids any feedback loop from proposing that
+  # this threshold be loosened, however many false alarms it produces; the answer
+  # there is to add conditions that make it more precise, never to make it less
+  # sensitive. The flag is what gives that prohibition something to act on, and it
+  # is set by the person writing the rule rather than guessed later.
+  - rule_id: R-safety-interlock-open
+    machine_model: R-2000iC
+    component: unknown
+    symptom_code: SYM-002
+    metric_name: interlock_closed
+    comparison: below
+    threshold: 1.0
+    for_seconds: 0
+    severity: critical
+    safety_critical: true
+
+  # The case ADR-009 requires phase 1 to prove: a line-level signal that cannot
+  # say which part is at fault. component "unknown" means layer 2 serves a
+  # fault-finding playbook rather than a repair one, which is the honest answer
+  # to "which part" when the signal does not carry it.
+  - rule_id: R-cycle-time-drift
+    machine_model: M-710iC
+    component: unknown
+    symptom_code: SYM-031
+    metric_name: cycle_time_s
+    comparison: above
+    threshold: 62.0
+    for_seconds: 600
+    severity: low
+    safety_critical: false
+
+  - rule_id: R-fan-rpm-low
+    machine_model: M-710iC
+    component: cooling_fan
+    symptom_code: SYM-047
+    metric_name: fan_rpm
+    comparison: below
+    threshold: 1200.0
+    for_seconds: 180
+    severity: medium
+    safety_critical: false

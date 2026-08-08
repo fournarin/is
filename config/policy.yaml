@@ -1,0 +1,94 @@
+# Tunable numbers: scoring weights, load gate, trigger timing, retrieval, fallbacks.
+#
+# Every constant in this project needs one of three provenances: a machine
+# manual, a measurement of our own, or a recorded decision. Values here say which
+# one they have. A number that looks reasonable but has no source is the same
+# thing as a playbook nobody approved - it looks fine until somebody asks why.
+
+version: 1
+
+# ── scoring ────────────────────────────────────────────────────────────────
+# Provenance: none of the three. These are starting values, and they are the one
+# group in this file that must not be presented in the report as tuned. They are
+# meant to be derived from the simulator and Loop 6, which replays real
+# scheduling mistakes against alternative weights and reports the difference.
+weights:
+  severity: 1.0
+  downtime: 1.0
+  skill_match: 0.5
+  waiting: 0.3
+  # Only applies to Findings of kind "predicted". Work that has been forecast is
+  # the best example of the lower-priority work a quiet shift should absorb.
+  eta_urgency: 0.7
+
+# ── load gate (ADR-011) ────────────────────────────────────────────────────
+# Provenance: recorded decision. The advisor described this behaviour more
+# concretely than any other part of the brief - heavy load means the important
+# work first, light load means release the secondary work. Splitting it from the
+# score keeps the explanation to one sentence a technician understands: "this
+# shift is at 92%, four non-urgent jobs are being held".
+#
+# The two boundaries are starting values. 3E, a queueing model, is the tool for
+# finding better ones; guessing again is not.
+load:
+  light_below: 0.5
+  heavy_at_or_above: 0.8
+
+# ── triggers (ADR-020, ADR-023) ────────────────────────────────────────────
+triggers:
+  # Provenance: recorded decision. Without a cooldown a sensor oscillating across
+  # its threshold produces Findings without end, which is the failure that would
+  # otherwise destroy the system in its first hour on real data.
+  cooldown_minutes: 30
+  # How long past a predicted ETA to wait before calling the prediction expired.
+  eta_grace_minutes: 60
+
+  trend:
+    # Provenance: none yet. To be set from measured ETA error on synthetic data,
+    # which is the whole reason ADR-020 chose an approach that can be measured
+    # without waiting for the plant.
+    window_minutes: 120
+    min_samples: 10
+    # Predictions further out than this are not reported. Accuracy falls with
+    # horizon, which is why ADR-020 requires error to be reported per horizon
+    # rather than as one number that hides it.
+    max_horizon_hours: 24
+
+# ── retrieval (ADR-015) ────────────────────────────────────────────────────
+# Provenance: measured, but on somebody else's corpus. These come from the
+# author's earlier on-premise RAG system and are starting points, not universal
+# constants; they must be retuned on this project's own gold set before any
+# number derived from them appears in the report.
+retrieval:
+  # Recall leads here, because an engineer reviews every draft. Missing the right
+  # manual page means that playbook never exists and nobody learns the gap was
+  # there; pulling something irrelevant costs a reviewer a few seconds.
+  authoring:
+    min_score: 0.20
+    candidates: 40
+    abstain: false
+
+  # Precision leads here, because nothing stands between the system and the
+  # technician. The review already happened, at approval time.
+  runtime:
+    min_score: 0.35
+    safety_min_score: 0.45
+    candidates: 8
+    abstain: true
+
+# ── fallback estimates (design.md 3.2) ─────────────────────────────────────
+# Provenance: none. Deliberately coarse, and shown to the technician as coarse.
+# Their purpose is not accuracy: without a duration a job cannot be queued at
+# all, so long-tail work would disappear from the system with nothing reporting
+# its absence.
+fallback_minutes:
+  R-2000iC:
+    low: 30
+    medium: 45
+    high: 60
+    critical: 90
+  M-710iC:
+    low: 25
+    medium: 40
+    high: 55
+    critical: 80
