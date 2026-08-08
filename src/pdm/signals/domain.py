@@ -32,7 +32,7 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta
 from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pdm.contracts import MachineId, Signal
 
@@ -71,6 +71,17 @@ class SignalSource(Protocol):
 
 def _hours(elapsed: timedelta) -> float:
     return elapsed.total_seconds() / 3600.0
+
+
+def _sign(value: float) -> int:
+    """Zero is its own answer here.
+
+    Folding it in with "falling" would make a curve that does not move claim a
+    direction, and the inherited failure check would then divide by it.
+    """
+    if value > 0:
+        return 1
+    return -1 if value < 0 else 0
 
 
 class _Profile(BaseModel):
@@ -185,15 +196,19 @@ class LinearDrift(_Profile):
     # a cooling fan losing speed.
     per_hour: float
 
-    @model_validator(mode="after")
-    def _drift_actually_drifts(self) -> LinearDrift:
-        if self.per_hour == 0:
+    # A field validator rather than a model one, because model validators run
+    # base class first: the inherited failure check would divide by this zero
+    # before a validator declared here could reject it.
+    @field_validator("per_hour")
+    @classmethod
+    def _drift_actually_drifts(cls, per_hour: float) -> float:
+        if per_hour == 0:
             raise ValueError("a linear drift of zero is a Steady profile; use that instead")
-        return self
+        return per_hour
 
     @property
     def direction(self) -> int:
-        return 1 if self.per_hour > 0 else -1
+        return _sign(self.per_hour)
 
     def value_at(self, elapsed: timedelta) -> float:
         return self.baseline + self.per_hour * _hours(elapsed)
@@ -220,15 +235,16 @@ class Exponential(_Profile):
     amplitude: float
     tau_hours: float = Field(gt=0)
 
-    @model_validator(mode="after")
-    def _the_curve_goes_somewhere(self) -> Exponential:
-        if self.amplitude == 0:
+    @field_validator("amplitude")
+    @classmethod
+    def _the_curve_goes_somewhere(cls, amplitude: float) -> float:
+        if amplitude == 0:
             raise ValueError("an amplitude of zero is a Steady profile; use that instead")
-        return self
+        return amplitude
 
     @property
     def direction(self) -> int:
-        return 1 if self.amplitude > 0 else -1
+        return _sign(self.amplitude)
 
     def value_at(self, elapsed: timedelta) -> float:
         return self.baseline + self.amplitude * math.expm1(_hours(elapsed) / self.tau_hours)
@@ -257,15 +273,16 @@ class Step(_Profile):
     delta: float
     after: timedelta = Field(gt=timedelta(0))
 
-    @model_validator(mode="after")
-    def _the_step_is_a_step(self) -> Step:
-        if self.delta == 0:
+    @field_validator("delta")
+    @classmethod
+    def _the_step_is_a_step(cls, delta: float) -> float:
+        if delta == 0:
             raise ValueError("a step of zero changes nothing; use a Steady profile")
-        return self
+        return delta
 
     @property
     def direction(self) -> int:
-        return 1 if self.delta > 0 else -1
+        return _sign(self.delta)
 
     def value_at(self, elapsed: timedelta) -> float:
         return self.baseline if elapsed < self.after else self.baseline + self.delta
@@ -353,6 +370,29 @@ class Scenario(BaseModel):
         """
         if self.starts_at.tzinfo is None:
             raise ValueError("a scenario needs a timezone-aware start time (ADR-028)")
+        return self
+
+    @model_validator(mode="after")
+    def _every_curve_survives_its_own_window(self) -> Scenario:
+        """A curve is checked against the window it will actually be run over.
+
+        A profile validates on its own by inverting its formula, which stays
+        finite where evaluating it forward does not: an exponential with a
+        one-second time constant is a legitimate curve until it is asked for
+        hour twelve, and then it raises OverflowError halfway through a run.
+        Configuration that cannot work must stop at construction, not partway
+        through a generated stream (design.md 9).
+        """
+        for channel in self.channels:
+            try:
+                value = channel.profile.value_at(self.duration)
+            except OverflowError:
+                value = math.inf
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"{channel.machine_id} {channel.metric_name} runs off to infinity "
+                    f"before the end of a {self.duration} window"
+                )
         return self
 
     @model_validator(mode="after")
@@ -526,6 +566,11 @@ class SyntheticSource:
 # The four cases together are the argument that layer 1 works without the plant:
 # one crossing predicted well, one predicted late, one not predictable at all,
 # and one machine that is simply healthy.
+#
+# Every degrading channel is timed to fail near the end of the window. Nothing
+# here models what a machine does after it has failed, so hours of data past
+# that point would be invention presented as measurement - a servo still
+# accelerating away to two hundred amps because the formula says so.
 LINE_A_TWELVE_HOURS = Scenario(
     name="line-a-twelve-hours",
     starts_at=datetime.fromisoformat("2026-03-03T06:00:00+00:00"),
@@ -533,8 +578,10 @@ LINE_A_TWELVE_HOURS = Scenario(
     duration=timedelta(hours=12),
     channels=(
         # ADR-002's motor. Crosses its 85 °C threshold at 07:40 of elapsed time
-        # and is finished at hour 11. The spike is a single reading at 87 °C,
-        # which the rule's 120-second debounce must throw away.
+        # and is finished at hour 11. The spike is a sensor glitch of +25 °C
+        # landing on roughly seven readings across the run - out of range rather
+        # than merely high, which is what a loose thermocouple actually reads,
+        # and what the rule's 120-second debounce exists to throw away.
         Channel(
             machine_id=MachineId("MC-001"),
             metric_name="motor_temp_c",
@@ -543,14 +590,15 @@ LINE_A_TWELVE_HOURS = Scenario(
             noise_sigma=0.4,
             spike=Spike(probability=0.01, magnitude=25.0),
         ),
-        # Accelerating wear: crosses 12.5 A at about hour 4.6 having spent the
-        # first two hours looking almost flat. A straight line fitted early
-        # predicts this one late, which is the number ADR-020 wants per horizon.
+        # Accelerating wear: crosses 12.5 A at about hour 9.2 having spent the
+        # first four hours looking almost flat, and reaching 15 A at hour 10.8.
+        # A straight line fitted early predicts this one late, which is the
+        # number ADR-020 wants reported per horizon.
         Channel(
             machine_id=MachineId("MC-004"),
             metric_name="servo_current_a",
             unit="A",
-            profile=Exponential(baseline=8.0, amplitude=0.5, tau_hours=2.0, failure_value=15.0),
+            profile=Exponential(baseline=8.0, amplitude=0.5, tau_hours=4.0, failure_value=15.0),
             noise_sigma=0.15,
         ),
         # The safety interlock at the bottleneck station, open at hour 9 with

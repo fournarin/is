@@ -307,30 +307,51 @@ class TestSpikes:
     def test_the_healthy_machine_never_holds_a_rule_open(self) -> None:
         """R-cycle-time-drift needs 600 seconds above 62s, which at one sample a
         minute is ten in a row. Spikes must not add up to that, or the demo
-        raises a work order against a machine that is fine."""
-        values = _values(list(SyntheticSource(LINE_A_TWELVE_HOURS).stream()), FAN, "cycle_time_s")
+        raises a work order against a machine that is fine.
 
-        assert sum(value > CYCLE_TIME_LIMIT for value in values) > 0  # spikes do happen
-        assert _longest_run(values, lambda value: value > CYCLE_TIME_LIMIT) < 10
+        Checked across every seed rather than the shipped one: independent
+        draws mean the debounce shortens the odds of a false alarm rather than
+        removing them, and a claim about the demo dataset alone would say
+        nothing about that. Ten in a row at p=0.02 is beyond reach; two in a row
+        is not, which is why the 120-second debounce on the motor rule cannot
+        make the same promise.
+        """
+        for seed in range(20):
+            values = _values(
+                list(SyntheticSource(LINE_A_TWELVE_HOURS, seed=seed).stream()),
+                FAN,
+                "cycle_time_s",
+            )
+            assert sum(value > CYCLE_TIME_LIMIT for value in values) > 0  # spikes do happen
+            assert _longest_run(values, lambda value: value > CYCLE_TIME_LIMIT) < 10
 
-    def test_the_motor_raises_nothing_before_it_is_really_hot(self) -> None:
-        """R-motor-temp-high needs 120 seconds over 85 °C - two samples in a row
-        at this interval. The motor's spike puts single readings over the line
-        hours before the true crossing, and the debounce is the only thing
-        standing between those and a work order for a machine that is fine."""
+    def test_the_motor_glitches_over_the_threshold_long_before_it_is_hot(self) -> None:
+        """What the debounce is up against, stated as what it is.
+
+        Single readings sit over 85 °C hours before the motor is anywhere near
+        it. A two-sample debounce discards almost all of them - but adjacent
+        glitches are independent draws, so "never two in a row" is not a
+        property this generator has and must not be asserted as one. The
+        surviving pairs are a false alarm rate to be measured in slice 5, not a
+        thing to be tested away here.
+        """
         source = SyntheticSource(LINE_A_TWELVE_HOURS)
         truth = source.ground_truth(
             MOTOR, "motor_temp_c", threshold=MOTOR_TEMP_LIMIT, comparison="above"
         )
         assert truth.crosses_at is not None
 
-        samples_before_crossing = int(
-            (truth.crosses_at - LINE_A_TWELVE_HOURS.starts_at) / LINE_A_TWELVE_HOURS.sample_interval
+        # Stop an hour short of the crossing: within that hour the curve itself
+        # is within 3 °C of the threshold, so a reading over the line is the
+        # machine genuinely getting hot rather than a glitch.
+        early_samples = int(
+            (truth.crosses_at - timedelta(hours=1) - LINE_A_TWELVE_HOURS.starts_at)
+            / LINE_A_TWELVE_HOURS.sample_interval
         )
-        early = _values(list(source.stream()), MOTOR, "motor_temp_c")[:samples_before_crossing]
+        early = _values(list(source.stream()), MOTOR, "motor_temp_c")[:early_samples]
 
-        assert sum(value > MOTOR_TEMP_LIMIT for value in early) > 0
-        assert _longest_run(early, lambda value: value > MOTOR_TEMP_LIMIT) < 2
+        assert max(early) > MOTOR_TEMP_LIMIT  # glitches reach over the line
+        assert all(value < MOTOR_TEMP_LIMIT for value in early[-5:])  # the curve does not
 
 
 class TestScenariosRefuseToBeQuietlyWrong:
@@ -384,6 +405,27 @@ class TestScenariosRefuseToBeQuietlyWrong:
         with pytest.raises(ValidationError, match="Steady"):
             Step(baseline=1.0, delta=0.0, after=timedelta(hours=1))
 
+    def test_a_flat_curve_with_a_failure_value_says_the_same_thing(self) -> None:
+        """The shape guard has to run before the inherited failure check, which
+        divides by the rate of change. Declared as a model validator it would
+        run second, and a zero rate would raise ZeroDivisionError from inside
+        pydantic instead of saying which field is wrong."""
+        with pytest.raises(ValidationError, match="Steady"):
+            LinearDrift(baseline=62.0, per_hour=0.0, failure_value=30.0)
+        with pytest.raises(ValidationError, match="Steady"):
+            Exponential(baseline=8.0, amplitude=0.0, tau_hours=2.0, failure_value=30.0)
+
+    def test_a_curve_that_overflows_its_window_is_rejected_at_construction(self) -> None:
+        """A profile validates by inverting its formula, which stays finite
+        where running it forward does not. Without this the run raises
+        OverflowError partway through a stream that has already been half
+        consumed."""
+        with pytest.raises(ValidationError, match="infinity"):
+            _scenario(
+                _channel(Exponential(baseline=8.0, amplitude=0.5, tau_hours=0.001)),
+                duration=timedelta(hours=2),
+            )
+
     def test_a_spike_must_move_the_reading(self) -> None:
         with pytest.raises(ValidationError, match="not a spike"):
             Spike(probability=0.5, magnitude=0.0)
@@ -414,14 +456,26 @@ class TestTheDemoScenarioMatchesTheRealPlant:
     def test_the_thresholds_in_this_file_still_match_the_rules(self) -> None:
         """These tests assert exact crossing times against thresholds copied out
         of config. If the file moves and the copies do not, the assertions keep
-        passing against a threshold nothing uses."""
-        config = load_config(REPO_CONFIG)
-        thresholds = {rule.metric_name: rule.threshold for rule in config.rules.rules}
+        passing against a threshold nothing uses.
 
-        assert thresholds["motor_temp_c"] == MOTOR_TEMP_LIMIT
-        assert thresholds["servo_current_a"] == SERVO_CURRENT_LIMIT
-        assert thresholds["fan_rpm"] == FAN_RPM_FLOOR
-        assert thresholds["cycle_time_s"] == CYCLE_TIME_LIMIT
+        Keyed by machine and metric rather than metric alone: two models may
+        watch the same metric at different limits, and a dict keyed on the
+        metric would quietly keep whichever rule was read last - defeating the
+        drift this test exists to catch.
+        """
+        config = load_config(REPO_CONFIG)
+        thresholds = {
+            (rule.machine_model, rule.metric_name): rule.threshold for rule in config.rules.rules
+        }
+
+        expected = {
+            (MOTOR, "motor_temp_c"): MOTOR_TEMP_LIMIT,
+            (SERVO, "servo_current_a"): SERVO_CURRENT_LIMIT,
+            (FAN, "fan_rpm"): FAN_RPM_FLOOR,
+            (FAN, "cycle_time_s"): CYCLE_TIME_LIMIT,
+        }
+        for (machine_id, metric_name), limit in expected.items():
+            assert thresholds[(config.model_of(machine_id), metric_name)] == limit
 
     def test_the_scenario_covers_a_predictable_and_an_unpredictable_failure(self) -> None:
         """The argument that layer 1 can be delivered without the plant needs

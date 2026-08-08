@@ -23,10 +23,15 @@ that number means:
 ### 1. Ground truth is the noise-free curve
 
 Every profile provides `value_at(t)` and its analytic inverse
-`time_to_reach(value)`. Noise and spikes are applied to emitted samples only and
-**never move the ground truth**. The true crossing time of a rule's threshold is
-the inverse evaluated at that threshold; the true failure time is the inverse
-evaluated at the profile's failure value.
+`time_until(value, comparison)`. Noise and spikes are applied to emitted samples
+only and **never move the ground truth**. The true crossing time of a rule's
+threshold is the inverse evaluated at that threshold; the true failure time is
+the inverse evaluated at the profile's failure value.
+
+The inverse takes the comparison, not just the value, because a threshold is
+crossed in a direction: the step failure attains no value between its two
+levels, so "when does it reach 1200" and "when does it fall below 1200" have
+different answers, and only the second one is what a rule asks.
 
 ### 2. Scenarios are code, not a fourth config file
 
@@ -94,6 +99,15 @@ gaussian noise and optional single-sample spikes.
 - Ground truth exists only where a profile can be inverted in closed form. A
   future profile without one needs a numeric solve or has no ground truth at all,
   so adding a profile is a decision rather than an implementation detail.
+- **A debounce shortens the odds of a false alarm; it does not remove them.**
+  Spikes are independent per sample, so two landing together is unlikely rather
+  than impossible, and a rule with a two-sample debounce will occasionally fire
+  on a healthy machine. That rate is a number to be measured when the rule
+  engine exists, not a property to be assumed here - and a test asserting "never
+  two in a row" would be asserting something false.
+- **Curves are timed to fail near the end of their window.** Nothing models what
+  a machine does after it has failed, so a scenario running hours past that
+  point emits invention in the shape of measurement.
 - **`ReplaySource` and `LiveSource` have no ground truth.** Anything that
   measures ETA error must therefore hold a `SyntheticSource` explicitly rather
   than reach it through the `SignalSource` port, which is the one thing in the
