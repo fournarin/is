@@ -44,6 +44,24 @@ jobs:
       - name: unit tests
         run: uv run pytest
 
+  image:
+    name: tier 0 - the image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # One image serves api, worker-runtime and worker-authoring (ADR-026), so
+      # a broken Dockerfile takes all three down at once. It is also the artefact
+      # handed over for the on-premise install, where a build failure is found by
+      # somebody else on a machine we cannot reach.
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
 # Steps to add once there is something for them to check. Do not add them early:
 # a CI run that is red from day one is a CI run nobody reads
 # (lessons_carried.md 4.4, and the table in git.md section 6.5).
