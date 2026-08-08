@@ -1,107 +1,117 @@
-# IS: ระบบคาดการณ์ซ่อมบำรุงและออก Ticket อัตโนมัติ
+# Predictive maintenance with automatic work-order dispatch
 
-## บริบทโปรเจกต์
+## What this is
 
-Individual Study ระยะเวลา 1 เทอม ของนักศึกษา CEDT ปี 2 จุฬาลงกรณ์มหาวิทยาลัย
-ทำร่วมกับอาจารย์ผู้สอนวิชาระบบฝังตัว โจทย์มาจากโรงงานประกอบรถยนต์ Ford
-จังหวัดระยอง ซึ่งกำลังขยับไปสู่ full automation (ปัจจุบันบางไลน์เป็นอัตโนมัติแล้ว)
+An Individual Study project: one student, one term, one person building it. The
+problem comes from a vehicle assembly plant moving towards full automation, with
+some lines already automated.
 
-รายละเอียดบทสนทนากับอาจารย์ทั้งหมดอยู่ที่ `docs-md/professor_notes.md`
-แผนงานเต็มและตารางเปรียบเทียบทางเลือกอยู่ที่ `docs-md/plan.md`
-เหตุผลเบื้องหลังการตัดสินใจแต่ละข้ออยู่ที่ `docs-md/decision.md`
-รูปทรงระบบ โมดูล และกฎการพึ่งพาอยู่ที่ `docs-md/design.md`
-หน้าจอและเหตุผลเบื้องหลังอยู่ที่ `docs-md/ui.md`
-กลไกที่ทำให้ระบบดีขึ้นตามเวลาอยู่ที่ `docs-md/feedback_loops.md`
-วิธีทำงานและการใช้ AI กับโปรเจกต์นี้อยู่ที่ `docs-md/workflow.md`
-กฎ git workflow, รูปแบบ commit/PR และ CI/CD อยู่ที่ `docs-md/git.md`
-บันทึกว่าเกิดอะไรขึ้นบ้างตามลำดับเวลาอยู่ที่ `docs-md/history.md`
-— อัปเดตหลัง merge PR ทุกครั้ง และหลังเหตุการณ์สำคัญที่ไม่มี commit
-บทเรียนที่ขนมาจากงานเดิม (และเส้นที่ห้ามข้าม) อยู่ที่ `docs-md/lessons_carried.md`
+**The design rationale lives in [`docs/adr/`](docs/adr/README.md)** - 31 decision
+records, append-only. Start with
+[003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md),
+[020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)
+and [011](docs/adr/0011-load-ratio-switches-dispatch-behaviour.md), which carry
+most of the system's shape.
 
-## เป้าหมายเดียวที่ต้องยึด
+Working notes - the plan, the schedule, the risk register, the conversation log
+with the advisor - are kept in Thai in `docs-md/`, which is outside version
+control on purpose. They are not needed to work on the code.
 
-> ปลายเทอมต้องมีระบบที่ช่างคนหนึ่งเปิดขึ้นมาแล้วทำงานตามได้จริง
-> แม้ข้อมูล sensor จาก Ford จะไม่เคยมาถึงเลย
+## The one goal everything is measured against
 
-ทุกการตัดสินใจเอาประโยคนี้ไปวัด ถ้าอะไรไม่รับใช้ประโยคนี้ ให้เลื่อนเป็น future work
+> By the end of term there must be a system a technician can open and actually
+> work from, **even if sensor data from the plant never arrives.**
 
-สองข้อที่ตามมาจากประโยคนี้ และห้ามปล่อยให้กลายเป็นงานสำรอง:
+Anything that does not serve that sentence is future work. Two things follow, and
+neither is allowed to become a fallback:
 
-- **"ช่างคนหนึ่ง" ต้องมีตัวจริง** — หาช่างซ่อมบำรุงมาลองใช้ให้ได้ 1 คน
-  เป็นงานที่เราต้องผลักดันเอง ไม่ผูกกับการที่ข้อมูล sensor จะมาหรือไม่มา
-- **รายงานผ่าน MCV คือชิ้นงานที่ถูกให้เกรด** — กันสัปดาห์ 13–14 ไว้เขียน
-  ทุกกรณี ไม่ว่าข้อมูลจะมาหรือไม่
+- **"A technician" has to be a real person.** Find one to try the system. This is
+  ours to push for and does not depend on data arriving.
+- **The written report is what is graded.** Weeks 13-14 are reserved for it in
+  every case.
 
-## สถาปัตยกรรม 4 ชั้น
+## Four layers
 
 ```
-แหล่งงาน 3 ทาง
- ├── สัญญาณเครื่องจักร (SignalSource) → ชั้น 1 · Trigger      [ทำบน synthetic ได้เลย]
- │      ตรวจจับ: rule + threshold          → Finding (detected)
- │      คาดการณ์: trend → เวลาถึงเกณฑ์      → Finding (predicted + ETA)
- ├── ตาราง PM ตามรอบ → งาน priority รอง (origin = scheduled)   [เริ่มได้ทันที]
- └── ช่าง/หัวหน้ากะแจ้งเอง (origin = manual)                   [เริ่มได้ทันที]
+Three sources of work
+ ├── machine signals (SignalSource) → layer 1 · Trigger    [works on synthetic data]
+ │      detect:  rules and thresholds     → Finding (detected)
+ │      predict: trend → time to threshold → Finding (predicted + ETA)
+ ├── the PM schedule → lower-priority work (origin = scheduled)
+ └── a technician or supervisor reporting it (origin = manual)
                     │
                     ▼
-ชั้น 2 · Content — ประกอบ ticket พร้อมวิธีซ่อมจาก playbook      [เริ่มได้ทันที]
+layer 2 · Content — assemble the ticket with steps from a playbook
         │                    ▲
-        │                    └── คลัง playbook (สร้างจากคู่มือด้วย RAG)
+        │                    └── playbook store (drafted from manuals with RAG)
         ▼
-ชั้น 3 · Dispatch — จัดคิวตาม priority × โหลดของกะ              [เริ่มได้ทันที]
+layer 3 · Dispatch — queue by priority against the shift's load
         │                    ▲
-        │                    └── ข้อมูลช่าง (ทักษะ ตารางกะ งานค้าง)
+        │                    └── technician data (skills, shifts, open work)
         ▼
-ชั้น 4 · ระบบปลายทาง — ticket ไปโผล่ที่ไหน                      [รอคำตอบอาจารย์]
-        │      CMMS เดิม (SAP PM / Maximo) หรือระบบของเราเอง หรือ LINE / Teams
+layer 4 · Destination — where the ticket appears
+        │      an existing CMMS, our own system, or a chat client
         ▼
-      ช่าง — รับงาน ปิดงาน แก้ไขขั้นตอน → ป้อนกลับเข้าคลัง playbook
+     technician — accept, close, propose corrections → back into the playbook store
 ```
 
-**หลักการสำคัญ:** ชั้น 2 และ 3 ต้องไม่บล็อกรอชั้น 1 ทุกชั้นแยกพัฒนาได้
+**Layers 2 and 3 must never block on layer 1.** Every layer is separately
+buildable.
 
-**ชั้น 1 ไม่ได้รอข้อมูลจริง** — อาจารย์เปิดโจทย์ด้วยคำว่า "ตรวจสอบ**และคาดการณ์**"
-ซึ่งเป็นข้อกำหนดข้อแรก จึงต้องส่งให้ได้ทั้งสองอย่าง ไม่ใช่แค่ตรวจจับ
-`SyntheticSource` จำลองความเสื่อมโดยรู้เวลาเสียจริงตั้งแต่ตอนสร้างข้อมูล
-เท่ากับมี label ให้วัดความแม่นของการคาดการณ์ได้ทันทีโดยไม่ต้องรอโรงงาน (ADR-020)
+**Layer 1 is not waiting for real data.** The advisor opened with "monitor
+**and predict**", so both have to be delivered. `SyntheticSource` models
+degradation while knowing the true failure time, which gives prediction a
+measurable ground truth without the plant
+([ADR-020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)).
 
-**ชั้น 4 คือชั้นที่เสี่ยงที่สุด** เพราะคำตอบเรื่อง CMMS เปลี่ยนสถาปัตยกรรมทั้งหมด
-ต้องถามอาจารย์ให้ได้คำตอบเร็วที่สุด — ระหว่างยังไม่รู้ ให้เขียน ticket ออกทาง
-interface ที่มี adapter สลับได้ ไม่ผูกกับปลายทางใดปลายทางเดียว
+**Layer 4 carries the most risk**, because whether a CMMS already exists changes
+the whole outbound design. Until that is known, tickets leave through a swappable
+adapter
+([ADR-012](docs/adr/0012-tickets-leave-through-an-adapter.md)).
 
-## หลักการที่ห้ามละเมิด
+## Principles that are not negotiable
 
-1. **Runtime ต้อง deterministic** — ไม่ให้ LLM แต่งคำสั่งซ่อมสด ๆ ตอนใช้งาน
-   เพราะเป็นงาน safety-critical ค่า torque หรือลำดับ lockout ที่ผิดคือความเสี่ยงต่อคน
-   LLM ทำงานที่ build time (ร่าง playbook) ไม่ใช่ runtime
-2. **ทุก playbook ต้องมี traceability** — `source_doc` + `page` (รายขั้น) +
-   `revision` + `approved_by` + `approved_at` ครบทุกใบ ไม่มีใบไหนถึงมือช่าง
-   โดยไม่มีคนอนุมัติ และใบงานที่ปิดแล้วต้องพิสูจน์ได้ว่าตอนนั้นสั่งอะไร
-   ผ่าน `playbook_snapshot`
-3. **ทุก ticket ต้องอธิบายได้** — ต้องบอกช่างได้ว่าทำไมงานนี้ถูกจัดให้เขา
-   และทำไมมาก่อนงานอื่น ถ้าอธิบายไม่ได้ ช่างจะเลิกใช้ระบบ
-4. **ไม่มีอะไรบล็อกรอข้อมูลจากโรงงาน** — ทุกส่วนต้องทดสอบได้ด้วย synthetic data
-5. **เมื่อหลักฐานไม่พอ ให้ระบบยอมรับว่าไม่รู้** — แสดง "ไม่พบข้อมูล ดูคู่มือหน้า X
-   หรือติดต่อวิศวกร" ดีกว่าเดา
+1. **Runtime is deterministic.** No LLM writes repair instructions while a
+   technician is waiting. A wrong torque value or lockout order is a risk to a
+   person. The LLM works at build time, drafting for review
+   ([ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md)).
+2. **Every playbook is traceable.** Source document and page per step, plus
+   revision, approver and approval time. Nothing reaches a technician unapproved,
+   and a closed work order must be able to prove what it instructed, through its
+   `playbook_snapshot`.
+3. **Every ticket explains itself.** Why this job, why now. A system that cannot
+   answer that gets overruled and then abandoned
+   ([ADR-005](docs/adr/0005-every-ticket-carries-its-reason.md)).
+4. **Nothing blocks on plant data.** Every part must be testable on synthetic
+   data.
+5. **When the evidence is thin, say so.** "Not found - see manual page X or ask
+   an engineer" beats a guess.
 
-## สัญญาข้อมูล (Data Contracts)
+## Data contracts
 
-สัญญาทั้งหมดมีแปดตัว **ต้องนิ่งก่อนเขียนโค้ดส่วนอื่น** เพราะทุกส่วนต่อกันผ่านของพวกนี้
+Eight in total, and **they have to be settled before anything else is written**,
+because everything connects through them.
 
-- **สี่ตัวที่อธิบายงาน** — อยู่ในไฟล์นี้ เพราะแตะแทบทุกครั้งที่เขียนโค้ด
-  `Signal` → `Finding` → `Playbook` → `WorkOrder`
-- **สี่ตัวที่อธิบายทรัพยากรและสถานที่** — อยู่ที่ `docs-md/design.md` หัวข้อ 13
-  `Station`/`Line` · `Skill` · `Technician`/`Shift` · `PMTask` (ADR-027)
-  ชั้น 3 ใช้ทั้งสี่ตัว ถ้าจะแตะ `dispatch/` หรือ `load_ratio` ต้องเปิดอ่านก่อน
+- **Four describing work** - below, because they are touched almost every time
+  code is written: `Signal` → `Finding` → `Playbook` → `WorkOrder`
+- **Four describing resources and places** - `Line`/`Station`, `Skill`,
+  `Technician`/`Shift`, `PMTask`
+  ([ADR-027](docs/adr/0027-operational-data-contracts.md)). Layer 3 uses all
+  four; read that record before touching `dispatch/` or anything to do with load.
 
-และมีของอีกสองอย่างที่ไม่ใช่สัญญาข้อมูลแต่ต้องมีก่อนโค้ดบรรทัดแรก —
-`Clock` port (ADR-028) และกฎ import + gate ใน CI (ADR-029)
-ดู `docs-md/design.md` หัวข้อ 11 ลำดับ 0
+Two more things are not contracts but must exist before the first line of code:
+the `Clock` port
+([ADR-028](docs/adr/0028-clock-is-the-single-time-port.md)) and the import rules
+with their CI gates
+([ADR-030](docs/adr/0030-package-layout-io-boundary-and-self-contained-work-orders.md)).
 
 ### Signal
 ```
 timestamp, machine_id, metric_name, value, unit
 ```
-หน้าตาเดียวไม่ว่ามาจาก synthetic generator, ไฟล์ replay, หรือ OPC UA จริง
+The same shape whether it came from the synthetic generator, a replay file or a
+live OPC UA connection. `timestamp` is **source** time, not the clock the system
+makes decisions on.
 
 ### Finding
 ```
@@ -109,30 +119,34 @@ machine_id, component, symptom_code, severity, evidence, detected_at,
 kind, eta, eta_confidence,
 rule_id, status, occurrence_count, last_seen_at, superseded_by
 ```
-`evidence` ต้องเก็บว่าอะไรทำให้เตือน (ค่าอะไร เกินเกณฑ์เท่าไร นานแค่ไหน)
-เพื่อให้อธิบายช่างได้
+`evidence` records what triggered the alert - which value, how far past the
+threshold, for how long - so it can be explained to a technician.
 
-`status` มีค่า open / acknowledged / resolved / expired / superseded
+`status` is open / acknowledged / resolved / expired / superseded.
 
-**rule ที่ยิงซ้ำต้องอัปเดตใบเดิม ไม่สร้างใบใหม่** — คีย์กดทับคือ
-(`machine_id`, `rule_id`) ตราบใดที่ยังมีใบ open/acknowledged อยู่
-การยิงซ้ำแค่เพิ่ม `occurrence_count` และขยับ `last_seen_at`
+**A rule firing repeatedly updates the existing record; it does not create a new
+one.** The suppression key is (`machine_id`, `rule_id`) while an open or
+acknowledged record exists. A repeat firing raises `occurrence_count` and moves
+`last_seen_at`.
 
-ถ้าไม่มีข้อนี้ มอเตอร์ร้อนเกินหนึ่งตัวจะสร้าง Finding ทุกรอบการอ่านค่า
-กลายเป็น WorkOrder ร้อยใบ แล้ว `load_ratio` พุ่งจนเกิน 100% แล้ว load gate
-กลั้นทุกอย่าง — ระบบทำลายตัวเองภายในชั่วโมงแรกที่รันจริง ดู ADR-023
+Without this, one overheating motor raises a Finding on every reading, becomes a
+hundred work orders, `load_ratio` passes 100%, and the gate holds back
+everything - the system destroys itself in its first hour on real data
+([ADR-023](docs/adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md)).
 
-`kind` มีค่า **detected** (ค่าเกินเกณฑ์แล้ว) หรือ **predicted** (แนวโน้มชี้ว่า
-จะถึงเกณฑ์) — ใบ predicted ต้องมี `eta` และ `eta_confidence` เสมอ และ
-`priority_reason` ของ WorkOrder ต้องพูดต่างกันสองแบบ ("เกินเกณฑ์แล้ว 20 นาที"
-กับ "คาดว่าจะถึงเกณฑ์ในอีก ~6 ชั่วโมง ± 2") เพราะช่างตัดสินใจต่างกัน
-งาน predicted คือสิ่งที่ควรถูกดึงเข้ามาทำตอนโหลดเบา ดู ADR-020
+`kind` is **detected** (already past the threshold) or **predicted** (the trend
+says it will be). A predicted Finding always carries `eta` and `eta_confidence`,
+and the work order's reason must read differently in the two cases - "over
+threshold for 20 minutes" against "expected to reach threshold in about 6 hours,
+give or take 2" - because a technician decides differently. Predicted work is the
+clearest example of what a quiet shift should absorb
+([ADR-020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)).
 
-`component` **ไม่ได้มาจากการอนุมาน** — rule แต่ละข้อประกาศไว้ในนิยามของตัวเองว่า
-เฝ้า component ไหน (สัญญาณหนึ่ง tag ผูกกับ component หนึ่ง) rule ที่ระบุไม่ได้
-เช่นสัญญาณระดับไลน์ ให้ใส่ `component = unknown` แล้วชั้น 2 ต้องเสิร์ฟ playbook
-ประเภทช่วยไล่หาจุด ไม่ใช่ playbook ซ่อม — นี่คือคำตอบของข้อกำหนด "ซ่อมจุดไหน"
-ดู ADR-009
+`component` is **never inferred**. Each rule declares which component it watches;
+one signal tag maps to one component. A rule that cannot say uses `unknown`, and
+layer 2 then serves a fault-finding playbook rather than a repair one - which is
+the honest answer to "which part"
+([ADR-009](docs/adr/0009-component-comes-from-the-rule-not-from-inference.md)).
 
 ### Playbook
 ```
@@ -141,31 +155,32 @@ estimated_minutes, required_skill, required_technicians,
 source_doc, page, revision, approved_by, approved_at, approver_role, status
 ```
 ```
-steps[] แต่ละขั้น = { text, source_doc, page, confidence }
+steps[] each = { text, source_doc, page, confidence }
 ```
-`status` มีค่า draft / approved / needs_review
+`status` is draft / approved / needs_review.
 
-**หนึ่งแถวต่อหนึ่ง (`symptom_code`, `machine_model`)** ไม่มีสายเวอร์ชัน
-ไม่มี `supersedes` การอนุมัติเขียนทับใบเดิมและเพิ่ม `revision` ขึ้นหนึ่ง
-ประวัติไม่ได้อยู่ที่นี่ แต่อยู่ใน `playbook_snapshot` ของ WorkOrder (ADR-018)
+**One row per (`symptom_code`, `machine_model`).** No version chain, no
+supersedes. Approval overwrites and increments `revision`. History lives in the
+work order's `playbook_snapshot`
+([ADR-018](docs/adr/0018-drop-the-version-chain-move-history-to-the-work-order.md)).
 
-**ทุกขั้นตอนถือที่มาของตัวเอง** ไม่ใช่มี `source_doc`/`page` แค่ระดับใบ
-เพราะ authoring ตั้งค่าให้ recall กว้าง (ADR-015) โอกาสที่ LLM ร่างใบซึ่ง
-ผสมขั้นตอนจากคนละเอกสารจึงสูงขึ้น ถ้าที่มาอยู่ระดับใบ ใบที่ผสมกันจะดูเหมือน
-ใบปกติ แต่ถ้าอยู่ระดับขั้น ใบผสมจะฟ้องตัวเองว่ามีขั้นที่อ้างคนละเอกสาร
-ระดับใบยังเก็บไว้ในฐานะเอกสารหลักของใบนั้น
+**Every step carries its own source**, not just the page as a whole. Authoring is
+tuned for recall
+([ADR-015](docs/adr/0015-recall-at-authoring-precision-at-runtime.md)), which
+raises the chance of a draft mixing steps from two documents. At page level a
+mixed playbook looks ordinary; at step level it reports itself.
 
-เมื่อ operator เปลี่ยนคู่มือ playbook ทุกใบที่มาจากเล่มนั้นเด้งเป็น
-`needs_review` ยังเสิร์ฟต่อพร้อมป้ายเตือนจนกว่าจะอนุมัติใหม่
-ลำดับการเสิร์ฟตอน runtime อยู่ใน `docs-md/plan.md` หัวข้อชั้น 2
+When an operator replaces a manual, every playbook derived from it becomes
+`needs_review` and is still served with a warning until re-approved.
 
-`required_technicians` มีค่าตั้งต้น 1 — งานที่ต้องสองคน (เช่นถอดมอเตอร์หนัก)
-กิน capacity ของกะเป็นสองเท่า ถ้าไม่มีฟิลด์นี้ `load_ratio` จะนับต่ำกว่าจริง
-แล้ว scheduler จะแจกงานเกินกำลังคน ดู ADR-025
+`required_technicians` defaults to 1. A two-person job consumes twice the shift's
+capacity; omitting it makes the load calculation read low and the gate release
+more work than there are people for
+([ADR-025](docs/adr/0025-work-orders-support-handover-and-multi-person-jobs.md)).
 
-`approver_role` บันทึกบทบาทที่ผู้อนุมัติ **ถืออยู่ ณ เวลาที่กด** ไม่ใช่บทบาท
-ปัจจุบัน — บทบาทเปลี่ยนได้ แต่หลักฐานการอนุมัติต้องสะท้อนสภาพตอนนั้น
-หลักคิดเดียวกับ `playbook_snapshot` ดู ADR-024
+`approver_role` records the role held **at the moment of approval**, not the
+person's current role. Roles change; the evidence must not
+([ADR-024](docs/adr/0024-roles-and-approval-authority.md)).
 
 ### WorkOrder
 ```
@@ -179,73 +194,99 @@ actual_minutes, blocked_minutes, blocked_reason, outcome, technician_feedback
 assignees[]     = [{ user, role: primary | helper }]
 work_segments[] = [{ user, started_at, ended_at }]
 ```
-**บรรทัดที่สองคือข้อเท็จจริงที่ scheduler ต้องใช้ ซึ่งใบงานถือไว้เอง**
-`work/` คัดลอกลงใบงาน ณ เวลาสร้าง แล้ว `dispatch/` **ไม่อ่าน `Finding` เลย**
-— ถ้าไม่มีข้อนี้ `dispatch/` จะคำนวณ `w2` (ต้องใช้ `machine_id` → สถานี)
-และ `w5` (ต้องใช้ `eta`) ไม่ได้โดยไม่ละเมิดกฎ "ห้าม import `triggers/`"
-ของตัวเอง แบบแผนเดียวกับ `playbook_snapshot` คือคัดลอกสิ่งที่ต้องใช้
-มาไว้ที่ที่ต้องใช้มัน ดู ADR-030
+**The second line is the facts the scheduler needs, held by the order itself.**
+The work module copies them on creation, and **dispatch never reads a Finding.**
+Without this, dispatch cannot compute the station-level downtime term (which
+needs `machine_id`) or the urgency term (which needs `eta`) without breaking its
+own rule against importing the trigger layer. Same pattern as
+`playbook_snapshot`: copy what is needed to where it is needed
+([ADR-030](docs/adr/0030-package-layout-io-boundary-and-self-contained-work-orders.md)).
 
-`severity` อยู่ที่ใบงานไม่ใช่ที่ `Finding` เพราะงาน `scheduled` และ `manual`
-ไม่มี Finding ผูก ถ้า severity อยู่ฝั่งโน้น load gate ที่ ADR-011 บอกว่า
-"ผ่านเฉพาะ severity สูง" จะตัดสินงานสองประเภทนั้นไม่ได้เลย
+`severity` lives on the order rather than the Finding, because scheduled and
+manual work have no Finding attached. On the other side, the load gate that
+admits "high severity only" could not judge those two kinds of work at all.
 
-`finding_ref` มีไว้ **สืบกลับ** ไม่ใช่ให้ scheduler ดึงข้อมูล — UI ของช่าง
-ที่ต้องแสดง "เกิดซ้ำ N ครั้ง" อ่านผ่าน `finding_ref` เพราะค่าที่คัดลอกลงใบงาน
-เป็นภาพนิ่ง ณ เวลาสร้าง และตั้งใจให้ไม่ขยับตาม (`design.md` 6.2)
-`actual_minutes` = **ผลรวมของ `work_segments` ไม่ใช่ (เวลาปิด − เวลาเริ่ม)**
-เพราะงานหนึ่งใบอาจข้ามกะ ถูกวางแล้วกลับมาทำต่อ หรือมีคนช่วยหลายคน
-และ `blocked_minutes` (รออะไหล่ รอไลน์หยุด) ต้องหักออกก่อนป้อนกลับเข้า
-`estimated_minutes` ไม่งั้นค่าประมาณจะพองทุกรอบ ดู ADR-025
-`playbook_snapshot` คือสำเนาแช่แข็งของ `steps[]` + ที่มารายขั้น +
-`approved_by` / `approved_at` **ณ เวลาที่ออกใบงาน** ห้ามแก้ตลอดอายุใบ
+`finding_ref` is for **tracing back**, not for the scheduler to fetch data. The
+technician's screen showing "seen N times" reads through it, because the values
+copied onto the order are a snapshot and are deliberately fixed.
 
-**นี่คือของที่ทำให้ตัดสายเวอร์ชันออกได้อย่างปลอดภัย** — ใบงานที่ปิดไปแล้ว
-ต้องพิสูจน์ได้ว่าตอนนั้นระบบสั่งอะไร ถ้าประวัติอยู่ที่ตาราง playbook
-การเขียนทับจะทำให้ใบงานเก่าชี้ไปยังขั้นตอนที่ไม่ใช่สิ่งที่ช่างทำจริง
-พอย้ายประวัติมาไว้ที่ที่ต้องใช้มัน ตาราง playbook ก็เขียนทับได้อิสระ (ADR-018)
-`origin` มีค่า condition (มาจาก Finding) / scheduled (PM ตามรอบ) /
-manual (คนแจ้ง) — `finding_ref` จึงเป็น optional เพราะงาน priority รอง
-ที่อาจารย์สั่งให้แจกตอนโหลดเบา ส่วนใหญ่ไม่มี Finding ผูก ดู ADR-010
+`actual_minutes` is the **sum of the work segments, not close time minus start
+time**, because a job can cross shifts, be set down and resumed, or involve
+several people. `blocked_minutes` - waiting for parts, waiting for a line stop -
+is subtracted before anything feeds back into estimates, or they inflate every
+cycle
+([ADR-025](docs/adr/0025-work-orders-support-handover-and-multi-person-jobs.md)).
 
-**หมายเหตุสำคัญ:** `estimated_minutes` (ใน Playbook) กับ `actual_minutes`
-(ใน WorkOrder) ต่างกันโดยเจตนา ตัวแรกคือค่าที่ scheduler ใช้คำนวณ ตัวหลังคือ
-ข้อมูลจริงที่เอามาปรับค่าประมาณให้แม่นขึ้น — นี่คือ feedback loop ที่ทำให้ระบบ
-ดีขึ้นโดยไม่ต้องใช้ ML
+`playbook_snapshot` is a frozen copy of the steps, their per-step provenance and
+the approval, taken **when the order was issued**, and never editable.
 
-## Technology Stack
+**This is what makes dropping the version chain safe.** A closed work order must
+prove what the system instructed. With history in the playbook table, overwriting
+would leave old orders pointing at steps that are not what the technician did.
+Moved to where it is actually needed, the playbook table can be overwritten
+freely.
 
-เหตุผลการเลือกทั้งชุดอยู่ที่ ADR-008 — ห้ามเพิ่ม dependency ใหม่โดยไม่มี ADR
+`origin` is condition (from a Finding) / scheduled (PM) / manual (reported).
+`finding_ref` is therefore optional, because most lower-priority work - the work
+the advisor asked to be released on a quiet shift - has no Finding
+([ADR-010](docs/adr/0010-work-orders-have-an-origin.md)).
+
+**Note:** `estimated_minutes` on the playbook and `actual_minutes` on the order
+are separate by design. The first is what the scheduler computes with; the second
+is reality, fed back to make the first more accurate. That is a feedback loop
+requiring no machine learning at all.
+
+## Technology
+
+Reasoning in [ADR-008](docs/adr/0008-technology-stack.md). **No new dependency
+without an ADR.**
 
 - **Backend:** Python, FastAPI, PostgreSQL
-- **Retrieval:** Qdrant (dense), PostgreSQL full-text (sparse), reciprocal rank fusion,
-  cross-encoder reranking — สถาปัตยกรรมเดียวกับที่ผู้ทำเคยส่งขึ้น production ที่ CPF
-- **Job queue:** ตาราง job ใน PostgreSQL (`FOR UPDATE SKIP LOCKED` + heartbeat
-  + reaper) ไม่มี Redis — enqueue/complete commit พร้อมข้อมูลจริงในทรานแซกชัน
-  เดียว จึงไม่มีทางเกิด playbook ที่ไม่มี job ผูก หรือกลับกัน (ADR-017)
-- **Optimization:** OR-Tools (CP-SAT) สำหรับ scheduler
-- **Simulation:** SimPy หรือ discrete-event simulator เขียนเอง
+- **Retrieval:** Qdrant (dense), PostgreSQL full-text (sparse), reciprocal rank
+  fusion, cross-encoder reranking
+- **Job queue:** a table in PostgreSQL (`FOR UPDATE SKIP LOCKED`, heartbeat,
+  reaper). No Redis - a job and its result commit in one transaction, so there
+  can be no playbook without a job or job without a playbook
+  ([ADR-017](docs/adr/0017-postgres-is-the-job-queue.md))
+- **Database access:** psycopg 3 with plain SQL, no ORM. Alembic versions the
+  migrations and nothing more
+  ([ADR-031](docs/adr/0031-plain-sql-against-postgres-no-orm.md))
+- **Optimisation:** OR-Tools (CP-SAT)
+- **Simulation:** SimPy or a discrete-event simulator written here
 - **Frontend:** Next.js
-- **Deployment:** Docker, on-premise (ข้อมูลโรงงานติด NDA ห้ามขึ้นคลาวด์)
-  7 container โดย `api` / `worker-runtime` / `worker-authoring` มาจาก image
-  เดียวกัน และ `llm-server` อยู่บน network ที่ `api` เข้าไม่ถึง
-  (ADR-026, ADR-029 · `docs-md/design.md` 1 และ 15)
+- **Deployment:** Docker, on-premise only (plant documents are under NDA and must
+  not go to the cloud). Seven containers, of which `api`, `worker-runtime` and
+  `worker-authoring` come from one image, and `llm-server` sits on a network the
+  API cannot reach
+  ([ADR-026](docs/adr/0026-split-the-worker-into-two-roles.md),
+  [ADR-029](docs/adr/0029-where-the-models-run.md))
 
-## พื้นฐานของผู้ทำ
+## Background this builds on
 
-เคยสร้างและส่งมอบระบบ RAG on-premise ให้โรงงาน CPF (ระบบชื่อ Neo Chat)
-ตอบคำถามวิศวกรโรงงานเป็นไทย/อังกฤษจากคู่มือหุ่นยนต์ I/O mapping และแบบไฟฟ้าสแกน
-รันบน NVIDIA Jetson AGX Orin บน LAN โรงงาน — จุดที่นำมาใช้ต่อได้โดยตรง:
+The author has previously built and delivered an on-premise RAG system to a
+factory, answering engineers' questions in Thai and English from robot manuals,
+I/O mappings and scanned electrical drawings, running on edge hardware inside the
+plant network. What carries over:
 
-- Hybrid retrieval ข้ามภาษา (คำถามไทย เอกสารอังกฤษ) — คู่มือ Ford ก็จะเป็นอังกฤษ
-- NLI entailment gate + self-verification + extractive fallback กัน fabrication
-- Vision-language ingestion อ่านแบบไฟฟ้าสแกนเป็นตาราง device/connection
-- ประสบการณ์ที่ฟีเจอร์ predictive maintenance ถูกถอดออกเพราะไม่มี sensor data
-  และไม่มี failure label — บทเรียนที่กำหนดรูปร่างของโปรเจกต์นี้
+- Cross-lingual hybrid retrieval - questions in Thai, documents in English
+- An entailment gate, self-verification and extractive fallback against
+  fabrication
+- Vision-language ingestion reading scanned drawings as device and connection
+  tables
+- **The experience of a predictive maintenance feature being cut for want of
+  sensor data and failure labels** - the lesson that shaped this project's whole
+  structure, and the reason
+  [ADR-020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)
+  exists
 
-## การสื่อสาร
+## Working language
 
-- ตอบเป็นภาษาไทย ศัพท์เทคนิคใช้ภาษาอังกฤษตามเดิม
-- ก่อนทำงานก้อนใหญ่ ให้เสนอแผนก่อน อย่าเพิ่งแก้ไฟล์
-- เมื่อตัดสินใจเชิงสถาปัตยกรรม ให้บันทึกเหตุผลลง `docs-md/decision.md`
-  โดยเพิ่ม ADR ใหม่ต่อท้าย ไม่แก้ทับของเก่า ถ้าเปลี่ยนใจให้เขียนใบใหม่ที่อ้างของเดิม
+- **Reply in Thai.** Keep technical terms in English.
+- **All code, comments, commit messages and pull requests are in English.** The
+  repository is the artefact that gets handed over; its history is part of what
+  is delivered.
+- Propose a plan before any substantial piece of work. Do not start editing
+  files first.
+- When an architectural decision is made, record it as a **new** record in
+  `docs/adr/`. Never edit an existing one. Changing your mind means writing a new
+  record that references the old.
