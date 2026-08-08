@@ -18,6 +18,8 @@ dev = [
     "mypy>=1.18",
     "pytest>=8.4",
     "import-linter>=2.3",
+    "pyyaml>=6.0.3",
+    "types-pyyaml>=6.0.12.20260724",
 ]
 
 [build-system]
@@ -69,7 +71,7 @@ ban-relative-imports = "parents"
 # ─────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "tests"]
+files = ["src", "tests", "scripts"]
 strict = true
 warn_unreachable = true
 
@@ -78,6 +80,9 @@ warn_unreachable = true
 # ─────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# scripts/ holds the CI gates. They are tooling, not part of the shipped
+# package, but they are tested like anything else that can fail silently.
+pythonpath = ["."]
 addopts = "--strict-markers -q"
 markers = [
     "heavy: needs a real LLM or GPU; excluded from normal CI (tier 3)",
