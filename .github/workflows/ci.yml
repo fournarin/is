@@ -35,14 +35,16 @@ jobs:
       - name: dependency rules (invariant 1, ADR-003)
         run: uv run lint-imports
 
-      - name: package layout matches the architecture doc
-        run: uv run pytest tests/test_package_layout.py
+      - name: only the Clock port reads real time (invariant 14, ADR-028)
+        run: uv run python scripts/check_no_wall_clock.py
+
+      - name: unit tests
+        run: uv run pytest
 
 # Steps to add once there is something for them to check. Do not add them early:
 # a CI run that is red from day one is a CI run nobody reads
 # (lessons_carried.md 4.4, and the table in git.md section 6.5).
 #
 #   gate - validate config             -> slice 1.2
-#   gate - check_no_wall_clock.py      -> slice 0.2 (invariant 14, ADR-028)
 #   gate - check_llm_isolation.py      -> slice 0.3 (invariant 15, ADR-029)
-#   test - unit + invariants + eval    -> slice 1.1 (needs a postgres service)
+#   test - split out of gate with a postgres service -> slice 1.3
