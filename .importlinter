@@ -132,6 +132,7 @@ name = domain.py must not reach the database or a repo (ADR-030, invariant 10)
 type = forbidden
 source_modules =
     pdm.platform.jobs.domain
+    pdm.signals.domain
 forbidden_modules =
     pdm.platform.db
     pdm.platform.jobs.repo

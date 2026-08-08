@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Thirty-one decisions, in the order they were made. Each records the context that
+Thirty-two decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -43,6 +43,7 @@ entries replace parts of earlier ones, and both are kept.
 | [029](0029-where-the-models-run.md) | Where the models run, and ADR-003 at the network layer | |
 | [030](0030-package-layout-io-boundary-and-self-contained-work-orders.md) | Package layout, the I/O boundary, self-contained work orders | |
 | [031](0031-plain-sql-against-postgres-no-orm.md) | Plain SQL against PostgreSQL, no ORM | |
+| [032](0032-what-the-synthetic-source-guarantees.md) | What `SyntheticSource` guarantees, and what it cannot | |
 
 ## Where to start
 
