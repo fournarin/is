@@ -275,9 +275,9 @@ class TestConfigIsReadOnly:
     def test_stations_cannot_be_replaced(self, tmp_path: Path) -> None:
         config = load_config(_write(tmp_path))
         with pytest.raises(TypeError):
-            config.stations["st-99"] = config.stations["st-01"]  # type: ignore[index]
+            config.stations[StationId("st-99")] = config.stations[StationId("st-01")]  # type: ignore[index]
 
     def test_a_station_itself_cannot_be_edited(self, tmp_path: Path) -> None:
         config = load_config(_write(tmp_path))
         with pytest.raises(ValidationError):
-            config.stations["st-01"].buffer_units = 0
+            config.stations[StationId("st-01")].buffer_units = 0
