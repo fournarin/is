@@ -35,6 +35,9 @@ jobs:
       - name: dependency rules (invariant 1, ADR-003)
         run: uv run lint-imports
 
+      - name: configuration must be loadable (invariants 7 and 13)
+        run: uv run python -m pdm.platform.config config
+
       - name: only the Clock port reads real time (invariant 14, ADR-028)
         run: uv run python scripts/check_no_wall_clock.py
 
@@ -66,5 +69,4 @@ jobs:
 # a CI run that is red from day one is a CI run nobody reads
 # (lessons_carried.md 4.4, and the table in git.md section 6.5).
 #
-#   gate - validate config             -> slice 1.2
 #   test - split out of gate with a postgres service -> slice 1.3
