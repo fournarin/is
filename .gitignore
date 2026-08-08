@@ -1,16 +1,25 @@
 # ─────────────────────────────────────────────────────────────
-# เอกสารลับ — ห้ามเข้า repo เด็ดขาด
+# Confidential. Must never enter the repository.
 # ─────────────────────────────────────────────────────────────
-# ที่ทิ้งของสำหรับเอกสารที่แชร์ไม่ได้ — วางไว้ที่นี่แล้วปลอดภัย
+# Somewhere to put anything that cannot be shared. Drop it here and it is safe.
 private/
 secret/
 
-# เอกสารภายในของโปรเจกต์ — เก็บไว้ในเครื่องอย่างเดียว
-# มีบันทึกบทสนทนากับอาจารย์ แนวทางการนำเสนอ และบทเรียนจากงานเดิม
+# Internal working notes, kept on this machine only: the conversation log with
+# the advisor, how to present the work, and lessons carried from earlier work.
 docs-md/
 
-# เอกสารส่งมอบและสัญญาของงานเดิม (Neo Chat / CPF)
-# มีสกรีนช็อตระบบจริง ชื่อโฮสต์ และชื่อเอกสารลูกค้า
+# Handover documents and contracts from earlier work. They contain screenshots
+# of a running system, hostnames and client document titles.
+#
+# These patterns have to spell out the names they exclude, which is the one place
+# in this repository where those names appear. Anything under private/ is already
+# covered above; these are a second line for files that land elsewhere by
+# accident. Remove them only after confirming nothing outside private/ needs them.
+#
+# The Thai patterns below stay Thai: they match Thai filenames, so translating
+# them would stop them matching anything. They are the only Thai left in this
+# repository, and deliberately so.
 *เอกสารส่งมอบ*
 *Neo?Chat*
 *NeoChat*
@@ -18,14 +27,14 @@ docs-md/
 *แบบตรวจสอบ*
 NEOCHAT-*
 
-# เอกสารโรงงานที่ติด NDA
+# Plant documents under NDA.
 storage/
 manuals/
 *.pdf
 !docs-md/**/*.pdf
 
 # ─────────────────────────────────────────────────────────────
-# ความลับของระบบ
+# Secrets
 # ─────────────────────────────────────────────────────────────
 .env
 .env.*
@@ -62,7 +71,7 @@ npm-debug.log*
 yarn-error.log*
 
 # ─────────────────────────────────────────────────────────────
-# ข้อมูลรันไทม์
+# Runtime data
 # ─────────────────────────────────────────────────────────────
 data/
 *.db
@@ -74,7 +83,7 @@ sim_out/
 *.log
 
 # ─────────────────────────────────────────────────────────────
-# เครื่องมือ / OS
+# Tooling and OS
 # ─────────────────────────────────────────────────────────────
 .DS_Store
 .idea/
