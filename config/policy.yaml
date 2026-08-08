@@ -92,3 +92,19 @@ fallback_minutes:
     medium: 40
     high: 55
     critical: 80
+
+# ── job queue timing (ADR-017, ADR-026) ────────────────────────────────────
+# Provenance: recorded decision. Two sets, because one cannot serve both. A
+# threshold tight enough to notice a dead five-second runtime job inside a minute
+# would declare a twenty-minute manual ingest dead while it is still working, and
+# a threshold loose enough for the ingest would leave the runtime queue stalled
+# for that whole window. This is the consequence ADR-026 called out.
+jobs:
+  runtime:
+    heartbeat_seconds: 10
+    dead_after_seconds: 60
+  authoring:
+    heartbeat_seconds: 30
+    # Fifteen minutes: the upper end of the 5-20 minute range ADR-017 gives for
+    # ingest and drafting work, plus room for a slow model server.
+    dead_after_seconds: 900

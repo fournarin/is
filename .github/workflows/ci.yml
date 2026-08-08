@@ -44,8 +44,42 @@ jobs:
       - name: the LLM is unreachable from runtime services (invariant 15, ADR-029)
         run: uv run python scripts/check_llm_isolation.py
 
-      - name: unit tests
-        run: uv run pytest
+      - name: unit tests (no database needed)
+        run: uv run pytest -m "not db"
+
+  test:
+    name: tier 1 - behaviour, against a real PostgreSQL
+    runs-on: ubuntu-latest
+    # ADR-031 forbids substituting SQLite: what most needs testing in the queue
+    # is exactly what SQLite lacks - SKIP LOCKED, partial indexes, CHECK
+    # constraints - so a substitute would pass tests the real thing would fail.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pdm
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: pdm_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports: ["5432:5432"]
+    env:
+      DATABASE_URL: postgresql://pdm:ci@localhost:5432/pdm_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      - name: apply migrations
+        run: uv run alembic upgrade head
+
+      - name: database-backed tests
+        run: uv run pytest -m db
 
   image:
     name: tier 0 - the image builds
@@ -69,4 +103,3 @@ jobs:
 # a CI run that is red from day one is a CI run nobody reads
 # (lessons_carried.md 4.4, and the table in git.md section 6.5).
 #
-#   test - split out of gate with a postgres service -> slice 1.3

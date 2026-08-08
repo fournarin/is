@@ -7,7 +7,7 @@
 
 [importlinter]
 root_package = pdm
-include_external_packages = False
+include_external_packages = True
 
 
 # ─────────────────────────────────────────────────────────────
@@ -124,12 +124,36 @@ modules =
 # would be meaningless: one entrypoint would drag in the other's dependencies.
 
 
-# Rules that cannot be expressed yet, and what they are waiting for:
-#
-#   domain.py in every module must not import any repo.py, nor the database layer
-#   -> invariant 10. Added in slice 1.x once domain.py and repo.py exist
-#      (import-linter requires every module named in a contract to be real).
-#
-#   src/pdm/ must not import sqlalchemy or alembic
-#   -> ADR-031, rule 8. Needs include_external_packages = True and is added in
-#      slice 1.3 when those dependencies actually arrive.
+# ─────────────────────────────────────────────────────────────
+# ADR-030 - invariant 10, now that domain.py and repo.py exist
+# ─────────────────────────────────────────────────────────────
+[importlinter:contract:domain-touches-no-io]
+name = domain.py must not reach the database or a repo (ADR-030, invariant 10)
+type = forbidden
+source_modules =
+    pdm.platform.jobs.domain
+forbidden_modules =
+    pdm.platform.db
+    pdm.platform.jobs.repo
+    psycopg
+# The rule that turns "dispatch() must be a pure function" from an agreement
+# into something the build refuses to accept. Extend source_modules as each
+# module grows its own domain.py.
+
+
+# ─────────────────────────────────────────────────────────────
+# ADR-031 rule 8 - the ORM must not creep back in
+# ─────────────────────────────────────────────────────────────
+[importlinter:contract:no-orm-in-the-application]
+name = src/pdm must not import sqlalchemy or alembic (ADR-031)
+type = forbidden
+source_modules =
+    pdm
+forbidden_modules =
+    sqlalchemy
+    alembic
+# Alembic pulls SQLAlchemy in as a transitive dependency, so without this rule
+# somebody will eventually notice it is installed and start using it in repo.py,
+# one file at a time. Both belong to migrations/ only. Reversing this decision
+# should be a deliberate, visible act rather than a slow leak - the same
+# reasoning as the network boundary in ADR-029.

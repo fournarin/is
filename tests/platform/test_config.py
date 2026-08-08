@@ -93,6 +93,10 @@ POLICY: dict[str, Any] = {
         },
     },
     "fallback_minutes": {"R-2000iC": {"low": 30, "medium": 45, "high": 60, "critical": 90}},
+    "jobs": {
+        "runtime": {"heartbeat_seconds": 10, "dead_after_seconds": 60},
+        "authoring": {"heartbeat_seconds": 30, "dead_after_seconds": 900},
+    },
 }
 
 
@@ -281,3 +285,20 @@ class TestConfigIsReadOnly:
         config = load_config(_write(tmp_path))
         with pytest.raises(ValidationError):
             config.stations[StationId("st-01")].buffer_units = 0
+
+
+class TestJobTiming:
+    """ADR-026: the two job classes cannot share a heartbeat threshold."""
+
+    def test_a_death_threshold_too_close_to_the_beat_is_rejected(self, tmp_path: Path) -> None:
+        """With the two set equal, one slow round trip reaps a healthy worker,
+        its job goes to another, and the first carries on - two workers on the
+        same job, which is what SKIP LOCKED was chosen to prevent."""
+        policy = _deep(POLICY)
+        policy["jobs"]["runtime"]["heartbeat_seconds"] = 40
+        with pytest.raises(ConfigError, match="three missed beats"):
+            load_config(_write(tmp_path, **{"policy.yaml": policy}))
+
+    def test_the_two_classes_are_configured_separately(self) -> None:
+        jobs = load_config(REPO_CONFIG).policy.jobs
+        assert jobs.authoring.dead_after_seconds > jobs.runtime.dead_after_seconds * 5

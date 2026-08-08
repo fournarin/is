@@ -225,6 +225,38 @@ class RetrievalPolicy(BaseModel):
         return self
 
 
+class JobTiming(BaseModel):
+    """Heartbeat and death thresholds for one job class (ADR-026)."""
+
+    model_config = _STRICT
+
+    heartbeat_seconds: int = Field(gt=0)
+    dead_after_seconds: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _death_comes_after_several_missed_beats(self) -> JobTiming:
+        """A job must be allowed to miss a beat without being declared dead.
+
+        With the two set equal, one slow network round trip reaps a healthy
+        worker, its job is handed to another, and the first one carries on - two
+        workers on the same job, which is precisely what SKIP LOCKED was chosen
+        to prevent.
+        """
+        if self.dead_after_seconds < self.heartbeat_seconds * 3:
+            raise ValueError(
+                f"dead_after_seconds must allow at least three missed beats, got "
+                f"{self.dead_after_seconds}s against a {self.heartbeat_seconds}s beat"
+            )
+        return self
+
+
+class JobPolicy(BaseModel):
+    model_config = _STRICT
+
+    runtime: JobTiming
+    authoring: JobTiming
+
+
 class PolicyConfig(BaseModel):
     model_config = _STRICT
 
@@ -236,3 +268,4 @@ class PolicyConfig(BaseModel):
     # Rough estimates used when no playbook exists, so long-tail work still gets
     # a duration and stays in the queue instead of vanishing (design.md 3.2).
     fallback_minutes: dict[MachineModel, dict[Severity, int]]
+    jobs: JobPolicy
