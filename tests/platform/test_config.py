@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from pdm.contracts import MachineId, MachineModel, StationId
 from pdm.platform.config import ConfigError, load_config
@@ -260,3 +261,23 @@ class TestLookups:
         line = config.line_of(MachineId("MC-001"))
         assert config.station_of(MachineId("MC-001")).buffer_minutes(line) == 20.0
         assert config.station_of(MachineId("MC-012")).buffer_minutes(line) == 0.0
+
+
+class TestConfigIsReadOnly:
+    """Config is an argument to dispatch(), which must be a pure function of its
+    inputs (invariant 10).
+
+    Freezing every contract and then handing the scheduler a writable config
+    would have enforced the rule on one input and not the other, which is the
+    kind of half-measure that looks enforced until the day it is not.
+    """
+
+    def test_stations_cannot_be_replaced(self, tmp_path: Path) -> None:
+        config = load_config(_write(tmp_path))
+        with pytest.raises(TypeError):
+            config.stations["st-99"] = config.stations["st-01"]  # type: ignore[index]
+
+    def test_a_station_itself_cannot_be_edited(self, tmp_path: Path) -> None:
+        config = load_config(_write(tmp_path))
+        with pytest.raises(ValidationError):
+            config.stations["st-01"].buffer_units = 0

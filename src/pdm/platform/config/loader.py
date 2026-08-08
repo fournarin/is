@@ -21,7 +21,9 @@ restart is how an operator ends up disabling validation.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import yaml
@@ -68,36 +70,46 @@ class Config:
         self.rules = rules
         self.policy = policy
 
-        self.lines: dict[LineId, Line] = {
-            line.line_id: Line(line_id=line.line_id, takt_seconds=line.takt_seconds)
-            for line in plant.lines
-        }
-        self.stations: dict[StationId, Station] = {}
-        self._station_of: dict[MachineId, StationId] = {}
-        self._model_of: dict[MachineId, MachineModel] = {}
+        stations: dict[StationId, Station] = {}
+        station_of: dict[MachineId, StationId] = {}
+        model_of: dict[MachineId, MachineModel] = {}
 
         for line in plant.lines:
             for station in line.stations:
-                machine_ids = tuple(machine.machine_id for machine in station.machines)
-                self.stations[station.station_id] = Station(
+                stations[station.station_id] = Station(
                     station_id=station.station_id,
                     line_id=line.line_id,
                     seq=station.seq,
                     buffer_units=station.buffer_units,
                     bottleneck_multiplier=station.bottleneck_multiplier,
-                    machine_ids=machine_ids,
+                    machine_ids=tuple(machine.machine_id for machine in station.machines),
                 )
                 for machine in station.machines:
-                    self._station_of[machine.machine_id] = station.station_id
-                    self._model_of[machine.machine_id] = machine.model
+                    station_of[machine.machine_id] = station.station_id
+                    model_of[machine.machine_id] = machine.model
 
+        # Read-only views, for the same reason every contract is frozen: config
+        # is an argument to dispatch(), which must be a pure function of its
+        # inputs (invariant 10). Freezing the contracts and leaving config
+        # writable would have left the rule half enforced.
+        self.lines: Mapping[LineId, Line] = MappingProxyType(
+            {
+                line.line_id: Line(line_id=line.line_id, takt_seconds=line.takt_seconds)
+                for line in plant.lines
+            }
+        )
+        self.stations: Mapping[StationId, Station] = MappingProxyType(stations)
         self.skills = frozenset(plant.skills)
-        self.shifts: dict[ShiftId, ShiftDefinition] = {
-            shift.shift_id: ShiftDefinition(
-                shift_id=shift.shift_id, starts_at=shift.starts_at, ends_at=shift.ends_at
-            )
-            for shift in plant.shifts
-        }
+        self.shifts: Mapping[ShiftId, ShiftDefinition] = MappingProxyType(
+            {
+                shift.shift_id: ShiftDefinition(
+                    shift_id=shift.shift_id, starts_at=shift.starts_at, ends_at=shift.ends_at
+                )
+                for shift in plant.shifts
+            }
+        )
+        self._station_of: Mapping[MachineId, StationId] = MappingProxyType(station_of)
+        self._model_of: Mapping[MachineId, MachineModel] = MappingProxyType(model_of)
 
     def station_of(self, machine_id: MachineId) -> Station:
         """Resolve the station a machine stands at.
