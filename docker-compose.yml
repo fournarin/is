@@ -1,0 +1,129 @@
+# Seven containers, two networks (design.md 1, ADR-026, ADR-029).
+#
+# The network split is not an optimisation. ADR-003 forbids the LLM from
+# generating repair instructions at runtime, and the import linter enforces that
+# for calls made through a module. It cannot see a raw HTTP request. Putting
+# llm-server on a network that api, web and worker-runtime are not members of
+# makes runtime generation physically impossible rather than merely forbidden,
+# and scripts/check_llm_isolation.py fails CI if that ever changes.
+#
+# Status: the images for api, worker-runtime, worker-authoring and web have no
+# entrypoint yet. This file exists now because it is the artefact that carries
+# the topology decision and makes invariant 15 checkable. Runnable services
+# arrive with slice 1.3 (job queue) and the web slice.
+
+name: pdm
+
+services:
+  # ── data ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [app]
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks: [app]
+    restart: unless-stopped
+
+  # ── application: one image, three roles (ADR-026) ─────────────────────
+  api:
+    build: .
+    command: ["python", "-m", "pdm.api"]           # entrypoint: later slice
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres: {condition: service_healthy}
+      qdrant: {condition: service_started}
+    volumes:
+      - ./config:/app/config:ro
+      - storage:/app/storage
+    ports: ["8000:8000"]
+    networks: [app]                                 # deliberately not [llm]
+    restart: unless-stopped
+
+  worker-runtime:
+    build: .
+    command: ["python", "-m", "pdm.workers.runtime"]
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres: {condition: service_healthy}
+    volumes:
+      - ./config:/app/config:ro
+      - storage:/app/storage
+    networks: [app]                                 # deliberately not [llm]
+    restart: unless-stopped
+
+  worker-authoring:
+    build: .
+    command: ["python", "-m", "pdm.workers.authoring"]
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres: {condition: service_healthy}
+      qdrant: {condition: service_started}
+    volumes:
+      - ./config:/app/config:ro
+      - storage:/app/storage
+    # The only service on both networks. ADR-017 keeps it at concurrency 1
+    # because the work behind it is GPU-bound anyway.
+    networks: [app, llm]
+    restart: unless-stopped
+
+  # ── models ────────────────────────────────────────────────────────────
+  # Embedding and reranker models load in-process inside api and the workers,
+  # because the extractive fallback is a runtime path (plan.md layer 2) and a
+  # separate container for them would add a hop while preventing nothing.
+  llm-server:
+    image: ollama/ollama:0.5.7
+    volumes:
+      - llm-models:/root/.ollama
+    # No `ports:` entry, and this is load-bearing rather than an omission:
+    # publishing a port would expose the model on the host and let anything
+    # reach it, which defeats the network split above.
+    networks: [llm]
+    restart: unless-stopped
+
+  # ── frontend ──────────────────────────────────────────────────────────
+  web:
+    build: ./web                                    # Next.js app: later slice
+    environment:
+      NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:8000}
+    depends_on: [api]
+    ports: ["3000:3000"]
+    networks: [app]                                 # deliberately not [llm]
+    restart: unless-stopped
+
+networks:
+  app:
+    driver: bridge
+  llm:
+    driver: bridge
+    # internal: true would also cut llm-server off from the outside world, but
+    # pulling a model needs egress on first run. Revisit once models are baked
+    # into the image for the air-gapped factory install (git.md 7).
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  llm-models:
+  # Source documents. ADR-019: content-addressed, never deleted by the
+  # application, and one of the two things that must be backed up.
+  storage:
