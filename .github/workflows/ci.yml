@@ -44,6 +44,9 @@ jobs:
       - name: the LLM is unreachable from runtime services (invariant 15, ADR-029)
         run: uv run python scripts/check_llm_isolation.py
 
+      - name: nothing in the application deletes a document (ADR-019)
+        run: uv run python scripts/check_no_blob_deletion.py
+
       - name: unit tests (no database needed)
         run: uv run pytest -m "not db"
 
@@ -96,8 +99,29 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: pdm:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Building is not enough for this one. Docker copies the image's ownership
+      # of a mount point onto a fresh named volume, and creates it root-owned if
+      # the path does not exist in the image - so the container runs, looks
+      # healthy, and fails at the first upload instead of at boot. Attaching a
+      # new volume the way compose does is the only way to see it (ADR-019).
+      - name: the document volume is writable by the runtime user (ADR-019)
+        run: |
+          docker run --rm \
+            -v pdm-ci-storage:/app/storage \
+            -e STORAGE_DIR=/app/storage \
+            pdm:ci python -c "
+          import os
+          from pdm.platform.objects import FilesystemObjectStore, storage_root
+          store = FilesystemObjectStore(storage_root())
+          document_id = store.put(b'%PDF-1.7 synthetic')
+          assert store.get(document_id) == b'%PDF-1.7 synthetic'
+          print('stored', document_id, 'as uid', os.getuid())
+          "
 
 # Steps to add once there is something for them to check. Do not add them early:
 # a CI run that is red from day one is a CI run nobody reads

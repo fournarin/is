@@ -32,6 +32,14 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ ./src/
 RUN uv sync --frozen --no-dev
 
+# The document volume mounts here. The directory has to exist in the image and
+# be owned by the runtime user *before* the volume is attached: Docker copies
+# the image's ownership onto a fresh named volume, and creates it root-owned if
+# the path is absent. Without this the object store cannot create its incoming/
+# directory on first use, and the failure appears at the first upload rather
+# than at boot (ADR-019).
+RUN mkdir -p /app/storage
+
 # Nothing runs as root. The factory host is shared and long-lived.
 RUN useradd --system --create-home --uid 10001 pdm \
     && chown -R pdm:pdm /app /opt/venv

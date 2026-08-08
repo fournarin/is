@@ -12,7 +12,7 @@ The rule is deliberately stricter than "domain code must not read the clock":
 *nothing* outside clock.py may, which is both easier to state and easier to
 check. Anything needing the time receives a Clock.
 
-Escape hatch: append `# noqa: clock` to a line that genuinely has to call the
+Escape hatch: append `# allow: wall-clock` to a line that genuinely has to call the
 system clock. It should be rare enough to be reviewed each time it appears.
 """
 
@@ -37,7 +37,7 @@ BANNED = re.compile(
     re.VERBOSE,
 )
 
-ESCAPE_HATCH = "noqa: clock"
+ESCAPE_HATCH = "allow: wall-clock"
 
 
 def main() -> int:
