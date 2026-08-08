@@ -152,13 +152,23 @@ class Corpus(BaseModel):
     covered: tuple[Answer, ...] = Field(min_length=1)
     documented_without_procedure: tuple[DocumentedOnly, ...] = ()
     absent: tuple[AbsentSymptom, ...] = ()
-    never_an_answer: tuple[PageRef, ...] = ()
+    never_an_answer: tuple[PageRef, ...] = Field(min_length=1)
 
     def document(self, machine_model: MachineModel) -> ManualDocument:
         for document in self.documents:
             if document.machine_model == machine_model:
                 return document
         raise KeyError(f"the corpus has no manual for {machine_model}")
+
+    def resolve(self, reference: PageRef, within: ManualDocument) -> tuple[str, int]:
+        """A page reference as (filename, page), with `document: None` filled in.
+
+        Every comparison between references has to go through this. Testing
+        `document is None` instead treats "the other manual" and "this manual,
+        named explicitly" as different things, and the checks that depend on the
+        distinction then pass on entries they were written to reject.
+        """
+        return (reference.document or within.filename, reference.page)
 
     def answer(self, symptom_code: SymptomCode) -> Answer:
         for answer in self.covered:

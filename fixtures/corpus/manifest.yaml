@@ -130,9 +130,12 @@ covered:
       mounting_screw_torque_nm: 3
       confirm_within_seconds: 30
     figures_on_the_page_that_are_not_the_answer:
-      - value: 4
-        unit: count
-        belongs_to: the number of screws, not a torque
+      # The sharpest one in the corpus: the same numeral is the hex driver size
+      # and the mounting torque, one line apart. A draft that swaps them cites
+      # evidence that genuinely contains "3" and is still wrong.
+      - value: 3
+        unit: mm
+        belongs_to: the hex driver size, not the mounting torque, which is also 3
     distractors:
       - page: 6
         why: the cabinet filter, which mentions fan speed only to say the filter

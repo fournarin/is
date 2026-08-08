@@ -109,3 +109,9 @@ why it does not live in a directory called `manuals/`.
   verifies the bytes, not that the script still reproduces them. Accepted,
   because the alternative is running a PDF writer in CI, which is exactly the
   coupling point 4 rejects.
+- **The demo seed will need the corpus inside the container, and it is not there
+  yet.** `fixtures/` is outside the wheel and outside the image, deliberately -
+  it is a measuring instrument, not part of the shipped system, and an import
+  rule now enforces that nothing under `src/` reaches it. Whichever slice builds
+  the seed has to mount or copy it explicitly, and **CI cannot warn about this**
+  because there is no seed yet to fail.

@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from fixtures.corpus import CORPUS, Corpus
+from fixtures.corpus import CORPUS, Corpus, ManualDocument, PageRef
 from fixtures.corpus.pages import MANUALS
 from pdm.platform.config import load_config
 
@@ -32,6 +32,18 @@ REPO_CONFIG = Path("config")
 @pytest.fixture(scope="module")
 def corpus() -> Corpus:
     return CORPUS
+
+
+def _page_text(machine_model: str, pages: tuple[int, ...]) -> str:
+    manual = next(m for m in MANUALS if m.machine_model == machine_model)
+    return "\n".join(
+        f"{page.heading}\n{page.body}" for page in manual.pages if page.number in pages
+    )
+
+
+def _numeral(value: float) -> str:
+    """How the figure would be written on the page: 3.0 as "3", 12.5 as "12.5"."""
+    return str(int(value)) if value == int(value) else str(value)
 
 
 class TestTheBytesAreFrozen:
@@ -149,36 +161,60 @@ class TestTheAnswerKeyIsUsable:
     def test_every_cited_page_exists_in_the_document_it_names(self, corpus: Corpus) -> None:
         by_name = {document.filename: document for document in corpus.documents}
 
+        def check(reference: PageRef, within: ManualDocument) -> None:
+            filename, page = corpus.resolve(reference, within)
+            assert filename in by_name, f"{filename} is not a document in this corpus"
+            assert 1 <= page <= by_name[filename].pages
+
         for answer in corpus.covered:
             own = corpus.document(answer.machine_model)
             for page in (*answer.answer_pages, *answer.supporting_pages):
                 assert 1 <= page <= own.pages
             for distractor in answer.distractors:
-                document = by_name[distractor.document] if distractor.document else own
-                assert 1 <= distractor.page <= document.pages
+                check(distractor, own)
 
         for documented in corpus.documented_without_procedure:
             own = corpus.document(documented.machine_model)
             for page in documented.pages:
                 assert 1 <= page <= own.pages
 
+        # never_an_answer names its document outright, so any manual will do as
+        # the fallback; what matters is that the filename resolves at all.
+        for reference in corpus.never_an_answer:
+            check(reference, corpus.documents[0])
+
     def test_an_answer_page_is_never_also_a_distractor_for_the_same_symptom(
         self, corpus: Corpus
     ) -> None:
+        """Compared after resolving, not by whether `document` was left out. A
+        distractor that spells out its own manual's filename and points at the
+        answer page is the same contradiction written differently."""
         for answer in corpus.covered:
-            same_document = {
-                distractor.page for distractor in answer.distractors if distractor.document is None
-            }
-            assert not same_document & set(answer.answer_pages)
+            own = corpus.document(answer.machine_model)
+            declared = {corpus.resolve(d, own) for d in answer.distractors}
+            answers = {(own.filename, page) for page in answer.answer_pages}
+            assert not declared & answers
 
-    def test_every_covered_symptom_declares_a_cross_model_distractor(self, corpus: Corpus) -> None:
+    def test_every_covered_symptom_declares_a_distractor_from_the_other_manual(
+        self, corpus: Corpus
+    ) -> None:
         """The wrong-model case is the one ADR-015 says reviewers are worst at,
         because a step from the other manual reads perfectly well. A corpus
-        without it lets a retriever that ignores machine model score full
-        marks."""
+        without it lets a retriever that ignores machine model score full marks.
+
+        Checked by resolved filename: `document is not None` is satisfied by a
+        distractor naming its own manual, which is not a cross-model case at
+        all and leaves this guarantee unenforced.
+        """
         for answer in corpus.covered:
-            assert any(distractor.document is not None for distractor in answer.distractors), (
-                f"{answer.symptom_code} has no distractor from the other manual"
+            own = corpus.document(answer.machine_model)
+            elsewhere = {
+                filename
+                for filename, _ in (corpus.resolve(d, own) for d in answer.distractors)
+                if filename != own.filename
+            }
+            assert elsewhere, (
+                f"{answer.symptom_code} has no distractor from a manual other than {own.filename}"
             )
 
     def test_the_gate_blind_spot_is_recorded_for_every_covered_symptom(
@@ -190,9 +226,69 @@ class TestTheAnswerKeyIsUsable:
         for answer in corpus.covered:
             assert answer.figures_on_the_page_that_are_not_the_answer
 
+    def test_every_recorded_blind_spot_is_really_a_numeral_on_the_answer_page(
+        self, corpus: Corpus
+    ) -> None:
+        """A blind spot only exists if the gate would actually let it through,
+        which means the numeral has to be on the page the step cites. One
+        recorded here read "4 screws" where the page spells the word "four", so
+        the gate would have caught it and the entry described a hazard that was
+        not there.
+
+        Matched with the unit attached. A bare digit is on almost every page as
+        a step number, so searching for one finds something regardless of
+        whether the figure exists - which is how the wrong entry survived being
+        checked in the first place.
+        """
+        for answer in corpus.covered:
+            text = _page_text(answer.machine_model, answer.answer_pages)
+            for figure in answer.figures_on_the_page_that_are_not_the_answer:
+                written = f"{_numeral(figure.value)} {figure.unit}"
+                assert written in text, (
+                    f"{answer.symptom_code}: {written!r} does not appear on page(s) "
+                    f"{list(answer.answer_pages)}, so the gate would reject a draft "
+                    f"quoting it and this is not a blind spot"
+                )
+
     def test_the_first_page_of_each_manual_is_never_an_answer(self, corpus: Corpus) -> None:
         never = {(ref.document, ref.page) for ref in corpus.never_an_answer}
         for answer in corpus.covered:
             document = corpus.document(answer.machine_model)
             for page in answer.answer_pages:
                 assert (document.filename, page) not in never
+
+
+class TestTheManifestAgreesWithTheText:
+    """The manifest repeats what pages.py already says, and the two can drift.
+
+    Nothing else would notice: rebuilding after an edit updates the sha, the
+    hash test goes green, and the manifest keeps claiming a page count or a
+    title that is no longer true - while every citation recorded against it is
+    read as authoritative.
+    """
+
+    def test_each_manual_appears_in_both_with_the_same_description(self, corpus: Corpus) -> None:
+        by_filename = {manual.filename: manual for manual in MANUALS}
+        assert {document.filename for document in corpus.documents} == set(by_filename)
+
+        for document in corpus.documents:
+            manual = by_filename[document.filename]
+            assert document.title == manual.title
+            assert document.machine_model == manual.machine_model
+            assert document.edition == manual.edition
+            assert document.pages == len(manual.pages)
+
+    def test_page_numbers_run_from_one_without_gaps(self) -> None:
+        """The printed footer comes from Page.number while the PDF page index
+        comes from position in the list. A citation points at the printed
+        number and ingest will read the index, so the two drifting apart makes
+        every recorded page reference quietly wrong."""
+        for manual in MANUALS:
+            assert [page.number for page in manual.pages] == list(range(1, len(manual.pages) + 1))
+
+    def test_the_lockout_page_is_the_page_about_lockout(self, corpus: Corpus) -> None:
+        """Every corrective procedure in the corpus begins by citing it."""
+        for document in corpus.documents:
+            manual = next(m for m in MANUALS if m.filename == document.filename)
+            heading = manual.pages[document.lockout_page - 1].heading.lower()
+            assert "lockout" in heading
