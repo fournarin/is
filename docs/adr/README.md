@@ -1,0 +1,61 @@
+# Architecture decision records
+
+Thirty-one decisions, in the order they were made. Each records the context that
+forced it, the decision, the reasoning, and what followed. Read in order, they
+are the design rationale for the system; read individually, each answers "why is
+this part shaped this way".
+
+**These are append-only.** An ADR is never edited after the fact. Changing your
+mind means writing a new one that references the old, so the record shows what
+was believed at the time rather than only what is believed now. Several later
+entries replace parts of earlier ones, and both are kept.
+
+| # | Decision | Superseded in part by |
+|---|---|---|
+| [001](0001-three-layers-buildable-in-parallel.md) | Three layers that can be built in parallel | 010, 012 |
+| [002](0002-signalsource-interface-with-three-implementations.md) | `SignalSource` is an interface with three implementations | |
+| [003](0003-no-llm-generated-repair-text-at-runtime.md) | **The LLM does not write repair instructions at runtime** | |
+| [004](0004-rule-based-detection-before-machine-learning.md) | Start with rules, not machine learning | 020 |
+| [005](0005-every-ticket-carries-its-reason.md) | Every ticket must carry a reason for its priority | |
+| [006](0006-estimated-and-actual-minutes-are-separate.md) | Estimated and actual duration are separate fields | 025 |
+| [007](0007-phase-one-targets-a-demo-the-advisor-can-negotiate-with.md) | Phase 1 aims at a demo the advisor can negotiate with | |
+| [008](0008-technology-stack.md) | Technology stack, and the boundary around Redis | 017 |
+| [009](0009-component-comes-from-the-rule-not-from-inference.md) | Component comes from the rule, never from inference | 016 |
+| [010](0010-work-orders-have-an-origin.md) | Work does not only come from a Finding | |
+| [011](0011-load-ratio-switches-dispatch-behaviour.md) | Dispatch switches behaviour on load, not on score alone | |
+| [012](0012-tickets-leave-through-an-adapter.md) | Tickets leave through an adapter interface | |
+| [013](0013-playbooks-are-immutable-versions.md) | A playbook version cannot be edited in place | 018 |
+| [014](0014-report-and-technician-trial-are-reserved-unconditionally.md) | Reserve time for the report and the technician trial | |
+| [015](0015-recall-at-authoring-precision-at-runtime.md) | Recall at authoring, precision at runtime | |
+| [016](0016-component-is-a-config-label-not-a-database-entity.md) | Component is a configuration label, not an entity | |
+| [017](0017-postgres-is-the-job-queue.md) | PostgreSQL is the job queue; no Redis | |
+| [018](0018-drop-the-version-chain-move-history-to-the-work-order.md) | Drop the version chain; history moves to the work order | |
+| [019](0019-content-addressed-document-storage-served-through-the-api.md) | Content-addressed storage, served through the API | |
+| [020](0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md) | **Prediction by trend extrapolation, measured on synthetic data** | |
+| [021](0021-downtime-cost-at-station-level-with-buffers.md) | Downtime cost per station and buffer, not per line | |
+| [022](0022-every-improvement-loop-proposes-rather-than-changes.md) | Every improvement loop proposes; it does not change | |
+| [023](0023-findings-have-a-lifecycle-and-a-suppression-window.md) | Findings have a lifecycle and a suppression window | |
+| [024](0024-roles-and-approval-authority.md) | Roles and approval authority | |
+| [025](0025-work-orders-support-handover-and-multi-person-jobs.md) | Shift handover and multi-person jobs | |
+| [026](0026-split-the-worker-into-two-roles.md) | Split the worker into runtime and authoring | |
+| [027](0027-operational-data-contracts.md) | Operational contracts: station, technician, shift, PM task | |
+| [028](0028-clock-is-the-single-time-port.md) | `Clock` is the single time port | |
+| [029](0029-where-the-models-run.md) | Where the models run, and ADR-003 at the network layer | |
+| [030](0030-package-layout-io-boundary-and-self-contained-work-orders.md) | Package layout, the I/O boundary, self-contained work orders | |
+| [031](0031-plain-sql-against-postgres-no-orm.md) | Plain SQL against PostgreSQL, no ORM | |
+
+## Where to start
+
+Three decisions carry most of the system's shape, and the rest follow from them:
+
+- **[003](0003-no-llm-generated-repair-text-at-runtime.md)** - the LLM works
+  before the job, not during it. This is the most expensive constraint in the
+  design and the one everything else bends around. It is enforced twice, by an
+  import rule and by a network boundary
+  ([029](0029-where-the-models-run.md)).
+- **[020](0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)** -
+  how the system predicts without failure labels, and how that prediction is
+  measured before any real data arrives.
+- **[011](0011-load-ratio-switches-dispatch-behaviour.md)** - why scheduling has
+  a gate and a score rather than one formula, which is what lets it explain
+  itself in a sentence.
