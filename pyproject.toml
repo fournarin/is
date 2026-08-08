@@ -24,6 +24,7 @@ dev = [
     "pytest>=8.4",
     "import-linter>=2.3",
     "types-pyyaml>=6.0.12.20260724",
+    "fpdf2>=2.8",
 ]
 
 [build-system]
@@ -39,7 +40,10 @@ packages = ["src/pdm"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+# The repo root is listed so that `fixtures` resolves as first-party. Without
+# it the corpus imports are sorted as though they came from PyPI, which reads as
+# though the answer key were a third-party package (ADR-033).
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 select = [
@@ -75,7 +79,7 @@ ban-relative-imports = "parents"
 # ─────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "tests", "scripts"]
+files = ["src", "tests", "scripts", "fixtures"]
 strict = true
 warn_unreachable = true
 

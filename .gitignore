@@ -33,6 +33,20 @@ manuals/
 *.pdf
 !docs-md/**/*.pdf
 
+# The one exception, deliberately narrow (ADR-033). The synthetic corpus has to
+# be committed because ADR-019 makes a document's sha256 its id, so generating
+# the files at test time would tie every id to a PDF library version. It is not
+# in a directory called manuals/ so that the rule above keeps applying to
+# anything that is.
+#
+# The two files are named rather than globbed. A glob re-includes anything with
+# a .pdf extension dropped into that directory, and the only thing that would
+# notice is a test in CI - by which point a real manual has already been pushed
+# to GitHub. Named, an unexpected PDF stays ignored and cannot be committed at
+# all, and adding one to the corpus is a deliberate edit here.
+!fixtures/corpus/r-2000ic-maintenance.pdf
+!fixtures/corpus/m-710ic-maintenance.pdf
+
 # ─────────────────────────────────────────────────────────────
 # Secrets
 # ─────────────────────────────────────────────────────────────

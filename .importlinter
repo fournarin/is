@@ -143,6 +143,22 @@ forbidden_modules =
 
 
 # ─────────────────────────────────────────────────────────────
+# ADR-033 - the measuring instrument is not part of the system
+# ─────────────────────────────────────────────────────────────
+[importlinter:contract:fixtures-are-not-shipped]
+name = src/pdm must not import the fixture corpus (ADR-033)
+type = forbidden
+source_modules =
+    pdm
+forbidden_modules =
+    fixtures
+# The corpus is an answer key and a demo seed. Imported from src/, it would ship
+# with the system, and a synthetic manual sitting in the same store as the real
+# ones is a page a technician could be served. The docstring said so; this is
+# what makes it true.
+
+
+# ─────────────────────────────────────────────────────────────
 # ADR-031 rule 8 - the ORM must not creep back in
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:no-orm-in-the-application]

@@ -1,0 +1,188 @@
+# The answer key for the synthetic manual corpus (ADR-033).
+#
+# This file is the point of the corpus. Two PDFs on their own would let any
+# retriever be measured against whatever it happened to return; written down
+# before the retriever exists, this is a commitment made in ignorance of the
+# result.
+#
+# Three categories, because the honest answer differs in each:
+#
+#   covered                      a procedure exists - a repair playbook can be
+#                                drafted, and its figures can be checked
+#   documented_without_procedure the manual discusses the symptom and
+#                                deliberately prescribes no steps - layer 2 owes
+#                                a fault-finding playbook, not a repair one
+#                                (ADR-009), and both of these are the rules whose
+#                                component is "unknown"
+#   absent                       nothing anywhere - the "not found, see page X or
+#                                ask an engineer" path (principle 5)
+#
+# Nothing here came from a real manual. Every figure is invented and none of it
+# is maintenance instruction.
+
+version: 1
+
+documents:
+  - filename: r-2000ic-maintenance.pdf
+    # sha256 of the file contents, which ADR-019 makes the document id.
+    # A test fails if the file on disk disagrees.
+    sha256: 34dce924e0ee125b54ded6e88b8503f947c52d885130f1ef28bba11e27d9214b
+    title: R-2000iC Maintenance Manual
+    machine_model: R-2000iC
+    edition: Edition 3, synthetic
+    pages: 11
+    lockout_page: 2
+
+  - filename: m-710ic-maintenance.pdf
+    sha256: 0f7075b8cef63dc94d5c557a5739cb4aec5ad832d6b87dceefbe26dc5052c8a2
+    title: M-710iC Maintenance Manual
+    machine_model: M-710iC
+    edition: Edition 1, synthetic
+    pages: 7
+    lockout_page: 2
+
+covered:
+  - symptom_code: SYM-014
+    machine_model: R-2000iC
+    answer_pages: [4]
+    # Pages a good retriever should also surface, but which are not the answer.
+    supporting_pages: [2, 3]
+    required_skill: robot_mechanical
+    estimated_minutes: 45
+    tools:
+      - torque wrench 5-60 Nm
+      - belt tension gauge
+      - 10 mm socket
+    # What a correct draft is allowed to state. The authoring gate checks that
+    # every figure in a drafted step appears in the evidence it cites; this is
+    # the narrower question of whether the figure is the *right* one.
+    correct_figures:
+      motor_mount_torque_nm: 42
+      guard_bolt_torque_nm: 10
+      belt_deflection_mm: [4, 6]
+      deflection_force_n: 20
+      threshold_c: 85
+    # Figures that sit on the answer page and belong to something else. A draft
+    # using one of these passes the subset gate and is still wrong, which is the
+    # gate's known limit and has to be stated in the report rather than
+    # discovered later.
+    figures_on_the_page_that_are_not_the_answer:
+      - value: 10
+        unit: Nm
+        belongs_to: guard bolts, not the motor mount
+      - value: 20
+        unit: minutes
+        belongs_to: the run-in period, not the deflection force
+    distractors:
+      - page: 5
+        why: belt replacement, repeats the 42 Nm mount figure and adds an 18 Nm
+          idler figure that does not apply to this task
+      - document: m-710ic-maintenance.pdf
+        page: 4
+        why: the same symptom on the other model, reading perfectly well with
+          28 Nm and 6 Nm - the wrong-model case ADR-015 says reviewers miss
+    queries:
+      en: belt motor running above 85 degrees, what do I check
+      th: มอเตอร์สายพานร้อนเกิน 85 องศา ต้องตรวจอะไรบ้าง
+
+  - symptom_code: SYM-021
+    machine_model: R-2000iC
+    answer_pages: [7]
+    supporting_pages: [2, 6]
+    required_skill: robot_mechanical
+    estimated_minutes: 60
+    tools:
+      - grease gun
+      - torque wrench 5-60 Nm
+      - inspection mirror
+    correct_figures:
+      threshold_a: 12.5
+      grease_grams: 90
+      inspection_plug_torque_nm: 12
+      return_below_a: 9
+    figures_on_the_page_that_are_not_the_answer:
+      - value: 10
+        unit: minutes
+        belongs_to: the unloaded run, not a torque or a quantity
+    distractors:
+      - page: 8
+        why: axis 2, same procedure and different figures (60 g, 8 Nm, 11 A) -
+          a draft mixing the two reads correctly and is wrong
+      - document: m-710ic-maintenance.pdf
+        page: 7
+        why: axis 1 on the other model, which states no procedure exists
+    queries:
+      en: axis 1 current above 12.5 A
+      th: กระแสแกน 1 เกิน 12.5 แอมป์ ทำอย่างไร
+
+  - symptom_code: SYM-047
+    machine_model: M-710iC
+    answer_pages: [5]
+    supporting_pages: [2]
+    required_skill: electrical
+    estimated_minutes: 25
+    tools:
+      - 3 mm hex driver
+      - torque screwdriver 1-5 Nm
+    correct_figures:
+      threshold_rpm: 1200
+      nominal_rpm: 1500
+      mounting_screw_torque_nm: 3
+      confirm_within_seconds: 30
+    figures_on_the_page_that_are_not_the_answer:
+      # The sharpest one in the corpus: the same numeral is the hex driver size
+      # and the mounting torque, one line apart. A draft that swaps them cites
+      # evidence that genuinely contains "3" and is still wrong.
+      - value: 3
+        unit: mm
+        belongs_to: the hex driver size, not the mounting torque, which is also 3
+    distractors:
+      - page: 6
+        why: the cabinet filter, which mentions fan speed only to say the filter
+          cannot be judged by it
+      - document: r-2000ic-maintenance.pdf
+        page: 9
+        why: the other model's fan section, which quotes the same 1200 rpm floor
+          and gives no procedure
+    queries:
+      en: cabinet fan slower than 1200 rpm
+      th: พัดลมตู้คอนโทรลหมุนต่ำกว่า 1200 rpm
+
+documented_without_procedure:
+  - symptom_code: SYM-002
+    machine_model: R-2000iC
+    pages: [11]
+    why: the correct action depends on which interlock channel disagrees, so the
+      manual gives none. Layer 2 owes a fault-finding playbook here, and the rule
+      that raises it declares component "unknown" for the same reason (ADR-009).
+      Bypassing the interlock is prohibited on the page, which is the one thing a
+      draft must never contradict.
+    queries:
+      en: interlock reported open but the gate is closed
+      th: interlock แจ้งว่าเปิดทั้งที่ประตูปิดอยู่
+
+absent:
+  - symptom_code: SYM-031
+    machine_model: M-710iC
+    why: cycle time is measured by the line controller, and the robot manual says
+      nothing about it. The retriever must return nothing rather than the nearest
+      page, and the answer to the technician is "not found - ask an engineer".
+      Without this case that path first executes in front of a real person.
+    # Declaring a gap is cheap; the gap has to stay real. A test reads every page
+    # of the corpus and fails if any of these appears, so an edit that quietly
+    # adds a paragraph about cycle time cannot make the "not found" path
+    # unreachable without saying so.
+    forbidden_phrases:
+      - cycle time
+      - takt
+    queries:
+      en: cycle time drifting above 62 seconds
+      th: cycle time ค่อย ๆ สูงขึ้นเกิน 62 วินาที
+
+# Retrieval that returns any of these for any query is retrieving on layout
+# rather than on content.
+never_an_answer:
+  - document: r-2000ic-maintenance.pdf
+    page: 1
+  - document: m-710ic-maintenance.pdf
+    page: 1
