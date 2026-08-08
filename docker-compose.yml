@@ -43,6 +43,12 @@ services:
   api:
     build: .
     command: ["python", "-m", "pdm.api"]           # entrypoint: later slice
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # The path is the mount below. There is no default in the code (ADR-019):
+      # a service that starts against a guessed directory looks healthy while
+      # writing documents somewhere nobody backs up.
+      STORAGE_DIR: /app/storage
     env_file:
       - path: .env
         required: false
@@ -59,6 +65,12 @@ services:
   worker-runtime:
     build: .
     command: ["python", "-m", "pdm.workers.runtime"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # The path is the mount below. There is no default in the code (ADR-019):
+      # a service that starts against a guessed directory looks healthy while
+      # writing documents somewhere nobody backs up.
+      STORAGE_DIR: /app/storage
     env_file:
       - path: .env
         required: false
@@ -73,6 +85,12 @@ services:
   worker-authoring:
     build: .
     command: ["python", "-m", "pdm.workers.authoring"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # The path is the mount below. There is no default in the code (ADR-019):
+      # a service that starts against a guessed directory looks healthy while
+      # writing documents somewhere nobody backs up.
+      STORAGE_DIR: /app/storage
     env_file:
       - path: .env
         required: false
