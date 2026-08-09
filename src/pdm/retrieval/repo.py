@@ -7,13 +7,14 @@ screen's evidence panel.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from psycopg import Connection
 from psycopg.rows import dict_row
 
 from pdm.contracts import DocumentId, MachineModel
-from pdm.retrieval.domain import Chunk, IndexedPage, PageOutcome, SearchHit
+from pdm.retrieval.domain import Chunk, ChunkKey, IndexedPage, PageOutcome, SearchHit
 
 
 def replace_pages(conn: Connection[Any], document_id: DocumentId, pages: list[IndexedPage]) -> None:
@@ -105,6 +106,84 @@ def needing_ocr(conn: Connection[Any], document_id: DocumentId) -> list[int]:
         )
         rows = cur.fetchall()
     return [int(row[0]) for row in rows]
+
+
+def chunks_by_key(conn: Connection[Any], keys: Sequence[ChunkKey]) -> list[Chunk]:
+    """Fetch chunks the vector half returned by key.
+
+    The vector store holds identity and no text: duplicating the text there
+    would give two copies to keep in step, and PostgreSQL is where it lives.
+    Order is not preserved - the caller has the ranking and reorders.
+
+    Withdrawn manuals are excluded here as well as in `search`. The vector half
+    is cleaned when a document is withdrawn, but the two stores are separate and
+    the whole point of filtering in `search` was that the worst case should be a
+    stale row rather than a technician sent to a manual out of service - which
+    only holds if both routes to a chunk apply it.
+    """
+    if not keys:
+        return []
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT c.document_id, c.page, c.ordinal, c.text
+              FROM chunk c
+              JOIN document d ON d.document_id = c.document_id
+             WHERE d.status = 'active'
+               AND (c.document_id, c.page, c.ordinal) IN (
+                       SELECT * FROM unnest(%s::text[], %s::int[], %s::int[])
+                   )
+            """,
+            (
+                [key[0] for key in keys],
+                [key[1] for key in keys],
+                [key[2] for key in keys],
+            ),
+        )
+        rows = cur.fetchall()
+    return [Chunk.model_validate(row) for row in rows]
+
+
+def chunks_of(conn: Connection[Any], document_id: DocumentId) -> list[Chunk]:
+    """Every chunk of one document, in reading order.
+
+    What the vector half is given to embed after the text half has been
+    written - which is the order ADR-035 requires, so a crash between the two
+    leaves a chunk the dense half cannot see rather than a vector pointing at
+    nothing.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT document_id, page, ordinal, text
+              FROM chunk
+             WHERE document_id = %s
+             ORDER BY page, ordinal
+            """,
+            (document_id,),
+        )
+        rows = cur.fetchall()
+    return [Chunk.model_validate(row) for row in rows]
+
+
+def documents_of(
+    conn: Connection[Any], document_ids: Sequence[DocumentId]
+) -> dict[DocumentId, tuple[str, MachineModel]]:
+    """Title and machine model per document, for labelling candidates.
+
+    One query for the whole result set rather than one per hit: the review
+    screen shows eight at a time and the difference between one round trip and
+    eight is the difference between a screen that opens and one that hesitates.
+    """
+    if not document_ids:
+        return {}
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT document_id, title, machine_model FROM document WHERE document_id = ANY(%s)",
+            (list(set(document_ids)),),
+        )
+        rows = cur.fetchall()
+    return {row["document_id"]: (row["title"], row["machine_model"]) for row in rows}
 
 
 # plainto_tsquery normalises, stems and drops stopwords, then joins the lexemes

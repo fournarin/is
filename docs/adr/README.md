@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Thirty-four decisions, in the order they were made. Each records the context that
+Thirty-five decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -19,7 +19,7 @@ entries replace parts of earlier ones, and both are kept.
 | [005](0005-every-ticket-carries-its-reason.md) | Every ticket must carry a reason for its priority | |
 | [006](0006-estimated-and-actual-minutes-are-separate.md) | Estimated and actual duration are separate fields | 025 |
 | [007](0007-phase-one-targets-a-demo-the-advisor-can-negotiate-with.md) | Phase 1 aims at a demo the advisor can negotiate with | |
-| [008](0008-technology-stack.md) | Technology stack, and the boundary around Redis | 017 |
+| [008](0008-technology-stack.md) | Technology stack, and the boundary around Redis | 017, 035 |
 | [009](0009-component-comes-from-the-rule-not-from-inference.md) | Component comes from the rule, never from inference | 016 |
 | [010](0010-work-orders-have-an-origin.md) | Work does not only come from a Finding | |
 | [011](0011-load-ratio-switches-dispatch-behaviour.md) | Dispatch switches behaviour on load, not on score alone | |
@@ -46,6 +46,7 @@ entries replace parts of earlier ones, and both are kept.
 | [032](0032-what-the-synthetic-source-guarantees.md) | What `SyntheticSource` guarantees, and what it cannot | |
 | [033](0033-a-synthetic-manual-corpus-that-carries-its-own-answer-key.md) | A synthetic manual corpus, carrying its own answer key | |
 | [034](0034-pdf-text-with-page-provenance-and-what-happens-when-there-is-none.md) | PDF text with page provenance, and pages that yield none | |
+| [035](0035-embedding-in-process-vectors-in-qdrant-and-the-fusion-between.md) | Embedding in process, vectors in Qdrant, fusion on ranks | |
 
 ## Where to start
 
