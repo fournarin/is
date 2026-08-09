@@ -18,6 +18,7 @@ from psycopg import Connection
 from pydantic import BaseModel, ConfigDict, Field
 
 from pdm.contracts import DocumentId, MachineModel
+from pdm.platform.config.schema import RetrievalPolicy
 from pdm.retrieval import repo
 from pdm.retrieval.domain import Chunk, FusedHit, SearchHit, fuse
 from pdm.retrieval.embedding import Embedder
@@ -46,8 +47,32 @@ class Profile(BaseModel):
     same_model_only: bool
 
 
-AUTHORING = Profile(candidates=8, min_score=0.0, abstain=False, same_model_only=False)
-RUNTIME = Profile(candidates=4, min_score=0.5, abstain=True, same_model_only=True)
+def profiles_from(policy: RetrievalPolicy) -> tuple[Profile, Profile]:
+    """The two profiles as configured, in the order (authoring, runtime).
+
+    Built from `policy.yaml` rather than written here. The first version of this
+    module hardcoded them, with a docstring claiming they came from config -
+    which meant retuning the file changed nothing, and the two values drifted
+    apart without anything noticing. `RetrievalPolicy` already validates at boot
+    that the authoring profile is the looser of the two (ADR-015).
+
+    `same_model_only` is not in the file and is not configurable: it is the one
+    line ADR-015 says does not move, and a knob for it is a knob somebody turns.
+    """
+    return (
+        Profile(
+            candidates=policy.authoring.candidates,
+            min_score=policy.authoring.min_score,
+            abstain=policy.authoring.abstain,
+            same_model_only=False,
+        ),
+        Profile(
+            candidates=policy.runtime.candidates,
+            min_score=policy.runtime.min_score,
+            abstain=policy.runtime.abstain,
+            same_model_only=True,
+        ),
+    )
 
 
 class Retrieved(BaseModel):
@@ -108,7 +133,7 @@ class HybridSearch:
         query: str,
         *,
         machine_model: MachineModel | None = None,
-        profile: Profile = AUTHORING,
+        profile: Profile,
     ) -> list[Retrieved]:
         """Both halves, fused, filtered by the profile.
 

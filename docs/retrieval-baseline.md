@@ -23,6 +23,11 @@ corpus: 2 synthetic manuals, 18 pages, 19 chunks (ADR-033)
 
 Fusion finds the answer in all 8 cases and ranks it first in 4.
 
+Rank counts **pages**, not hits: two chunks of the same page are one place. On
+this corpus that makes no difference - 19 chunks across 18 pages - but on a real
+manual, where a page is several chunks, ranking the raw hit list would publish a
+page reached second as third or fourth.
+
 ## What this says, including the part that is not flattering
 
 **Fusion does not beat the word half on this corpus, and on SYM-021 it is
@@ -62,6 +67,24 @@ sparse puts the overview page 3 first, fusion puts the procedure on page 4 first
 That hybrid retrieval improves accuracy. It did not, here. What it did was
 answer questions the other half could not answer at all, which is a different
 claim and the one the report should make.
+
+## What the runtime gate does with these
+
+A fused score of 0.5 means one half found the page and the other did not. The
+runtime profile's threshold sits above that (`policy.yaml`), so:
+
+- the Thai questions in the table above pass, because the word half finds them
+  through their figures and the meaning half agrees;
+- the Thai questions **without** a figure do not. The word half returns nothing,
+  the score tops out at 0.5, and runtime abstains rather than serving a page one
+  method found alone. Authoring offers them, which is the split ADR-015 asks
+  for.
+
+The second point is a real limitation of what a technician can be answered
+directly, not an accident of the threshold. Lowering it below 0.5 would mean
+serving single-method results to somebody with nobody checking - and the same
+gate is what makes the system abstain rather than pretend if the vector store is
+down.
 
 ## Next measurement
 

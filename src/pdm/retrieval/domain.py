@@ -182,6 +182,23 @@ def fuse(rankings: Sequence[Sequence[Chunk]], *, k: int = RRF_K) -> list[FusedHi
             positions.setdefault(key, [None] * len(rankings))[index] = position
             total[key] = total.get(key, 0.0) + 1.0 / (k + position)
 
+    # Every half asked counts towards the ceiling, including one that came back
+    # empty. The alternative - dividing only by the halves that answered - was
+    # tried and is worse in both directions it matters:
+    #
+    #   a query only one half can answer would score the maximum, so the runtime
+    #   gate would pass it at full confidence on the evidence of one method with
+    #   no corroboration;
+    #
+    #   and if the vector store were down, every score would still read as
+    #   perfect, so runtime would serve word-only results as though both halves
+    #   had agreed.
+    #
+    # Counted this way the score means one fixed thing - agreement across the
+    # halves this system consults - and the two consequences are the intended
+    # ones: a Thai question with no figure in it tops out at 0.5, which
+    # authoring offers and runtime abstains on (ADR-015), and a dead half makes
+    # runtime abstain rather than pretend.
     best_possible = len(rankings) / (k + 1)
 
     hits = [

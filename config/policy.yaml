@@ -59,10 +59,27 @@ triggers:
 # author's earlier on-premise RAG system and are starting points, not universal
 # constants; they must be retuned on this project's own gold set before any
 # number derived from them appears in the report.
+# Thresholds are on the **fused** scale, which ADR-035 defines and which the two
+# halves' own scores are not on: ts_rank_cd is unbounded and cosine similarity is
+# dense around 0.8 for anything related. After fusion:
+#
+#   1.0   both halves ranked this first
+#   ~0.98 both halves found it, both near the top
+#   0.5   only one of the two halves found it at all
+#
+# A half that returns nothing still counts. That is what makes the number mean
+# one thing - agreement between the halves - and it has two intended
+# consequences. A Thai question with no figure in it, where the word half finds
+# nothing at all (ADR-034), tops out at 0.5: authoring offers those and runtime
+# abstains, which is exactly the split ADR-015 asks for. And if the vector store
+# is down, every score halves and runtime abstains rather than serving word-only
+# results as though both halves had agreed.
 retrieval:
   # Recall leads here, because an engineer reviews every draft. Missing the right
   # manual page means that playbook never exists and nobody learns the gap was
   # there; pulling something irrelevant costs a reviewer a few seconds.
+  #
+  # Below 0.5, so a page only one half found is still offered.
   authoring:
     min_score: 0.20
     candidates: 40
@@ -70,9 +87,14 @@ retrieval:
 
   # Precision leads here, because nothing stands between the system and the
   # technician. The review already happened, at approval time.
+  #
+  # Above 0.5 on purpose: where both halves had an opinion, they have to broadly
+  # agree. The previous value of 0.35 sat below the score of a hit only one half
+  # found, so the abstain gate ADR-015 requires could never fire - it read as
+  # strict and admitted everything.
   runtime:
-    min_score: 0.35
-    safety_min_score: 0.45
+    min_score: 0.60
+    safety_min_score: 0.75
     candidates: 8
     abstain: true
 

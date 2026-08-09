@@ -46,7 +46,17 @@ OPERATOR = UserId("measurement")
 
 
 def _rank_of(pages: list[int], answer_pages: tuple[int, ...]) -> int | None:
-    for position, page in enumerate(pages, start=1):
+    """Rank of the answer *page*, not of the chunk that carried it.
+
+    Ranking the raw hit list counts two chunks of the same page as two places,
+    so a page reached second could be published as third. The baseline table
+    says "page", and the number under it now means that.
+    """
+    seen: list[int] = []
+    for page in pages:
+        if page not in seen:
+            seen.append(page)
+    for position, page in enumerate(seen, start=1):
         if page in answer_pages:
             return position
     return None
@@ -54,7 +64,7 @@ def _rank_of(pages: list[int], answer_pages: tuple[int, ...]) -> int | None:
 
 def _load(conn: Connection[Any], hybrid: HybridSearch, root: Path) -> None:
     library = DocumentLibrary(FilesystemObjectStore(root), SystemClock())
-    ingest = Ingest(library)
+    ingest = Ingest(library, hybrid)
 
     for document in CORPUS.documents:
         row = library.add(
@@ -67,10 +77,8 @@ def _load(conn: Connection[Any], hybrid: HybridSearch, root: Path) -> None:
             uploaded_by=OPERATOR,
             edition=document.edition,
         )
-        ingest.run(conn, row.document_id)
-        chunks = repo.chunks_of(conn, row.document_id)
-        hybrid.index_document(row.document_id, chunks, document.machine_model)
-        print(f"  {document.filename}: {len(chunks)} chunks embedded")
+        report = ingest.run(conn, row.document_id)
+        print(f"  {document.filename}: {report.chunks} chunks embedded")
 
 
 def _dense_pages(
@@ -87,6 +95,12 @@ def main() -> int:
     url = os.environ.get("DATABASE_URL")
     if not url:
         print("DATABASE_URL is not set")
+        return 1
+    if not url.rsplit("/", 1)[-1].endswith("_test"):
+        # This script empties the document table, which is the record of which
+        # edition was in force when a work order was issued (ADR-019) and is not
+        # derived data. Pointed at a real database it would orphan every blob.
+        print(f"refusing to run against {url.rsplit('/', 1)[-1]}: name a *_test database")
         return 1
 
     print(f"measured {datetime.now(UTC).date().isoformat()}")

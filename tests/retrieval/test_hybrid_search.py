@@ -22,11 +22,12 @@ from psycopg import Connection, connect
 from pdm.authoring.service import Ingest
 from pdm.contracts import DocumentId, MachineModel, UserId
 from pdm.platform.clock import SimulatedClock
+from pdm.platform.config import load_config
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore
 from pdm.retrieval import repo
 from pdm.retrieval.embedding import FakeEmbedder
-from pdm.retrieval.service import AUTHORING, RUNTIME, HybridSearch, Profile
+from pdm.retrieval.service import HybridSearch, Profile, profiles_from
 from pdm.retrieval.vectors import InMemoryVectorIndex
 
 pytestmark = pytest.mark.db
@@ -35,6 +36,12 @@ START = datetime(2026, 3, 3, 8, 0, tzinfo=UTC)
 OPERATOR = UserId("op-1")
 R2000IC = MachineModel("R-2000iC")
 M710IC = MachineModel("M-710iC")
+
+# The profiles the system actually ships with, not values written here. An
+# earlier version hardcoded them and they drifted from policy.yaml without
+# anything noticing, so these tests now fail if the shipped file stops meaning
+# what ADR-015 says it means.
+AUTHORING, RUNTIME = profiles_from(load_config(Path("config")).policy.retrieval)
 
 
 def _manual(title: str, pages: list[str]) -> bytes:
@@ -92,11 +99,16 @@ def loaded(conn: Connection[Any], tmp_path: Path) -> HybridSearch:
     fan = [0.0, 0.0, 1.0, 0.0]
     filter_page = [0.0, 0.0, 0.0, 1.0]
 
+    # Keyed on a distinctive phrase from each page rather than the whole page:
+    # a chunk is the page after parsing and chunking, so it carries the running
+    # title and whatever the extractor did to the line breaks.
     embedder = FakeEmbedder(
         dimensions=4,
         declared={
-            **{page: vector for page, vector in zip(R2000IC_PAGES, [belt, pump], strict=True)},
-            **{page: vector for page, vector in zip(M710IC_PAGES, [fan, filter_page], strict=True)},
+            "Belt tension": belt,
+            "Hydraulic pump": pump,
+            "Cabinet fan": fan,
+            "Intake filter": filter_page,
             "loose drive belt": belt,
             "หลวม": belt,
         },
@@ -134,7 +146,7 @@ class TestBothHalvesAreConsulted:
         the result comes entirely from meaning."""
         assert repo.search(conn, "หลวม", machine_model=R2000IC) == []
 
-        found = loaded.search(conn, "หลวม", machine_model=R2000IC)
+        found = loaded.search(conn, "หลวม", machine_model=R2000IC, profile=AUTHORING)
 
         assert found
         assert found[0].chunk.page == 1
@@ -144,7 +156,7 @@ class TestBothHalvesAreConsulted:
     def test_a_hit_both_halves_found_records_both_ranks(
         self, loaded: HybridSearch, conn: Connection[Any]
     ) -> None:
-        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING)
 
         assert found[0].found_by_both
         assert found[0].ranks == (1, 1)
@@ -155,7 +167,7 @@ class TestBothHalvesAreConsulted:
     ) -> None:
         """The review screen must make "this is the other model" impossible to
         miss, and neither half knows the title on its own (ADR-015)."""
-        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING)
 
         assert found[0].title == "R-2000iC Manual"
         assert found[0].machine_model == R2000IC
@@ -204,7 +216,7 @@ class TestTheTwoProfilesDiffer:
         """What the threshold is applied to. Half the maximum is the score of a
         page one half ranked first and the other did not see at all, which is
         exactly the judgement the two profiles differ on."""
-        found = loaded.search(conn, "หลวม", machine_model=R2000IC)
+        found = loaded.search(conn, "หลวม", machine_model=R2000IC, profile=AUTHORING)
 
         assert found[0].score == pytest.approx(0.5)
 
@@ -214,6 +226,23 @@ class TestTheTwoProfilesDiffer:
         one = Profile(candidates=1, min_score=0.0, abstain=False, same_model_only=False)
 
         assert len(loaded.search(conn, "belt pump fan filter", profile=one)) == 1
+
+    def test_the_shipped_runtime_profile_can_actually_abstain(
+        self, loaded: HybridSearch, conn: Connection[Any]
+    ) -> None:
+        """The gate has to be able to fire, and for a while it could not.
+
+        Runtime's threshold was 0.35 while a hit only one half found scores
+        exactly 0.5, so every result cleared it: the profile read as strict and
+        admitted everything. This asserts the shipped configuration is on the
+        right side of that line, against the real policy.yaml.
+        """
+        assert RUNTIME.min_score > 0.5
+        assert RUNTIME.abstain
+
+        # Only the word half finds this, and only weakly, so it must not reach a
+        # technician.
+        assert loaded.search(conn, "monthly", machine_model=R2000IC, profile=RUNTIME) == []
 
 
 class TestKeepingTheIndexInStep:
@@ -227,26 +256,28 @@ class TestKeepingTheIndexInStep:
             conn,
             [
                 hit.chunk.document_id
-                for hit in loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+                for hit in loaded.search(
+                    conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING
+                )
             ],
         )
         (only,) = document_id.keys()
 
-        before = loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+        before = loaded.search(conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING)
         loaded.index_document(only, repo.chunks_of(conn, only), R2000IC)
-        after = loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+        after = loaded.search(conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING)
 
         assert [hit.chunk.key for hit in before] == [hit.chunk.key for hit in after]
 
     def test_dropping_a_document_takes_its_vectors_with_it(
         self, loaded: HybridSearch, conn: Connection[Any]
     ) -> None:
-        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING)
         document_id = DocumentId(found[0].chunk.document_id)
 
         loaded.drop_document(document_id)
 
-        assert loaded.search(conn, "หลวม", machine_model=R2000IC) == []
+        assert loaded.search(conn, "หลวม", machine_model=R2000IC, profile=AUTHORING) == []
 
     def test_a_vector_with_no_chunk_behind_it_is_skipped(
         self, loaded: HybridSearch, conn: Connection[Any]
@@ -255,10 +286,10 @@ class TestKeepingTheIndexInStep:
         first, so the reachable inconsistency is a chunk with no vector - but if
         the reverse ever happens, a dangling key must not become a result with
         no text."""
-        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC)
+        found = loaded.search(conn, "loose drive belt", machine_model=R2000IC, profile=AUTHORING)
         document_id = DocumentId(found[0].chunk.document_id)
 
         with conn.cursor() as cur:
             cur.execute("DELETE FROM chunk WHERE document_id = %s", (document_id,))
 
-        assert loaded.search(conn, "หลวม", machine_model=R2000IC) == []
+        assert loaded.search(conn, "หลวม", machine_model=R2000IC, profile=AUTHORING) == []

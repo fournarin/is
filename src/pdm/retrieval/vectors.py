@@ -149,6 +149,14 @@ class QdrantVectorIndex:
         from qdrant_client.models import Distance, VectorParams
 
         if self._client.collection_exists(self._collection):
+            existing = self._client.get_collection(self._collection)
+            width = existing.config.params.vectors.size
+            if width != dimensions:
+                raise ValueError(
+                    f"collection {self._collection} holds {width}-dimensional vectors "
+                    f"and this embedder produces {dimensions}. Re-ingest every document "
+                    f"after changing model - the index is derived data (ADR-019)."
+                )
             return
         self._client.create_collection(
             collection_name=self._collection,

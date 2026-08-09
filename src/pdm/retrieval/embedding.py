@@ -117,6 +117,11 @@ class FakeEmbedder:
 
     Vectors can also be declared outright, which is how a test says "these two
     passages are close" without pretending a hash function understands Thai.
+    A declaration matches any text **containing** its key, because a chunk is a
+    page's text after parsing and chunking rather than the string a test wrote
+    down: exact matching meant the declarations silently never fired and the
+    test measured the hash instead, which looked like a working test right up
+    until it disagreed with itself.
     """
 
     def __init__(
@@ -138,17 +143,29 @@ class FakeEmbedder:
         return self._vector(text)
 
     def _vector(self, text: str) -> list[float]:
-        if text in self._declared:
-            return _unit(self._declared[text])
+        # First declaration whose key appears in the text. Insertion order, so
+        # the answer does not depend on dictionary iteration.
+        for key, vector in self._declared.items():
+            if key in text:
+                return _unit(vector)
 
         # Stable across processes: hashlib rather than hash(), which is salted
         # per interpreter and would make a seeded test irreproducible.
-        digest = hashlib.blake2b(text.encode("utf-8"), digest_size=self._dimensions * 2).digest()
-        raw = [
-            int.from_bytes(digest[index * 2 : index * 2 + 2], "big") / 65535.0 - 0.5
-            for index in range(self._dimensions)
-        ]
-        return _unit(raw)
+        #
+        # Extended by counter rather than by asking for a longer digest, because
+        # blake2b refuses anything over 64 bytes - so the obvious version broke
+        # at 33 dimensions and would have broken on the first attempt to fake
+        # the real model's 384.
+        raw: list[float] = []
+        block = 0
+        while len(raw) < self._dimensions:
+            digest = hashlib.blake2b(f"{block}:{text}".encode(), digest_size=64).digest()
+            raw.extend(
+                int.from_bytes(digest[offset : offset + 2], "big") / 65535.0 - 0.5
+                for offset in range(0, 64, 2)
+            )
+            block += 1
+        return _unit(raw[: self._dimensions])
 
 
 def _unit(vector: Sequence[float]) -> list[float]:

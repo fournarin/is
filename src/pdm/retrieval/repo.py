@@ -114,15 +114,23 @@ def chunks_by_key(conn: Connection[Any], keys: Sequence[ChunkKey]) -> list[Chunk
     The vector store holds identity and no text: duplicating the text there
     would give two copies to keep in step, and PostgreSQL is where it lives.
     Order is not preserved - the caller has the ranking and reorders.
+
+    Withdrawn manuals are excluded here as well as in `search`. The vector half
+    is cleaned when a document is withdrawn, but the two stores are separate and
+    the whole point of filtering in `search` was that the worst case should be a
+    stale row rather than a technician sent to a manual out of service - which
+    only holds if both routes to a chunk apply it.
     """
     if not keys:
         return []
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT document_id, page, ordinal, text
-              FROM chunk
-             WHERE (document_id, page, ordinal) IN (
+            SELECT c.document_id, c.page, c.ordinal, c.text
+              FROM chunk c
+              JOIN document d ON d.document_id = c.document_id
+             WHERE d.status = 'active'
+               AND (c.document_id, c.page, c.ordinal) IN (
                        SELECT * FROM unnest(%s::text[], %s::int[], %s::int[])
                    )
             """,

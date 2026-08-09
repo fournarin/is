@@ -22,6 +22,7 @@ from pdm.contracts import DocumentId
 from pdm.platform.documents import Document, DocumentLibrary
 from pdm.retrieval import repo as index
 from pdm.retrieval.domain import IndexedPage, PageOutcome
+from pdm.retrieval.service import HybridSearch
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
@@ -72,10 +73,18 @@ class UnknownDocument(Exception):
 
 
 class Ingest:
-    """Reads a document out of the library and writes it into the index."""
+    """Reads a document out of the library and writes it into the index.
 
-    def __init__(self, library: DocumentLibrary) -> None:
+    Both halves of the index, when one is supplied. The vector half is optional
+    because most tests and the whole of slice 3.2 have no use for it and no
+    reason to load a model - but when it is absent, ingesting leaves the dense
+    half stale rather than empty, so anything searching afterwards is searching
+    yesterday's vectors.
+    """
+
+    def __init__(self, library: DocumentLibrary, hybrid: HybridSearch | None = None) -> None:
         self.library = library
+        self.hybrid = hybrid
 
     def run(self, conn: Connection[Any], document_id: DocumentId) -> IngestReport:
         """Parse, chunk, index. Replaces whatever was there before.
@@ -108,6 +117,15 @@ class Ingest:
         index.replace_pages(conn, document_id, pages)
         index.insert_chunks(conn, chunks)
 
+        # After PostgreSQL, never before. That order is what makes a crash
+        # between the two a chunk the dense half cannot see - degraded
+        # retrieval - rather than a vector pointing at a chunk that does not
+        # exist (ADR-035). It is also what makes ADR-035's claim that
+        # "re-ingesting repairs it" true, which it was not while nothing called
+        # this at all.
+        if self.hybrid is not None:
+            self.hybrid.index_document(document_id, chunks, document.machine_model)
+
         return IngestReport(
             document_id=document_id,
             pages=len(pages),
@@ -127,4 +145,7 @@ class Ingest:
         row. The library sits in `platform/` and must not know that an index
         exists; joining the two is the caller's job, in one transaction.
         """
-        return index.drop_document(conn, document.document_id)
+        removed = index.drop_document(conn, document.document_id)
+        if self.hybrid is not None:
+            self.hybrid.drop_document(document.document_id)
+        return removed
