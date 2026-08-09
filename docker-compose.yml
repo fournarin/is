@@ -7,10 +7,9 @@
 # makes runtime generation physically impossible rather than merely forbidden,
 # and scripts/check_llm_isolation.py fails CI if that ever changes.
 #
-# Status: the images for api, worker-runtime, worker-authoring and web have no
-# entrypoint yet. This file exists now because it is the artefact that carries
-# the topology decision and makes invariant 15 checkable. Runnable services
-# arrive with slice 1.3 (job queue) and the web slice.
+# Status: `api` runs. worker-runtime, worker-authoring and web still have no
+# entrypoint - the two workers arrive with the slice that gives them a claim
+# loop, and web with the review screen.
 
 name: pdm
 
@@ -39,10 +38,35 @@ services:
     networks: [app]
     restart: unless-stopped
 
+  # ── schema ────────────────────────────────────────────────────────────
+  # A one-shot container that runs the migrations and exits. Everything that
+  # touches the database waits for it to finish successfully.
+  #
+  # Nothing did this before, so a fresh `docker compose up` produced an API
+  # whose /health answered ok and whose login failed with `relation "account"
+  # does not exist` - a service that looks up and is not, which is the failure
+  # mode this project keeps refusing everywhere else.
+  #
+  # A separate service rather than an entrypoint step, so that a restart of the
+  # API is not also a schema change, and so the log of what the schema did is in
+  # one place.
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [app]
+    restart: "no"
+
   # ── application: one image, three roles (ADR-026) ─────────────────────
   api:
     build: .
-    command: ["python", "-m", "pdm.api"]           # entrypoint: later slice
+    command: ["python", "-m", "pdm.api"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # The path is the mount below. There is no default in the code (ADR-019):
@@ -55,6 +79,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       qdrant: {condition: service_started}
+      migrate: {condition: service_completed_successfully}
     volumes:
       - ./config:/app/config:ro
       - storage:/app/storage
@@ -76,6 +101,7 @@ services:
         required: false
     depends_on:
       postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
     volumes:
       - ./config:/app/config:ro
       - storage:/app/storage
@@ -97,6 +123,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       qdrant: {condition: service_started}
+      migrate: {condition: service_completed_successfully}
     volumes:
       - ./config:/app/config:ro
       - storage:/app/storage

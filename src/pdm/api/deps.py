@@ -1,0 +1,88 @@
+"""What every route is given: a connection, a clock, and who is asking.
+
+The authorisation check lives here rather than in each handler because invariant
+6 is about the endpoint refusing, not about a button being hidden - and a check
+each handler has to remember is a check some handler will not.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import Annotated, Any
+
+from fastapi import Cookie, Depends, HTTPException, Request, status
+from psycopg import Connection
+
+from pdm.contracts import Role
+from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
+from pdm.platform.auth.service import Authentication
+
+SESSION_COOKIE = "pdm_session"
+
+
+def connection(request: Request) -> Iterator[Connection[Any]]:
+    """One connection and one transaction per request.
+
+    Committed when the handler returns, rolled back if it fails. That is what
+    makes an action and the access-log line recording it land together: a log
+    written in its own transaction can record a read the database rolled back.
+
+    **An `HTTPException` commits.** It is a decision the handler made - a 403, a
+    404 - not a failure, and rolling back would take the access-log line with
+    it. Refusals are the entries that matter most: "who looked at this manual"
+    is the obvious question and "who tried to and could not" is the one asked
+    after an incident, and it was being discarded by exactly the code meant to
+    record it (ADR-019).
+    """
+    pool = request.app.state.pool
+    with pool.connection() as conn:
+        try:
+            yield conn
+        except HTTPException:
+            conn.commit()
+            raise
+
+
+def authentication(request: Request) -> Authentication:
+    auth: Authentication = request.app.state.authentication
+    return auth
+
+
+def current_account(
+    conn: Annotated[Connection[Any], Depends(connection)],
+    auth: Annotated[Authentication, Depends(authentication)],
+    session: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+) -> Account:
+    try:
+        return auth.account_for(conn, session)
+    except NotAuthenticated as error:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(error)) from error
+
+
+CurrentAccount = Annotated[Account, Depends(current_account)]
+Db = Annotated[Connection[Any], Depends(connection)]
+Auth = Annotated[Authentication, Depends(authentication)]
+
+
+def requires(*roles: Role, action: str):  # type: ignore[no-untyped-def]
+    """A dependency that admits only these roles, and logs either way.
+
+    Returns the account so a handler can use it without asking twice.
+
+    `action` is required rather than derived from the path, because the log is
+    read by a person after an incident and "approve_playbook" answers their
+    question where "POST /playbooks/SYM-014/approve" makes them work it out.
+    """
+
+    def dependency(account: CurrentAccount, conn: Db, auth: Auth) -> Account:
+        try:
+            auth.authorise(conn, account, *roles, action=action)
+        except NotAuthorised as error:
+            # 403 rather than 404: the caller is authenticated and the refusal
+            # is the answer. Hiding the existence of the route from somebody who
+            # already has an account protects nothing and makes a genuine
+            # permissions problem look like a broken link.
+            raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
+        return account
+
+    return dependency
