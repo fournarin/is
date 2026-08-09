@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -50,6 +51,89 @@ _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 # ADR-019 asks for is that it goes through RBAC and into the log, not that it is
 # rare.
 _MAY_READ = (Role.TECHNICIAN, Role.ENGINEER, Role.SUPERVISOR, Role.OPERATOR)
+
+# What may be stored, and the bytes a file of that type has to begin with.
+#
+# The type is **not** taken from the upload. A browser sends whatever the client
+# claims, and this endpoint serves documents inline from the same origin as the
+# session cookie: an operator who uploaded text/html would have stored a page
+# that runs with the reader's session. Manuals are PDFs (ADR-019, ADR-033), so
+# the list is one entry, and widening it is a deliberate edit here rather than
+# something a client decides.
+#
+# Photographs from the shop floor are in the design (design.md 8) and are not
+# this endpoint: they attach to a work order and will bring their own types with
+# their own slice.
+_ALLOWED_TYPES = {"application/pdf": b"%PDF-"}
+
+# Enough to recognise any format in the list above.
+_MAGIC_BYTES = 8
+
+_SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._-]")
+
+# Defence in depth for the case this file cannot see: a row written before the
+# allow-list existed, or by some later path that skips it. nosniff stops a
+# browser deciding for itself that a PDF is really HTML, and a policy of
+# default-src 'none' means nothing in a document response can fetch or execute.
+#
+# Deliberately not `sandbox`: it can disable the browser's built-in PDF viewer,
+# and opening a cited page beside a drafted step is the one interaction this
+# endpoint exists for (ADR-019).
+_HARDENING = {
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'",
+}
+
+
+def _checked_media_type(declared: str | None, head: bytes) -> str:
+    """The type this file is allowed to be stored as, or 415.
+
+    Both halves are needed. The declared type alone is the client's word for it;
+    the magic bytes alone would let a PDF be stored under a type that makes a
+    browser treat it as something else.
+    """
+    normalised = (declared or "").split(";")[0].strip().lower()
+    expected = _ALLOWED_TYPES.get(normalised)
+    if expected is None:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            f"{normalised or 'an unnamed type'} is not a type this library stores; "
+            f"expected one of {sorted(_ALLOWED_TYPES)}",
+        )
+    if not head.startswith(expected):
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            f"the file does not begin like {normalised}",
+        )
+    return normalised
+
+
+def _serving_type(document: Document) -> tuple[str, str]:
+    """(media type, disposition) for a stored document.
+
+    Never the stored string unchecked. Anything not on the allow-list is served
+    as a download of unknown bytes rather than as something a browser will try to
+    render, which is what makes a row that predates the check harmless.
+    """
+    stored = document.content_type.split(";")[0].strip().lower()
+    if stored in _ALLOWED_TYPES:
+        # inline, not attachment: the point of this endpoint is a reviewer
+        # opening page 47 beside a drafted step, not a download.
+        return stored, "inline"
+    return "application/octet-stream", "attachment"
+
+
+def _disposition(document: Document, kind: str) -> str:
+    """A Content-Disposition a filename cannot break out of.
+
+    The uploader chooses the filename. Interpolated raw, a quote in it ends the
+    quoted string early and the rest of the name becomes header parameters. The
+    ASCII form is sanitised for old clients and the real name goes in the RFC
+    5987 field, percent-encoded - which is also what lets a Thai filename
+    survive.
+    """
+    ascii_name = _SAFE_FILENAME.sub("_", document.filename) or "document"
+    return f"{kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(document.filename)}"
 
 
 def _parse_range(header: str, size: int) -> tuple[int, int]:
@@ -125,17 +209,17 @@ def fetch(
             "the document row exists but its file is missing",
         ) from error
 
+    media_type, kind = _serving_type(document)
     headers = {
         "Accept-Ranges": "bytes",
-        # inline, not attachment: the point of this endpoint is a reviewer
-        # opening page 47 beside a drafted step, not a download.
-        "Content-Disposition": f'inline; filename="{document.filename}"',
+        "Content-Disposition": _disposition(document, kind),
+        **_HARDENING,
     }
 
     if range_header is None:
         return StreamingResponse(
             _stream(library, document, 0, size - 1),
-            media_type=document.content_type,
+            media_type=media_type,
             headers={**headers, "Content-Length": str(size)},
         )
 
@@ -151,7 +235,7 @@ def fetch(
     return StreamingResponse(
         _stream(library, document, first, last),
         status_code=status.HTTP_206_PARTIAL_CONTENT,
-        media_type=document.content_type,
+        media_type=media_type,
         headers={
             **headers,
             "Content-Range": f"bytes {first}-{last}/{size}",
@@ -196,11 +280,18 @@ def upload(
     """
     library: DocumentLibrary = request.app.state.library
 
+    # Read the first bytes, check them, then hand the stream back from the top.
+    # Peeking rather than buffering keeps the streaming property above: a
+    # scanned manual is still never held in memory whole.
+    head = file.file.read(_MAGIC_BYTES)
+    file.file.seek(0)
+    content_type = _checked_media_type(file.content_type, head)
+
     document = library.add_stream(
         conn,
         source=file.file,
         filename=file.filename or "untitled.pdf",
-        content_type=file.content_type or "application/octet-stream",
+        content_type=content_type,
         machine_model=machine_model,
         title=title,
         uploaded_by=account.user,

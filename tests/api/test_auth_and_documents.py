@@ -248,6 +248,61 @@ class TestReadingADocument:
         assert response.headers["content-disposition"].startswith("inline")
         assert response.headers["accept-ranges"] == "bytes"
 
+    def test_a_document_response_can_neither_execute_nor_fetch(
+        self, client: TestClient, setup: dict[str, Any]
+    ) -> None:
+        """Defence in depth for the row this file cannot see: one written before
+        the upload check existed, or by a later path that skips it. nosniff stops
+        a browser deciding a PDF is really HTML."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.get(f"/documents/{setup['document'].document_id}")
+
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["content-security-policy"] == "default-src 'none'"
+
+    def test_a_stored_type_off_the_allow_list_is_never_rendered(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        """The row the allow-list cannot reach: written directly, as a migration
+        or a fix at 3am might. It is served as bytes to download rather than as
+        something a browser will try to run."""
+        document_id = setup["document"].document_id
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE document SET content_type = 'text/html' WHERE document_id = %s",
+                (document_id,),
+            )
+        conn.commit()
+        _log_in(client, Role.ENGINEER)
+
+        response = client.get(f"/documents/{document_id}")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/octet-stream")
+        assert response.headers["content-disposition"].startswith("attachment")
+
+    def test_a_filename_cannot_break_out_of_the_header(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        """The uploader chooses the filename. Interpolated raw, a quote in it
+        closes the quoted string early and the rest becomes header parameters -
+        and a Thai filename would not survive at all."""
+        document_id = setup["document"].document_id
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE document SET filename = %s WHERE document_id = %s",
+                ('evil"; x=y คู่มือ.pdf', document_id),
+            )
+        conn.commit()
+        _log_in(client, Role.ENGINEER)
+
+        disposition = client.get(f"/documents/{document_id}").headers["content-disposition"]
+
+        assert disposition.count('"') == 2
+        assert "x=y" not in disposition.split(";")[1]
+        assert "filename*=UTF-8''" in disposition
+
 
 class TestRangeRequests:
     """ADR-019 calls this mandatory: citation to a page number is the system's
@@ -340,6 +395,39 @@ class TestUploadingIsRestrictedAtTheEndpoint:
 
         assert response.status_code == 201, response.text
         assert response.json()["machine_model"] == "M-710iC"
+
+    def test_a_type_the_library_does_not_store_is_refused(self, client: TestClient) -> None:
+        """The reason the stored type is not the client's word for it.
+
+        This endpoint serves documents inline from the same origin as the
+        session cookie, so a stored text/html page would run with the reader's
+        session - an operator uploading one would be handing themselves every
+        reader's rights. Manuals are PDFs (ADR-019, ADR-033).
+        """
+        _log_in(client, Role.OPERATOR)
+
+        response = client.post(
+            "/documents",
+            data={"machine_model": "M-710iC", "title": "Not a manual"},
+            files={"file": ("x.html", b"<script>alert(1)</script>", "text/html")},
+        )
+
+        assert response.status_code == 415, response.text
+
+    def test_declaring_pdf_is_not_enough(self, client: TestClient) -> None:
+        """Both halves of the check. The declared type is the client's claim; the
+        first bytes are what the file actually is, and a browser decides what to
+        do with a file by looking at the second when the first is missing."""
+        _log_in(client, Role.OPERATOR)
+
+        response = client.post(
+            "/documents",
+            data={"machine_model": "M-710iC", "title": "Not a manual"},
+            files={"file": ("x.pdf", b"<script>alert(1)</script>", "application/pdf")},
+        )
+
+        assert response.status_code == 415, response.text
+        assert "begin like" in response.text
 
     @pytest.mark.parametrize("role", [Role.TECHNICIAN, Role.SUPERVISOR])
     def test_everybody_else_is_refused_by_the_endpoint(
