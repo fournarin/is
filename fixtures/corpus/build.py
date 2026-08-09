@@ -33,8 +33,35 @@ HERE = Path(__file__).parent
 FROZEN = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
 
 
+class _Manual(FPDF):
+    """A page footer that does not create a page.
+
+    Writing the footer by hand with `set_y(-18)` and `cell(...)` pushed the
+    cursor past the auto page-break margin, so every footer landed on a fresh
+    page: an eleven-page manual came out as twenty-two physical pages, each
+    content page followed by a page holding only "page N". Nothing noticed,
+    because the manifest was checked against pages.py and neither was checked
+    against the PDF.
+
+    fpdf2 calls this hook with the break temporarily disabled, which is what the
+    hook is for.
+
+    The number comes from `page_no()` rather than from the Page being written,
+    because `add_page()` finalises the *previous* page: passing the number in
+    printed every footer one page late. Read from the document, the printed
+    number cannot disagree with the physical page index - which is what a
+    citation resolves through.
+    """
+
+    def footer(self) -> None:
+        self.set_y(-18)
+        self.set_font("Helvetica", "", 9)
+        self.set_text_color(120)
+        self.cell(0, 5, f"page {self.page_no()}", align="C")
+
+
 def _render(manual: Manual) -> bytes:
-    pdf = FPDF(format="A4", unit="mm")
+    pdf = _Manual(format="A4", unit="mm")
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.set_title(manual.title)
     pdf.set_author("synthetic corpus")
@@ -58,13 +85,6 @@ def _render(manual: Manual) -> bytes:
         pdf.set_font("Helvetica", "", 11)
         pdf.ln(3)
         pdf.multi_cell(0, 6, page.body)
-
-        # Printed page numbers are what a playbook step cites, so they have to be
-        # on the page rather than implied by position in the file.
-        pdf.set_y(-18)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(120)
-        pdf.cell(0, 5, f"page {page.number}", align="C")
 
     out = pdf.output()
     return bytes(out)

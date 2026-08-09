@@ -26,7 +26,7 @@ documents:
   - filename: r-2000ic-maintenance.pdf
     # sha256 of the file contents, which ADR-019 makes the document id.
     # A test fails if the file on disk disagrees.
-    sha256: 34dce924e0ee125b54ded6e88b8503f947c52d885130f1ef28bba11e27d9214b
+    sha256: 266957a270e551e70ab4849ef40f28c059e648b06e758d02957d2e01daa2c835
     title: R-2000iC Maintenance Manual
     machine_model: R-2000iC
     edition: Edition 3, synthetic
@@ -34,7 +34,7 @@ documents:
     lockout_page: 2
 
   - filename: m-710ic-maintenance.pdf
-    sha256: 0f7075b8cef63dc94d5c557a5739cb4aec5ad832d6b87dceefbe26dc5052c8a2
+    sha256: ca1a406f2a2e73d80b6b122ee20b786434180659cc353bc9f694fefc2551231c
     title: M-710iC Maintenance Manual
     machine_model: M-710iC
     edition: Edition 1, synthetic

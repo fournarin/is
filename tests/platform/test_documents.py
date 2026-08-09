@@ -50,7 +50,10 @@ def conn() -> Iterator[Connection[Any]]:
         pytest.skip("DATABASE_URL is not set")
     connection = connect(url)
     try:
-        connection.execute("TRUNCATE document")
+        # CASCADE because the index tables reference document. Named
+        # implicitly rather than listed, so a table added later does not make
+        # this fixture fail on a test that has nothing to do with it.
+        connection.execute("TRUNCATE document CASCADE")
         connection.commit()
         yield connection
     finally:
