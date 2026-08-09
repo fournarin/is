@@ -20,6 +20,7 @@ from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
+    Cookie,
     Depends,
     File,
     Form,
@@ -33,10 +34,12 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
-from pdm.api.deps import CurrentAccount, Db, requires
+from pdm.api.deps import SESSION_COOKIE, Db, requires
 from pdm.contracts import DocumentId, MachineModel, Role
-from pdm.platform.auth.domain import Account, NotAuthorised
+from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
+from pdm.platform.auth.service import Authentication
 from pdm.platform.documents import Document, DocumentLibrary
+from pdm.platform.documents.repo import DocumentModelConflict, DocumentRegistrationConflict
 from pdm.platform.objects import READ_CHUNK_BYTES, ObjectNotFound
 
 router = APIRouter(tags=["documents"])
@@ -66,8 +69,13 @@ _MAY_READ = (Role.TECHNICIAN, Role.ENGINEER, Role.SUPERVISOR, Role.OPERATOR)
 # their own slice.
 _ALLOWED_TYPES = {"application/pdf": b"%PDF-"}
 
-# Enough to recognise any format in the list above.
-_MAGIC_BYTES = 8
+# Enough to find the signature even when something precedes it. A byte-order
+# mark or a stray newline before %PDF- is malformed and every reader opens it
+# anyway, and refusing those leaves an operator holding a manual with no way to
+# get it in. The signature is looked for in this window rather than demanded at
+# offset zero - deliberately lenient, because what actually protects a reader is
+# that the *served* type comes from the allow-list and never from the file.
+_MAGIC_WINDOW = 1024
 
 _SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._-]")
 
@@ -100,7 +108,7 @@ def _checked_media_type(declared: str | None, head: bytes) -> str:
             f"{normalised or 'an unnamed type'} is not a type this library stores; "
             f"expected one of {sorted(_ALLOWED_TYPES)}",
         )
-    if not head.startswith(expected):
+    if expected not in head:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             f"the file does not begin like {normalised}",
@@ -136,11 +144,19 @@ def _disposition(document: Document, kind: str) -> str:
     return f"{kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(document.filename)}"
 
 
-def _parse_range(header: str, size: int) -> tuple[int, int]:
-    """(first, last) inclusive, as HTTP counts them."""
+def _parse_range(header: str, size: int) -> tuple[int, int] | None:
+    """(first, last) inclusive as HTTP counts them, or None to ignore the header.
+
+    Two different answers, which the first version of this conflated into one.
+    RFC 9110 14.2 says a `Range` that cannot be parsed - a unit this server does
+    not know, several ranges at once - **must be ignored**, and the whole
+    representation returned. Only a range that parses and falls outside the file
+    is 416. Answering 416 to a multi-range request left a viewer showing nothing
+    where it should have shown the whole document.
+    """
     match = _RANGE.match(header.strip())
     if not match:
-        raise ValueError(header)
+        return None
 
     start_text, end_text = match.groups()
     if start_text:
@@ -151,7 +167,7 @@ def _parse_range(header: str, size: int) -> tuple[int, int]:
         first = max(0, size - int(end_text))
         last = size - 1
     else:
-        raise ValueError(header)
+        return None
 
     if first > last or first >= size:
         raise ValueError(header)
@@ -174,8 +190,7 @@ def _stream(library: DocumentLibrary, document: Document, first: int, last: int)
 def fetch(
     request: Request,
     document_id: DocumentId,
-    account: CurrentAccount,
-    conn: Db,
+    session: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
     range_header: str | None = Header(default=None, alias="Range"),
 ) -> Response:
     """The bytes of one manual, whole or by range.
@@ -184,30 +199,61 @@ def fetch(
     edition that was in force when it was issued, and refusing to open it would
     make the citation unverifiable - which is the audit trail ADR-018 moved to
     the work order specifically to preserve.
+
+    **This route manages its own connection instead of taking the `Db`
+    dependency, and that is the whole point of how it is written.** FastAPI
+    unwinds a request's dependencies after the response has finished sending, so
+    a `StreamingResponse` built on a dependency-held connection keeps that
+    connection checked out - and open in a transaction - for the entire
+    download. The pool holds four. Four technicians opening a fifty-megabyte
+    scanned manual would have starved login and every other route until the pool
+    timed out, on the plant's own hardware, with nothing in the logs but
+    timeouts.
+
+    Everything that needs the database happens inside the block below and the
+    connection is back in the pool before a byte is sent. The stream itself
+    needs no database at all: it reads the object store.
     """
-    auth = request.app.state.authentication
+    auth: Authentication = request.app.state.authentication
     library: DocumentLibrary = request.app.state.library
+    pool = request.app.state.pool
 
-    try:
-        auth.authorise(conn, account, *_MAY_READ, action="read_document", subject=document_id)
-    except NotAuthorised as error:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
+    with pool.connection() as conn:
+        try:
+            try:
+                account = auth.account_for(conn, session)
+            except NotAuthenticated as error:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(error)) from error
 
-    document = library.get(conn, document_id)
-    if document is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such document")
+            try:
+                auth.authorise(
+                    conn, account, *_MAY_READ, action="read_document", subject=document_id
+                )
+            except NotAuthorised as error:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
 
-    try:
-        size = library.size(document)
-    except ObjectNotFound as error:
-        # The row exists and the file does not. Nothing in the application
-        # deletes a blob (ADR-019), so this is a restore from an incomplete
-        # backup or somebody working on the volume by hand - a server fault, not
-        # a missing page.
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "the document row exists but its file is missing",
-        ) from error
+            document = library.get(conn, document_id)
+            if document is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "no such document")
+
+            try:
+                size = library.size(document)
+            except ObjectNotFound as error:
+                # The row exists and the file does not. Nothing in the
+                # application deletes a blob (ADR-019), so this is a restore
+                # from an incomplete backup or somebody working on the volume by
+                # hand - a server fault, not a missing page.
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "the document row exists but its file is missing",
+                ) from error
+        except HTTPException:
+            # The same rule the Db dependency states: a refusal is a decision,
+            # not a failure, and rolling it back would discard the access-log
+            # line recording it. "Who tried to read this and could not" is the
+            # question asked after an incident (ADR-019).
+            conn.commit()
+            raise
 
     media_type, kind = _serving_type(document)
     headers = {
@@ -216,22 +262,27 @@ def fetch(
         **_HARDENING,
     }
 
-    if range_header is None:
+    requested: tuple[int, int] | None = None
+    if range_header is not None:
+        try:
+            requested = _parse_range(range_header, size)
+        except ValueError as error:
+            raise HTTPException(
+                status.HTTP_416_RANGE_NOT_SATISFIABLE,
+                "range not satisfiable",
+                headers={"Content-Range": f"bytes */{size}"},
+            ) from error
+
+    # None means either no Range header or one this server ignores, and RFC 9110
+    # 14.2 answers both the same way: the whole representation.
+    if requested is None:
         return StreamingResponse(
             _stream(library, document, 0, size - 1),
             media_type=media_type,
             headers={**headers, "Content-Length": str(size)},
         )
 
-    try:
-        first, last = _parse_range(range_header, size)
-    except ValueError as error:
-        raise HTTPException(
-            status.HTTP_416_RANGE_NOT_SATISFIABLE,
-            "range not satisfiable",
-            headers={"Content-Range": f"bytes */{size}"},
-        ) from error
-
+    first, last = requested
     return StreamingResponse(
         _stream(library, document, first, last),
         status_code=status.HTTP_206_PARTIAL_CONTENT,
@@ -283,20 +334,29 @@ def upload(
     # Read the first bytes, check them, then hand the stream back from the top.
     # Peeking rather than buffering keeps the streaming property above: a
     # scanned manual is still never held in memory whole.
-    head = file.file.read(_MAGIC_BYTES)
+    head = file.file.read(_MAGIC_WINDOW)
     file.file.seek(0)
     content_type = _checked_media_type(file.content_type, head)
 
-    document = library.add_stream(
-        conn,
-        source=file.file,
-        filename=file.filename or "untitled.pdf",
-        content_type=content_type,
-        machine_model=machine_model,
-        title=title,
-        uploaded_by=account.user,
-        edition=edition,
-    )
+    try:
+        document = library.add_stream(
+            conn,
+            source=file.file,
+            filename=file.filename or "untitled.pdf",
+            content_type=content_type,
+            machine_model=machine_model,
+            title=title,
+            uploaded_by=account.user,
+            edition=edition,
+        )
+    except (DocumentModelConflict, DocumentRegistrationConflict) as error:
+        # The same bytes already in the library under another machine model. A
+        # 409 rather than a 500 because it is the caller's answer and they can
+        # act on it - and because only an HTTPException commits, so a bare
+        # exception would have rolled back the access-log line for exactly the
+        # requests that failed, which is the "without exception" ADR-019 asks
+        # for going missing where it matters most.
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     return Registered(
         document_id=document.document_id,
         filename=document.filename,

@@ -102,6 +102,16 @@ class Authentication:
             )
             return None
 
+        # Sweep the dead ones while we are here. There is no worker loop yet and
+        # a function nothing calls is not a policy - `session` would have grown
+        # with every login ever made rather than with the people signed in now,
+        # because a row is only ever removed when its holder comes back.
+        #
+        # Login is the right moment: it is already writing, it is not on the hot
+        # path of anything a technician waits for, and its frequency tracks the
+        # thing being cleaned up.
+        repo.delete_expired_sessions(conn, now)
+
         token = new_session_token()
         repo.open_session(
             conn, token=token, user=account.user, now=now, expires_at=now + SESSION_LIFETIME

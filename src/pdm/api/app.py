@@ -15,14 +15,25 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 
-from pdm.api import documents, sessions
+from pdm.api import deps, documents, sessions
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
 from pdm.platform.db import make_pool
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore, storage_root
+
+# A scanned two-hundred-page manual is tens of megabytes; this leaves room for
+# several times the largest thing anybody should be uploading and stops the
+# request that is not a manual at all.
+MAX_BODY_BYTES = 256 * 1024 * 1024
+
+# Everything else needs a session. Listed here rather than inferred, so adding a
+# route that should be public is a visible edit and forgetting to add one gives a
+# 401 rather than an open door.
+_PUBLIC_PATHS = frozenset({"/health", "/sessions", "/docs", "/redoc", "/openapi.json"})
 
 
 def create_app(
@@ -50,6 +61,35 @@ def create_app(
         yield
 
     app = FastAPI(title="Predictive maintenance", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def refuse_before_reading_the_body(request: Request, call_next: Any) -> Response:
+        """Two checks that have to happen before FastAPI parses a request body.
+
+        FastAPI parses a multipart body **before** it resolves dependencies, so
+        the authorisation on the upload route runs after the file has already
+        been written to the container's disk. `curl -F file=@/dev/zero` with no
+        session at all would fill the volume and only then be told 401.
+
+        So the size limit and a session *presence* check live here, in front of
+        the parser. The presence check is not the authorisation - `requires()` on
+        the route is, and it is what invariant 6 is about. This one only refuses
+        to read a body from somebody who has not even attempted to sign in.
+        """
+        declared = request.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+            return JSONResponse(
+                {"detail": f"a request body over {MAX_BODY_BYTES} bytes is refused"},
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            )
+
+        anonymous = deps.SESSION_COOKIE not in request.cookies
+        if anonymous and request.url.path not in _PUBLIC_PATHS:
+            return JSONResponse({"detail": "no session"}, status_code=status.HTTP_401_UNAUTHORIZED)
+
+        response: Response = await call_next(request)
+        return response
+
     app.include_router(sessions.router)
     app.include_router(documents.router)
 

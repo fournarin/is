@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from psycopg import Connection, connect
 from psycopg_pool import ConnectionPool
 
-from pdm.api.app import create_app
+from pdm.api.app import MAX_BODY_BYTES, create_app
 from pdm.api.deps import SESSION_COOKIE
 from pdm.contracts import MachineModel, Role, UserId
 from pdm.platform.auth.service import Authentication, LocalAccounts
@@ -359,16 +359,80 @@ class TestRangeRequests:
         assert response.status_code == 416
         assert response.headers["content-range"] == f"bytes */{len(MANUAL)}"
 
-    def test_a_range_nobody_can_parse_is_refused(
+    def test_a_range_this_server_does_not_understand_is_ignored(
         self, client: TestClient, setup: dict[str, Any]
     ) -> None:
+        """RFC 9110 14.2: a Range in a unit the server does not support **must be
+        ignored**, and the whole representation returned. This asserted 416 and
+        was wrong - a viewer sending a unit or a multi-range request this server
+        does not implement would have been shown nothing at all where it should
+        have been shown the document."""
         _log_in(client, Role.ENGINEER)
 
         response = client.get(
             f"/documents/{setup['document'].document_id}", headers={"Range": "pages=1-2"}
         )
 
+        assert response.status_code == 200
+        assert response.content == MANUAL
+
+    def test_a_range_outside_the_file_is_refused(
+        self, client: TestClient, setup: dict[str, Any]
+    ) -> None:
+        """The other answer, and the one 416 is for: the range parses and there
+        is nothing there."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.get(
+            f"/documents/{setup['document'].document_id}",
+            headers={"Range": f"bytes={len(MANUAL) + 500}-"},
+        )
+
         assert response.status_code == 416
+        assert response.headers["content-range"] == f"bytes */{len(MANUAL)}"
+
+
+class TestGuardsThatRunBeforeTheBodyIsRead:
+    """FastAPI parses a multipart body before it resolves dependencies.
+
+    So the authorisation on the upload route runs *after* the file has been
+    written to the container's disk: `curl -F file=@/dev/zero` with no session
+    would have filled the volume and only then been told 401. These two checks
+    sit in front of the parser. They are not the authorisation - `requires()` on
+    the route is that, and invariant 6 is about the route refusing.
+    """
+
+    def test_an_anonymous_request_is_refused_without_reading_a_body(
+        self, client: TestClient
+    ) -> None:
+        response = client.post(
+            "/documents",
+            data={"machine_model": "M-710iC", "title": "x"},
+            files={"file": ("x.pdf", b"%PDF-1.7\nx", "application/pdf")},
+        )
+
+        assert response.status_code == 401
+
+    def test_a_body_too_large_is_refused_on_its_content_length(self, client: TestClient) -> None:
+        """Refused on the declared length, before anything is read. The point is
+        that nothing reaches the disk, so the request cannot be a real one."""
+        _log_in(client, Role.OPERATOR)
+
+        response = client.post(
+            "/documents",
+            content=b"",
+            headers={
+                "Content-Length": str(MAX_BODY_BYTES + 1),
+                "Content-Type": "multipart/form-data; boundary=x",
+            },
+        )
+
+        assert response.status_code == 413
+
+    def test_the_login_route_stays_reachable_without_a_session(self, client: TestClient) -> None:
+        """The guard must not lock the door it is standing in front of."""
+        assert client.get("/health").status_code == 200
+        assert client.post("/sessions", json={"user": "nobody", "password": "x"}).status_code == 401
 
 
 class TestUploadingIsRestrictedAtTheEndpoint:

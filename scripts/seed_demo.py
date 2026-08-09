@@ -50,15 +50,18 @@ def main() -> int:
     library = DocumentLibrary(FilesystemObjectStore(storage_root()), clock)
 
     with connect(url) as conn:
-        print("accounts:")
+        created: list[str] = ["accounts:"]
         for user, name, role, password in PEOPLE:
             if auth_repo.account(conn, user) is not None:
-                print(f"  {user:8} {role.value:11} already there")
+                created.append(f"  {user:8} {role.value:11} already there")
                 continue
             auth.create_account(conn, user=user, display_name=name, role=role, password=password)
-            print(f"  {user:8} {role.value:11} password {password}")
+            # Collected rather than printed: a failure later in this script rolls
+            # the transaction back, and an operator who has already been told a
+            # password exists has no way to know it does not.
+            created.append(f"  {user:8} {role.value:11} password {password}")
 
-        print("manuals:")
+        created.append("manuals:")
         for document in CORPUS.documents:
             row = library.add(
                 conn,
@@ -70,9 +73,15 @@ def main() -> int:
                 uploaded_by=UserId("op-1"),
                 edition=document.edition,
             )
-            print(f"  {document.filename}  {row.document_id[:12]}...")
+            created.append(f"  {document.filename}  {row.document_id[:12]}...")
 
         conn.commit()
+
+    # After the commit, never before. Everything above is one transaction, so a
+    # failure halfway through leaves nothing - and an operator who was already
+    # told an account exists has no way to discover that it does not.
+    for line in created:
+        print(line)
 
     print("\nThese passwords are in the repository. They are for a demo on a")
     print("machine inside the plant network and are not secrets.")
