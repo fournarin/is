@@ -93,6 +93,15 @@ class UnreadableDocument(Exception):
     """
 
 
+# Rejoins a word broken across a line: "cali-" / "brate". Both sides must be
+# letters and the continuation must be lowercase, because the obvious version -
+# any word character - silently destroys figures: "torque to 20-\n25 Nm" became
+# "2025 Nm", a number that is not in the manual, on a page whose citation still
+# points at the right place. In a document whose whole purpose is torque values
+# and thresholds, that is the most damaging thing this module could do.
+_HYPHENATED_ACROSS_LINES = re.compile(r"(?<=[A-Za-z])-\n(?=[a-z])")
+
+
 def _normalise(raw: str) -> str:
     """Collapse the whitespace a PDF extractor invents.
 
@@ -101,9 +110,13 @@ def _normalise(raw: str) -> str:
     alone they end up inside the indexed text and inside the quoted evidence on
     the review screen, where they read as though the manual itself were badly
     typeset.
+
+    Spaces are collapsed before words are rejoined, not after: extractors that
+    leave a space before the line break turn "cali- \nbrate" into something the
+    rejoin never sees.
     """
-    without_hyphenation = re.sub(r"-\n(?=\w)", "", raw)
-    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in without_hyphenation.splitlines()]
+    tidied = "\n".join(re.sub(r"[ \t]+", " ", line).rstrip() for line in raw.splitlines())
+    lines = [line.strip() for line in _HYPHENATED_ACROSS_LINES.sub("", tidied).splitlines()]
     # Blank lines are kept as paragraph separators - chunking needs them - but
     # runs of them collapse to one.
     collapsed: list[str] = []
@@ -131,14 +144,23 @@ def parse(source: BinaryIO | bytes) -> ParsedDocument:
     handle = BytesIO(source) if isinstance(source, bytes) else source
     try:
         reader = PdfReader(handle)
-        raw_pages = [page.extract_text() or "" for page in reader.pages]
+        page_objects = list(reader.pages)
     except PdfReadError as error:
         raise UnreadableDocument(str(error)) from error
     except Exception as error:  # pypdf raises assorted exceptions on damaged files
         raise UnreadableDocument(f"{type(error).__name__}: {error}") from error
 
     pages: list[PageText] = []
-    for number, raw in enumerate(raw_pages, start=1):
+    for number, page_object in enumerate(page_objects, start=1):
+        # Per page, not once for the document. A single damaged page used to
+        # fail the whole manual, so 199 readable pages of a 200-page scan
+        # indexed to nothing and the result was indistinguishable from "this is
+        # not a PDF" - the inverse of what ADR-034 point 3 is for.
+        try:
+            raw = page_object.extract_text() or ""
+        except Exception:
+            pages.append(PageText(page=number, text="", outcome=PageOutcome.UNREADABLE))
+            continue
         text = _normalise(raw)
         pages.append(PageText(page=number, text=text, outcome=_classify(text)))
 

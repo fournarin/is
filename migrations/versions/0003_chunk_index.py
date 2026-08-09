@@ -38,7 +38,8 @@ def upgrade() -> None:
             page         integer NOT NULL CHECK (page > 0),
 
             outcome      text NOT NULL
-                         CHECK (outcome IN ('text', 'no_text', 'too_little_text')),
+                         CHECK (outcome IN ('text', 'no_text', 'too_little_text',
+                                            'unreadable')),
             characters   integer NOT NULL CHECK (characters >= 0),
 
             PRIMARY KEY (document_id, page)

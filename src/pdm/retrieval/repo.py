@@ -111,7 +111,11 @@ def needing_ocr(conn: Connection[Any], document_id: DocumentId) -> list[int]:
 # with AND. Rewriting the operator is the documented way to get OR semantics
 # while keeping all of that: the alternative is hand-tokenising the query, which
 # means reimplementing the stemmer.
-_ANY_TERM = "replace(plainto_tsquery('english', %s)::text, '&', '|')::tsquery"
+# The operator is replaced with its spaces, not bare. plainto_tsquery renders
+# the conjunction as " & " while an ampersand inside a lexeme - a URL, a part
+# number - has none, so replacing the bare character rewrote the lexeme itself
+# into one no document contains. Silent recall loss with no error.
+_ANY_TERM = "replace(plainto_tsquery('english', %s)::text, ' & ', ' | ')::tsquery"
 
 
 def search(
@@ -144,7 +148,12 @@ def search(
     wants authoring to see across models so a reviewer can be shown a candidate
     from the wrong manual and reject it, while runtime must not serve one.
     """
-    clauses = [f"c.search @@ {_ANY_TERM}"]
+    # Withdrawn editions are removed from the index by Ingest.withdraw, but
+    # DocumentLibrary.withdraw deliberately does not cascade, so a caller that
+    # changes the row without touching the index would leave the old manual
+    # searchable. Filtering here means the worst case is a stale row rather than
+    # a technician served a page from a manual that is out of service.
+    clauses = [f"c.search @@ {_ANY_TERM}", "d.status = 'active'"]
     if machine_model is not None:
         clauses.append("d.machine_model = %s")
 

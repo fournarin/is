@@ -36,9 +36,15 @@ class PageOutcome(StrEnum):
     # are. This count is what decides whether a document needs OCR before the
     # system can answer anything about it.
     NO_TEXT = "no_text"
-    # A few characters: a figure number, a drawing with a caption. Not worth
+    # A few characters: a figure number, a drawing with a caption. Also a page
+    # whose only text was the running header, which is furniture. Not worth
     # indexing, and not evidence of a scan either.
     TOO_LITTLE_TEXT = "too_little_text"
+    # The parser failed on this page alone. Kept apart from NO_TEXT because the
+    # answers differ: a scan needs OCR, a damaged page needs a new copy of the
+    # file, and telling an operator to OCR a corrupt page wastes the one thing
+    # they can actually do about it.
+    UNREADABLE = "unreadable"
 
 
 class IndexedPage(BaseModel):

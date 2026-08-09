@@ -52,6 +52,21 @@ class IngestReport(BaseModel):
         return self.pages > 0 and self.pages_with_text == self.pages
 
 
+def _what_the_index_got(parsed: PageOutcome, produced_chunks: bool) -> PageOutcome:
+    """The outcome as the *index* sees it, not as the parser left it.
+
+    A page whose only text is the running header parses as TEXT and then loses
+    all of it to furniture stripping, so it produced nothing searchable while
+    coverage counted it as read. Coverage is the number that has to travel with
+    every retrieval figure measured on a real manual (ADR-034); a version of it
+    that counts pages nothing can retrieve would overstate exactly the thing it
+    exists to be honest about.
+    """
+    if parsed is PageOutcome.TEXT and not produced_chunks:
+        return PageOutcome.TOO_LITTLE_TEXT
+    return parsed
+
+
 class UnknownDocument(Exception):
     """Asked to ingest something the library has no row for."""
 
@@ -77,16 +92,18 @@ class Ingest:
         with self.library.open(document) as handle:
             parsed = parse(handle)
 
+        chunks = chunk_document(document_id, parsed.pages)
+        chunked = {chunk.page for chunk in chunks}
+
         pages = [
             IndexedPage(
                 document_id=document_id,
                 page=page.page,
-                outcome=page.outcome,
+                outcome=_what_the_index_got(page.outcome, page.page in chunked),
                 characters=len(page.text),
             )
             for page in parsed.pages
         ]
-        chunks = chunk_document(document_id, parsed.pages)
 
         index.replace_pages(conn, document_id, pages)
         index.insert_chunks(conn, chunks)

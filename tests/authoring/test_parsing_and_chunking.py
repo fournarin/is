@@ -72,6 +72,54 @@ class TestReadingAPdf:
         with pytest.raises(UnreadableDocument):
             parse(b"this is not a PDF at all")
 
+    def test_a_figure_split_across_lines_is_never_fused(self) -> None:
+        """The most damaging thing this module could do, and it did it.
+
+        Rejoining any word character across a hyphen turned "torque to 20-\n25
+        Nm" into "2025 Nm" - a number that is not in the manual, on a page whose
+        citation still points at the right place, so provenance could not catch
+        it. In a document whose whole content is torque values and thresholds
+        this is worse than failing to parse at all.
+        """
+        from pdm.authoring.parsing import _normalise
+
+        assert "2025" not in _normalise("Torque the bolts to 20-\n25 Nm.")
+        assert "20-\n25 Nm" in _normalise("Torque the bolts to 20-\n25 Nm.")
+
+    def test_a_word_split_across_lines_is_rejoined(self) -> None:
+        from pdm.authoring.parsing import _normalise
+
+        assert "calibrate" in _normalise("cali-\nbrate the sensor")
+
+    def test_a_trailing_space_before_the_break_does_not_defeat_it(self) -> None:
+        """Some extractors leave one. Collapsing spaces after rejoining meant
+        the rejoin never saw the hyphen."""
+        from pdm.authoring.parsing import _normalise
+
+        assert "calibrate" in _normalise("cali- \nbrate the sensor")
+
+    def test_one_damaged_page_does_not_lose_the_other_hundred(self) -> None:
+        """A single failing page used to raise for the whole document, so 199
+        readable pages of a 200-page manual indexed to nothing and the result
+        was indistinguishable from "this is not a PDF"."""
+        from unittest.mock import patch
+
+        document = CORPUS.documents[0]
+        undamaged = parse(document.path.read_bytes())
+
+        with patch("pypdf._page.PageObject.extract_text") as extract:
+            extract.side_effect = [
+                RuntimeError("damaged content stream") if page.page == 2 else page.text
+                for page in undamaged.pages
+            ]
+            parsed = parse(document.path.read_bytes())
+
+        assert len(parsed.pages) == document.pages
+        assert parsed.pages[1].outcome is PageOutcome.UNREADABLE
+        assert [p.outcome for p in parsed.pages if p.page != 2] == [PageOutcome.TEXT] * (
+            document.pages - 1
+        )
+
     def test_the_running_header_and_footer_survive_parsing(self) -> None:
         """They have to reach the chunker to be removed by it. A parser that
         silently dropped them would take the printed page number with them."""

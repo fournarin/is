@@ -1,8 +1,9 @@
 """Ingest and sparse search, against a real PostgreSQL (ADR-031).
 
-The generated tsvector column, `websearch_to_tsquery` and `ts_rank_cd` are the
-whole of the sparse half, and none of them exists in a substitute database - so
-testing this anywhere else would be testing a different system.
+The generated tsvector column, `plainto_tsquery` with its operator rewritten to
+OR, and `ts_rank_cd` are the whole of the sparse half, and none of them exists
+in a substitute database - so testing this anywhere else would be testing a
+different system.
 
 The tests that matter are the ones using the corpus's answer key. It was written
 in slice 3.0, before any of this existed, which is what makes "the right page
@@ -178,6 +179,42 @@ class TestAPageThatGivesNothing:
         assert index.coverage(conn, document.document_id) == (0, 1)
 
 
+class TestCoverageCountsWhatTheIndexGot:
+    def test_a_page_that_is_only_a_running_header_does_not_count_as_read(
+        self, ingest: Ingest, library: DocumentLibrary, conn: Connection[Any]
+    ) -> None:
+        """It parses as text and then loses all of it to furniture stripping, so
+        it produced nothing searchable while coverage counted it as read.
+        Coverage travels with every retrieval figure measured on a real manual;
+        one that counts unretrievable pages overstates the thing it exists to be
+        honest about (ADR-034)."""
+        from fpdf import FPDF
+
+        pdf = FPDF()
+        for number in range(1, 4):
+            pdf.add_page()
+            pdf.set_font("Helvetica", size=11)
+            pdf.cell(0, 8, "R-2000iC Maintenance Manual", new_x="LMARGIN", new_y="NEXT")
+            if number != 2:
+                pdf.multi_cell(0, 6, f"Section {number}. " + "real procedure text here. " * 12)
+
+        document = library.add(
+            conn,
+            content=bytes(pdf.output()),
+            filename="mostly-empty.pdf",
+            content_type="application/pdf",
+            machine_model=MachineModel("R-2000iC"),
+            title="Mostly empty",
+            uploaded_by=OPERATOR,
+        )
+        report = ingest.run(conn, document.document_id)
+
+        assert report.pages == 3
+        assert report.pages_with_text == 2
+        assert not report.is_fully_readable
+        assert {page.page for page in index.pages_of(conn, document.document_id)} == {1, 2, 3}
+
+
 class TestSearchFindsWhatTheAnswerKeySays:
     """The sparse baseline, measured against the key written in slice 3.0.
 
@@ -258,6 +295,37 @@ class TestSearchFindsWhatTheAnswerKeySays:
 
         assert {hit.machine_model for hit in everywhere} == {"R-2000iC", "M-710iC"}
         assert {hit.machine_model for hit in one_model} == {"R-2000iC"}
+
+    def test_a_withdrawn_manual_is_not_searchable_even_if_the_index_was_not_cleaned(
+        self, library: DocumentLibrary, conn: Connection[Any]
+    ) -> None:
+        """Two steps take a manual out of service: the row and the index.
+        DocumentLibrary.withdraw deliberately does not cascade, so a caller
+        doing only the first would leave the old edition answering questions.
+        Filtering on status means the worst case is a stale row rather than a
+        technician sent to a page from a manual that is out of service."""
+        document_id = next(
+            hit.chunk.document_id
+            for hit in index.search(conn, "belt motor overheating")
+            if hit.machine_model == "R-2000iC"
+        )
+        library.withdraw(conn, document_id)
+
+        assert (
+            index.search(conn, "belt motor overheating", machine_model=MachineModel("R-2000iC"))
+            == []
+        )
+
+    def test_an_ampersand_in_the_query_does_not_break_the_rewrite(
+        self, conn: Connection[Any]
+    ) -> None:
+        """The AND-to-OR rewrite replaces the operator, which plainto_tsquery
+        renders with spaces around it. Replacing the bare character also
+        rewrote ampersands *inside* a lexeme - a URL, a part number - into one
+        no document contains, losing recall with no error."""
+        hits = index.search(conn, "belt motor see http://a.com/x?p=1&q=2 for detail")
+
+        assert hits, "the real terms still match despite the URL"
 
     def test_a_hit_says_which_manual_it_came_from(self, conn: Connection[Any]) -> None:
         """The review screen has to make "this is from the other model"
