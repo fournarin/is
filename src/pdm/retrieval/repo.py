@@ -166,6 +166,37 @@ def chunks_of(conn: Connection[Any], document_id: DocumentId) -> list[Chunk]:
     return [Chunk.model_validate(row) for row in rows]
 
 
+def chunks_on_pages(conn: Connection[Any], pages: Sequence[tuple[DocumentId, int]]) -> list[Chunk]:
+    """Every chunk of the named pages, in reading order.
+
+    Drafting cites a page and needs the whole of it (ADR-037): a procedure that
+    was cut into two chunks would otherwise reach the backend as two unrelated
+    fragments, with the tools and the duration - which a manual writes at the
+    foot of the page - in whichever fragment happened to catch them.
+
+    Withdrawn manuals are excluded, for the reason `chunks_by_key` gives: every
+    route to a chunk has to apply the filter or none of them does.
+    """
+    if not pages:
+        return []
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT c.document_id, c.page, c.ordinal, c.text
+              FROM chunk c
+              JOIN document d ON d.document_id = c.document_id
+             WHERE d.status = 'active'
+               AND (c.document_id, c.page) IN (
+                       SELECT * FROM unnest(%s::text[], %s::int[])
+                   )
+             ORDER BY c.document_id, c.page, c.ordinal
+            """,
+            ([page[0] for page in pages], [page[1] for page in pages]),
+        )
+        rows = cur.fetchall()
+    return [Chunk.model_validate(row) for row in rows]
+
+
 def documents_of(
     conn: Connection[Any], document_ids: Sequence[DocumentId]
 ) -> dict[DocumentId, tuple[str, MachineModel]]:

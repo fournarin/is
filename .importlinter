@@ -135,8 +135,12 @@ source_modules =
     pdm.platform.documents.domain
     pdm.signals.domain
     pdm.authoring.domain
+    pdm.authoring.drafting
     pdm.retrieval.domain
     pdm.platform.auth.domain
+    pdm.llm.domain
+    pdm.llm.extractive
+    pdm.llm.prompt
 forbidden_modules =
     pdm.platform.db
     pdm.platform.jobs.repo
@@ -154,6 +158,32 @@ forbidden_modules =
 # filesystem, which is I/O by another name. A domain module that could reach it
 # would be a domain module that reads a fifty-megabyte scan inside a function
 # the simulator calls in a loop.
+
+
+# ─────────────────────────────────────────────────────────────
+# ADR-029, ADR-037 - one door to the model server, and it is not in the path
+# tiers 1 and 2 run through
+# ─────────────────────────────────────────────────────────────
+[importlinter:contract:model-server-has-one-door]
+name = only llm/server.py may speak to the model server (ADR-029, ADR-037)
+type = forbidden
+source_modules =
+    pdm.llm.domain
+    pdm.llm.extractive
+    pdm.llm.prompt
+    pdm.authoring
+forbidden_modules =
+    pdm.llm.server
+    urllib
+# The extractive backend is what every commit runs (ADR-037 section 9). If it
+# could reach the server module, a machine with no `llm-server` would fail tier 1
+# for a reason that has nothing to do with what changed - and the two backends
+# would stop being separable, which is the property that keeps "no silent
+# fallback" true.
+#
+# `authoring/` is on the list because the drafting service takes its backend as
+# an argument. The composition root chooses which one; a service that could
+# import the HTTP backend directly could also decide to fall back to it.
 
 
 # ─────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""Ingest: a stored document becomes searchable text (ADR-034).
+"""Ingest and drafting: the two authoring jobs (ADR-034, ADR-037).
 
 The only module `workers/` calls to index a manual. It opens no connection - the
 caller supplies one - so the page records, the chunks and the job that produced
@@ -11,18 +11,21 @@ takes minutes, and ADR-026 exists so that work cannot stall the dispatch tick.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict
 
 from pdm.authoring.domain import chunk_document
+from pdm.authoring.drafting import DraftResult, assemble
 from pdm.authoring.parsing import parse
-from pdm.contracts import DocumentId
+from pdm.contracts import DocumentId, MachineModel, SymptomCode
+from pdm.llm.domain import Drafter, DraftRequest, Evidence
 from pdm.platform.documents import Document, DocumentLibrary
 from pdm.retrieval import repo as index
 from pdm.retrieval.domain import IndexedPage, PageOutcome
-from pdm.retrieval.service import HybridSearch
+from pdm.retrieval.service import HybridSearch, Profile, Retrieved
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
@@ -149,3 +152,122 @@ class Ingest:
         if self.hybrid is not None:
             self.hybrid.drop_document(document.document_id)
         return removed
+
+
+class Drafting:
+    """Retrieval, a backend, and the gate: one symptom becomes one draft.
+
+    The order is the whole of ADR-037. Retrieval offers pages under the authoring
+    profile, which is deliberately loose (ADR-015); the pages belonging to other
+    machine models are separated out before the backend sees anything, and travel
+    beside the result for the reviewer; the backend picks spans; and nothing it
+    returns is believed until `assemble` has checked it.
+
+    It opens no connection, holds no state between calls, and asks the clock for
+    nothing. Two runs of the same symptom against the same index and the same
+    backend produce the same draft, which is what makes the drafting figures in
+    the report reproducible.
+    """
+
+    def __init__(
+        self,
+        hybrid: HybridSearch,
+        drafter: Drafter,
+        *,
+        profile: Profile,
+        skills: Iterable[str],
+    ) -> None:
+        self.hybrid = hybrid
+        self.drafter = drafter
+        self.profile = profile
+        # The vocabulary from plant.yaml. Held rather than read here because
+        # `service.py` must not reach for configuration on its own: the caller
+        # loaded it at boot, and a second reader would be a second answer to
+        # "what skills exist" (invariant 13).
+        self.skills = frozenset(skills)
+
+    def run(
+        self,
+        conn: Connection[Any],
+        *,
+        symptom_code: SymptomCode,
+        machine_model: MachineModel,
+        question: str,
+    ) -> DraftResult:
+        """Draft one playbook, or say why there is none.
+
+        `question` is what retrieval is asked. It comes from the caller rather
+        than from the symptom code, because a code is not a query: SYM-014
+        retrieves nothing and "belt motor running above 85 degrees" retrieves the
+        page. Where that sentence comes from - a rule's description, an engineer
+        typing it - is the caller's problem and not settled yet.
+        """
+        hits = self.hybrid.search(conn, question, profile=self.profile)
+        ours, theirs = self._evidence(conn, hits, machine_model)
+
+        request = DraftRequest(
+            symptom_code=symptom_code,
+            machine_model=machine_model,
+            question=question,
+            evidence=ours,
+        )
+        return assemble(
+            request,
+            self.drafter.propose(request),
+            skills=self.skills,
+            cross_model=theirs,
+        )
+
+    def _evidence(
+        self,
+        conn: Connection[Any],
+        hits: list[Retrieved],
+        machine_model: MachineModel,
+    ) -> tuple[tuple[Evidence, ...], tuple[Evidence, ...]]:
+        """Hits regrouped into whole pages, split by machine model.
+
+        A page scores as high as its best chunk. Summing instead would rank a
+        page that was cut into four mediocre chunks above one whose single chunk
+        answered the question, which is a property of the chunker rather than of
+        the manual.
+        """
+        best: dict[tuple[DocumentId, int], Retrieved] = {}
+        for hit in hits:
+            if hit.score < self.profile.min_score:
+                # The authoring profile does not abstain (ADR-015): it returns
+                # its best guesses so a reviewer can dismiss them. Writing steps
+                # is not the same act as offering a candidate, so the floor the
+                # profile carries is applied here even though the search did not
+                # apply it.
+                continue
+            key = (hit.chunk.document_id, hit.chunk.page)
+            if key not in best or hit.score > best[key].score:
+                best[key] = hit
+
+        ranked = sorted(best.items(), key=lambda item: (-item[1].score, item[0]))
+        text = self._page_text(conn, [key for key, _ in ranked])
+
+        evidence = [
+            Evidence(
+                document_id=key[0],
+                page=key[1],
+                text=text[key],
+                title=hit.title,
+                machine_model=hit.machine_model,
+                score=hit.score,
+            )
+            for key, hit in ranked
+            if key in text
+        ]
+        return (
+            tuple(page for page in evidence if page.machine_model == machine_model),
+            tuple(page for page in evidence if page.machine_model != machine_model),
+        )
+
+    def _page_text(
+        self, conn: Connection[Any], pages: list[tuple[DocumentId, int]]
+    ) -> dict[tuple[DocumentId, int], str]:
+        joined: dict[tuple[DocumentId, int], list[str]] = {}
+        for chunk in index.chunks_on_pages(conn, pages):
+            joined.setdefault((chunk.document_id, chunk.page), []).append(chunk.text)
+        return {key: "\n".join(parts) for key, parts in joined.items()}

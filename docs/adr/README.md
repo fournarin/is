@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Thirty-six decisions, in the order they were made. Each records the context that
+Thirty-seven decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -48,6 +48,7 @@ entries replace parts of earlier ones, and both are kept.
 | [034](0034-pdf-text-with-page-provenance-and-what-happens-when-there-is-none.md) | PDF text with page provenance, and pages that yield none | |
 | [035](0035-embedding-in-process-vectors-in-qdrant-and-the-fusion-between.md) | Embedding in process, vectors in Qdrant, fusion on ranks | |
 | [036](0036-sessions-in-the-database-behind-an-identity-adapter.md) | Sessions in the database, behind an identity adapter | |
+| [037](0037-drafting-selects-spans-and-a-draft-is-withheld-whole.md) | Drafting selects spans; a failed draft is withheld whole | |
 
 ## Where to start
 
