@@ -99,9 +99,8 @@ def _figure_report(result: DraftResult, entry: Answer) -> str:
         for wrong in entry.figures_on_the_page_that_are_not_the_answer
         for figure in figures(str(wrong.value))
     }
-    return (
-        f"{len(drafted & correct)}/{len(correct)} of the key's figures"
-        + (f", {len(drafted & misleading)} misleading" if drafted & misleading else "")
+    return f"{len(drafted & correct)}/{len(correct)} of the key's figures" + (
+        f", {len(drafted & misleading)} misleading" if drafted & misleading else ""
     )
 
 
@@ -193,13 +192,9 @@ def main() -> int:
                 total += 1
                 agreed += int(result.outcome is wanted)
                 score = (
-                    f"{result.draft.steps[0].confidence:.2f}"
-                    if result.draft is not None
-                    else "-"
+                    f"{result.draft.steps[0].confidence:.2f}" if result.draft is not None else "-"
                 )
-                anchor = (
-                    _anchor(conn, query, entry.machine_model, cited[0]) if cited else "-"
-                )
+                anchor = _anchor(conn, query, entry.machine_model, cited[0]) if cited else "-"
                 print(
                     f"{entry.symptom_code:9} {language:4} {wanted.value:11} "
                     f"{result.outcome.value:11} "
