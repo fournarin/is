@@ -12,6 +12,7 @@ takes minutes, and ADR-026 exists so that work cannot stall the dispatch tick.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 from psycopg import Connection
@@ -23,6 +24,8 @@ from pdm.authoring.parsing import parse
 from pdm.contracts import DocumentId, MachineModel, SymptomCode
 from pdm.llm.domain import Drafter, DraftRequest, Evidence
 from pdm.platform.documents import Document, DocumentLibrary
+from pdm.playbooks import repo as playbooks
+from pdm.playbooks.domain import Proposal, ProposalOrigin
 from pdm.retrieval import repo as index
 from pdm.retrieval.domain import IndexedPage, PageOutcome
 from pdm.retrieval.service import HybridSearch, Profile, Retrieved
@@ -144,11 +147,26 @@ class Ingest:
         and the file is kept, because `playbook_snapshot` cites its pages. The
         index is a projection and can be rebuilt; the file is the record.
 
+        **Every playbook citing it moves to `needs_review` in the same
+        transaction** (ADR-018). Splitting the two would leave a window in which
+        the manual is gone from the index and the procedures derived from it are
+        still being served as current - and the window would be however long it
+        took somebody to remember the second step.
+
         Deliberately separate from `DocumentLibrary.withdraw`, which changes the
         row. The library sits in `platform/` and must not know that an index
         exists; joining the two is the caller's job, in one transaction.
         """
         removed = index.drop_document(conn, document.document_id)
+        playbooks.flag_for_review(
+            conn,
+            document.document_id,
+            reason=(
+                f"{document.title} ({document.edition or 'no edition recorded'}) was withdrawn; "
+                "this procedure was drafted from it and has not been checked against the "
+                "replacement"
+            ),
+        )
         if self.hybrid is not None:
             self.hybrid.drop_document(document.document_id)
         return removed
@@ -216,6 +234,46 @@ class Drafting:
             self.drafter.propose(request),
             skills=self.skills,
             cross_model=theirs,
+        )
+
+    def file(
+        self,
+        conn: Connection[Any],
+        result: DraftResult,
+        *,
+        now: datetime,
+    ) -> Proposal:
+        """Put a drafting result in the review queue (ADR-038).
+
+        Every outcome is filed, including the ones with no steps. A withheld
+        draft says the backend produced something unusable and a `not_found` says
+        the manuals are silent, and both are things a person should see: the
+        first is a model to stop trusting, the second is a gap in the manuals
+        somebody has to fill. Filing only the successes would leave both
+        invisible, which is how a corpus acquires a hole nobody knows about.
+
+        The clock is passed in rather than held, because this is the only part of
+        drafting that is not a pure function of the index and the backend, and
+        keeping it in the signature is what stops the rest of the class quietly
+        acquiring a dependency on the time (ADR-028).
+        """
+        draft = result.draft
+        return playbooks.add_proposal(
+            conn,
+            symptom_code=result.symptom_code,
+            machine_model=result.machine_model,
+            origin=ProposalOrigin.DRAFTED,
+            outcome=result.outcome.value,
+            steps=draft.steps if draft else (),
+            tools=draft.tools if draft else (),
+            proposed_skill=draft.proposed_skill if draft else None,
+            proposed_minutes=draft.proposed_minutes if draft else None,
+            rejected=tuple(step.model_dump(mode="json") for step in result.rejected),
+            reason=result.reason,
+            created_at=now,
+            # No user: the authoring pipeline filed it. A technician's objection
+            # names the person, and the review screen shows the difference.
+            created_by=None,
         )
 
     def _evidence(

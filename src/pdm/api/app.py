@@ -18,12 +18,13 @@ from typing import Any
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from pdm.api import deps, documents, sessions
+from pdm.api import deps, documents, playbooks, sessions
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
 from pdm.platform.db import make_pool
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore, storage_root
+from pdm.playbooks import PlaybookStore
 
 # A scanned two-hundred-page manual is tens of megabytes; this leaves room for
 # several times the largest thing anybody should be uploading and stops the
@@ -58,6 +59,7 @@ def create_app(
             FilesystemObjectStore(storage_root()), the_clock
         )
         app.state.authentication = Authentication(LocalAccounts(), the_clock)
+        app.state.playbooks = PlaybookStore(the_clock)
         yield
 
     app = FastAPI(title="Predictive maintenance", lifespan=lifespan)
@@ -92,6 +94,7 @@ def create_app(
 
     app.include_router(sessions.router)
     app.include_router(documents.router)
+    app.include_router(playbooks.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:
