@@ -89,6 +89,22 @@ sets the tension the first three steps prepared for.
 so, and ADR-033 built a symptom into the corpus that has no answer anywhere so
 that this path is executed by a test rather than first in front of a technician.
 
+**Measured before this record was merged, and it does not work.** On the corpus,
+the symptom nothing documents produces a six-step repair draft off an unrelated
+page at a fused score of 0.95, and no threshold on that score fixes it:
+reciprocal rank fusion knows positions rather than distances, and the vector half
+returns its nearest neighbours however far away they are. The word half does
+discriminate - 1.600 against 0.200 - but a Thai question about a *documented*
+symptom scores 0.100, below the absent one, so there is nothing to threshold on
+there either (`docs/drafting-baseline.md`).
+
+The floor stays, because it is right when it fires. What follows is that
+**`not_found` is presently reachable only when retrieval returns nothing at all**,
+and on a corpus of nineteen chunks it never does. The missing signal is a
+relevance magnitude rather than a rank, which is what a cross-encoder produces
+and what ADR-035 deferred until something showed it was needed. This is that
+something, and closing it needs its own record.
+
 ### 6. A step's confidence is the retrieval score of the chunk it cites
 
 Not a number the model reports about itself. A model-reported confidence has no
@@ -161,6 +177,12 @@ purpose.
   procedure is a paragraph rather than a numbered list drafts poorly, and the
   measurement records that rather than hiding it behind a model that would
   rewrite it into a list.
+- **Drafting quality is bounded by the ranking, and that is where it actually
+  fails.** Measured: two of the three repair symptoms are handed the wrong page -
+  an overview that repeats the question's words, and the neighbouring axis, which
+  is the distractor the answer key declared before any retriever existed. Given
+  the right page the drafter is right, so the number this slice produces is an
+  argument for reranking rather than for a better drafter.
 - **`Playbook` is not the drafting output.** A draft may lack a skill or a
   duration, which the contract requires; the drafting result is its own object
   and becomes a `Playbook` when a person completes it. The slice that stores

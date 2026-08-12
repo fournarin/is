@@ -1,0 +1,166 @@
+"""The backend tiers 1 and 2 run on: no model, no GPU, no network (ADR-037 §9).
+
+It reads the evidence and picks spans out of it, which is all any backend here is
+permitted to do. That makes it a real implementation of the port rather than a
+stub, and it is the one the drafting numbers in the report come from - an LLM at
+temperature zero is still not reproducible across model versions, and a number
+that cannot be reproduced cannot be published.
+
+The pages are the corpus's own (ADR-033), not hand-written here, so a change to
+the manuals shows up as a failure in the thing that reads them.
+"""
+
+from __future__ import annotations
+
+from fixtures.corpus.pages import M710IC, R2000IC, Manual
+from pdm.contracts import DocumentId, MachineModel, SymptomCode
+from pdm.llm.domain import DraftRequest, Evidence, ProposalKind
+from pdm.llm.extractive import ExtractiveDrafter
+
+R2000IC_DOC = DocumentId("a" * 64)
+M710IC_DOC = DocumentId("b" * 64)
+
+
+def _page(manual: Manual, number: int, *, document_id: DocumentId, score: float) -> Evidence:
+    page = next(candidate for candidate in manual.pages if candidate.number == number)
+    return Evidence(
+        document_id=document_id,
+        page=number,
+        text=f"{page.heading}\n\n{page.body}",
+        title=manual.title,
+        machine_model=MachineModel(manual.machine_model),
+        score=score,
+    )
+
+
+def _request(
+    *evidence: Evidence, symptom: str = "SYM-014", model: str = "R-2000iC"
+) -> DraftRequest:
+    return DraftRequest(
+        symptom_code=SymptomCode(symptom),
+        machine_model=MachineModel(model),
+        question="belt motor running above 85 degrees, what do I check",
+        evidence=evidence,
+    )
+
+
+class TestARepairProcedureIsReadOffThePage:
+    def test_every_numbered_instruction_becomes_a_step_in_order(self) -> None:
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        proposal = ExtractiveDrafter().propose(_request(answer))
+
+        assert proposal.kind is ProposalKind.REPAIR
+        assert len(proposal.steps) == 6
+        assert proposal.steps[0].text.startswith("Isolate the cell")
+        assert proposal.steps[-1].text.startswith("Refit the guard")
+
+    def test_every_step_cites_the_page_it_was_taken_from(self) -> None:
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        proposal = ExtractiveDrafter().propose(_request(answer))
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 4)}
+
+    def test_no_step_says_anything_the_page_does_not(self) -> None:
+        """The property that makes this backend safe by construction.
+
+        Not a substitute for the gate in `authoring/drafting.py`: that gate has
+        to hold for backends this one cannot vouch for.
+        """
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        proposal = ExtractiveDrafter().propose(_request(answer))
+
+        collapsed = " ".join(answer.text.split())
+        for step in proposal.steps:
+            assert " ".join(step.text.split()) in collapsed
+
+    def test_tools_time_and_skill_come_off_the_page_when_it_states_them(self) -> None:
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        proposal = ExtractiveDrafter().propose(_request(answer))
+
+        assert proposal.estimated_minutes == 45
+        assert proposal.required_skill == "robot mechanical"
+        assert proposal.tools == (
+            "torque wrench 5-60 Nm",
+            "belt tension gauge",
+            "10 mm socket",
+        )
+
+    def test_a_page_that_states_no_duration_proposes_none(self) -> None:
+        overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=0.5)
+        proposal = ExtractiveDrafter().propose(_request(overview))
+
+        assert proposal.estimated_minutes is None
+        assert proposal.required_skill is None
+
+
+class TestChoosingWhichPageToDraftFrom:
+    def test_the_highest_scoring_page_wins_not_the_first_one_listed(self) -> None:
+        overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=0.4)
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.9)
+        proposal = ExtractiveDrafter().propose(_request(overview, answer))
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 4)}
+
+    def test_a_page_from_another_model_is_never_drafted_from(self) -> None:
+        """The service filters these out; this is the second place it holds.
+
+        M-710iC page 4 is the same procedure with 28 Nm where this model wants
+        42 Nm, and it outscores the right page here on purpose.
+        """
+        other_model = _page(M710IC, 4, document_id=M710IC_DOC, score=0.95)
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.5)
+        proposal = ExtractiveDrafter().propose(_request(other_model, answer))
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 4)}
+
+    def test_nothing_at_all_when_no_evidence_belongs_to_this_model(self) -> None:
+        other_model = _page(M710IC, 4, document_id=M710IC_DOC, score=0.95)
+        proposal = ExtractiveDrafter().propose(_request(other_model))
+
+        assert proposal.kind is ProposalKind.NOTHING
+        assert proposal.steps == ()
+
+
+class TestAPageThatDocumentsWithoutPrescribing:
+    """ADR-033's middle category, and ADR-009's diagnostic playbook."""
+
+    def test_prose_with_no_numbered_steps_drafts_as_diagnostic(self) -> None:
+        interlocks = _page(R2000IC, 11, document_id=R2000IC_DOC, score=0.9)
+        proposal = ExtractiveDrafter().propose(
+            _request(interlocks, symptom="SYM-002"),
+        )
+
+        assert proposal.kind is ProposalKind.DIAGNOSTIC
+        assert proposal.steps
+
+    def test_the_prohibition_on_the_page_is_carried_into_the_draft(self) -> None:
+        """The one thing a draft off this page must never lose.
+
+        "Bypassing an interlock to continue production is prohibited under all
+        circumstances" is the sentence a technician most needs to see, and a
+        drafter that kept only the sentences shaped like instructions would drop
+        it - it is a prohibition, not an instruction.
+        """
+        interlocks = _page(R2000IC, 11, document_id=R2000IC_DOC, score=0.9)
+        proposal = ExtractiveDrafter().propose(
+            _request(interlocks, symptom="SYM-002"),
+        )
+
+        assert any("prohibited" in step.text for step in proposal.steps)
+
+
+class TestTheSameEvidenceAlwaysDraftsTheSameWay:
+    """Tier 2 requires it: an eval that moves on its own measures nothing."""
+
+    def test_two_runs_of_the_same_request_are_identical(self) -> None:
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        request = _request(answer)
+        drafter = ExtractiveDrafter()
+
+        assert drafter.propose(request) == drafter.propose(request)
+
+    def test_two_instances_of_the_backend_agree(self) -> None:
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        request = _request(answer)
+
+        assert ExtractiveDrafter().propose(request) == ExtractiveDrafter().propose(request)
