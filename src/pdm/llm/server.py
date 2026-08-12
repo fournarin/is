@@ -54,6 +54,24 @@ def _post(url: str, body: bytes, timeout: float) -> bytes:
         raise ModelServerError(f"{url}: {error}") from error
 
 
+def _minutes(value: object) -> int | None:
+    """A duration the scheduler can compute with, or nothing.
+
+    Whole minutes above zero and nothing else. `0.5` truncated to zero and was
+    then rejected by the contract as a pydantic error escaping this module; `true`
+    is an `int` in Python and would have become a one-minute estimate that reads
+    like a figure off a manual. Neither is a duration, and a duration this module
+    is unsure about is one the reviewer should be asked for (ADR-037 §8).
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, float) and value.is_integer() and value > 0:
+        return int(value)
+    return None
+
+
 class LlmServerDrafter:
     """Implements `Drafter` by asking a model. Tier 3 only.
 
@@ -108,17 +126,32 @@ class LlmServerDrafter:
                 f"the model did not return the JSON it was asked for: {error}"
             ) from error
 
+        if not isinstance(answer, dict):
+            # A JSON array or a bare string is valid JSON and not an answer. Left
+            # unchecked this reaches `.get` and leaves the module as an
+            # AttributeError, which the worker cannot tell from a bug in here.
+            raise ModelServerError(f"the model returned {type(answer).__name__}, not an object")
+
         kind = answer.get("kind")
         if kind not in {item.value for item in ProposalKind}:
             raise ModelServerError(f"the model answered with kind={kind!r}")
 
         steps = []
         for step in answer.get("steps") or []:
+            if not isinstance(step, dict):
+                # A step written as a bare string has no citation, and a step
+                # with no citation is one nobody can check after an accident
+                # (principle 2).
+                continue
             label = step.get("evidence")
-            text = (step.get("text") or "").strip()
+            text = str(step.get("text") or "").strip()
             if not text:
                 continue
-            if not isinstance(label, int) or not 1 <= label <= len(request.evidence):
+            if (
+                not isinstance(label, int)
+                or isinstance(label, bool)
+                or not 1 <= label <= len(request.evidence)
+            ):
                 # A label pointing at nothing cannot be resolved to a page, and a
                 # step with no page is a step nobody can check after an accident
                 # (principle 2). Dropped here rather than passed on with a guessed
@@ -126,14 +159,18 @@ class LlmServerDrafter:
                 continue
             steps.append(ProposedStep(text=text, cites=request.evidence[label - 1].ref))
 
-        minutes = answer.get("estimated_minutes")
         skill = answer.get("required_skill")
         return Proposal(
             kind=ProposalKind(kind),
             steps=tuple(steps),
-            tools=tuple(str(tool) for tool in (answer.get("tools") or []) if str(tool).strip()),
-            required_skill=str(skill) if skill else None,
-            estimated_minutes=int(minutes)
-            if isinstance(minutes, int | float) and minutes
-            else None,
+            # Strings only. `str()` on whatever arrived would put
+            # "{'name': 'torque wrench'}" on a tool list a technician reads, and
+            # tools are not gated the way steps are.
+            tools=tuple(
+                tool.strip()
+                for tool in (answer.get("tools") or [])
+                if isinstance(tool, str) and tool.strip()
+            ),
+            required_skill=str(skill).strip() if isinstance(skill, str) and skill.strip() else None,
+            estimated_minutes=_minutes(answer.get("estimated_minutes")),
         )

@@ -68,6 +68,18 @@ def figures(text: str) -> frozenset[Decimal]:
     return frozenset(found)
 
 
+def _as_written(figure: Decimal) -> str:
+    """A figure back in the notation a person reads.
+
+    `Decimal.normalize()` turns 40 into `4E+1` and 1200 into `1.2E+3`, which is
+    the same number and not the same message: the reviewer is being shown the
+    figure a backend invented, and "the model wrote 4E+1" is a sentence about
+    nothing that appears anywhere.
+    """
+    plain = f"{figure:f}"
+    return plain.rstrip("0").rstrip(".") if "." in plain else plain
+
+
 def _comparable(text: str) -> str:
     """Whitespace collapsed, step number removed, case folded.
 
@@ -233,7 +245,7 @@ def _check(
             text=step_text,
             cites=ref,
             reason=RejectionReason.FIGURE_NOT_IN_EVIDENCE,
-            figures_not_in_evidence=tuple(str(figure) for figure in missing),
+            figures_not_in_evidence=tuple(_as_written(figure) for figure in missing),
         )
 
     if require_containment and _comparable(step_text) not in _comparable(request_evidence.text):
@@ -274,7 +286,7 @@ def assemble(
     figure gate on its own, which is the only way to prove that gate can fail
     while every real backend passes it by construction.
     """
-    if proposal.kind is ProposalKind.NOTHING or not proposal.steps:
+    if proposal.kind is ProposalKind.NOTHING:
         return DraftResult(
             outcome=DraftOutcome.NOT_FOUND,
             symptom_code=request.symptom_code,
@@ -285,9 +297,27 @@ def assemble(
                 if not request.evidence
                 else (
                     f"{len(request.evidence)} page(s) were retrieved for "
-                    f"{request.symptom_code} and none of them states anything that can become "
-                    "a step"
+                    f"{request.symptom_code} and the backend found nothing in them that can "
+                    "become a step"
                 )
+            ),
+        )
+
+    if not proposal.steps:
+        # The backend said it had a procedure and then produced no usable step -
+        # which is what `LlmServerDrafter` returns when every citation the model
+        # gave pointed at a page it was never shown. Filing that as "the corpus
+        # is silent" would send a symptom whose manual page exists to the queue
+        # of symptoms nobody has written a playbook for, and would hide a model
+        # that is fabricating citations behind a sentence about the manuals.
+        return DraftResult(
+            outcome=DraftOutcome.WITHHELD,
+            symptom_code=request.symptom_code,
+            machine_model=request.machine_model,
+            reason=(
+                f"the backend answered '{proposal.kind.value}' for {request.symptom_code} and "
+                "returned no step that could be used; nothing here is a statement about what "
+                "the manuals contain"
             ),
         )
 

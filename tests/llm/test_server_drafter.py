@@ -98,6 +98,64 @@ class TestARepliesThatIsAlmostRight:
 
         assert proposal.steps == ()
 
+    def test_json_that_is_not_an_object_is_an_error(self) -> None:
+        """A JSON array is valid JSON and is not an answer.
+
+        Unchecked it reaches `.get` and leaves this module as an AttributeError,
+        which the worker cannot tell from a bug in the drafter itself.
+        """
+        with pytest.raises(ModelServerError, match="not an object"):
+            _answering(["Retighten the bolts."]).propose(REQUEST)
+
+    def test_a_step_written_as_a_bare_string_is_dropped(self) -> None:
+        proposal = _answering(
+            {"kind": "repair", "steps": ["Retighten the motor mount bolts to 42 Nm."]}
+        ).propose(REQUEST)
+
+        assert proposal.steps == ()
+
+    def test_half_a_minute_is_not_a_duration(self) -> None:
+        """0.5 truncated to zero, which the contract rejects - as a pydantic
+        error escaping this module rather than as a missing estimate."""
+        proposal = _answering(
+            {
+                "kind": "repair",
+                "steps": [{"text": "Retighten the motor mount bolts to 42 Nm.", "evidence": 1}],
+                "estimated_minutes": 0.5,
+            }
+        ).propose(REQUEST)
+
+        assert proposal.estimated_minutes is None
+
+    def test_true_is_not_a_duration_either(self) -> None:
+        """`True` is an `int` in Python, and would have become one minute -
+        a figure the scheduler computes with, reading like one off a manual."""
+        proposal = _answering(
+            {
+                "kind": "repair",
+                "steps": [{"text": "Retighten the motor mount bolts to 42 Nm.", "evidence": 1}],
+                "estimated_minutes": True,
+            }
+        ).propose(REQUEST)
+
+        assert proposal.estimated_minutes is None
+
+    def test_a_tool_that_is_not_a_string_is_dropped(self) -> None:
+        """Tools are not gated the way steps are.
+
+        `str()` on whatever arrived would put "{'name': 'torque wrench'}" on a
+        list a technician reads, and nothing downstream would question it.
+        """
+        proposal = _answering(
+            {
+                "kind": "repair",
+                "steps": [{"text": "Retighten the motor mount bolts to 42 Nm.", "evidence": 1}],
+                "tools": [{"name": "torque wrench"}, "10 mm socket"],
+            }
+        ).propose(REQUEST)
+
+        assert proposal.tools == ("10 mm socket",)
+
     def test_a_duration_that_is_not_a_number_is_left_unset(self) -> None:
         proposal = _answering(
             {

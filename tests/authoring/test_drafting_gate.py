@@ -228,6 +228,21 @@ class TestFiguresMustBeASubsetOfTheEvidence:
         assert result.rejected[0].reason is RejectionReason.FIGURE_NOT_IN_EVIDENCE
         assert result.rejected[0].figures_not_in_evidence == ("33",)
 
+    def test_the_figure_is_reported_the_way_it_was_written(self) -> None:
+        """40 and not `4E+1`.
+
+        Normalising for comparison is right and printing the normalised form is
+        not: what the reviewer is being shown is the figure a backend invented,
+        and `4E+1` is a sentence about nothing that appears on any page.
+        """
+        result = assemble(
+            REQUEST,
+            _proposal("Retighten the motor mount bolts to 40 Nm at 1200 rpm."),
+            skills=SKILLS,
+            require_containment=False,
+        )
+        assert result.rejected[0].figures_not_in_evidence == ("40", "1200")
+
     def test_a_translated_step_keeping_every_figure_passes(self) -> None:
         result = assemble(
             REQUEST,
@@ -359,6 +374,21 @@ class TestNothingToDraft:
         assert result.outcome is DraftOutcome.NOT_FOUND
         assert result.draft is None
         assert result.rejected == ()
+
+    def test_a_backend_claiming_a_procedure_and_giving_no_step_is_withheld(self) -> None:
+        """The other half of the same distinction.
+
+        `LlmServerDrafter` drops citations that point at pages it never showed
+        the model, so a model fabricating every citation arrives here as "repair,
+        no steps". Reporting that as `not_found` would say the manuals are silent
+        about a symptom whose page is sitting in the index, and would hide the
+        model that is inventing citations behind a sentence about the corpus.
+        """
+        result = assemble(REQUEST, Proposal(kind=ProposalKind.REPAIR, steps=()), skills=SKILLS)
+
+        assert result.outcome is DraftOutcome.WITHHELD
+        assert result.draft is None
+        assert "backend" in result.reason
 
     def test_a_backend_that_returns_no_steps_is_not_a_withheld_draft(self) -> None:
         """Two silences that must not be confused.

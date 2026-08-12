@@ -121,9 +121,35 @@ def _procedure(text: str) -> list[str]:
 
     steps: list[str] = []
     for position, marker in enumerate(chain):
-        stop = chain[position + 1].start() if position + 1 < len(chain) else len(region)
+        stop = (
+            chain[position + 1].start()
+            if position + 1 < len(chain)
+            else _end_of_the_last_step(region, marker.end())
+        )
         steps.append(" ".join(region[marker.end() : stop].split()))
     return [step for step in steps if step]
+
+
+def _end_of_the_last_step(region: str, start: int) -> int:
+    """Where the numbering stops but the page carries on.
+
+    Every step but the last is bounded by the marker after it. The last one is
+    bounded by nothing, and on a page with no tools block that swallows whatever
+    follows the list - on the lockout pages, the note that "the 5 minute wait is
+    a minimum", which is a warning about the procedure and not a step in it.
+
+    The line break is the boundary, but only where the text reads as finished: a
+    sentence end followed by a new sentence. A step that merely wrapped -
+    "4. If deflection is" / "outside that range" - has neither, and stays whole.
+    """
+    position = start
+    while (newline := region.find("\n", position)) != -1:
+        ended = region[start:newline].rstrip().endswith((".", ":", ";"))
+        begins = region[newline + 1 :].lstrip()[:1]
+        if ended and begins.isupper():
+            return newline
+        position = newline + 1
+    return len(region)
 
 
 def _sentences(text: str) -> list[str]:

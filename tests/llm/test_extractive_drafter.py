@@ -85,6 +85,31 @@ class TestARepairProcedureIsReadOffThePage:
             "10 mm socket",
         )
 
+    def test_the_note_after_the_list_is_not_folded_into_the_last_step(self) -> None:
+        """Every step but the last is bounded by the marker after it.
+
+        The lockout page has no tools block to end the procedure at, so the
+        warning that follows the list - "The 5 minute wait is a minimum. Do not
+        shorten it..." - would otherwise arrive as part of step 4, attributed to
+        an instruction that does not say it.
+        """
+        lockout = _page(R2000IC, 2, document_id=R2000IC_DOC, score=0.9)
+        proposal = ExtractiveDrafter().propose(_request(lockout, symptom="SYM-000"))
+
+        assert len(proposal.steps) == 4
+        assert proposal.steps[-1].text == (
+            "Verify zero energy at test points TP-1 and TP-2 before proceeding."
+        )
+
+    def test_a_sentence_that_continues_the_last_step_is_kept(self) -> None:
+        """The other direction: page 4's last step is two sentences on one line,
+        and cutting at the first full stop would lose the temperature to confirm
+        the repair against."""
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+        proposal = ExtractiveDrafter().propose(_request(answer))
+
+        assert "settles below 70 degrees" in proposal.steps[-1].text
+
     def test_a_page_that_states_no_duration_proposes_none(self) -> None:
         overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=0.5)
         proposal = ExtractiveDrafter().propose(_request(overview))
