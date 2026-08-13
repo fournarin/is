@@ -151,16 +151,25 @@ def fail(
     conn: Connection[Any],
     *,
     job_id: int,
+    worker: str,
     error: str,
     now: datetime,
     retry_at: datetime | None,
-) -> None:
-    """Either release the job for a later retry, or mark it failed for good."""
+) -> bool:
+    """Either release the job for a later retry, or mark it failed for good.
+
+    Scoped to the claiming worker, like `finish` and for the same reason: a
+    worker the reaper gave up on is still running, and its eventual failure must
+    not flip a row a second worker owns back to `queued` - which would draft the
+    same symptom twice - or bury the second worker's progress under the first
+    one's error.
+    """
     with conn.cursor() as cur:
         if retry_at is None:
             cur.execute(
-                "UPDATE job SET status = 'failed', finished_at = %s, last_error = %s WHERE id = %s",
-                (now, error, job_id),
+                "UPDATE job SET status = 'failed', finished_at = %s, last_error = %s "
+                "WHERE id = %s AND claimed_by = %s AND status = 'running'",
+                (now, error, job_id, worker),
             )
         else:
             cur.execute(
@@ -168,10 +177,11 @@ def fail(
                 UPDATE job SET
                     status = 'queued', claimed_by = NULL, claimed_at = NULL,
                     heartbeat_at = NULL, available_at = %s, last_error = %s
-                WHERE id = %s
+                WHERE id = %s AND claimed_by = %s AND status = 'running'
                 """,
-                (retry_at, error, job_id),
+                (retry_at, error, job_id, worker),
             )
+        return cur.rowcount == 1
 
 
 def reap(
@@ -202,7 +212,20 @@ def reap(
         cur.execute(
             f"""
             UPDATE job SET
-                status = 'queued', claimed_by = NULL, claimed_at = NULL, heartbeat_at = NULL
+                -- A job that has used its attempts is not put back. Nothing else
+                -- enforces the cap on this path: `fail` counts the attempts, and
+                -- a job that kills its worker outright - an OOM on a large scan -
+                -- never reaches `fail`. Re-queued unconditionally it would be
+                -- claimed again, kill the worker again, and be reaped again, for
+                -- as long as the worker is restarted (ADR-039).
+                status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+                finished_at = CASE WHEN attempts >= max_attempts THEN %s ELSE NULL END,
+                last_error = CASE
+                    WHEN attempts >= max_attempts
+                    THEN 'the worker went silent and the attempts are spent'
+                    ELSE 'the worker went silent; returned to the queue'
+                END,
+                claimed_by = NULL, claimed_at = NULL, heartbeat_at = NULL
             WHERE id IN (
                 SELECT id FROM job
                 WHERE job_class = %s
@@ -212,7 +235,7 @@ def reap(
             )
             RETURNING {_COLUMNS}
             """,
-            (job_class.value, dead_before),
+            (dead_before, job_class.value, dead_before),
         )
         return [_to_job(row) for row in cur.fetchall()]
 

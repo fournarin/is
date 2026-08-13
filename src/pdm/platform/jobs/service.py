@@ -75,7 +75,7 @@ class JobQueue:
             if should_retry(job.attempts, job.max_attempts)
             else None
         )
-        repo.fail(conn, job_id=job.id, error=error, now=now, retry_at=retry_at)
+        repo.fail(conn, job_id=job.id, worker=self.worker, error=error, now=now, retry_at=retry_at)
 
     def reap(self, conn: Connection[Any]) -> list[Job]:
         """Return jobs abandoned by a dead worker to the queue.

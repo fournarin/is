@@ -15,6 +15,7 @@ the plant, as a job that runs twice.
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -335,3 +336,88 @@ def _status(conn: Connection[Any]) -> str:
     row = conn.execute("SELECT status FROM job ORDER BY id LIMIT 1").fetchone()
     assert row is not None
     return str(row[0])
+
+
+class TestWhatTheCodeReviewFound:
+    """Three of them, and the first is the mechanism this slice was reopened for."""
+
+    def test_the_thread_beats_while_the_handler_works(
+        self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        """Deleting `_beating` used to leave the suite green.
+
+        The earlier test passed on the heartbeat `claim` writes, which is enough
+        for ten simulated minutes against a fifteen-minute threshold and says
+        nothing about the thread. This one waits in real time for a real beat,
+        with the interval turned down to a second, and fails if nothing beats.
+        """
+        clock = SimulatedClock(START)
+        fast = ClassTiming(heartbeat_seconds=1, dead_after_seconds=3)
+        queue = JobQueue(job_class=JobClass.AUTHORING, worker="worker-1", timing=fast, clock=clock)
+        queue.enqueue(conn, kind="ingest")
+        conn.commit()
+        beats: list[datetime] = []
+
+        def slow(job_conn: Connection[Any], job: Job) -> None:
+            # The beat is written by another connection while this one holds an
+            # open transaction, so it is read from a third.
+            time.sleep(1.4)
+            clock.advance(timedelta(seconds=90))
+            time.sleep(1.4)
+            row = conn.execute("SELECT heartbeat_at FROM job WHERE id = %s", (job.id,)).fetchone()
+            conn.commit()
+            assert row is not None and row[0] is not None
+            beats.append(row[0])
+
+        worker = Worker(queue=queue, pool=pool, clock=clock, handlers={"ingest": slow})
+        worker.run_one()
+
+        assert beats and beats[0] > START, "the heartbeat thread never reported in"
+
+    def test_a_job_that_kills_its_worker_is_not_reaped_for_ever(
+        self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        """`fail` counts the attempts, and a job that OOMs its worker never
+        reaches `fail`. Re-queued unconditionally it would be claimed, kill the
+        worker, and be reaped again for as long as anything restarted it."""
+        clock = SimulatedClock(START)
+        queue = _queue(clock)
+        queue.enqueue(conn, kind="ingest", max_attempts=1)
+        queue.claim(conn)
+        conn.commit()
+
+        later = SimulatedClock(START + timedelta(hours=2))
+        returned = _worker(pool, later, {}, worker="reaper").reap()
+
+        assert [job.status.value for job in returned] == ["failed"]
+        assert _status(conn) == "failed"
+
+    def test_a_reaped_workers_failure_cannot_reopen_someone_elses_job(
+        self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        """The other exit `finish` was hardened against, left open until now.
+
+        The first worker is reaped mid-job and a second claims it; when the first
+        eventually fails, an unscoped UPDATE would flip the row back to `queued`
+        under the second worker - and the same symptom would be drafted twice.
+        """
+        clock = SimulatedClock(START)
+        first = _queue(clock, worker="worker-1")
+        job = first.enqueue(conn, kind="ingest")
+        claimed = first.claim(conn)
+        conn.commit()
+        assert claimed is not None
+
+        # Reaped, then taken by somebody else.
+        late = SimulatedClock(START + timedelta(hours=2))
+        _queue(late, worker="reaper").reap(conn)
+        second = _queue(late, worker="worker-2")
+        assert second.claim(conn) is not None
+        conn.commit()
+
+        # The original worker finally gives up.
+        first.fail(conn, claimed, "died late")
+        conn.commit()
+
+        row = conn.execute("SELECT status, claimed_by FROM job WHERE id = %s", (job.id,)).fetchone()
+        assert row == ("running", "worker-2")

@@ -117,6 +117,12 @@ services:
   worker-authoring:
     build: .
     command: ["python", "-m", "pdm.workers.authoring"]
+    # SIGTERM makes the loop finish the job in hand rather than abandon it
+    # (ADR-039), and Compose's default is to SIGKILL ten seconds later - which
+    # would abandon every ingest ADR-017 puts at five to twenty minutes, exactly
+    # the case the flag exists for. Twenty-five minutes covers the longest job
+    # with room over the fifteen-minute dead threshold.
+    stop_grace_period: 25m
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # The path is the mount below. There is no default in the code (ADR-019):

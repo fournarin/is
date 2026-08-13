@@ -149,6 +149,17 @@ nothing is waiting on a dead job that has already been dead for fifteen minutes.
 - **`repo.reap` changes shape**, and its existing tests keep passing because they
   test the timing rather than the locking. The lock behaviour needs a test with
   two real connections, which is the only way to write it.
+- **The vector half is written inside the job's transaction and cannot be rolled
+  back with it.** `index_document` sends points to Qdrant during the handler, so
+  a commit that fails afterwards leaves vectors whose chunks are not in
+  PostgreSQL - the inverse of the ordering ADR-035 relies on. A retry repairs it,
+  because ingest replaces a document's points wholesale; a job that exhausts its
+  attempts leaves them. Accepted rather than solved: the alternative is a
+  post-commit hook that would have to survive the process dying between the two,
+  which is the same problem one step along.
+- **Nothing enqueues an `ingest` job yet either**, so an uploaded manual is still
+  not indexed by anything but a test or a script. The same gap as drafting, and
+  it closes with the screen that uploads a manual.
 - **The runtime worker is not built here.** It has nothing to run: the trigger
   loop and the dispatch tick are layers 1 and 3. The loop in `workers/` is shared
   so that when they arrive, the entrypoint is a handler table and not a second
