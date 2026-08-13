@@ -36,6 +36,7 @@ from pdm.contracts import (
     LineId,
     MachineId,
     MachineModel,
+    Severity,
     ShiftDefinition,
     ShiftId,
     Station,
@@ -220,6 +221,23 @@ def _cross_file_problems(plant: PlantConfig, rules: RulesConfig, policy: PolicyC
             problems.append(
                 f"{POLICY_FILE} has no fallback estimate for machine model {model}, so work "
                 f"on it without a playbook would have no duration and drop out of the queue"
+            )
+            continue
+        # And every severity, not merely the model. The lookup at issue time is
+        # [model][severity], so a table missing one row boots cleanly and then
+        # fails on the first critical fault with no playbook - which moves the
+        # "long-tail work vanishes" failure out of config validation, where it is
+        # cheap, and into the plant, where it is not (ADR-041).
+        missing = [
+            severity.value
+            for severity in Severity
+            if severity not in policy.fallback_minutes[model]
+        ]
+        if missing:
+            problems.append(
+                f"{POLICY_FILE} has no fallback estimate for {model} at severity "
+                f"{', '.join(missing)}; work at that severity with no playbook would have no "
+                f"duration and drop out of the queue"
             )
 
     for model, unknown in (

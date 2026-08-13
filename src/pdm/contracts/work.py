@@ -246,10 +246,45 @@ class WorkOrder(BaseModel):
     playbook_snapshot: tuple[PlaybookStep, ...] = ()
     snapshot_approved_by: UserId | None = None
     snapshot_approved_at: datetime | None = None
+    # Set when the playbook this was built from is awaiting review - a manual
+    # replaced, a technician's objection filed. ADR-018 serves such a playbook
+    # anyway, because a technician with an out-of-date procedure is better off
+    # than one with none; that is only true while they can tell which they have,
+    # and the ticket is where somebody is standing at a machine (ADR-041).
+    playbook_warning: str | None = None
 
     finding_kind: FindingKind | None = None
     eta: datetime | None = None
     eta_confidence: timedelta | None = None
+
+    # ── what the scheduler computes with (ADR-041) ──────────────────────
+    # Copied from the playbook when the order is created, for the reason
+    # machine_id and severity are: load_ratio is the sum of
+    # estimated_minutes x required_technicians over the shift's capacity
+    # (design.md 13.2), and dispatch() may not read a table to find them
+    # (invariant 10).
+    #
+    # A snapshot, deliberately. An order priced at forty-five minutes stays
+    # priced at forty-five when the playbook is re-approved at sixty, because
+    # the shift was planned on the first number.
+    estimated_minutes: int = Field(gt=0)
+    # None means "any technician". There is no honest default: guessing
+    # robot_mechanical for an electrical fault sends the wrong person, and a
+    # guess is worse than an absence because the absence is visible (ADR-041).
+    required_skill: SkillId | None = None
+    required_technicians: int = Field(default=1, ge=1)
+    # True when the duration came from policy.yaml rather than from a manual.
+    # Unlabelled, a coarse guess is indistinguishable from a figure somebody
+    # measured, and nobody can then say how much of the schedule rests on
+    # guesses (design.md 3.2).
+    estimate_is_fallback: bool = False
+
+    # Why this job exists, written at creation and never changed. Distinct from
+    # priority_reason, which is why it is ranked where it is and belongs to
+    # layer 3: a technician looking at a job asks the first question and a
+    # supervisor looking at the queue asks the second, and one field answers
+    # whichever was asked last (ADR-005, ADR-041).
+    reason: str = Field(min_length=1)
 
     priority_score: float = 0.0
     # Never empty: a system that cannot say why this job comes first gets
@@ -287,6 +322,22 @@ class WorkOrder(BaseModel):
         full (feedback_loops.md 3).
         """
         return max(0, self.actual_minutes - self.blocked_minutes)
+
+    @model_validator(mode="after")
+    def _a_playbook_backed_order_is_not_a_fallback(self) -> WorkOrder:
+        """The two cannot both be true, and the confusion would be invisible.
+
+        `estimate_is_fallback` exists so that a coarse number can be told from a
+        manual's figure. An order carrying a playbook *and* claiming a fallback
+        estimate says both at once, and whichever a reader believes, the other
+        was written by something that was not paying attention.
+        """
+        if self.estimate_is_fallback and self.playbook_ref is not None:
+            raise ValueError(
+                "an order bound to a playbook takes its estimate from that playbook; "
+                "estimate_is_fallback describes an order that has none (ADR-041)"
+            )
+        return self
 
     @model_validator(mode="after")
     def _origin_matches_its_reference(self) -> WorkOrder:

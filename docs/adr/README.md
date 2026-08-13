@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Forty decisions, in the order they were made. Each records the context that
+Forty-one decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -52,6 +52,7 @@ entries replace parts of earlier ones, and both are kept.
 | [038](0038-the-review-queue-is-a-table-and-the-served-table-holds-no-drafts.md) | The review queue is a table; the served table holds no drafts | |
 | [039](0039-what-a-worker-does-between-claiming-a-job-and-finishing-it.md) | What a worker does between claiming a job and finishing it | 040 |
 | [040](0040-what-happens-when-somebody-asks-twice.md) | Asking twice, and a worker with no handlers | |
+| [041](0041-a-work-order-carries-what-the-scheduler-needs-to-schedule-it.md) | A work order carries what the scheduler needs | |
 
 ## Where to start
 

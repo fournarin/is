@@ -184,9 +184,10 @@ person's current role. Roles change; the evidence must not
 
 ### WorkOrder
 ```
-origin, finding_ref?, pm_task_ref?, playbook_ref, playbook_snapshot,
+origin, finding_ref?, pm_task_ref?, playbook_ref, playbook_snapshot, playbook_warning?,
 machine_id, severity, finding_kind?, eta?, eta_confidence?,
-priority_score, priority_reason, status,
+estimated_minutes, required_skill?, required_technicians, estimate_is_fallback,
+reason, priority_score, priority_reason, status,
 assignees[], work_segments[], handover_note,
 actual_minutes, blocked_minutes, blocked_reason, outcome, technician_feedback
 ```
@@ -205,6 +206,29 @@ own rule against importing the trigger layer. Same pattern as
 `severity` lives on the order rather than the Finding, because scheduled and
 manual work have no Finding attached. On the other side, the load gate that
 admits "high severity only" could not judge those two kinds of work at all.
+
+**The third line is the same argument about the playbook.** `load_ratio` is the
+sum of `estimated_minutes` x `required_technicians` over the shift's capacity,
+and `dispatch()` may not read a table to find either (invariant 10), so both are
+copied onto the order when it is created - a snapshot, so an order priced at
+forty-five minutes stays priced at forty-five when the playbook is re-approved
+at sixty. A job with no playbook takes its duration from `fallback_minutes` in
+`policy.yaml` and says so through `estimate_is_fallback`; its `required_skill`
+stays empty, because guessing one sends the wrong person and a guess is worse
+than an absence
+([ADR-041](docs/adr/0041-a-work-order-carries-what-the-scheduler-needs-to-schedule-it.md)).
+
+`playbook_warning` is set when the playbook the order was built from was awaiting
+review at that moment. ADR-018 serves such a playbook anyway, on the argument
+that a technician with an out-of-date procedure is better off than one with
+none - which holds only while they can tell which they have, and the ticket is
+where somebody is standing at a machine.
+
+`reason` is why the job exists and is written once, at creation - "over
+threshold for 20 minutes", or "expected to reach threshold in about 6 hours,
+give or take 2". `priority_reason` is why it is ranked where it is and belongs
+to layer 3. Two questions get asked, by two people, and one field would answer
+whichever was asked last (ADR-005, ADR-041).
 
 `finding_ref` is for **tracing back**, not for the scheduler to fetch data. The
 technician's screen showing "seen N times" reads through it, because the values

@@ -68,6 +68,11 @@ def _order(**overrides: object) -> WorkOrder:
         "origin": WorkOrderOrigin.MANUAL,
         "machine_id": MOTOR,
         "severity": Severity.HIGH,
+        # The scheduler-facing copies (ADR-041). Required, because an order the
+        # load gate cannot price is an order that cannot be scheduled, and a
+        # default here would let one exist.
+        "estimated_minutes": 45,
+        "reason": "reported by a technician on the floor",
     }
     return WorkOrder(**(base | overrides))  # type: ignore[arg-type]
 
@@ -317,3 +322,60 @@ def test_a_signal_looks_the_same_whatever_produced_it() -> None:
         "value": 92.0,
         "unit": "celsius",
     }
+
+
+class TestWhatTheSchedulerNeedsToPriceAJob:
+    """ADR-041: the four facts layer 3 computes with, on the order itself.
+
+    `load_ratio` is the sum of estimated_minutes x required_technicians over the
+    shift's capacity (design.md 13.2), and `dispatch()` may not read a table to
+    find them (invariant 10). Held here for the same reason machine_id and
+    severity are (ADR-030).
+    """
+
+    def test_an_order_that_cannot_be_priced_cannot_be_created(self) -> None:
+        with pytest.raises(ValidationError):
+            WorkOrder(  # type: ignore[call-arg]
+                origin=WorkOrderOrigin.MANUAL,
+                machine_id=MOTOR,
+                severity=Severity.HIGH,
+                reason="reported by a technician",
+            )
+
+    def test_a_two_person_job_says_so(self) -> None:
+        """ADR-025: counted as one, the shift reads as half as busy as it is."""
+        order = _order(required_technicians=2)
+
+        assert order.required_technicians == 2
+
+    def test_a_job_with_no_playbook_may_have_no_skill(self) -> None:
+        """None is "any technician", and it is the honest answer.
+
+        Guessing robot_mechanical for an electrical fault sends the wrong
+        person, and the guess is worse than the absence because the absence is
+        visible.
+        """
+        order = _order(required_skill=None, estimate_is_fallback=True)
+
+        assert order.required_skill is None
+
+    def test_a_fallback_estimate_cannot_claim_a_playbook(self) -> None:
+        """Both at once says two things, and one of them was written by
+        something that was not paying attention."""
+        with pytest.raises(ValidationError, match="takes its estimate from that playbook"):
+            _order(estimate_is_fallback=True, playbook_ref=PlaybookRef("SYM-014/R-2000iC"))
+
+    def test_an_order_always_says_why_it_exists(self) -> None:
+        with pytest.raises(ValidationError):
+            _order(reason="")
+
+    def test_the_reason_for_existing_and_the_reason_for_the_ranking_are_separate(self) -> None:
+        """One field would answer whichever question was asked last: layer 3
+        overwrites priority_reason on the first tick (ADR-005, ADR-041)."""
+        order = _order(
+            reason="motor temperature 91 C, over the 85 C threshold for 20 minutes",
+            priority_reason="first of four: this station has no buffer",
+        )
+
+        assert "20 minutes" in order.reason
+        assert "no buffer" in order.priority_reason
