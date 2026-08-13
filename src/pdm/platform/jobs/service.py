@@ -14,7 +14,14 @@ from psycopg import Connection
 
 from pdm.platform.clock import Clock
 from pdm.platform.jobs import repo
-from pdm.platform.jobs.domain import ClassTiming, Job, JobClass, retry_delay, should_retry
+from pdm.platform.jobs.domain import (
+    ClassTiming,
+    Job,
+    JobClass,
+    JobKind,
+    retry_delay,
+    should_retry,
+)
 
 
 class JobQueue:
@@ -37,7 +44,7 @@ class JobQueue:
         self,
         conn: Connection[Any],
         *,
-        kind: str,
+        kind: JobKind | str,
         payload: dict[str, object] | None = None,
         available_at: datetime | None = None,
         max_attempts: int = 3,
@@ -45,11 +52,23 @@ class JobQueue:
         return repo.enqueue(
             conn,
             job_class=self.job_class,
-            kind=kind,
+            kind=kind.value if isinstance(kind, JobKind) else kind,
             payload=payload or {},
             now=self.clock.now(),
             available_at=available_at,
             max_attempts=max_attempts,
+        )
+
+    def pending(
+        self, conn: Connection[Any], *, kind: JobKind, payload: dict[str, object]
+    ) -> Job | None:
+        """An unfinished job of this kind matching these payload keys.
+
+        For the entrance, not for the worker: it is how a door recognises that
+        what is being asked for is already coming (ADR-040).
+        """
+        return repo.pending_of_kind(
+            conn, job_class=self.job_class, kind=kind.value, payload=payload
         )
 
     def claim(self, conn: Connection[Any]) -> Job | None:

@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pdm.api.deps import Db, Jobs, requires
 from pdm.contracts import MachineModel, PlaybookStep, Role, SkillId, SymptomCode
@@ -131,6 +131,17 @@ class DraftRequested(BaseModel):
     # retrieves the page.
     question: str = Field(min_length=1)
 
+    @field_validator("question")
+    @classmethod
+    def _not_only_whitespace(cls, value: str) -> str:
+        """`min_length` admits "   ", which retrieves nothing and then files a
+        `not_found` proposal reading as "the manuals do not answer this" - a
+        statement about the corpus made on the strength of a typo (ADR-040)."""
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("a drafting question cannot be only whitespace")
+        return stripped
+
 
 class Dismissal(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -154,16 +165,29 @@ def request_draft(
     because the worker behind it holds the one GPU (ADR-029), and a queue anybody
     can fill is a queue the person who has to empty it does not control.
     """
-    job = jobs.enqueue(
-        conn,
-        kind=JobKind.DRAFT.value,
-        payload={
+    pair: dict[str, object] = {
+        "symptom_code": requested.symptom_code,
+        "machine_model": requested.machine_model,
+    }
+    # Asking twice for something already coming is not an error (ADR-040): the
+    # second press gets the first job's id. A 409 would teach people to press
+    # again to find out, and each press costs a pass on the one GPU.
+    already = jobs.pending(conn, kind=JobKind.DRAFT, payload=pair)
+    if already is not None:
+        return {
+            "job": already.id,
             "symptom_code": requested.symptom_code,
-            "machine_model": requested.machine_model,
-            "question": requested.question,
-        },
-    )
-    return {"job": job.id, "symptom_code": requested.symptom_code, "status": job.status.value}
+            "status": already.status.value,
+            "queued_already": True,
+        }
+
+    job = jobs.enqueue(conn, kind=JobKind.DRAFT, payload={**pair, "question": requested.question})
+    return {
+        "job": job.id,
+        "symptom_code": requested.symptom_code,
+        "status": job.status.value,
+        "queued_already": False,
+    }
 
 
 @router.get("/playbooks/queue", response_model=list[ProposalSummary])

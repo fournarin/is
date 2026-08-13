@@ -110,7 +110,7 @@ def worker(conn: Connection[Any], pool: ConnectionPool[Connection[Any]], tmp_pat
     )
 
 
-def _enqueue(conn: Connection[Any], kind: str, payload: dict[str, object]) -> None:
+def _enqueue(conn: Connection[Any], kind: JobKind, payload: dict[str, object]) -> None:
     JobQueue(
         job_class=JobClass.AUTHORING,
         worker="enqueuer",
@@ -125,7 +125,7 @@ class TestTheIngestJob:
         self, conn: Connection[Any], worker: Worker
     ) -> None:
         document = CORPUS.document(M710IC)
-        _enqueue(conn, JobKind.INGEST.value, {"document_id": document.sha256})
+        _enqueue(conn, JobKind.INGEST, {"document_id": document.sha256})
 
         assert worker.run_one() is True
 
@@ -140,7 +140,7 @@ class TestTheIngestJob:
         """Not a KeyError. The row is read minutes after it was written, by a
         process that did not write it, and "KeyError: 'document_id'" is not a
         sentence anybody can act on."""
-        _enqueue(conn, JobKind.INGEST.value, {"documentid": "a" * 64})
+        _enqueue(conn, JobKind.INGEST, {"documentid": "a" * 64})
 
         worker.run_one()
 
@@ -154,11 +154,11 @@ class TestTheDraftJob:
         self, conn: Connection[Any], worker: Worker
     ) -> None:
         answer = CORPUS.answer(SymptomCode("SYM-047"))
-        _enqueue(conn, JobKind.INGEST.value, {"document_id": CORPUS.document(M710IC).sha256})
+        _enqueue(conn, JobKind.INGEST, {"document_id": CORPUS.document(M710IC).sha256})
         worker.run_one()
         _enqueue(
             conn,
-            JobKind.DRAFT.value,
+            JobKind.DRAFT,
             {
                 "symptom_code": answer.symptom_code,
                 "machine_model": answer.machine_model,
@@ -178,11 +178,11 @@ class TestTheDraftJob:
         """ADR-017, through the whole chain: read from a different connection
         after the loop returns, both are there or neither is."""
         answer = CORPUS.answer(SymptomCode("SYM-047"))
-        _enqueue(conn, JobKind.INGEST.value, {"document_id": CORPUS.document(M710IC).sha256})
+        _enqueue(conn, JobKind.INGEST, {"document_id": CORPUS.document(M710IC).sha256})
         worker.run_one()
         _enqueue(
             conn,
-            JobKind.DRAFT.value,
+            JobKind.DRAFT,
             {
                 "symptom_code": answer.symptom_code,
                 "machine_model": answer.machine_model,
@@ -198,7 +198,7 @@ class TestTheDraftJob:
     def test_a_job_with_no_question_is_refused_before_anything_is_retrieved(
         self, conn: Connection[Any], worker: Worker
     ) -> None:
-        _enqueue(conn, JobKind.DRAFT.value, {"symptom_code": "SYM-047", "machine_model": "M-710iC"})
+        _enqueue(conn, JobKind.DRAFT, {"symptom_code": "SYM-047", "machine_model": "M-710iC"})
 
         worker.run_one()
 

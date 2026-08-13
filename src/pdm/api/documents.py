@@ -376,9 +376,7 @@ def upload(
     # nothing else to do - and the alternative, deciding here whether the index
     # is current, is a second opinion about a question `document_page` already
     # answers.
-    job = jobs.enqueue(
-        conn, kind=JobKind.INGEST.value, payload={"document_id": document.document_id}
-    )
+    job = jobs.enqueue(conn, kind=JobKind.INGEST, payload={"document_id": document.document_id})
     return Registered(
         document_id=document.document_id,
         filename=document.filename,

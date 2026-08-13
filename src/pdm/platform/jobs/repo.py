@@ -65,6 +65,32 @@ def enqueue(
     return _to_job(row)
 
 
+def pending_of_kind(
+    conn: Connection[Any], *, job_class: JobClass, kind: str, payload: dict[str, object]
+) -> Job | None:
+    """A job of this kind whose payload contains these keys, not yet finished.
+
+    Containment rather than equality, so a draft already queued for a pair is
+    found whatever question it carries (ADR-040 section 2). Used at the door to
+    recognise the second press of a button, never inside a worker.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT {_COLUMNS} FROM job
+             WHERE job_class = %s
+               AND kind = %s
+               AND status IN ('queued', 'running')
+               AND payload @> %s
+             ORDER BY id
+             LIMIT 1
+            """,
+            (job_class.value, kind, Jsonb(payload)),
+        )
+        row = cur.fetchone()
+    return _to_job(row) if row else None
+
+
 def claim(
     conn: Connection[Any],
     *,

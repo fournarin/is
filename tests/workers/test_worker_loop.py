@@ -25,7 +25,7 @@ from psycopg import Connection, connect
 from psycopg_pool import ConnectionPool
 
 from pdm.platform.clock import SimulatedClock
-from pdm.platform.jobs import ClassTiming, Job, JobClass, JobQueue
+from pdm.platform.jobs import ClassTiming, Job, JobClass, JobKind, JobQueue
 from pdm.workers.loop import UnknownJobKind, Worker
 
 pytestmark = pytest.mark.db
@@ -90,11 +90,14 @@ class TestOneJob:
         self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
     ) -> None:
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest", payload={"document_id": "a" * 64})
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST, payload={"document_id": "a" * 64})
         conn.commit()
         seen: list[Job] = []
 
-        assert _worker(pool, clock, {"ingest": lambda _, job: seen.append(job)}).run_one() is True
+        assert (
+            _worker(pool, clock, {JobKind.INGEST.value: lambda _, job: seen.append(job)}).run_one()
+            is True
+        )
 
         assert [job.kind for job in seen] == ["ingest"]
         assert _status(conn) == "done"
@@ -105,7 +108,7 @@ class TestOneJob:
         """ADR-017's promise, tested by writing something and reading it back
         from a different connection after the loop returns."""
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
 
         def handler(job_conn: Connection[Any], job: Job) -> None:
@@ -117,7 +120,7 @@ class TestOneJob:
                 (START, START),
             )
 
-        _worker(pool, clock, {"ingest": handler}).run_one()
+        _worker(pool, clock, {JobKind.INGEST.value: handler}).run_one()
 
         rows = conn.execute("SELECT kind, status FROM job ORDER BY id").fetchall()
         assert rows == [("ingest", "done"), ("follow-up", "queued")]
@@ -128,13 +131,13 @@ class TestWhenAHandlerFails:
         self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
     ) -> None:
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
 
         def explode(job_conn: Connection[Any], job: Job) -> None:
             raise RuntimeError("the PDF is not a PDF")
 
-        assert _worker(pool, clock, {"ingest": explode}).run_one() is True
+        assert _worker(pool, clock, {JobKind.INGEST.value: explode}).run_one() is True
 
         row = conn.execute("SELECT status, attempts, last_error FROM job").fetchone()
         assert row is not None
@@ -152,7 +155,7 @@ class TestWhenAHandlerFails:
         tried three times with nothing to say why.
         """
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
 
         def write_then_fail(job_conn: Connection[Any], job: Job) -> None:
@@ -164,7 +167,7 @@ class TestWhenAHandlerFails:
             )
             raise RuntimeError("failed after writing")
 
-        _worker(pool, clock, {"ingest": write_then_fail}).run_one()
+        _worker(pool, clock, {JobKind.INGEST.value: write_then_fail}).run_one()
 
         kinds = [row[0] for row in conn.execute("SELECT kind FROM job ORDER BY id").fetchall()]
         assert kinds == ["ingest"]
@@ -177,10 +180,10 @@ class TestWhenAHandlerFails:
         """A worker that fell over on an unrecognised kind would stop working
         because somebody deployed a new job type into a queue it shares."""
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="something-new")
+        _queue(clock).enqueue(conn, kind="a-kind-from-a-later-slice")
         conn.commit()
 
-        assert _worker(pool, clock, {"ingest": lambda _, __: None}).run_one() is True
+        assert _worker(pool, clock, {JobKind.INGEST.value: lambda _, __: None}).run_one() is True
 
         error = conn.execute("SELECT last_error FROM job").fetchone()
         assert error is not None
@@ -190,13 +193,13 @@ class TestWhenAHandlerFails:
         self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
     ) -> None:
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest", max_attempts=1)
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST, max_attempts=1)
         conn.commit()
 
         def explode(job_conn: Connection[Any], job: Job) -> None:
             raise RuntimeError("no")
 
-        _worker(pool, clock, {"ingest": explode}).run_one()
+        _worker(pool, clock, {JobKind.INGEST.value: explode}).run_one()
 
         assert _status(conn) == "failed"
 
@@ -208,7 +211,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
         self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
     ) -> None:
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
         seen: list[datetime | None] = []
 
@@ -219,7 +222,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
             conn.commit()
             seen.append(row[0] if row else None)
 
-        _worker(pool, clock, {"ingest": slow}).run_one()
+        _worker(pool, clock, {JobKind.INGEST.value: slow}).run_one()
 
         assert seen == [START], "the claim's own heartbeat is invisible until commit (ADR-039)"
 
@@ -239,7 +242,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
         beat and not the lock.
         """
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
         swept: list[list[Job]] = []
 
@@ -248,7 +251,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
             swept.append(_queue(late, worker="reaper").reap(conn))
             conn.commit()
 
-        _worker(pool, clock, {"ingest": slow}).run_one()
+        _worker(pool, clock, {JobKind.INGEST.value: slow}).run_one()
 
         assert [job.id for job in swept[0]]
         # The work still committed; only the row changed hands, and finish said
@@ -260,7 +263,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
     ) -> None:
         """The mechanism that actually protects a twenty-minute ingest."""
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
         swept: list[list[Job]] = []
 
@@ -271,7 +274,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
             swept.append(_queue(late, worker="reaper").reap(conn))
             conn.commit()
 
-        _worker(pool, clock, {"ingest": slow}).run_one()
+        _worker(pool, clock, {JobKind.INGEST.value: slow}).run_one()
 
         assert swept == [[]]
         assert _status(conn) == "done"
@@ -282,7 +285,7 @@ class TestTheHeartbeatIsVisibleWhileTheWorkIsInFlight:
         """The other side: nothing holds the row, and the sweep takes it back."""
         clock = SimulatedClock(START)
         queue = _queue(clock)
-        job = queue.enqueue(conn, kind="ingest")
+        job = queue.enqueue(conn, kind=JobKind.INGEST)
         queue.claim(conn)
         conn.commit()
 
@@ -300,14 +303,14 @@ class TestStopping:
         """SIGTERM during an ingest finishes it rather than abandoning it, so a
         `docker compose down` does not cost the reaper's whole threshold."""
         clock = SimulatedClock(START)
-        _queue(clock).enqueue(conn, kind="ingest")
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
         worker = _worker(pool, clock, {})
 
         def stop_midway(job_conn: Connection[Any], job: Job) -> None:
             worker.stopping = True
 
-        worker.handlers["ingest"] = stop_midway
+        worker.handlers[JobKind.INGEST.value] = stop_midway
         worker.run_forever()
 
         assert _status(conn) == "done"
@@ -354,7 +357,7 @@ class TestWhatTheCodeReviewFound:
         clock = SimulatedClock(START)
         fast = ClassTiming(heartbeat_seconds=1, dead_after_seconds=3)
         queue = JobQueue(job_class=JobClass.AUTHORING, worker="worker-1", timing=fast, clock=clock)
-        queue.enqueue(conn, kind="ingest")
+        queue.enqueue(conn, kind=JobKind.INGEST)
         conn.commit()
         beats: list[datetime] = []
 
@@ -369,7 +372,7 @@ class TestWhatTheCodeReviewFound:
             assert row is not None and row[0] is not None
             beats.append(row[0])
 
-        worker = Worker(queue=queue, pool=pool, clock=clock, handlers={"ingest": slow})
+        worker = Worker(queue=queue, pool=pool, clock=clock, handlers={JobKind.INGEST.value: slow})
         worker.run_one()
 
         assert beats and beats[0] > START, "the heartbeat thread never reported in"
@@ -382,7 +385,7 @@ class TestWhatTheCodeReviewFound:
         worker, and be reaped again for as long as anything restarted it."""
         clock = SimulatedClock(START)
         queue = _queue(clock)
-        queue.enqueue(conn, kind="ingest", max_attempts=1)
+        queue.enqueue(conn, kind=JobKind.INGEST, max_attempts=1)
         queue.claim(conn)
         conn.commit()
 
@@ -403,7 +406,7 @@ class TestWhatTheCodeReviewFound:
         """
         clock = SimulatedClock(START)
         first = _queue(clock, worker="worker-1")
-        job = first.enqueue(conn, kind="ingest")
+        job = first.enqueue(conn, kind=JobKind.INGEST)
         claimed = first.claim(conn)
         conn.commit()
         assert claimed is not None
@@ -421,3 +424,21 @@ class TestWhatTheCodeReviewFound:
 
         row = conn.execute("SELECT status, claimed_by FROM job WHERE id = %s", (job.id,)).fetchone()
         assert row == ("running", "worker-2")
+
+    def test_a_worker_with_no_handlers_claims_nothing(
+        self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        """What `worker-runtime` depends on entirely (ADR-040).
+
+        Claiming a job only to fail it as an unknown kind would burn the attempts
+        of a job whose handler ships next month - and that container exists
+        precisely because layers 1 and 3 have not been built.
+        """
+        clock = SimulatedClock(START)
+        _queue(clock).enqueue(conn, kind="a-kind-from-a-later-slice")
+        conn.commit()
+
+        assert _worker(pool, clock, {}).run_one() is False
+        assert _status(conn) == "queued"
+        attempts = conn.execute("SELECT attempts FROM job").fetchone()
+        assert attempts == (0,)

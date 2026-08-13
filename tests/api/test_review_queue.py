@@ -424,3 +424,48 @@ class TestAskingForADraft:
         )
 
         assert response.status_code == 422
+
+    def test_asking_twice_gets_the_first_job_back_rather_than_a_second_one(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        """ADR-040: each press costs a pass on the one GPU, and a 409 would
+        teach people to press again to find out."""
+        _log_in(client, Role.ENGINEER)
+        body = {
+            "symptom_code": "SYM-021",
+            "machine_model": "R-2000iC",
+            "question": "axis 1 current above 12.5 A",
+        }
+
+        first = client.post("/playbooks/drafts", json=body)
+        second = client.post("/playbooks/drafts", json={**body, "question": "asked again"})
+
+        assert first.json()["job"] == second.json()["job"]
+        assert second.json()["queued_already"] is True
+        assert conn.execute("SELECT count(*) FROM job WHERE kind = 'draft'").fetchone() == (1,)
+
+    def test_a_different_symptom_is_a_different_job(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": "one"},
+        )
+        client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-014", "machine_model": "R-2000iC", "question": "two"},
+        )
+
+        assert conn.execute("SELECT count(*) FROM job WHERE kind = 'draft'").fetchone() == (2,)
+
+    def test_a_question_of_only_spaces_is_refused(self, client: TestClient) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": "   "},
+        )
+
+        assert response.status_code == 422
