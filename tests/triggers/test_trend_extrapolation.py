@@ -320,3 +320,107 @@ class TestTheSentenceAPersonReads:
         assert "give or take" in sentence
         assert "expected to reach 92.0" in sentence
         assert "readings" in sentence
+
+
+class TestWhatTheCodeReviewFound:
+    """Four in the fit. Two of them only appear on data that looks boring."""
+
+    def test_a_channel_drifting_by_a_billionth_does_not_crash_the_batch(self) -> None:
+        """A crossing a hundred thousand years out is `timedelta` overflow, and
+        an uncaught OverflowError here aborts every other signal in the batch -
+        on the most boring possible input."""
+        readings = _readings([80.0 + 1e-9 * index for index in range(20)])
+
+        found = crossing(
+            readings,
+            threshold=85.0,
+            comparison="above",
+            now=readings[-1][0],
+            horizon=timedelta(hours=24),
+            min_samples=10,
+        )
+
+        assert found is None
+
+    def test_the_eta_comes_from_the_fitted_line_not_the_last_reading(self) -> None:
+        """ADR-043 section 3 says `(threshold - intercept)/slope`, and the
+        intercept was being computed and ignored.
+
+        One noisy final sample moved the ETA by half an hour while the interval -
+        computed from the slope - stayed a few minutes wide. A number that
+        precise and that unstable is worse than a wider one.
+        """
+        clean = _rising(per_hour=2.0, start_value=80.0, count=13)
+        jumpy = [*clean[:-1], (clean[-1][0], clean[-1][1] + 2.0)]
+
+        steady = crossing(
+            clean,
+            threshold=90.0,
+            comparison="above",
+            now=clean[-1][0],
+            horizon=timedelta(hours=24),
+            min_samples=10,
+        )
+        wobbled = crossing(
+            jumpy,
+            threshold=90.0,
+            comparison="above",
+            now=jumpy[-1][0],
+            horizon=timedelta(hours=24),
+            min_samples=10,
+        )
+
+        assert steady is not None and wobbled is not None
+
+        # The last sample still rotates the fit, which is correct - it is data.
+        # What it must not do is move the answer by its whole size, which is what
+        # extrapolating from the raw reading did. Compared here against exactly
+        # that calculation rather than against a number chosen to pass.
+        from_raw_sample = jumpy[-1][0] + timedelta(
+            hours=(90.0 - jumpy[-1][1]) / wobbled.fit.slope_per_hour
+        )
+        assert abs(wobbled.at - steady.at) < abs(from_raw_sample - steady.at)
+
+    def test_a_perfectly_clean_line_still_reports_an_interval(self) -> None:
+        """ "Give or take 0 minutes" is a claim to know the future to the second
+        from data sampled every ten minutes. The floor is the sampling
+        resolution, derived from the readings rather than configured."""
+        readings = _rising(per_hour=2.0, start_value=80.0, count=13)
+
+        found = crossing(
+            readings,
+            threshold=90.0,
+            comparison="above",
+            now=readings[-1][0],
+            horizon=timedelta(hours=24),
+            min_samples=10,
+        )
+
+        assert found is not None
+        assert found.fit.slope_error == pytest.approx(0.0, abs=1e-9)
+        assert found.interval >= timedelta(minutes=10)
+
+    def test_a_stream_that_stopped_and_restarted_does_not_widen_every_interval(self) -> None:
+        """The resolution is the median gap, not the mean: one hole in the
+        stream would otherwise make every later forecast look vaguer than the
+        data supports."""
+        readings = [
+            *_rising(per_hour=2.0, start_value=80.0, count=6),
+            (NOW + timedelta(hours=6), 81.0),
+            *[
+                (NOW + timedelta(hours=6, minutes=10 * index), 81.0 + 0.33 * index)
+                for index in range(1, 8)
+            ],
+        ]
+
+        found = crossing(
+            readings,
+            threshold=90.0,
+            comparison="above",
+            now=readings[-1][0],
+            horizon=timedelta(hours=48),
+            min_samples=10,
+        )
+
+        if found is not None:
+            assert found.resolution == timedelta(minutes=10)

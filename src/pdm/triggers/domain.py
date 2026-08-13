@@ -349,6 +349,8 @@ def forecast(
     now: datetime,
     windows: trend.Window,
     open_findings: Mapping[SuppressionKey, Finding] = _NO_FINDINGS,
+    resolved_at: Mapping[SuppressionKey, datetime] = _NO_TIMES,
+    cooldown: timedelta = timedelta(minutes=30),
     horizon: timedelta,
     min_samples: int,
 ) -> list[Decision]:
@@ -394,6 +396,27 @@ def forecast(
                     rule_id=rule_id,
                     machine_id=signal.machine_id,
                     why="the trend still predicts a crossing already forecast (ADR-023)",
+                    finding=_predicted(signal, rule, rule_id, found, now=now),
+                )
+            )
+            continue
+
+        # The cooldown applies to forecasts too, and it was missing here while
+        # detections had it. A prediction resolved by a technician who looked and
+        # found nothing would otherwise be re-raised on the very next reading -
+        # which is ADR-023 section 3's oscillating sensor wearing a different hat.
+        last_resolved = resolved_at.get(key)
+        if last_resolved is not None and now - last_resolved < cooldown:
+            decisions.append(
+                Decision(
+                    outcome=Outcome.IN_COOLDOWN,
+                    rule_id=rule_id,
+                    machine_id=signal.machine_id,
+                    why=(
+                        "a forecast for this rule was resolved "
+                        f"{int((now - last_resolved).total_seconds() // 60)} minutes ago and the "
+                        "cooldown has not passed (ADR-023)"
+                    ),
                 )
             )
             continue
@@ -404,28 +427,50 @@ def forecast(
                 rule_id=rule_id,
                 machine_id=signal.machine_id,
                 why=trend.describe(found, metric_name=rule.metric_name, threshold=rule.threshold),
-                finding=Finding(
-                    machine_id=signal.machine_id,
-                    component=rule.component,
-                    symptom_code=rule.symptom_code,
-                    severity=rule.severity,
-                    rule_id=rule_id,
-                    detected_at=now,
-                    evidence=trend.evidence_for(
-                        found, threshold=rule.threshold, comparison=rule.comparison
-                    ),
-                    kind=FindingKind.PREDICTED,
-                    # Both, always. A prediction without its interval is an
-                    # opinion presented as a forecast, and the contract refuses
-                    # one without the other (ADR-020, ui.md 2.2).
-                    eta=found.at,
-                    eta_confidence=found.interval,
-                    status=FindingStatus.OPEN,
-                ),
+                finding=_predicted(signal, rule, rule_id, found, now=now),
             )
         )
 
     return decisions
+
+
+def _predicted(
+    signal: Signal,
+    rule: RuleConfig,
+    rule_id: RuleId,
+    found: trend.Crossing,
+    *,
+    now: datetime,
+) -> Finding:
+    """The forecast as a `Finding`, with its ETA on the decision-time axis.
+
+    **The two axes have to be joined here** (ADR-028). The crossing is computed
+    in source time, because that is what the samples are stamped with and what
+    the measurement compares against; but `eta` is read by things living in
+    decision time - the expiry sweep, the scheduler's urgency term, the screen
+    that says "in about six hours". Stored as source time on a replayed or
+    compressed run, every prediction would be expired the moment it was written.
+
+    So what is stored is how far ahead the crossing is, measured from the reading
+    that produced it, laid onto the clock the system is deciding by.
+    """
+    ahead = found.at - signal.timestamp
+    return Finding(
+        machine_id=signal.machine_id,
+        component=rule.component,
+        symptom_code=rule.symptom_code,
+        severity=rule.severity,
+        rule_id=rule_id,
+        detected_at=now,
+        evidence=trend.evidence_for(found, threshold=rule.threshold, comparison=rule.comparison),
+        kind=FindingKind.PREDICTED,
+        # Both, always. A prediction without its interval is an opinion presented
+        # as a forecast, and the contract refuses one without the other
+        # (ADR-020, ui.md 2.2).
+        eta=now + ahead,
+        eta_confidence=found.interval,
+        status=FindingStatus.OPEN,
+    )
 
 
 def rules_watching(rules: Iterable[RuleConfig], metric_name: str) -> list[RuleConfig]:

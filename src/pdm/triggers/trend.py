@@ -22,6 +22,7 @@ import math
 from collections import deque
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta
+from itertools import pairwise
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -73,11 +74,18 @@ class Crossing(BaseModel):
     earliest: datetime
     latest: datetime
     fit: Fit
+    # How often this channel is read. The interval is never reported as
+    # narrower than this: a perfectly clean line has a slope error of zero and
+    # would otherwise say "give or take 0 minutes", which is a claim to know the
+    # future to the second from data sampled once a minute. Derived from the
+    # readings rather than configured, so no constant was invented for it.
+    resolution: timedelta = timedelta(0)
 
     @property
     def interval(self) -> timedelta:
         """Half the width, which is what "give or take" means on a screen."""
-        return max(self.at - self.earliest, self.latest - self.at)
+        from_fit = max(self.at - self.earliest, self.latest - self.at)
+        return max(from_fit, self.resolution)
 
 
 class Window:
@@ -172,6 +180,18 @@ def fit(readings: Sequence[tuple[datetime, float]]) -> Fit | None:
     )
 
 
+def _resolution(readings: Sequence[tuple[datetime, float]]) -> timedelta:
+    """The typical gap between readings: how finely this channel is observed.
+
+    The median rather than the mean, so one gap in a stream that stopped and
+    restarted does not widen every interval afterwards.
+    """
+    if len(readings) < 2:
+        return timedelta(0)
+    gaps = sorted(later[0] - earlier[0] for earlier, later in pairwise(readings))
+    return gaps[len(gaps) // 2]
+
+
 def _hours_to(value: float, threshold: float, slope: float) -> float | None:
     """When a line at `value` moving at `slope` reaches `threshold`.
 
@@ -227,7 +247,21 @@ def crossing(
     ):
         return None
 
-    hours = _hours_to(latest_value, threshold, line.slope_per_hour)
+    # From the fitted line at the last reading, not from the reading itself
+    # (ADR-043 section 3). The fit is what was believed about the channel; the
+    # last sample is one draw from the noise around it, and letting it set the
+    # ETA moves the answer by half an hour while the interval - computed from the
+    # slope - stays a few minutes wide. A number that precise and that unstable
+    # is worse than a wider one.
+    fitted_now = line.intercept + line.slope_per_hour * (
+        (latest_at - readings[0][0]).total_seconds() / 3600.0
+    )
+    if (comparison == "above" and fitted_now > threshold) or (
+        comparison == "below" and fitted_now < threshold
+    ):
+        return None
+
+    hours = _hours_to(fitted_now, threshold, line.slope_per_hour)
     if hours is None:
         return None
 
@@ -237,21 +271,26 @@ def crossing(
     # is what `None` from `_hours_to` means here.
     steeper = line.slope_per_hour + math.copysign(line.slope_error, line.slope_per_hour)
     shallower = line.slope_per_hour - math.copysign(line.slope_error, line.slope_per_hour)
-    soonest = _hours_to(latest_value, threshold, steeper)
-    latest = _hours_to(latest_value, threshold, shallower)
+    soonest = _hours_to(fitted_now, threshold, steeper)
+    latest = _hours_to(fitted_now, threshold, shallower)
     if soonest is None or latest is None:
+        return None
+
+    # Bounded in hours, before anything becomes a datetime. A channel drifting at
+    # a billionth of a degree an hour has a crossing a hundred thousand years out,
+    # and `timedelta(hours=that)` raises OverflowError - which would abort the
+    # whole batch, on the most boring possible input.
+    horizon_hours = horizon.total_seconds() / 3600.0
+    if latest > horizon_hours or hours > horizon_hours:
         return None
 
     at = latest_at + timedelta(hours=hours)
     earliest_at = latest_at + timedelta(hours=soonest)
     latest_end = latest_at + timedelta(hours=latest)
 
-    # Both ends inside the horizon, and both in the future. Anything wider is a
-    # forecast the report would have to qualify into meaninglessness.
-    if earliest_at <= now or latest_end > now + horizon:
-        return None
-
-    return Crossing(at=at, earliest=earliest_at, latest=latest_end, fit=line)
+    return Crossing(
+        at=at, earliest=earliest_at, latest=latest_end, fit=line, resolution=_resolution(readings)
+    )
 
 
 def describe(crossing_found: Crossing, *, metric_name: str, threshold: float) -> str:

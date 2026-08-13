@@ -153,6 +153,8 @@ class Triggers:
                     now=now,
                     windows=self.windows,
                     open_findings=open_findings,
+                    resolved_at=resolved_at,
+                    cooldown=self.cooldown,
                     horizon=self.trend_horizon,
                     min_samples=self.trend_min_samples,
                 )
@@ -160,6 +162,25 @@ class Triggers:
             for decision in decisions:
                 if decision.outcome is Outcome.QUIET:
                     quiet += 1
+                elif decision.outcome is Outcome.REPEAT and decision.finding is not None:
+                    # A forecast seen again is a *newer forecast*: the fit moved,
+                    # and the record has to move with it or a technician reads a
+                    # crossing time computed from data six hours stale.
+                    predicted_again = decision.finding
+                    assert predicted_again.eta is not None
+                    assert predicted_again.eta_confidence is not None
+                    if repo.refresh_prediction(
+                        conn,
+                        machine_id=decision.machine_id,
+                        rule_id=decision.rule_id,
+                        eta=predicted_again.eta,
+                        eta_confidence=predicted_again.eta_confidence,
+                        evidence=predicted_again.evidence,
+                        now=now,
+                    ):
+                        counts[Outcome.REPEAT] += 1
+                    else:
+                        lost += 1
                 elif decision.outcome is Outcome.REPEAT:
                     # False means the record was resolved between the batch's
                     # state being read and this write. Counted apart: a repeat
@@ -178,8 +199,9 @@ class Triggers:
                         lost += 1
                 elif decision.outcome in (Outcome.RAISE, Outcome.FORECAST):
                     try:
-                        issued = self._raise(conn, decision, open_findings)
-                        target = raised if decision.outcome is Outcome.RAISE else predicted
+                        detected = decision.outcome is Outcome.RAISE
+                        issued = self._raise(conn, decision, open_findings, supersedes=detected)
+                        target = raised if detected else predicted
                         target.append(issued)
                     except AlreadyLive:
                         # Another worker raised it between the state being read
@@ -204,6 +226,8 @@ class Triggers:
         conn: Connection[Any],
         decision: Decision,
         open_findings: dict[tuple[MachineId, Any], Any],
+        *,
+        supersedes: bool,
     ) -> Raised:
         finding = decision.finding
         assert finding is not None  # RAISE always carries one
@@ -218,6 +242,14 @@ class Triggers:
         # ADR-023 section 7: what was predicted has happened. Two work orders for
         # one fault is the immediate reason; the other is that this is where a
         # prediction's error becomes measurable (ADR-020).
+        #
+        # **Only a detection supersedes.** A new forecast running this would mark
+        # an older forecast on the same component as superseded - and hand the
+        # accuracy loop a crossing that never happened, which is a measurement of
+        # nothing dressed as a measurement of something.
+        if not supersedes:
+            return Raised(finding_ref=finding_ref, decision=decision, superseded=None)
+
         candidate = repo.open_prediction_for(
             conn, machine_id=finding.machine_id, component=finding.component
         )

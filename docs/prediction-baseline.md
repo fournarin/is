@@ -21,11 +21,11 @@ degradation this method is wrong about.
 
 | horizon | n | mean error | median | worst |
 |---|---:|---:|---:|---:|
-| 0-1h | 172 | **+1.9 min** | +1.4 | +39.3 |
-| 1-3h | 300 | **+7.7 min** | +6.3 | −243.1 |
-| 3-6h | 427 | **+12.2 min** | −3.6 | −227.8 |
-| 6-12h | 240 | **+132.5 min** | +114.9 | +413.6 |
-| 12h+ | 135 | **+607.9 min** | +632.5 | +863.2 |
+| 0-1h | 162 | **−2.5 min** | −0.2 | −30.5 |
+| 1-3h | 327 | **−0.2 min** | +1.5 | −270.3 |
+| 3-6h | 399 | **+12.5 min** | −6.2 | −219.0 |
+| 6-12h | 236 | **+136.7 min** | +149.9 | +435.7 |
+| 12h+ | 139 | **+608.1 min** | +630.7 | +859.3 |
 
 Channels: `MC-001/R-motor-temp-high` (linear drift),
 `MC-004/R-servo-current-high` (exponential), `MC-018/R-fan-rpm-low` (falling
@@ -33,9 +33,9 @@ linear). The 12h+ bucket is the servo alone.
 
 ## What the table says
 
-**Accuracy falls with distance, exactly as ADR-020 predicted it would.** An hour
-out, the mechanism is within two minutes on average; twelve hours out it is ten
-hours late. A single headline figure - "mean ETA error 90 minutes" - would be
+**Accuracy falls with distance, exactly as ADR-020 predicted it would.** Inside
+three hours the mean error is under three minutes in either direction; twelve
+hours out it is ten hours late. A single headline figure - "mean ETA error 90 minutes" - would be
 true, meaningless, and the reason ADR-020 required this to be reported per
 horizon.
 
@@ -45,20 +45,20 @@ grows with the distance being extrapolated. That is the profile ADR-032 §4 buil
 in for this purpose: on a linear curve alone one figure would have done, and the
 report would have overstated what the method can do.
 
-**The early errors are noise, not bias.** The −243 and −228 minute worst cases in
+**The early errors are noise, not bias.** The −270 and −219 minute worst cases in
 the middle buckets are single fits where scatter tipped the slope steeper than
 the curve. The medians there are close to zero while the means are not, which is
 what a few large one-sided errors in a few hundred predictions looks like.
 
 ## The false alarms, which are the more interesting number
 
-**27 predictions on a channel whose curve never crosses its threshold:**
+**21 predictions on a channel whose curve never crosses its threshold:**
 `MC-018/R-cycle-time-drift`.
 
 That channel is steady with noise (ADR-032 §4), so every one of those is a
 forecast of an event that was never going to happen. In a twelve-hour scenario
-with a sample a minute, 27 false forecasts on one channel is roughly one every
-twenty-five minutes while the window is full.
+with a sample a minute, 21 false forecasts on one channel is roughly one every
+thirty minutes while the window is full.
 
 Three things follow, and the report has to say all three:
 
@@ -67,14 +67,24 @@ Three things follow, and the report has to say all three:
    horizon" instead. On a steady channel with enough scatter, a slope's interval
    can still fit - and does, here.
 2. **Suppression is what makes this survivable rather than fatal.** One live
-   Finding per (machine, rule) means those 27 forecasts are one record with an
-   occurrence count, not 27 work orders (ADR-023, invariant 8). Without slice
+   Finding per (machine, rule) means those 21 forecasts are one record with an
+   occurrence count, not 21 work orders (ADR-023, invariant 8). Without slice
    5.1 this figure would be the alarm flood.
 3. **It is a number to reduce, and reducing it needs a decision nobody has
    made.** The obvious moves - requiring the slope to exceed some multiple of its
    error, or requiring N consecutive agreeing forecasts - both introduce a
    constant with no source, which is what `workflow.md` 4.1 forbids and what a
    later measurement should settle rather than a guess now.
+
+## What changed after review
+
+The first version of these figures extrapolated from the **last raw reading**
+rather than from the fitted line, which ADR-043 §3 had specified and the code had
+not done. Fixing it moved the near horizons from +1.9 and +7.7 minutes to −2.5
+and −0.2, and took the false alarms from 27 to 21 - because a single noisy sample
+at the end of a window was setting the answer while the interval, computed from
+the slope, stayed narrow. Both sets of numbers were produced by the same
+scenario and seed; only the estimator changed.
 
 ## What this cannot do
 
