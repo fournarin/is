@@ -26,9 +26,6 @@ from pdm.platform.jobs import Job
 
 log = logging.getLogger(__name__)
 
-INGEST = "ingest"
-DRAFT = "draft"
-
 _STRICT = ConfigDict(frozen=True, extra="forbid")
 
 

@@ -83,7 +83,9 @@ def conn() -> Iterator[Connection[Any]]:
         pytest.skip("DATABASE_URL is not set")
     connection = connect(url)
     try:
-        connection.execute("TRUNCATE chunk, document_page, document CASCADE")
+        connection.execute(
+            "TRUNCATE playbook_proposal, playbook, chunk, document_page, document CASCADE"
+        )
         connection.commit()
         yield connection
     finally:

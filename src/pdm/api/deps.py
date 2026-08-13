@@ -16,6 +16,7 @@ from psycopg import Connection
 from pdm.contracts import Role
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
+from pdm.platform.jobs import JobQueue
 
 SESSION_COOKIE = "pdm_session"
 
@@ -43,6 +44,18 @@ def connection(request: Request) -> Iterator[Connection[Any]]:
             raise
 
 
+def authoring_jobs(request: Request) -> JobQueue:
+    """The queue the API writes to and never reads from.
+
+    `api` enqueues; `worker-authoring` claims. That is ADR-026's split seen from
+    this side - the request that uploads a manual must not be the request that
+    spends twenty minutes indexing it - and it is why this is a `JobQueue` for
+    the authoring class rather than a worker of any kind.
+    """
+    queue: JobQueue = request.app.state.authoring_jobs
+    return queue
+
+
 def authentication(request: Request) -> Authentication:
     auth: Authentication = request.app.state.authentication
     return auth
@@ -60,6 +73,7 @@ def current_account(
 
 
 CurrentAccount = Annotated[Account, Depends(current_account)]
+Jobs = Annotated[JobQueue, Depends(authoring_jobs)]
 Db = Annotated[Connection[Any], Depends(connection)]
 Auth = Annotated[Authentication, Depends(authentication)]
 

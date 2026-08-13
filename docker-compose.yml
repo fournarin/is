@@ -7,9 +7,11 @@
 # makes runtime generation physically impossible rather than merely forbidden,
 # and scripts/check_llm_isolation.py fails CI if that ever changes.
 #
-# Status: `api` runs. worker-runtime, worker-authoring and web still have no
-# entrypoint - the two workers arrive with the slice that gives them a claim
-# loop, and web with the review screen.
+# Status: `api`, `worker-authoring` and `worker-runtime` run. worker-runtime has
+# no handlers yet - layers 1 and 3 have not been built - so it claims nothing and
+# only reaps; it exists because the alternative was a container crash-looping
+# under `restart: unless-stopped` on every `docker compose up`. `web` still has
+# no entrypoint and arrives with the review screen.
 
 name: pdm
 
@@ -93,6 +95,10 @@ services:
   worker-runtime:
     build: .
     command: ["python", "-m", "pdm.workers.runtime"]
+    # Shorter than the authoring worker's: the runtime jobs this will one day
+    # claim are the ones a technician is waiting on, measured in seconds
+    # (ADR-026), so there is nothing long to finish before stopping.
+    stop_grace_period: 60s
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # The path is the mount below. There is no default in the code (ADR-019):

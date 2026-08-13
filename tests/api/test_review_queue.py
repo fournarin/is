@@ -63,7 +63,7 @@ def setup(database_url: str, tmp_path: Path) -> Iterator[dict[str, Any]]:
 
     with connect(database_url) as conn:
         conn.execute(
-            "TRUNCATE playbook_proposal, playbook, access_log, session, account, "
+            "TRUNCATE job, playbook_proposal, playbook, access_log, session, account, "
             "chunk, document_page, document CASCADE"
         )
         for role, (user, name) in PEOPLE.items():
@@ -367,3 +367,60 @@ class TestWhatTheCodeReviewFound:
         assert response.status_code == 200
         served = playbooks.get(conn, SYM, R2000IC)
         assert served is not None and served[0].required_technicians == 2
+
+
+class TestAskingForADraft:
+    """The other half of the gap: nothing used to enqueue anything."""
+
+    def test_an_engineer_queues_a_drafting_job(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={
+                "symptom_code": "SYM-021",
+                "machine_model": "R-2000iC",
+                "question": "axis 1 current above 12.5 A",
+            },
+        )
+
+        assert response.status_code == 202
+        row = conn.execute(
+            "SELECT kind, job_class, payload, status FROM job ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "draft"
+        assert row[1] == "authoring"
+        assert row[2]["question"] == "axis 1 current above 12.5 A"
+        assert row[3] == "queued"
+
+    @pytest.mark.parametrize("role", [Role.TECHNICIAN, Role.SUPERVISOR, Role.OPERATOR])
+    def test_nobody_else_may_fill_the_queue_the_engineer_has_to_empty(
+        self, client: TestClient, conn: Connection[Any], role: Role
+    ) -> None:
+        _log_in(client, role)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={
+                "symptom_code": "SYM-021",
+                "machine_model": "R-2000iC",
+                "question": "axis 1 current above 12.5 A",
+            },
+        )
+
+        assert response.status_code == 403
+        assert conn.execute("SELECT count(*) FROM job").fetchone() == (0,)
+
+    def test_a_request_with_no_question_is_refused_by_the_schema(self, client: TestClient) -> None:
+        """SYM-021 retrieves nothing; the sentence is what retrieves the page."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": ""},
+        )
+
+        assert response.status_code == 422

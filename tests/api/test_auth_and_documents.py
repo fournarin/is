@@ -63,6 +63,7 @@ def setup(database_url: str, tmp_path: Path, clock: SimulatedClock) -> Iterator[
     """A pool, a library, four accounts and one stored manual."""
     with connect(database_url) as conn:
         conn.execute("TRUNCATE access_log, session, account CASCADE")
+        conn.execute("TRUNCATE job, playbook_proposal, playbook CASCADE")
         conn.execute("TRUNCATE chunk, document_page, document CASCADE")
         conn.commit()
 
@@ -573,3 +574,64 @@ class TestTheAccessLog:
         client.get(f"/documents/{'0' * 64}")
 
         assert self._lines(conn, "read_document") == [("op-1", "operator", "0" * 64, True)]
+
+
+class TestAnUploadQueuesTheWorkThatIndexesIt:
+    """Slice 3.8's whole point: the pipeline had no way in.
+
+    Before this, uploading a manual put a file on disk and a row in a table and
+    nothing ever read either. The worker had been able to ingest since 3.7 and
+    nothing ever asked it to.
+    """
+
+    def _upload(self, client: TestClient) -> Any:
+        return client.post(
+            "/documents",
+            data={"machine_model": "M-710iC", "title": "M-710iC Manual"},
+            files={"file": ("m710.pdf", b"%PDF-1.7\nqueued for ingest\n", "application/pdf")},
+        )
+
+    def test_the_document_row_and_its_ingest_job_commit_together(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        """ADR-017's shape at the front door: read both back from another
+        connection after the response, and they are both there or neither is."""
+        _log_in(client, Role.OPERATOR)
+
+        response = self._upload(client)
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        row = conn.execute(
+            "SELECT kind, job_class, payload, status FROM job WHERE id = %s", (body["ingest_job"],)
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "ingest"
+        assert row[1] == "authoring"
+        assert row[2] == {"document_id": body["document_id"]}
+        assert row[3] == "queued"
+
+    def test_a_refused_upload_queues_nothing(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        """A technician's 403 must not leave a job behind it."""
+        _log_in(client, Role.TECHNICIAN)
+
+        assert self._upload(client).status_code == 403
+        assert conn.execute("SELECT count(*) FROM job").fetchone() == (0,)
+
+    def test_uploading_the_same_bytes_again_queues_another_ingest(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        """Deliberate. Re-ingesting replaces a document's pages and chunks rather
+        than adding to them, so the duplicate costs a few seconds of a worker
+        with nothing else to do - and deciding here whether the index is current
+        would be a second opinion about a question `document_page` answers."""
+        _log_in(client, Role.OPERATOR)
+
+        first = self._upload(client)
+        second = self._upload(client)
+
+        assert first.json()["document_id"] == second.json()["document_id"]
+        assert first.json()["ingest_job"] != second.json()["ingest_job"]
+        assert conn.execute("SELECT count(*) FROM job").fetchone() == (2,)

@@ -18,9 +18,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from pdm.api.deps import Db, requires
+from pdm.api.deps import Db, Jobs, requires
 from pdm.contracts import MachineModel, PlaybookStep, Role, SkillId, SymptomCode
 from pdm.platform.auth.domain import Account
+from pdm.platform.jobs import JobKind
 from pdm.playbooks.domain import Proposal
 from pdm.playbooks.repo import NothingToApply
 from pdm.playbooks.service import NotAnEngineer, PlaybookStore
@@ -116,12 +117,53 @@ class Approval(BaseModel):
     note: str | None = None
 
 
+class DraftRequested(BaseModel):
+    """Ask the authoring worker for a draft of one symptom."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    symptom_code: SymptomCode
+    machine_model: MachineModel
+    # What retrieval is asked, in the requester's words. On the job rather than
+    # derived from the symptom code, because a drafting result is reproducible
+    # only if what produced it was recorded (ADR-039 section 7) - and because
+    # SYM-014 retrieves nothing while "belt motor running above 85 degrees"
+    # retrieves the page.
+    question: str = Field(min_length=1)
+
+
 class Dismissal(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     # Required, and not just non-empty by convention: the dismissals are what
     # answer "why does this symptom still have no playbook" (ADR-038 §6).
     note: str = Field(min_length=1)
+
+
+@router.post("/playbooks/drafts", status_code=status.HTTP_202_ACCEPTED)
+def request_draft(
+    requested: DraftRequested,
+    conn: Db,
+    jobs: Jobs,
+    account: Annotated[Account, Depends(requires(Role.ENGINEER, action="request_draft"))],
+) -> dict[str, Any]:
+    """Queue a drafting job. 202, because nothing has been drafted yet.
+
+    An engineer only. Not because drafting is dangerous - nothing it produces
+    reaches a technician without an approval that is also engineer-only - but
+    because the worker behind it holds the one GPU (ADR-029), and a queue anybody
+    can fill is a queue the person who has to empty it does not control.
+    """
+    job = jobs.enqueue(
+        conn,
+        kind=JobKind.DRAFT.value,
+        payload={
+            "symptom_code": requested.symptom_code,
+            "machine_model": requested.machine_model,
+            "question": requested.question,
+        },
+    )
+    return {"job": job.id, "symptom_code": requested.symptom_code, "status": job.status.value}
 
 
 @router.get("/playbooks/queue", response_model=list[ProposalSummary])
