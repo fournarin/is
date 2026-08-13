@@ -17,7 +17,7 @@ import logging
 from typing import Any
 
 from psycopg import Connection
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from pdm.authoring.service import Drafting, Ingest
 from pdm.contracts import DocumentId, MachineModel, SymptomCode
@@ -25,9 +25,6 @@ from pdm.platform.clock import Clock
 from pdm.platform.jobs import Job
 
 log = logging.getLogger(__name__)
-
-INGEST = "ingest"
-DRAFT = "draft"
 
 _STRICT = ConfigDict(frozen=True, extra="forbid")
 
@@ -56,6 +53,16 @@ class DraftPayload(BaseModel):
     symptom_code: SymptomCode
     machine_model: MachineModel
     question: str = Field(min_length=1)
+
+    @field_validator("question")
+    @classmethod
+    def _not_only_whitespace(cls, value: str) -> str:
+        """Checked here as well as at the endpoint: a job row can be written by a
+        script, and this is the last place before a GPU is asked to look at
+        nothing (ADR-040 section 4)."""
+        if not value.strip():
+            raise ValueError("a drafting question cannot be only whitespace")
+        return value.strip()
 
 
 def _payload(model: type[BaseModel], job: Job) -> Any:

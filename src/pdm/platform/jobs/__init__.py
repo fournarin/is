@@ -11,7 +11,7 @@ Split by job_class so that a twenty-minute manual ingest cannot stall the
 dispatch tick (ADR-026, invariant 12).
 """
 
-from pdm.platform.jobs.domain import ClassTiming, Job, JobClass, JobStatus
+from pdm.platform.jobs.domain import ClassTiming, Job, JobClass, JobKind, JobStatus
 from pdm.platform.jobs.service import JobQueue
 
-__all__ = ["ClassTiming", "Job", "JobClass", "JobQueue", "JobStatus"]
+__all__ = ["ClassTiming", "Job", "JobClass", "JobKind", "JobQueue", "JobStatus"]

@@ -27,12 +27,12 @@ from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
 from pdm.platform.db import make_pool
 from pdm.platform.documents import DocumentLibrary
-from pdm.platform.jobs import ClassTiming, JobClass, JobQueue
+from pdm.platform.jobs import ClassTiming, JobClass, JobKind, JobQueue
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 from pdm.retrieval.embedding import OnnxEmbedder
 from pdm.retrieval.service import HybridSearch, profiles_from
 from pdm.retrieval.vectors import qdrant_from_env
-from pdm.workers.authoring.handlers import DRAFT, INGEST, draft_handler, ingest_handler
+from pdm.workers.authoring.handlers import draft_handler, ingest_handler
 from pdm.workers.loop import Worker
 
 log = logging.getLogger(__name__)
@@ -88,8 +88,8 @@ def main() -> None:
         pool=pool,
         clock=clock,
         handlers={
-            INGEST: ingest_handler(ingest),
-            DRAFT: draft_handler(drafting, clock),
+            JobKind.INGEST.value: ingest_handler(ingest),
+            JobKind.DRAFT.value: draft_handler(drafting, clock),
         },
     )
     worker.install_signal_handlers()

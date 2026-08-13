@@ -149,7 +149,7 @@ class TestClaiming:
         self, conn: Connection[Any], clock: SimulatedClock
     ) -> None:
         queue = _queue(clock, JobClass.RUNTIME)
-        queue.enqueue(conn, kind="later", available_at=START + timedelta(minutes=5))
+        queue.enqueue(conn, kind="dispatch_tick", available_at=START + timedelta(minutes=5))
 
         assert queue.claim(conn) is None
         clock.advance(timedelta(minutes=6))

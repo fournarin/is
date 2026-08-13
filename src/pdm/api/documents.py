@@ -34,12 +34,13 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
-from pdm.api.deps import SESSION_COOKIE, Db, requires
+from pdm.api.deps import SESSION_COOKIE, Db, Jobs, requires
 from pdm.contracts import DocumentId, MachineModel, Role
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
 from pdm.platform.documents import Document, DocumentLibrary
 from pdm.platform.documents.repo import DocumentModelConflict, DocumentRegistrationConflict
+from pdm.platform.jobs import JobKind
 from pdm.platform.objects import READ_CHUNK_BYTES, ObjectNotFound
 
 router = APIRouter(tags=["documents"])
@@ -296,7 +297,7 @@ def fetch(
 
 
 class Registered(BaseModel):
-    """What an upload returns: the identity the file now has."""
+    """What an upload returns: the identity the file now has, and its job."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -304,6 +305,11 @@ class Registered(BaseModel):
     filename: str
     machine_model: MachineModel
     size_bytes: int
+    # The ingest job queued for it. Returned rather than hidden, because an
+    # operator who has just uploaded a two-hundred-page scan needs something to
+    # ask about, and "it is in the library" and "it can be searched" are minutes
+    # apart (ADR-017).
+    ingest_job: int
 
 
 @router.post("/documents", status_code=status.HTTP_201_CREATED)
@@ -314,6 +320,7 @@ def upload(
         Account,
         Depends(requires(Role.OPERATOR, Role.ENGINEER, action="upload_document")),
     ],
+    jobs: Jobs,
     machine_model: Annotated[MachineModel, Form()],
     title: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
@@ -357,9 +364,23 @@ def upload(
         # requests that failed, which is the "without exception" ADR-019 asks
         # for going missing where it matters most.
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+
+    # The row and the job that indexes it, in one transaction (ADR-017). Until
+    # this line, uploading a manual put a file on disk and a row in a table and
+    # nothing ever read either: the pipeline was complete from the worker
+    # inwards and had no way in.
+    #
+    # Queued unconditionally, including for bytes the library already held.
+    # Re-ingesting replaces a document's pages and chunks rather than adding to
+    # them, so the cost of the duplicate is a few seconds of a worker that has
+    # nothing else to do - and the alternative, deciding here whether the index
+    # is current, is a second opinion about a question `document_page` already
+    # answers.
+    job = jobs.enqueue(conn, kind=JobKind.INGEST, payload={"document_id": document.document_id})
     return Registered(
         document_id=document.document_id,
         filename=document.filename,
         machine_model=document.machine_model,
         size_bytes=document.size_bytes,
+        ingest_job=job.id,
     )

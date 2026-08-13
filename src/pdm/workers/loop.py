@@ -95,6 +95,11 @@ class Worker:
     def run_one(self) -> bool:
         """Claim, then do the work. False when the queue had nothing.
 
+        A worker with no handlers claims nothing at all. `worker-runtime` runs
+        that way until layers 1 and 3 give it something to do, and claiming a job
+        only to fail it as an unknown kind would burn the attempts of a job whose
+        handler ships next month.
+
         **Two transactions, and the split is not an optimisation.** The claim
         commits on its own; the handler and `finish` share the second.
 
@@ -114,6 +119,9 @@ class Worker:
         leaves a job `running` that nobody is running - and that is the case the
         reaper was built for.
         """
+        if not self.handlers:
+            return False
+
         with self.pool.connection() as conn, conn.transaction():
             claimed = self.queue.claim(conn)
         if claimed is None:

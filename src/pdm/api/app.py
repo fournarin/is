@@ -25,6 +25,7 @@ from pdm.platform.clock import Clock, SystemClock
 from pdm.platform.config import load_config
 from pdm.platform.db import make_pool
 from pdm.platform.documents import DocumentLibrary
+from pdm.platform.jobs import ClassTiming, JobClass, JobQueue
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 from pdm.playbooks import PlaybookStore
 
@@ -68,6 +69,19 @@ def create_app(
         )
         app.state.authentication = Authentication(LocalAccounts(), the_clock)
         app.state.playbooks = PlaybookStore(the_clock, skills=config.skills)
+        # The API enqueues authoring work and claims none of it. `worker` names
+        # this process in `claimed_by` only if it ever claimed anything, which it
+        # must not (ADR-026); the name is here so a row written by the API is
+        # identifiable if that ever changes.
+        app.state.authoring_jobs = JobQueue(
+            job_class=JobClass.AUTHORING,
+            worker="api",
+            timing=ClassTiming(
+                heartbeat_seconds=config.policy.jobs.authoring.heartbeat_seconds,
+                dead_after_seconds=config.policy.jobs.authoring.dead_after_seconds,
+            ),
+            clock=the_clock,
+        )
         yield
 
     app = FastAPI(title="Predictive maintenance", lifespan=lifespan)

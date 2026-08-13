@@ -63,7 +63,7 @@ def setup(database_url: str, tmp_path: Path) -> Iterator[dict[str, Any]]:
 
     with connect(database_url) as conn:
         conn.execute(
-            "TRUNCATE playbook_proposal, playbook, access_log, session, account, "
+            "TRUNCATE job, playbook_proposal, playbook, access_log, session, account, "
             "chunk, document_page, document CASCADE"
         )
         for role, (user, name) in PEOPLE.items():
@@ -367,3 +367,105 @@ class TestWhatTheCodeReviewFound:
         assert response.status_code == 200
         served = playbooks.get(conn, SYM, R2000IC)
         assert served is not None and served[0].required_technicians == 2
+
+
+class TestAskingForADraft:
+    """The other half of the gap: nothing used to enqueue anything."""
+
+    def test_an_engineer_queues_a_drafting_job(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={
+                "symptom_code": "SYM-021",
+                "machine_model": "R-2000iC",
+                "question": "axis 1 current above 12.5 A",
+            },
+        )
+
+        assert response.status_code == 202
+        row = conn.execute(
+            "SELECT kind, job_class, payload, status FROM job ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "draft"
+        assert row[1] == "authoring"
+        assert row[2]["question"] == "axis 1 current above 12.5 A"
+        assert row[3] == "queued"
+
+    @pytest.mark.parametrize("role", [Role.TECHNICIAN, Role.SUPERVISOR, Role.OPERATOR])
+    def test_nobody_else_may_fill_the_queue_the_engineer_has_to_empty(
+        self, client: TestClient, conn: Connection[Any], role: Role
+    ) -> None:
+        _log_in(client, role)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={
+                "symptom_code": "SYM-021",
+                "machine_model": "R-2000iC",
+                "question": "axis 1 current above 12.5 A",
+            },
+        )
+
+        assert response.status_code == 403
+        assert conn.execute("SELECT count(*) FROM job").fetchone() == (0,)
+
+    def test_a_request_with_no_question_is_refused_by_the_schema(self, client: TestClient) -> None:
+        """SYM-021 retrieves nothing; the sentence is what retrieves the page."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": ""},
+        )
+
+        assert response.status_code == 422
+
+    def test_asking_twice_gets_the_first_job_back_rather_than_a_second_one(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        """ADR-040: each press costs a pass on the one GPU, and a 409 would
+        teach people to press again to find out."""
+        _log_in(client, Role.ENGINEER)
+        body = {
+            "symptom_code": "SYM-021",
+            "machine_model": "R-2000iC",
+            "question": "axis 1 current above 12.5 A",
+        }
+
+        first = client.post("/playbooks/drafts", json=body)
+        second = client.post("/playbooks/drafts", json={**body, "question": "asked again"})
+
+        assert first.json()["job"] == second.json()["job"]
+        assert second.json()["queued_already"] is True
+        assert conn.execute("SELECT count(*) FROM job WHERE kind = 'draft'").fetchone() == (1,)
+
+    def test_a_different_symptom_is_a_different_job(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": "one"},
+        )
+        client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-014", "machine_model": "R-2000iC", "question": "two"},
+        )
+
+        assert conn.execute("SELECT count(*) FROM job WHERE kind = 'draft'").fetchone() == (2,)
+
+    def test_a_question_of_only_spaces_is_refused(self, client: TestClient) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": "   "},
+        )
+
+        assert response.status_code == 422

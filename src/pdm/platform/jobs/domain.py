@@ -30,6 +30,24 @@ class JobClass(StrEnum):
     AUTHORING = "authoring"
 
 
+class JobKind(StrEnum):
+    """What a job asks for. The queue's vocabulary, not any worker's.
+
+    Here rather than beside the handlers because both sides need it and they are
+    not allowed to meet: the API enqueues and the worker claims, and when the API
+    imported the handler module to learn the string, the import linter refused
+    it - `api -> workers.authoring.handlers -> authoring.service -> llm` is a
+    runtime module reaching the language model, which is invariant 1 and the most
+    expensive rule in the system (ADR-003).
+
+    A string a producer and a consumer both have to agree on is a contract, and
+    contracts live where both can see them.
+    """
+
+    INGEST = "ingest"
+    DRAFT = "draft"
+
+
 class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"

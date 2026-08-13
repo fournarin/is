@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Thirty-nine decisions, in the order they were made. Each records the context that
+Forty decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -50,7 +50,8 @@ entries replace parts of earlier ones, and both are kept.
 | [036](0036-sessions-in-the-database-behind-an-identity-adapter.md) | Sessions in the database, behind an identity adapter | |
 | [037](0037-drafting-selects-spans-and-a-draft-is-withheld-whole.md) | Drafting selects spans; a failed draft is withheld whole | |
 | [038](0038-the-review-queue-is-a-table-and-the-served-table-holds-no-drafts.md) | The review queue is a table; the served table holds no drafts | |
-| [039](0039-what-a-worker-does-between-claiming-a-job-and-finishing-it.md) | What a worker does between claiming a job and finishing it | |
+| [039](0039-what-a-worker-does-between-claiming-a-job-and-finishing-it.md) | What a worker does between claiming a job and finishing it | 040 |
+| [040](0040-what-happens-when-somebody-asks-twice.md) | Asking twice, and a worker with no handlers | |
 
 ## Where to start
 
