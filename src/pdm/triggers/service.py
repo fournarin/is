@@ -22,8 +22,9 @@ from pdm.contracts import FindingRef, MachineId, MachineModel, RuleId, Signal
 from pdm.platform.clock import Clock
 from pdm.platform.config.schema import RuleConfig
 from pdm.triggers import repo
-from pdm.triggers.domain import Debounce, Decision, Outcome, evaluate
+from pdm.triggers.domain import Debounce, Decision, Outcome, evaluate, forecast
 from pdm.triggers.repo import AlreadyLive
+from pdm.triggers.trend import Window
 
 
 class Raised(BaseModel):
@@ -48,6 +49,10 @@ class Observation(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     raised: tuple[Raised, ...] = ()
+    # Predicted Findings, kept apart from detections in the count. "Twelve
+    # Findings this shift" means something different if eleven are forecasts,
+    # and ADR-020's accuracy work needs the two separable anyway.
+    forecast: tuple[Raised, ...] = ()
     repeated: int = 0
     suppressed: int = 0
     in_cooldown: int = 0
@@ -59,7 +64,7 @@ class Observation(BaseModel):
 
     @property
     def anything_happened(self) -> bool:
-        return bool(self.raised) or bool(self.repeated)
+        return bool(self.raised) or bool(self.forecast) or bool(self.repeated)
 
 
 class Triggers:
@@ -78,6 +83,9 @@ class Triggers:
         cooldown: timedelta,
         eta_grace: timedelta,
         model_of: Callable[[MachineId], MachineModel] | None = None,
+        trend_window: timedelta | None = None,
+        trend_min_samples: int = 10,
+        trend_horizon: timedelta | None = None,
     ) -> None:
         self.clock = clock
         self.rules = list(rules)
@@ -91,6 +99,14 @@ class Triggers:
         self.cooldown = cooldown
         self.eta_grace = eta_grace
         self.debounce = Debounce()
+        # The trend's own memory, alongside the debounce and forgotten the same
+        # way (ADR-042 section 1). Prediction is off when no window is given,
+        # which is what the detection-only tests use: a mechanism that could not
+        # be turned off would have to be reasoned about in every test of the
+        # other half.
+        self.windows = Window(trend_window) if trend_window else None
+        self.trend_min_samples = trend_min_samples
+        self.trend_horizon = trend_horizon or timedelta(hours=24)
 
     def observe(
         self,
@@ -112,6 +128,7 @@ class Triggers:
         resolved_at = repo.last_resolved(conn)
 
         raised: list[Raised] = []
+        predicted: list[Raised] = []
         counts = {Outcome.REPEAT: 0, Outcome.SUPPRESSED: 0, Outcome.IN_COOLDOWN: 0}
         quiet = 0
         lost = 0
@@ -128,6 +145,18 @@ class Triggers:
                 under_repair=under_repair or {},
                 cooldown=self.cooldown,
             )
+            if self.windows is not None:
+                decisions += forecast(
+                    signal,
+                    self.rules,
+                    machine_model=self.model_of(signal.machine_id) if self.model_of else None,
+                    now=now,
+                    windows=self.windows,
+                    open_findings=open_findings,
+                    horizon=self.trend_horizon,
+                    min_samples=self.trend_min_samples,
+                )
+
             for decision in decisions:
                 if decision.outcome is Outcome.QUIET:
                     quiet += 1
@@ -147,9 +176,11 @@ class Triggers:
                         counts[Outcome.REPEAT] += 1
                     else:
                         lost += 1
-                elif decision.outcome is Outcome.RAISE:
+                elif decision.outcome in (Outcome.RAISE, Outcome.FORECAST):
                     try:
-                        raised.append(self._raise(conn, decision, open_findings))
+                        issued = self._raise(conn, decision, open_findings)
+                        target = raised if decision.outcome is Outcome.RAISE else predicted
+                        target.append(issued)
                     except AlreadyLive:
                         # Another worker raised it between the state being read
                         # and this insert. That is suppression working across two
@@ -160,6 +191,7 @@ class Triggers:
 
         return Observation(
             raised=tuple(raised),
+            forecast=tuple(predicted),
             repeated=counts[Outcome.REPEAT],
             suppressed=counts[Outcome.SUPPRESSED],
             in_cooldown=counts[Outcome.IN_COOLDOWN],
