@@ -11,6 +11,7 @@ row it overwrites and the access log entry commit together.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from psycopg import Connection
@@ -26,7 +27,7 @@ from pdm.contracts import (
 )
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo
-from pdm.playbooks.domain import Proposal, ProposalStatus, Served
+from pdm.playbooks.domain import Proposal, ProposalStatus, Served, primary_source
 
 
 class NotAnEngineer(Exception):
@@ -36,8 +37,14 @@ class NotAnEngineer(Exception):
 class PlaybookStore:
     """The one way in and out of the playbook table."""
 
-    def __init__(self, clock: Clock) -> None:
+    def __init__(self, clock: Clock, *, skills: Iterable[str] = ()) -> None:
         self.clock = clock
+        # The vocabulary from plant.yaml. An approver types a skill where the
+        # manual stated none, and a typo there produces an approved playbook
+        # dispatch can never assign to anybody - the silent failure invariant 13
+        # exists to prevent (ADR-027). `Drafting` already refuses labels the
+        # config does not know; approval is the other way in.
+        self.skills = frozenset(skills)
 
     def serve(
         self,
@@ -84,6 +91,7 @@ class PlaybookStore:
         approver_role: Role,
         required_skill: SkillId | None = None,
         estimated_minutes: int | None = None,
+        required_technicians: int | None = None,
         note: str | None = None,
     ) -> Playbook:
         """Apply a pending proposal to the served row.
@@ -124,33 +132,20 @@ class PlaybookStore:
                 "the approver has to say which, because a value invented here would carry "
                 "the authority of the manual and the provenance of nothing"
             )
+        if self.skills and skill not in self.skills:
+            raise ValueError(
+                f"'{skill}' is not one of the skills declared in plant.yaml "
+                f"({', '.join(sorted(self.skills))}); a playbook asking for a skill nobody "
+                "holds is one dispatch can never assign (invariant 13)"
+            )
 
-        # Built through the contract, so invariant 4 - every step in an approved
-        # playbook carries its source document and page - is checked by the same
-        # validator wherever a playbook is approved from, and cannot be skipped
-        # by an endpoint that forgot (ADR-015).
-        playbook = Playbook(
-            symptom_code=pending.symptom_code,
-            machine_model=pending.machine_model,
-            steps=pending.steps,
-            tools=pending.tools,
-            estimated_minutes=minutes,
-            required_skill=skill,
-            source_doc=pending.steps[0].source_doc,
-            page=pending.steps[0].page,
-            status=PlaybookStatus.APPROVED,
-            approved_by=approver,
-            approved_at=now,
-            approver_role=approver_role,
-        )
-
-        saved = repo.save_approved(
-            conn,
-            playbook,
-            approved_by=approver,
-            approved_at=now,
-            approver_role=approver_role,
-        )
+        # Claimed before anything is written. Two engineers approving the same
+        # proposal at the same moment both got here; the UPDATE ... WHERE status
+        # = 'pending' matches for exactly one, and the other raises before it can
+        # overwrite the row. Written the other way round - save then claim - the
+        # loser's approval had already landed, and the 409 it was handed was a
+        # sentence about a change that had happened anyway (`deps.connection`
+        # commits on HTTPException, deliberately, so the access log survives).
         repo.decide(
             conn,
             proposal_id,
@@ -159,11 +154,42 @@ class PlaybookStore:
             decided_at=now,
             note=note,
         )
+
+        # Built through the contract, so invariant 4 - every step in an approved
+        # playbook carries its source document and page - is checked by the same
+        # validator wherever a playbook is approved from, and cannot be skipped
+        # by an endpoint that forgot (ADR-015).
+        source_doc, page = primary_source(pending.steps)
+        playbook = Playbook(
+            symptom_code=pending.symptom_code,
+            machine_model=pending.machine_model,
+            steps=pending.steps,
+            tools=pending.tools,
+            estimated_minutes=minutes,
+            required_skill=skill,
+            # Not carried on the proposal: nothing drafts it yet, and ADR-025
+            # makes the default of one the number that reads the shift's capacity
+            # low. The approver is the person who knows, so the field is theirs.
+            required_technicians=required_technicians or 1,
+            source_doc=source_doc,
+            page=page,
+            status=PlaybookStatus.APPROVED,
+            approved_by=approver,
+            approved_at=now,
+            approver_role=approver_role,
+        )
+
         # Deliberately not touching the pair's other pending proposals. A
         # re-draft that quietly closed a technician's objection would lose the
         # one report in this system that came from somebody at the machine
         # (ADR-038 section 4).
-        return saved
+        return repo.save_approved(
+            conn,
+            playbook,
+            approved_by=approver,
+            approved_at=now,
+            approver_role=approver_role,
+        )
 
     def dismiss(
         self,

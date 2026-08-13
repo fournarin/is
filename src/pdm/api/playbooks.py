@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from pdm.api.deps import Db, requires
@@ -109,6 +109,10 @@ class Approval(BaseModel):
 
     required_skill: SkillId | None = None
     estimated_minutes: int | None = Field(default=None, gt=0)
+    # ADR-025: a two-person job consumes twice the shift's capacity, and the
+    # default of one is what makes load_ratio read low. Nothing drafts it, so the
+    # approver is the only person who can say.
+    required_technicians: int | None = Field(default=None, ge=1, le=4)
     note: str | None = None
 
 
@@ -125,7 +129,10 @@ def review_queue(
     conn: Db,
     playbooks: Store,
     account: Annotated[Account, Depends(requires(*_MAY_REVIEW, action="list_review_queue"))],
-    limit: int = 50,
+    # Bounded on both sides. Unbounded it reaches LIMIT %s, where a negative
+    # number is a PostgreSQL error the caller sees as a 500 and a large one is a
+    # screen nobody reads.
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[ProposalSummary]:
     """One list, both origins, oldest first (design.md 4).
 
@@ -188,6 +195,7 @@ def approve(
             approver_role=account.role,
             required_skill=approval.required_skill,
             estimated_minutes=approval.estimated_minutes,
+            required_technicians=approval.required_technicians,
             note=approval.note,
         )
     except NothingToApply as error:
@@ -227,5 +235,9 @@ def dismiss(
         )
     except NothingToApply as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except ValueError as error:
+        # A note of nothing but spaces clears the schema's min_length and is not
+        # a reason. 422 rather than the 500 an uncaught ValueError produces.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
 
     return {"proposal_id": decided.proposal_id, "status": decided.status.value}

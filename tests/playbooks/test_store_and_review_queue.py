@@ -488,3 +488,86 @@ class TestWhenTheManualIsReplaced:
         assert served is not None
         assert served.is_current
         assert served.warning is None
+
+
+class TestWhatTheCodeReviewFound:
+    """Four cases that passed every earlier test and were wrong anyway."""
+
+    def test_a_skill_the_plant_does_not_declare_is_refused_at_approval(
+        self, conn: Connection[Any], clock: SimulatedClock, manual: DocumentId, people: None
+    ) -> None:
+        """Invariant 13, on the other way in.
+
+        `Drafting` drops a label the config does not know; approval is where a
+        person types one, and a typo there is an approved playbook dispatch can
+        never assign to anybody.
+        """
+        store = PlaybookStore(clock, skills={"robot_mechanical", "electrical"})
+        proposal_id = _file_a_draft(conn, manual, skill=None)
+
+        with pytest.raises(ValueError, match="not one of the skills"):
+            store.approve(
+                conn,
+                proposal_id,
+                approver=ENGINEER,
+                approver_role=Role.ENGINEER,
+                required_skill=SkillId("robot_mechnical"),
+            )
+
+    def test_the_proposal_is_claimed_before_the_playbook_is_written(
+        self, conn: Connection[Any], store: PlaybookStore, manual: DocumentId, people: None
+    ) -> None:
+        """Order matters because the API commits on an HTTPException.
+
+        Two engineers approving the same proposal: the loser gets a 409, and the
+        transaction it arrived in still commits so the access log survives. With
+        the write first, the loser's overwrite - a revision bump under their name
+        - would have committed with it.
+        """
+        proposal_id = _file_a_draft(conn, manual)
+        store.approve(conn, proposal_id, approver=ENGINEER, approver_role=Role.ENGINEER)
+        first = playbooks.get(conn, SYM, R2000IC)
+
+        with pytest.raises(NothingToApply):
+            store.approve(conn, proposal_id, approver=ENGINEER, approver_role=Role.ENGINEER)
+
+        after = playbooks.get(conn, SYM, R2000IC)
+        assert first is not None and after is not None
+        assert after[0].revision == first[0].revision
+
+    def test_the_playbook_is_filed_under_the_manual_most_of_its_steps_came_from(
+        self, conn: Connection[Any], store: PlaybookStore, manual: DocumentId, people: None
+    ) -> None:
+        """Not under whatever the first step happens to cite.
+
+        "Isolate the cell following the procedure on page 2" is an ordinary first
+        step and it points at the safety section, not at the repair.
+        """
+        steps = (
+            PlaybookStep(text="Isolate the cell.", source_doc=manual, page=2, confidence=0.6),
+            PlaybookStep(text="Remove the belt guard.", source_doc=manual, page=4, confidence=0.8),
+            PlaybookStep(text="Reset the tension.", source_doc=manual, page=4, confidence=0.8),
+        )
+        proposal_id = _file_a_draft(conn, manual, steps=steps)
+
+        approved = store.approve(conn, proposal_id, approver=ENGINEER, approver_role=Role.ENGINEER)
+
+        assert approved.page == 4
+
+    def test_a_two_person_job_is_recorded_as_one(
+        self, conn: Connection[Any], store: PlaybookStore, manual: DocumentId, people: None
+    ) -> None:
+        """ADR-025: omitting this makes load_ratio read low and the gate release
+        more work than there are people for. Nothing drafts it, so the approver
+        is the only person who can say."""
+        proposal_id = _file_a_draft(conn, manual)
+
+        approved = store.approve(
+            conn,
+            proposal_id,
+            approver=ENGINEER,
+            approver_role=Role.ENGINEER,
+            required_technicians=2,
+        )
+
+        assert approved.required_technicians == 2

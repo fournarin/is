@@ -184,7 +184,12 @@ def flag_for_review(conn: Connection[Any], document_id: DocumentId, *, reason: s
             """
             UPDATE playbook
                SET status = 'needs_review', review_reason = %s
-             WHERE %s = ANY (cited_documents)
+             -- Containment rather than `= ANY`, which cannot use the GIN index
+             -- migration 0005 created for exactly this query. On two playbooks
+             -- the difference is nothing; on a plant's worth of them the cascade
+             -- is a sequential scan inside the transaction an operator is
+             -- waiting on.
+             WHERE cited_documents @> ARRAY[%s]::text[]
                AND status <> 'needs_review'
             RETURNING symptom_code
             """,

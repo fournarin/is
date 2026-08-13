@@ -107,6 +107,23 @@ class Served(BaseModel):
         return self.playbook.status is PlaybookStatus.APPROVED
 
 
+def primary_source(steps: tuple[PlaybookStep, ...]) -> tuple[DocumentId, int]:
+    """The document and page most of the steps came from.
+
+    `Playbook` records one primary source beside the per-step provenance, and the
+    majority is the honest answer to which manual this procedure is filed under.
+    Taking the first step's citation instead files a playbook under whatever a
+    cross-reference happened to point at - "isolate the cell following the
+    procedure in the safety bulletin" is a perfectly ordinary first step, and it
+    is not the manual the repair came from.
+    """
+    counted: dict[tuple[DocumentId, int], int] = {}
+    for step in steps:
+        counted[(step.source_doc, step.page)] = counted.get((step.source_doc, step.page), 0) + 1
+    # Ties go to the earlier page, so the same steps always file the same way.
+    return max(counted, key=lambda ref: (counted[ref], -ref[1]))
+
+
 def cited_documents(steps: tuple[PlaybookStep, ...], source_doc: DocumentId) -> tuple[str, ...]:
     """Every manual this playbook depends on, for the withdrawal cascade.
 

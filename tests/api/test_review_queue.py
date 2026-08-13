@@ -316,3 +316,54 @@ class TestWhatTheEngineerHasToFillIn:
         assert refused.status_code == 422
         assert "no duration" in refused.json()["detail"]
         assert accepted.status_code == 200
+
+
+class TestWhatTheCodeReviewFound:
+    def test_a_note_of_nothing_but_spaces_is_a_422_not_a_500(
+        self, client: TestClient, setup: dict[str, Any]
+    ) -> None:
+        """It clears the schema's min_length and is still not a reason."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            f"/playbooks/queue/{setup['proposal_id']}/dismiss", json={"note": "   "}
+        )
+
+        assert response.status_code == 422
+
+    def test_a_negative_limit_is_refused_before_it_reaches_the_database(
+        self, client: TestClient
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        assert client.get("/playbooks/queue?limit=-1").status_code == 422
+        assert client.get("/playbooks/queue?limit=100000").status_code == 422
+
+    def test_a_skill_outside_the_plant_vocabulary_is_refused(
+        self, client: TestClient, setup: dict[str, Any]
+    ) -> None:
+        """Invariant 13 over HTTP. The app loads plant.yaml at boot, so the
+        endpoint knows which labels exist without asking the database."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            f"/playbooks/queue/{setup['proposal_id']}/approve",
+            json={"required_skill": "robot_mechnical"},
+        )
+
+        assert response.status_code == 422
+        assert "not one of the skills" in response.json()["detail"]
+
+    def test_the_approver_can_say_it_takes_two_people(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            f"/playbooks/queue/{setup['proposal_id']}/approve",
+            json={"required_technicians": 2},
+        )
+
+        assert response.status_code == 200
+        served = playbooks.get(conn, SYM, R2000IC)
+        assert served is not None and served[0].required_technicians == 2

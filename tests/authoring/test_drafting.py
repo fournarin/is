@@ -24,7 +24,13 @@ import pytest
 from psycopg import Connection, connect
 
 from fixtures.corpus import CORPUS, AbsentSymptom, Answer, DocumentedOnly
-from pdm.authoring.drafting import DraftOutcome, DraftResult, RejectionReason, figures
+from pdm.authoring.drafting import (
+    DraftOutcome,
+    DraftResult,
+    RejectionReason,
+    assemble,
+    figures,
+)
 from pdm.authoring.service import Drafting, Ingest
 from pdm.contracts import DocumentId, MachineModel, SymptomCode, UserId
 from pdm.llm.domain import DraftRequest, Proposal, ProposalKind, ProposedStep
@@ -33,6 +39,8 @@ from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore
+from pdm.playbooks import ProposalOrigin
+from pdm.playbooks import repo as playbooks
 from pdm.retrieval.embedding import FakeEmbedder
 from pdm.retrieval.service import HybridSearch, profiles_from
 from pdm.retrieval.vectors import InMemoryVectorIndex
@@ -312,3 +320,41 @@ class TestTheSymptomNothingInTheCorpusDocuments:
         result = _draft(drafting, conn, "SYM-031")
         assert result.draft is not None
         assert all(step.source_doc == CORPUS.document(M710IC).sha256 for step in result.draft.steps)
+
+
+class TestFilingTheResultForReview:
+    """The step that connects slice 3.5 to the queue (ADR-038)."""
+
+    def test_a_repair_draft_arrives_in_the_queue_with_its_steps(
+        self, drafting: Drafting, conn: Connection[Any]
+    ) -> None:
+        result = _draft(drafting, conn, "SYM-047")
+
+        filed = drafting.file(conn, result, now=START)
+
+        assert filed.origin is ProposalOrigin.DRAFTED
+        assert filed.outcome == "repair"
+        assert len(filed.steps) == len(result.draft.steps if result.draft else ())
+        assert filed.created_by is None
+
+    def test_an_outcome_with_no_steps_is_filed_too(
+        self, drafting: Drafting, conn: Connection[Any]
+    ) -> None:
+        """A silence in the queue and a gap in the manuals look identical from
+        the outside, and only one of them is somebody's job to fix."""
+        result = assemble(
+            DraftRequest(
+                symptom_code=SymptomCode("SYM-031"),
+                machine_model=M710IC,
+                question="cycle time drifting above 62 seconds",
+                evidence=(),
+            ),
+            Proposal(kind=ProposalKind.NOTHING, steps=()),
+        )
+
+        filed = drafting.file(conn, result, now=START)
+
+        assert filed.outcome == "not_found"
+        assert filed.steps == ()
+        assert filed.reason
+        assert [item.proposal_id for item in playbooks.queue(conn)] == [filed.proposal_id]
