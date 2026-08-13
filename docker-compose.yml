@@ -73,6 +73,9 @@ services:
       # a service that starts against a guessed directory looks healthy while
       # writing documents somewhere nobody backs up.
       STORAGE_DIR: /app/storage
+      # Same reasoning one store along: a worker pointed at no Qdrant indexes
+      # manuals into nothing and reports success (ADR-035).
+      QDRANT_URL: http://qdrant:6333
     env_file:
       - path: .env
         required: false
@@ -96,6 +99,9 @@ services:
       # a service that starts against a guessed directory looks healthy while
       # writing documents somewhere nobody backs up.
       STORAGE_DIR: /app/storage
+      # Same reasoning one store along: a worker pointed at no Qdrant indexes
+      # manuals into nothing and reports success (ADR-035).
+      QDRANT_URL: http://qdrant:6333
     env_file:
       - path: .env
         required: false
@@ -117,6 +123,9 @@ services:
       # a service that starts against a guessed directory looks healthy while
       # writing documents somewhere nobody backs up.
       STORAGE_DIR: /app/storage
+      # Same reasoning one store along: a worker pointed at no Qdrant indexes
+      # manuals into nothing and reports success (ADR-035).
+      QDRANT_URL: http://qdrant:6333
     env_file:
       - path: .env
         required: false

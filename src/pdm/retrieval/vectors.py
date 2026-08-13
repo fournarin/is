@@ -243,3 +243,29 @@ def records_for(
         )
         for chunk, vector in zip(chunks, vectors, strict=True)
     ]
+
+
+QDRANT_URL_ENV = "QDRANT_URL"
+
+
+def qdrant_from_env() -> QdrantVectorIndex:
+    """The real store, addressed by the environment.
+
+    No default. Unlike the object store, a wrong address here is not silent - the
+    first search fails - but it is silent for as long as nothing searches, which
+    on a worker that is ingesting is the whole of the ingest: the vectors are
+    written to nowhere and the manual reads as indexed (ADR-035's own warning
+    about the two halves being separate stores).
+    """
+    import os
+
+    from qdrant_client import QdrantClient
+
+    url = os.environ.get(QDRANT_URL_ENV)
+    if not url:
+        raise RuntimeError(
+            f"{QDRANT_URL_ENV} is not set. There is no default: the dense half is a "
+            f"separate store from PostgreSQL, and a worker pointed at the wrong one "
+            f"indexes manuals into nothing while reporting success (ADR-035)."
+        )
+    return QdrantVectorIndex(QdrantClient(url=url))

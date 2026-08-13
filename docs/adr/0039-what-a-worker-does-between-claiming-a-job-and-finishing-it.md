@@ -26,15 +26,31 @@ The third question is smaller and more immediate: a drafting job needs a
 
 ## Decision
 
-### 1. One transaction for the work, a second connection for the heartbeat
+### 1. The claim commits first; the work and the finish share the second transaction
 
-The handler runs inside the job's transaction, as ADR-017 requires. The heartbeat
-runs on its own connection and commits on its own, so it is visible while the
-work is still in flight.
+*This section was written the other way round - one transaction for both, with
+the heartbeat on a second connection - and a test disproved it before the record
+was merged. What follows is what the measurement forced, with the original
+reasoning kept below it because the correction is the useful part.*
 
-Two connections per running job is the price of ADR-017's guarantee, and it is
-the smaller of the two costs available: the alternative - committing progress in
-pieces - is what ADR-017 exists to refuse.
+**An uncommitted claim is invisible, including to the heartbeat.** The beat is
+scoped to `claimed_by` and `status = 'running'`, which is right - a beat from a
+process the reaper has replaced must not resurrect its claim - and from any other
+session the row is still `queued` with no claimer, so the beat matches nothing at
+all. A heartbeat cannot be made visible from outside a transaction that has not
+committed. The first version of this ADR asked for exactly that.
+
+**And a handler failure rolled the claim back with the work**, taking `attempts`
+with it. A job that fails every time would be retried for ever, with the counter
+that exists to stop it reset on every pass.
+
+So: the claim commits on its own, and the handler's writes commit with `finish`.
+
+**ADR-017's guarantee survives this, because it is about the result.** "No
+playbook without a job, no job claiming success with no playbook" holds as long
+as the work and `done` commit together, which they do. What is given up is
+narrower: a crash between the two leaves a job `running` that nobody is running,
+and that is the case the reaper already exists for.
 
 ### 2. The reaper skips locked rows
 
@@ -42,14 +58,33 @@ pieces - is what ADR-017 exists to refuse.
 already uses. A row still held by a live transaction is a job still running, and
 the sweep's job is to find the ones nobody holds.
 
-### 3. The worker reaps its own class, and only between jobs
+### 3. A thread beats while the handler works
+
+*Also written the other way round first: "no timer thread, one beat is enough".
+With the claim now committed the reaper can see the job, so the class threshold
+applies to it - fifteen minutes for authoring, against manual ingests ADR-017
+puts at five to twenty minutes. Without a periodic beat, the long jobs are
+precisely the ones that get reaped and run twice, which is the failure this
+record was opened to prevent.*
+
+A daemon thread beats every `heartbeat_seconds` on a borrowed connection, holds
+no transaction, and is joined before the loop returns. The objection to a thread
+was that it is a second thing that can be mid-write when `SIGTERM` arrives; this
+one cannot be, because it owns nothing between beats.
+
+A beat that matches no row means the reaper has already given the job away. The
+thread stops rather than beating into the void, the handler runs on, and `finish`
+is what notices - it is scoped to the claiming worker, so a worker that was
+reaped cannot write `done` over a row somebody else is now running.
+
+### 4. The worker reaps its own class, and only between jobs
 
 No separate reaper process. A sweep runs when the queue comes up empty, which is
 exactly when the worker has nothing else to do and when a stalled job is worth
 noticing. Both workers therefore reap, each with its own class's threshold -
 which is the whole reason ADR-026 gave the two classes separate timings.
 
-### 4. Shutdown finishes the job in hand
+### 5. Shutdown finishes the job in hand
 
 `SIGTERM` sets a flag; the loop returns after the current job commits. It does
 not abandon the transaction, because a job killed mid-flight is a job the reaper
@@ -59,13 +94,13 @@ ingest should not cost fifteen minutes of nothing happening.
 A second `SIGTERM` is not special-cased. `SIGKILL` already exists for the case
 where somebody means it, and the reaper is what covers the aftermath.
 
-### 5. The poll interval is the class's own heartbeat interval
+### 6. The poll interval is the class's own heartbeat interval
 
 No new number. A queue polled more often than its workers report in is a queue
 being polled for the sake of it, and `policy.yaml` already carries one interval
 per class with a recorded reason (ADR-026).
 
-### 6. A drafting job carries its question in the payload
+### 7. A drafting job carries its question in the payload
 
 `{symptom_code, machine_model, question}`. The question is supplied by whoever
 enqueues the job, and this record does not decide where *they* get it - an
@@ -77,7 +112,7 @@ reproducible only if the question that produced it is recorded, and a job that
 derived its own query from a symptom code at run time would produce different
 drafts as that derivation changed, with nothing saying so.
 
-### 7. A handler that raises fails the job, and the transaction rolls back
+### 8. A handler that raises fails the job, and the transaction rolls back
 
 No partial results. `JobQueue.fail` then records the error on its own connection,
 because the transaction that would have carried it is the one being rolled back -
@@ -99,9 +134,18 @@ nothing is waiting on a dead job that has already been dead for fifteen minutes.
 ## Consequences
 
 - **A worker needs two connections**, so the pool minimum for a worker process is
-  two rather than one. Undersized, the heartbeat blocks waiting for a connection
-  held by the job it is reporting on, which is a deadlock that only appears under
-  load.
+  two rather than one. Undersized, the heartbeat thread blocks waiting for a
+  connection held by the job it is reporting on, which is a deadlock that only
+  appears under load.
+- **A job can still run twice**, when a worker is stalled rather than dead - the
+  beats stop, the reaper takes the job, and the original wakes up and completes
+  its transaction. The work commits; the row does not, because `finish` is scoped
+  to the claimer, and the second run is logged as a warning rather than silently
+  overwriting. Handlers therefore have to tolerate being run twice, which ingest
+  does by construction (it replaces a document's pages and chunks) and drafting
+  does not (it would file two proposals for one symptom). Left as it stands and
+  written down here rather than solved with a unique index that would need a
+  vocabulary for "the same drafting request".
 - **`repo.reap` changes shape**, and its existing tests keep passing because they
   test the timing rather than the locking. The lock behaviour needs a test with
   two real connections, which is the only way to write it.

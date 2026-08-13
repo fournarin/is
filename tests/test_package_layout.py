@@ -38,8 +38,14 @@ EXPECTED_MODULES = frozenset(
 )
 
 # ADR-026 splits the worker into two roles that must be able to run as separate
-# processes.
-EXPECTED_WORKER_ROLES = frozenset({"runtime", "authoring"})
+# processes. `loop` is not a third role: it is the claim loop both of them run,
+# and it sits below both so that the second entrypoint is a handler table rather
+# than a copy of the first (ADR-039).
+#
+# What ADR-026 actually requires - that neither role can drag the other's
+# dependencies into its process - is enforced by the independence contract in
+# `.importlinter`, not by counting modules here.
+EXPECTED_WORKER_ROLES = frozenset({"runtime", "authoring", "loop"})
 
 
 def _submodules(package: object) -> frozenset[str]:
