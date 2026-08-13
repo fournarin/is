@@ -31,8 +31,8 @@ from pdm.contracts import (
     FindingKind,
     FindingStatus,
     MachineId,
+    MachineModel,
     RuleId,
-    Severity,
     Signal,
 )
 from pdm.platform.config.schema import RuleConfig
@@ -44,7 +44,7 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid")
 # ever wrote to it would be writing to everybody's.
 _NO_FINDINGS: Mapping[tuple[MachineId, RuleId], Finding] = MappingProxyType({})
 _NO_TIMES: Mapping[tuple[MachineId, RuleId], datetime] = MappingProxyType({})
-_NO_REPAIRS: Mapping[MachineId, Severity] = MappingProxyType({})
+_NO_REPAIRS: Mapping[MachineId, frozenset[RuleId]] = MappingProxyType({})
 
 # The suppression key of ADR-023: while an open or acknowledged Finding exists
 # for this pair, a repeat firing updates it rather than creating another.
@@ -85,6 +85,16 @@ class Decision(BaseModel):
     finding: Finding | None = None
 
 
+class Run(BaseModel):
+    """An unbroken run of breaching samples: when it started, and how many."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    last_seen: datetime
+    samples: int = Field(ge=1)
+
+
 class Debounce:
     """How long the excess has held, per (machine, rule). Mutable on purpose.
 
@@ -92,16 +102,28 @@ class Debounce:
     evaluation. A restart forgets it and the clock on a sustained excess starts
     again - which ADR-042 accepts, and writes down, because the alternative is a
     write per sample per rule for ever.
+
+    It counts samples as well as elapsed time, and **a gap ends the run**. One
+    hot reading after a three-hour outage is not three hours of sustained
+    excess: without the gap check the Finding it raised would carry evidence
+    saying `held_for_seconds: 10800`, which is a claim about a machine nobody was
+    watching.
     """
 
-    __slots__ = ("_since",)
+    __slots__ = ("_runs",)
 
     def __init__(self) -> None:
-        self._since: dict[SuppressionKey, datetime] = {}
+        self._runs: dict[SuppressionKey, Run] = {}
 
-    def held_since(self, key: SuppressionKey, at: datetime) -> datetime:
-        """When the current run of excess began, starting one if there is none."""
-        return self._since.setdefault(key, at)
+    def observe(self, key: SuppressionKey, at: datetime, *, max_gap: timedelta) -> Run:
+        """Extend the run, or start a new one if the stream went quiet."""
+        current = self._runs.get(key)
+        if current is None or at - current.last_seen > max_gap or at < current.since:
+            run = Run(since=at, last_seen=at, samples=1)
+        else:
+            run = Run(since=current.since, last_seen=at, samples=current.samples + 1)
+        self._runs[key] = run
+        return run
 
     def clear(self, key: SuppressionKey) -> None:
         """The value came back inside the threshold: the run is over.
@@ -110,10 +132,10 @@ class Debounce:
         `for_seconds` mean "continuously" rather than "at some point in the last
         few minutes".
         """
-        self._since.pop(key, None)
+        self._runs.pop(key, None)
 
     def __contains__(self, key: object) -> bool:
-        return key in self._since
+        return key in self._runs
 
 
 def breaches(signal: Signal, rule: RuleConfig) -> bool:
@@ -128,7 +150,9 @@ def breaches(signal: Signal, rule: RuleConfig) -> bool:
     return signal.value < rule.threshold
 
 
-def evidence_for(signal: Signal, rule: RuleConfig, *, held_for: timedelta) -> dict[str, object]:
+def evidence_for(
+    signal: Signal, rule: RuleConfig, *, held_for: timedelta, samples: int = 1
+) -> dict[str, object]:
     """The numbers the ticket's sentence will be built from (ADR-042 section 5).
 
     Recorded now because the signal stream has moved on by the time anybody
@@ -142,37 +166,44 @@ def evidence_for(signal: Signal, rule: RuleConfig, *, held_for: timedelta) -> di
         "comparison": rule.comparison,
         "metric_name": rule.metric_name,
         "held_for_seconds": int(held_for.total_seconds()),
+        # How many readings that was. "Above the threshold for twenty minutes"
+        # means something different on one sample than on twenty, and the
+        # difference is whether anybody was watching (ADR-042 section 1).
+        "samples": samples,
         "measured_at": signal.timestamp.isoformat(),
     }
 
 
 def _suppressed_by_repair(
     rule: RuleConfig,
-    under_repair: Mapping[MachineId, Severity],
+    under_repair: Mapping[MachineId, frozenset[RuleId]],
     machine_id: MachineId,
 ) -> bool:
-    """ADR-023 sections 4 and 5, which only make sense together.
+    """ADR-023 section 4: **the rule under repair, and nothing else.**
 
-    A machine being worked on suppresses the rule that produced that work, and
-    **any rule of higher severity passes anyway**. The comparison is on severity
-    rather than on the machine, because a technician is inside the machine and
-    the alarm that must not be swallowed is the one that says so.
+    This was first written as a severity comparison - suppress any rule of equal
+    or lower severity on a machine somebody is working on - and that is a
+    different rule from the one the record states. It also fails in exactly the
+    direction ADR-023 was written to prevent: a machine under repair for a
+    critical fault would have suppressed the critical interlock rule, which is
+    the alarm that says a technician inside the machine is in danger.
+
+    Keyed by rule, ADR-023 section 5 needs no comparison at all: a rule of higher
+    severity is a different rule, so it was never suppressed in the first place.
     """
-    open_severity = under_repair.get(machine_id)
-    if open_severity is None:
-        return False
-    return rule.severity.rank <= open_severity.rank
+    return rule.rule_id in under_repair.get(machine_id, frozenset())
 
 
 def evaluate(
     signal: Signal,
     rules: Sequence[RuleConfig],
     *,
+    machine_model: MachineModel | None = None,
     now: datetime,
     debounce: Debounce,
     open_findings: Mapping[SuppressionKey, Finding] = _NO_FINDINGS,
     resolved_at: Mapping[SuppressionKey, datetime] = _NO_TIMES,
-    under_repair: Mapping[MachineId, Severity] = _NO_REPAIRS,
+    under_repair: Mapping[MachineId, frozenset[RuleId]] = _NO_REPAIRS,
     cooldown: timedelta = timedelta(minutes=30),
 ) -> list[Decision]:
     """One signal against every rule that watches its metric.
@@ -187,6 +218,12 @@ def evaluate(
     for rule in rules:
         if rule.metric_name != signal.metric_name:
             continue
+        # A rule is declared for one machine model (config/rules.yaml) and the
+        # same tag exists on several. Without this, the R-2000iC belt rule fires
+        # on an M-710iC - producing a symptom code that has no playbook for that
+        # model, and a threshold that belongs to a different machine.
+        if machine_model is not None and rule.machine_model != machine_model:
+            continue
 
         key: SuppressionKey = (signal.machine_id, rule.rule_id)
 
@@ -194,8 +231,15 @@ def evaluate(
             debounce.clear(key)
             continue
 
-        since = debounce.held_since(key, signal.timestamp)
-        held_for = signal.timestamp - since
+        # A gap longer than the rule's own window ends the run: if nothing has
+        # been heard for as long as the rule needs, continuity cannot be claimed.
+        # No new constant - the rule states its own yardstick.
+        run = debounce.observe(
+            key,
+            signal.timestamp,
+            max_gap=timedelta(seconds=rule.for_seconds) if rule.for_seconds else timedelta.max,
+        )
+        held_for = signal.timestamp - run.since
         if held_for.total_seconds() < rule.for_seconds:
             decisions.append(
                 Decision(
@@ -229,9 +273,9 @@ def evaluate(
                     rule_id=rule.rule_id,
                     machine_id=signal.machine_id,
                     why=(
-                        f"{signal.machine_id} is under repair for work of equal or higher "
-                        f"severity; a rule above {rule.severity.value} would still fire "
-                        "(ADR-023)"
+                        f"{signal.machine_id} already has repair work open for "
+                        f"{rule.rule_id}; another rule - including any of higher severity - "
+                        "still fires (ADR-023)"
                     ),
                 )
             )
@@ -272,7 +316,7 @@ def evaluate(
                     severity=rule.severity,
                     rule_id=rule.rule_id,
                     detected_at=now,
-                    evidence=evidence_for(signal, rule, held_for=held_for),
+                    evidence=evidence_for(signal, rule, held_for=held_for, samples=run.samples),
                     kind=FindingKind.DETECTED,
                     status=FindingStatus.OPEN,
                 ),

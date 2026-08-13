@@ -57,16 +57,39 @@ line, and so it can be tested in every combination.
 It also keeps `triggers/` from importing `work/`. The loop joins them, which is
 the same shape as `Ingest.withdraw` not knowing the playbook table exists.
 
-### 3. Suppression is by rule, never by machine
+### 3. Suppression is by rule, never by machine and never by severity
 
-Directly from ADR-023 §4 and §5, restated here because this is where it becomes
-code: a machine under repair suppresses **the rule that produced the repair**,
-and any rule of higher severity fires anyway.
+Directly from ADR-023 §4: a machine under repair suppresses **the rule that
+produced the repair**, and nothing else. `under_repair` is therefore a map from
+machine to the set of rule ids with open work, not to a severity.
 
-Blanket suppression during repair is how somebody gets hurt: a technician is
-inside the machine and the interlock alarm is swallowed because "this machine is
-being repaired". The comparison is on `Severity.rank` and the test for it names
-that scenario.
+*This section first said "the comparison is on `Severity.rank`", and the code
+that followed suppressed any rule of equal or lower severity on a machine under
+repair. Review caught it before merge. That version fails in exactly the
+direction ADR-023 was written to prevent: a machine under repair for a critical
+fault would have suppressed the critical interlock rule - the alarm that says a
+technician inside the machine is in danger.*
+
+Keyed by rule, ADR-023 §5 needs no comparison at all: a rule of higher severity
+is a different rule, so it was never suppressed. The rule that made the code
+dangerous was the one that tried to implement §5 directly.
+
+### 3a. A gap in the stream ends the run of sustained excess
+
+The window holds when the excess began, when it was last seen, and how many
+samples that is. A gap longer than the rule's own `for_seconds` starts a new run.
+
+Without it, one hot reading after a three-hour outage raises a Finding whose
+evidence says the excess held for three hours - a claim about a machine nobody
+was watching. The yardstick is the rule's own window, so no new number is
+introduced.
+
+### 3b. A rule only fires on the machine model it was declared for
+
+`config/rules.yaml` declares `machine_model` per rule and the same tag exists on
+several models. A rule that ignored it would fire the R-2000iC belt threshold on
+an M-710iC, producing a symptom code with no playbook for that machine and a
+threshold from a different one.
 
 ### 4. A repeat firing updates the record; the update is one statement
 
@@ -103,6 +126,15 @@ argument.
   in it can be tested exhaustively.
 - **A Finding needs a reference**, from a sequence, for the same reason a work
   order does: the alternative is a key built from a machine and a time.
+- **A repeat that writes nothing, and a raise another worker got to first, are
+  counted rather than swallowed.** Both mean the system is working - the record
+  was resolved or created between this batch reading its state and writing - and
+  both are also the shape of a bug, so the batch reports them separately instead
+  of reporting a repeat that never happened.
+- **A duplicate insert uses `ON CONFLICT DO NOTHING`, not a caught exception.**
+  Catching leaves the transaction aborted, and this insert shares one with the
+  work order it produces (ADR-017), so a collision would discard all of it - in
+  the case where suppression is working exactly as intended.
 - **Nothing here decides when the loop runs.** The dispatch tick is five minutes
   (design.md 6.2) and the trigger loop must be faster than the shortest
   `for_seconds` in the rules, but the number belongs with the loop, in the slice

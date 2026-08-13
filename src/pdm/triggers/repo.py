@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from psycopg import Connection
-from psycopg.errors import UniqueViolation
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -62,43 +61,47 @@ def raise_finding(conn: Connection[Any], finding: Finding) -> FindingRef:
     first: between a check and an insert there is room for the second worker,
     and this is the table where a duplicate becomes a duplicate work order.
     """
-    # A savepoint, so a duplicate does not poison the caller's transaction. The
-    # batch that hits this is raising other Findings and writing work orders in
-    # the same transaction (ADR-017); without the savepoint, one collision would
-    # abort all of it, and the collision is the case where the system is working
-    # exactly as ADR-023 intends.
-    with conn.transaction(), conn.cursor(row_factory=dict_row) as cur:
-        try:
-            cur.execute(
-                f"""
+    # `ON CONFLICT DO NOTHING` rather than catching the violation. Catching it
+    # leaves the transaction aborted, and this insert shares a transaction with
+    # the work order it produces (ADR-017) - so one collision would discard all
+    # of it, in the case where suppression is working exactly as ADR-023 intends.
+    #
+    # A savepoint would also do, and was tried: `conn.transaction()` opens a real
+    # transaction when none is running, so a Finding raised as the first
+    # statement on a connection would commit on its own and break the pairing the
+    # module docstring promises.
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
                 INSERT INTO finding ({_COLUMNS})
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (machine_id, rule_id)
+                    WHERE status IN ('open', 'acknowledged') DO NOTHING
                 RETURNING finding_ref
                 """,
-                (
-                    finding.machine_id,
-                    finding.component,
-                    finding.symptom_code,
-                    finding.severity.value,
-                    finding.rule_id,
-                    finding.detected_at,
-                    Jsonb(finding.evidence),
-                    finding.kind.value,
-                    finding.eta,
-                    finding.eta_confidence,
-                    finding.status.value,
-                    finding.occurrence_count,
-                    finding.last_seen_at,
-                    finding.superseded_by,
-                ),
-            )
-        except UniqueViolation as error:
-            raise AlreadyLive(
-                f"{finding.machine_id}/{finding.rule_id} already has a live Finding; "
-                "a repeat updates it rather than adding another (ADR-023)"
-            ) from error
+            (
+                finding.machine_id,
+                finding.component,
+                finding.symptom_code,
+                finding.severity.value,
+                finding.rule_id,
+                finding.detected_at,
+                Jsonb(finding.evidence),
+                finding.kind.value,
+                finding.eta,
+                finding.eta_confidence,
+                finding.status.value,
+                finding.occurrence_count,
+                finding.last_seen_at,
+                finding.superseded_by,
+            ),
+        )
         row = cur.fetchone()
-    assert row is not None
+    if row is None:
+        raise AlreadyLive(
+            f"{finding.machine_id}/{finding.rule_id} already has a live Finding; "
+            "a repeat updates it rather than adding another (ADR-023)"
+        )
     return FindingRef(str(row["finding_ref"]))
 
 

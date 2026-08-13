@@ -11,18 +11,19 @@ with nothing behind it, and a ticket referring to a Finding that was rolled back
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
 from typing import Any
 
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict
 
-from pdm.contracts import FindingRef, MachineId, Severity, Signal
+from pdm.contracts import FindingRef, MachineId, MachineModel, RuleId, Signal
 from pdm.platform.clock import Clock
 from pdm.platform.config.schema import RuleConfig
 from pdm.triggers import repo
 from pdm.triggers.domain import Debounce, Decision, Outcome, evaluate
+from pdm.triggers.repo import AlreadyLive
 
 
 class Raised(BaseModel):
@@ -51,6 +52,10 @@ class Observation(BaseModel):
     suppressed: int = 0
     in_cooldown: int = 0
     quiet: int = 0
+    # A repeat that wrote nothing, or a raise another worker got to first. Both
+    # are the system working; both are also the shape of a bug, so they are
+    # counted rather than swallowed.
+    lost_races: int = 0
 
     @property
     def anything_happened(self) -> bool:
@@ -72,9 +77,15 @@ class Triggers:
         *,
         cooldown: timedelta,
         eta_grace: timedelta,
+        model_of: Callable[[MachineId], MachineModel] | None = None,
     ) -> None:
         self.clock = clock
         self.rules = list(rules)
+        # Which model a machine is, from config. Without it a rule declared for
+        # one model fires on another emitting the same tag - a symptom code with
+        # no playbook for that machine, and a threshold from a different one.
+        # Optional only so a test can drive the engine with one model's rules.
+        self.model_of = model_of
         # From policy.yaml, never from code: ADR-023's last consequence is that
         # these two live in configuration.
         self.cooldown = cooldown
@@ -86,7 +97,7 @@ class Triggers:
         conn: Connection[Any],
         signals: Iterable[Signal],
         *,
-        under_repair: Mapping[MachineId, Severity] | None = None,
+        under_repair: Mapping[MachineId, frozenset[RuleId]] | None = None,
     ) -> Observation:
         """Run a batch of signals through the rules and apply what they say.
 
@@ -103,11 +114,13 @@ class Triggers:
         raised: list[Raised] = []
         counts = {Outcome.REPEAT: 0, Outcome.SUPPRESSED: 0, Outcome.IN_COOLDOWN: 0}
         quiet = 0
+        lost = 0
 
         for signal in signals:
             decisions = evaluate(
                 signal,
                 self.rules,
+                machine_model=self.model_of(signal.machine_id) if self.model_of else None,
                 now=now,
                 debounce=self.debounce,
                 open_findings=open_findings,
@@ -119,15 +132,29 @@ class Triggers:
                 if decision.outcome is Outcome.QUIET:
                     quiet += 1
                 elif decision.outcome is Outcome.REPEAT:
-                    repo.repeat(
+                    # False means the record was resolved between the batch's
+                    # state being read and this write. Counted apart: a repeat
+                    # that wrote nothing is not a repeat, and reporting it as one
+                    # would put a number in the false-alarm picture that nothing
+                    # in the table supports.
+                    written = repo.repeat(
                         conn,
                         machine_id=decision.machine_id,
                         rule_id=decision.rule_id,
                         now=now,
                     )
-                    counts[Outcome.REPEAT] += 1
+                    if written:
+                        counts[Outcome.REPEAT] += 1
+                    else:
+                        lost += 1
                 elif decision.outcome is Outcome.RAISE:
-                    raised.append(self._raise(conn, decision, open_findings))
+                    try:
+                        raised.append(self._raise(conn, decision, open_findings))
+                    except AlreadyLive:
+                        # Another worker raised it between the state being read
+                        # and this insert. That is suppression working across two
+                        # processes; the batch carries on rather than ending.
+                        lost += 1
                 else:
                     counts[decision.outcome] += 1
 
@@ -137,6 +164,7 @@ class Triggers:
             suppressed=counts[Outcome.SUPPRESSED],
             in_cooldown=counts[Outcome.IN_COOLDOWN],
             quiet=quiet,
+            lost_races=lost,
         )
 
     def _raise(
@@ -158,11 +186,19 @@ class Triggers:
         # ADR-023 section 7: what was predicted has happened. Two work orders for
         # one fault is the immediate reason; the other is that this is where a
         # prediction's error becomes measurable (ADR-020).
-        superseded = repo.open_prediction_for(
+        candidate = repo.open_prediction_for(
             conn, machine_id=finding.machine_id, component=finding.component
         )
-        if superseded is not None and superseded != finding_ref:
-            repo.supersede(conn, predicted=superseded, by=finding_ref)
+        # Reported only if the UPDATE actually took it. A supersession that
+        # matched no row and was reported anyway would hand ADR-020's accuracy
+        # loop a measurement of something that never happened.
+        superseded = (
+            candidate
+            if candidate is not None
+            and candidate != finding_ref
+            and repo.supersede(conn, predicted=candidate, by=finding_ref)
+            else None
+        )
 
         return Raised(finding_ref=finding_ref, decision=decision, superseded=superseded)
 

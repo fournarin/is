@@ -143,11 +143,17 @@ class TestInvariantEight:
         observed = triggers.observe(conn, later)
 
         assert observed.raised == ()
-        assert observed.repeated == 100
+        # 98, not 100: this batch starts five minutes after the last one ended,
+        # which is longer than the rule's own window, so the run is treated as
+        # new and the first two readings are inside the debounce again. A gap
+        # that long is a stream nobody was watching, and the alternative - a
+        # Finding claiming five minutes of sustained excess on the strength of
+        # one sample - is the failure the gap check exists for.
+        assert observed.repeated == 98
         live = findings.live(conn)
         assert len(live) == 1
-        # 1 on creation, 1 from the last signal of the first batch, 100 here.
-        assert live[(MOTOR, TEMP_RULE)].occurrence_count == 102
+        # 1 on creation, 1 from the last signal of the first batch, 98 here.
+        assert live[(MOTOR, TEMP_RULE)].occurrence_count == 100
 
     def test_the_database_refuses_a_second_live_finding_whoever_writes_it(
         self, conn: Connection[Any], triggers: Triggers
@@ -188,12 +194,12 @@ class TestTheCooldown:
         again = triggers.observe(conn, _two_minutes_of_heat(NOW + timedelta(minutes=20)))
 
         assert again.raised == ()
-        # All six, not two: the value never came back inside the threshold, so
-        # the debounce still holds from the first batch and every sample clears
-        # the two minutes immediately. That is the machine still being hot while
-        # the Finding it raised has been marked resolved - which is exactly the
-        # oscillation the cooldown is for.
-        assert again.in_cooldown == 6
+        # Two: the batch arrives twenty minutes later, which is a gap longer than
+        # the rule's window, so the run restarts and the first four samples are
+        # back inside the debounce. The two that clear it meet the cooldown -
+        # which is the machine hot again while the Finding it raised has been
+        # marked resolved, exactly the oscillation ADR-023 section 3 is about.
+        assert again.in_cooldown == 2
 
     def test_the_cooldown_is_measured_from_when_it_was_resolved(
         self, conn: Connection[Any], triggers: Triggers, clock: SimulatedClock
@@ -319,10 +325,12 @@ class TestWhatTheBatchReports:
         observed = triggers.observe(
             conn,
             _two_minutes_of_heat(NOW + timedelta(minutes=10)),
-            under_repair={MOTOR: Severity.CRITICAL},
+            under_repair={MOTOR: frozenset({RuleId("R-motor-temp-high")})},
         )
 
-        assert observed.repeated == 6
+        # Two of the six: the batch is ten minutes after the last, so the run
+        # restarts and four samples are spent re-establishing it.
+        assert observed.repeated == 2
         assert observed.anything_happened is True
 
     def test_a_second_breach_inside_one_batch_is_a_repeat_not_a_second_record(
@@ -333,17 +341,15 @@ class TestWhatTheBatchReports:
         Without that the unique index refuses the second insert - correctly - and
         the batch ends in an exception rather than in a count.
         """
-        signals = [
-            *_two_minutes_of_heat(),
-            _hot(NOW + timedelta(minutes=5)),
-            _hot(NOW + timedelta(minutes=6)),
-        ]
+        # Kept continuous on purpose: this is about two breaches inside one
+        # batch, not about what a gap does to the run.
+        signals = [_hot(NOW + timedelta(seconds=30 * step)) for step in range(9)]
 
         observed = triggers.observe(conn, signals)
 
         assert len(observed.raised) == 1
-        # One from the last sample of the two minutes, two from the extra pair.
-        assert observed.repeated == 3
+        # The fifth sample raises; the four after it are repeats.
+        assert observed.repeated == 4
         assert len(findings.live(conn)) == 1
 
 
@@ -408,3 +414,60 @@ class TestWhatMutationTestingFound:
 
         # The connection is still usable: no rollback, no aborted transaction.
         assert findings.status_of(conn, observed.raised[0].finding_ref) is FindingStatus.OPEN
+
+    def test_a_raise_another_worker_got_to_first_is_counted_not_thrown(
+        self, conn: Connection[Any], triggers: Triggers, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two workers on one machine, which is what the unique index is for.
+
+        Forced rather than raced: a genuine interleaving needs two connections
+        and a timing assumption, and what has to be proved here is not that
+        PostgreSQL locks correctly but that **the batch survives**. The batch
+        that loses is also writing other Findings and work orders in the same
+        transaction (ADR-017), and ending it with an exception would discard all
+        of that in the case where suppression is working.
+        """
+
+        def already_live(*args: Any, **kwargs: Any) -> FindingRef:
+            raise AlreadyLive("another worker raised it first")
+
+        monkeypatch.setattr(findings, "raise_finding", already_live)
+
+        observed = triggers.observe(conn, _two_minutes_of_heat())
+
+        assert observed.raised == ()
+        # Both of the samples that cleared the debounce: the in-memory copy is
+        # only corrected when a raise succeeds, so every later breach in the
+        # batch tries and loses too. Counted, every time, rather than ending the
+        # batch on the first one.
+        assert observed.lost_races == 2
+        assert observed.quiet == 4
+
+    def test_a_supersession_that_matched_nothing_is_not_reported(
+        self, conn: Connection[Any], triggers: Triggers
+    ) -> None:
+        """Reported from the lookup rather than from the UPDATE, this handed
+        ADR-020's accuracy loop a measurement of something that never
+        happened."""
+        predicted = findings.raise_finding(conn, _prediction(NOW))
+        findings.resolve(conn, predicted, now=NOW)
+
+        observed = triggers.observe(conn, _two_minutes_of_heat(NOW + timedelta(hours=1)))
+
+        assert observed.raised[0].superseded is None
+
+    def test_a_finding_is_written_in_the_callers_transaction(
+        self, conn: Connection[Any], triggers: Triggers
+    ) -> None:
+        """ADR-017's pairing, which an earlier savepoint quietly broke.
+
+        `conn.transaction()` opens a real transaction when none is running, so a
+        Finding raised as the first statement on a connection committed on its
+        own - and a rollback of the work order it belonged to would have left it
+        behind.
+        """
+        observed = triggers.observe(conn, _two_minutes_of_heat())
+        assert observed.raised
+        conn.rollback()
+
+        assert findings.live(conn) == {}
