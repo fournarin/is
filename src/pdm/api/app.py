@@ -13,17 +13,20 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from pdm.api import deps, documents, sessions
+from pdm.api import deps, documents, playbooks, sessions
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
+from pdm.platform.config import load_config
 from pdm.platform.db import make_pool
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore, storage_root
+from pdm.playbooks import PlaybookStore
 
 # A scanned two-hundred-page manual is tens of megabytes; this leaves room for
 # several times the largest thing anybody should be uploading and stops the
@@ -41,6 +44,7 @@ def create_app(
     pool: Any | None = None,
     library: DocumentLibrary | None = None,
     clock: Clock | None = None,
+    config_dir: Path = Path("config"),
 ) -> FastAPI:
     """Build the application, with everything it depends on passed in.
 
@@ -50,6 +54,11 @@ def create_app(
     or STORAGE_DIR is missing (ADR-019, ADR-031).
     """
     the_clock = clock or SystemClock()
+    # Loaded here rather than inside a handler so that a config the loader
+    # refuses stops the process at boot, which is what invariants 7 and 13 are
+    # for. The API is the second reader of this file after the workers, and both
+    # have to fail the same way.
+    config = load_config(config_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -58,6 +67,7 @@ def create_app(
             FilesystemObjectStore(storage_root()), the_clock
         )
         app.state.authentication = Authentication(LocalAccounts(), the_clock)
+        app.state.playbooks = PlaybookStore(the_clock, skills=config.skills)
         yield
 
     app = FastAPI(title="Predictive maintenance", lifespan=lifespan)
@@ -92,6 +102,7 @@ def create_app(
 
     app.include_router(sessions.router)
     app.include_router(documents.router)
+    app.include_router(playbooks.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:
