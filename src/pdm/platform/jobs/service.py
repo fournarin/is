@@ -59,8 +59,9 @@ class JobQueue:
     def heartbeat(self, conn: Connection[Any], job: Job) -> bool:
         return repo.heartbeat(conn, job_id=job.id, worker=self.worker, now=self.clock.now())
 
-    def finish(self, conn: Connection[Any], job: Job) -> None:
-        repo.finish(conn, job_id=job.id, now=self.clock.now())
+    def finish(self, conn: Connection[Any], job: Job) -> bool:
+        """True if this worker still held the claim (ADR-039)."""
+        return repo.finish(conn, job_id=job.id, worker=self.worker, now=self.clock.now())
 
     def fail(self, conn: Connection[Any], job: Job, error: str) -> None:
         """Release for retry, or give up once the attempts are spent.
@@ -74,7 +75,7 @@ class JobQueue:
             if should_retry(job.attempts, job.max_attempts)
             else None
         )
-        repo.fail(conn, job_id=job.id, error=error, now=now, retry_at=retry_at)
+        repo.fail(conn, job_id=job.id, worker=self.worker, error=error, now=now, retry_at=retry_at)
 
     def reap(self, conn: Connection[Any]) -> list[Job]:
         """Return jobs abandoned by a dead worker to the queue.

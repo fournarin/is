@@ -125,28 +125,51 @@ def heartbeat(conn: Connection[Any], *, job_id: int, worker: str, now: datetime)
         return cur.rowcount == 1
 
 
-def finish(conn: Connection[Any], *, job_id: int, now: datetime) -> None:
+def finish(conn: Connection[Any], *, job_id: int, worker: str, now: datetime) -> bool:
+    """Mark the job done, if this worker still holds it.
+
+    Scoped to the claimer, like the heartbeat and for the same reason. A worker
+    the reaper gave up on may still be alive and finish minutes later; without
+    the scope it would write `done` over a row a second worker is now running,
+    and the second worker's result would land on a job already reported complete
+    (ADR-039).
+
+    False means the claim was lost. The work has still been committed - it is in
+    the same transaction - and the caller logs it, because a job silently
+    completed twice is worth seeing in the log even when both results agree.
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE job SET status = 'done', finished_at = %s, last_error = NULL WHERE id = %s",
-            (now, job_id),
+            "UPDATE job SET status = 'done', finished_at = %s, last_error = NULL "
+            "WHERE id = %s AND claimed_by = %s AND status = 'running'",
+            (now, job_id, worker),
         )
+        return cur.rowcount == 1
 
 
 def fail(
     conn: Connection[Any],
     *,
     job_id: int,
+    worker: str,
     error: str,
     now: datetime,
     retry_at: datetime | None,
-) -> None:
-    """Either release the job for a later retry, or mark it failed for good."""
+) -> bool:
+    """Either release the job for a later retry, or mark it failed for good.
+
+    Scoped to the claiming worker, like `finish` and for the same reason: a
+    worker the reaper gave up on is still running, and its eventual failure must
+    not flip a row a second worker owns back to `queued` - which would draft the
+    same symptom twice - or bury the second worker's progress under the first
+    one's error.
+    """
     with conn.cursor() as cur:
         if retry_at is None:
             cur.execute(
-                "UPDATE job SET status = 'failed', finished_at = %s, last_error = %s WHERE id = %s",
-                (now, error, job_id),
+                "UPDATE job SET status = 'failed', finished_at = %s, last_error = %s "
+                "WHERE id = %s AND claimed_by = %s AND status = 'running'",
+                (now, error, job_id, worker),
             )
         else:
             cur.execute(
@@ -154,10 +177,11 @@ def fail(
                 UPDATE job SET
                     status = 'queued', claimed_by = NULL, claimed_at = NULL,
                     heartbeat_at = NULL, available_at = %s, last_error = %s
-                WHERE id = %s
+                WHERE id = %s AND claimed_by = %s AND status = 'running'
                 """,
-                (retry_at, error, job_id),
+                (retry_at, error, job_id, worker),
             )
+        return cur.rowcount == 1
 
 
 def reap(
@@ -175,18 +199,43 @@ def reap(
 
     A running job with no heartbeat is included: the worker died between claiming
     and its first beat.
+
+    **Locked rows are skipped.** A job's whole handler runs inside the
+    transaction that claimed it (ADR-017), which holds that row's lock for the
+    duration - twenty minutes for a large manual. Without `SKIP LOCKED` this
+    UPDATE waits behind it, so one healthy long-running job stalls the reaping of
+    every genuinely dead job in its class. The rows this skips are the ones a
+    live transaction is holding, which is the definition of a job still running
+    (ADR-039).
     """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             f"""
             UPDATE job SET
-                status = 'queued', claimed_by = NULL, claimed_at = NULL, heartbeat_at = NULL
-            WHERE job_class = %s
-              AND status = 'running'
-              AND (heartbeat_at IS NULL OR heartbeat_at < %s)
+                -- A job that has used its attempts is not put back. Nothing else
+                -- enforces the cap on this path: `fail` counts the attempts, and
+                -- a job that kills its worker outright - an OOM on a large scan -
+                -- never reaches `fail`. Re-queued unconditionally it would be
+                -- claimed again, kill the worker again, and be reaped again, for
+                -- as long as the worker is restarted (ADR-039).
+                status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+                finished_at = CASE WHEN attempts >= max_attempts THEN %s ELSE NULL END,
+                last_error = CASE
+                    WHEN attempts >= max_attempts
+                    THEN 'the worker went silent and the attempts are spent'
+                    ELSE 'the worker went silent; returned to the queue'
+                END,
+                claimed_by = NULL, claimed_at = NULL, heartbeat_at = NULL
+            WHERE id IN (
+                SELECT id FROM job
+                WHERE job_class = %s
+                  AND status = 'running'
+                  AND (heartbeat_at IS NULL OR heartbeat_at < %s)
+                FOR UPDATE SKIP LOCKED
+            )
             RETURNING {_COLUMNS}
             """,
-            (job_class.value, dead_before),
+            (dead_before, job_class.value, dead_before),
         )
         return [_to_job(row) for row in cur.fetchall()]
 
