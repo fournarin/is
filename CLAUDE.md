@@ -184,7 +184,7 @@ person's current role. Roles change; the evidence must not
 
 ### WorkOrder
 ```
-origin, finding_ref?, pm_task_ref?, playbook_ref, playbook_snapshot,
+origin, finding_ref?, pm_task_ref?, playbook_ref, playbook_snapshot, playbook_warning?,
 machine_id, severity, finding_kind?, eta?, eta_confidence?,
 estimated_minutes, required_skill?, required_technicians, estimate_is_fallback,
 reason, priority_score, priority_reason, status,
@@ -217,6 +217,12 @@ at sixty. A job with no playbook takes its duration from `fallback_minutes` in
 stays empty, because guessing one sends the wrong person and a guess is worse
 than an absence
 ([ADR-041](docs/adr/0041-a-work-order-carries-what-the-scheduler-needs-to-schedule-it.md)).
+
+`playbook_warning` is set when the playbook the order was built from was awaiting
+review at that moment. ADR-018 serves such a playbook anyway, on the argument
+that a technician with an out-of-date procedure is better off than one with
+none - which holds only while they can tell which they have, and the ticket is
+where somebody is standing at a machine.
 
 `reason` is why the job exists and is written once, at creation - "over
 threshold for 20 minutes", or "expected to reach threshold in about 6 hours,

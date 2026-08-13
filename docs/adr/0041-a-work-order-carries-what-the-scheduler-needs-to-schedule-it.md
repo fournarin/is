@@ -87,6 +87,22 @@ through the ordinary lookup (`design.md` 13.3). Layer 4 does the same: one
 function, three origins, differing only in which reference is set and what the
 reason says.
 
+### 6. A ticket built from a playbook awaiting review says so on the ticket
+
+`playbook_warning`, copied at creation like everything else here.
+
+ADR-018 says a `needs_review` playbook is still served, **with a warning**, and
+the reason it is served at all is that a technician with an out-of-date procedure
+is better off than one with none. That argument only holds while they can tell
+which they have. The review screen is not the serving surface for this - the
+ticket is, and it is where somebody is standing at a machine.
+
+Copied rather than read through `playbook_ref`, for the reason everything else
+here is copied: the flag is true of the playbook *as it was when the order was
+issued*, and an order issued last week from a manual withdrawn yesterday should
+not silently acquire a warning about a change that came after the work was
+planned.
+
 ## Reasons
 
 **The copy is what keeps layer 3 pure and layer 1 invisible to it.** It is the

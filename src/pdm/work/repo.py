@@ -26,6 +26,7 @@ from pdm.contracts import (
     PlaybookStep,
     WorkOrder,
     WorkOrderStatus,
+    WorkOutcome,
     WorkSegment,
 )
 
@@ -34,7 +35,7 @@ from pdm.contracts import (
 _COLUMNS = """
     origin, finding_ref, pm_task_ref, machine_id, severity, finding_kind, eta,
     eta_confidence, playbook_ref, playbook_snapshot, snapshot_approved_by,
-    snapshot_approved_at, estimated_minutes, required_skill,
+    snapshot_approved_at, playbook_warning, estimated_minutes, required_skill,
     required_technicians, estimate_is_fallback, reason, priority_score,
     priority_reason, status, assignees, work_segments, handover_note,
     blocked_minutes, blocked_reason, outcome, technician_feedback
@@ -69,7 +70,7 @@ def issue(conn: Connection[Any], order: WorkOrder, *, now: datetime) -> str:
             f"""
             INSERT INTO work_order ({_COLUMNS}, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING work_order_ref
             """,
             (
@@ -85,6 +86,7 @@ def issue(conn: Connection[Any], order: WorkOrder, *, now: datetime) -> str:
                 Jsonb([step.model_dump(mode="json") for step in order.playbook_snapshot]),
                 order.snapshot_approved_by,
                 order.snapshot_approved_at,
+                order.playbook_warning,
                 order.estimated_minutes,
                 order.required_skill,
                 order.required_technicians,
@@ -118,23 +120,34 @@ def get(conn: Connection[Any], work_order_ref: str) -> WorkOrder | None:
     return _to_order(row) if row else None
 
 
-def open_orders(conn: Connection[Any], *, limit: int = 500) -> list[tuple[str, WorkOrder]]:
+def open_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder]]:
     """Everything the dispatch tick has to consider, oldest first.
 
-    Returned with the reference, because layer 3 ranks orders and then has to say
-    which row it ranked. Ordered by age rather than by severity: the ranking is
-    the scheduler's job and a repository that pre-sorted by one term of the score
-    would be quietly deciding part of it.
+    **No limit, and that is deliberate.** `load_ratio` is a sum over the whole
+    queue (design.md 13.2), so a page of it is not a smaller version of the
+    answer - it is a shift that reads emptier than it is, and the gate then
+    releases *more* work. A truncation that made the queue look manageable would
+    do it by hiding the newest orders, including a critical one raised minutes
+    ago.
+
+    The bound is the plant's own: open work orders are jobs somebody has to do,
+    and a queue long enough for this to matter is a queue that is itself the
+    problem to report.
+
+    Ordered by age rather than by severity: ranking is the scheduler's job, and a
+    repository that pre-sorted by one term of the score would be quietly deciding
+    part of it.
     """
     with conn.cursor(row_factory=dict_row) as cur:
+        # The status list is written out rather than passed as an array so the
+        # planner can match the partial index in migration 0006. `= ANY($1)`
+        # against a generic plan cannot.
         cur.execute(
             f"""
             SELECT work_order_ref, {_COLUMNS} FROM work_order
-             WHERE status = ANY(%s)
+             WHERE status IN ('queued', 'assigned', 'in_progress', 'handed_over')
              ORDER BY created_at, work_order_ref
-             LIMIT %s
-            """,
-            (list(OPEN_STATUSES), limit),
+            """
         )
         rows = cur.fetchall()
     return [(str(row["work_order_ref"]), _to_order(dict(row))) for row in rows]
@@ -167,29 +180,70 @@ def open_for_machine(conn: Connection[Any], machine_id: MachineId) -> list[str]:
         return [str(row[0]) for row in cur.fetchall()]
 
 
+class CannotCloseThisWay(Exception):
+    """`set_status` was asked to close an order. `close` is the way.
+
+    Closing needs an outcome - the database refuses a closed row without one -
+    so a `set_status(CLOSED)` would abort the caller's whole transaction on a
+    CHECK constraint rather than doing what it looked like it would do.
+    """
+
+
 def set_status(
     conn: Connection[Any],
     work_order_ref: str,
     *,
     status: WorkOrderStatus,
-    now: datetime,
     handover_note: str | None = None,
 ) -> bool:
-    """Move an order along. Never touches the snapshot.
+    """Move an order between its open states. Never touches the snapshot.
 
-    `closed_at` is set from the clock the caller passes, never `now()`: a
-    compressed demo would otherwise stamp real time on a job whose segments are
-    simulated (ADR-028).
+    Not for closing: an order that has ended has to say how (ADR-022's
+    "no problem found" is one of the answers, and the only false-alarm signal
+    the system will ever get), and the constraint enforcing that would fail here
+    with a message about a CHECK rather than about what the caller forgot.
     """
+    if status in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED):
+        raise CannotCloseThisWay(
+            f"{status.value} needs an outcome and a time; use close() (ADR-022)"
+        )
     with conn.cursor() as cur:
         cur.execute(
             """
             UPDATE work_order
-               SET status = %s,
-                   handover_note = COALESCE(%s, handover_note),
-                   closed_at = CASE WHEN %s IN ('closed', 'cancelled') THEN %s ELSE closed_at END
+               SET status = %s, handover_note = COALESCE(%s, handover_note)
              WHERE work_order_ref = %s
             """,
-            (status.value, handover_note, status.value, now, work_order_ref),
+            (status.value, handover_note, work_order_ref),
+        )
+        return cur.rowcount == 1
+
+
+def close(
+    conn: Connection[Any],
+    work_order_ref: str,
+    *,
+    status: WorkOrderStatus,
+    outcome: WorkOutcome,
+    now: datetime,
+    technician_feedback: str | None = None,
+) -> bool:
+    """End an order, with how it ended and when.
+
+    `closed_at` comes from the clock the caller passes, never `now()`: a
+    compressed demo would otherwise stamp real time on a job whose segments are
+    simulated (ADR-028).
+    """
+    if status not in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED):
+        raise ValueError(f"{status.value} is not an ending; use set_status()")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET status = %s, outcome = %s, closed_at = %s,
+                   technician_feedback = COALESCE(%s, technician_feedback)
+             WHERE work_order_ref = %s
+            """,
+            (status.value, outcome.value, now, technician_feedback, work_order_ref),
         )
         return cur.rowcount == 1

@@ -246,6 +246,12 @@ class WorkOrder(BaseModel):
     playbook_snapshot: tuple[PlaybookStep, ...] = ()
     snapshot_approved_by: UserId | None = None
     snapshot_approved_at: datetime | None = None
+    # Set when the playbook this was built from is awaiting review - a manual
+    # replaced, a technician's objection filed. ADR-018 serves such a playbook
+    # anyway, because a technician with an out-of-date procedure is better off
+    # than one with none; that is only true while they can tell which they have,
+    # and the ticket is where somebody is standing at a machine (ADR-041).
+    playbook_warning: str | None = None
 
     finding_kind: FindingKind | None = None
     eta: datetime | None = None

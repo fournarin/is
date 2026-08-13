@@ -62,19 +62,32 @@ class WorkOrders:
 
     def _playbook(
         self, conn: Connection[Any], symptom_code: SymptomCode, machine_model: MachineModel
-    ) -> Playbook | None:
-        """The approved playbook for this pair, or nothing.
+    ) -> tuple[Playbook | None, str | None]:
+        """The playbook for this pair and the warning that travels with it.
 
         A `needs_review` playbook is still bound. It was approved once, it is
-        still served with a warning (ADR-018), and refusing it here would leave
-        the job unpriced and unschedulable the moment a manual is replaced -
-        turning a warning into an outage.
+        still served (ADR-018), and refusing it here would leave the job unpriced
+        and unschedulable the moment a manual is replaced - turning a warning
+        into an outage.
+
+        **The warning is returned rather than dropped.** The review screen is not
+        the serving surface for it; the ticket is, and it is the one a technician
+        reads at the machine (ADR-041 section 6).
+
+        The store cannot hold a draft at all - that is a state the table has no
+        value for (ADR-038) - so there is nothing to filter here.
         """
         found = playbooks.get(conn, symptom_code, machine_model)
         if found is None:
-            return None
-        playbook, _ = found
-        return playbook if playbook.status is not PlaybookStatus.DRAFT else None
+            return (None, None)
+        playbook, review_reason = found
+        if playbook.status is PlaybookStatus.NEEDS_REVIEW:
+            return (
+                playbook,
+                review_reason
+                or "this procedure is awaiting review and may not match the current manual",
+            )
+        return (playbook, None)
 
     def from_finding(
         self,
@@ -85,10 +98,12 @@ class WorkOrders:
         machine_model: MachineModel,
     ) -> Issued:
         """A Finding becomes a ticket. Layer 1 will call this; nothing does yet."""
+        playbook, warning = self._playbook(conn, finding.symptom_code, machine_model)
         order = domain.from_finding(
             finding,
             finding_ref,
-            playbook=self._playbook(conn, finding.symptom_code, machine_model),
+            playbook_warning=warning,
+            playbook=playbook,
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
         )
@@ -102,9 +117,11 @@ class WorkOrders:
         machine_model: MachineModel,
         severity: Severity = domain.PM_SEVERITY,
     ) -> Issued:
+        playbook, warning = self._playbook(conn, task.symptom_code, machine_model)
         order = domain.from_pm_task(
             task,
-            playbook=self._playbook(conn, task.symptom_code, machine_model),
+            playbook_warning=warning,
+            playbook=playbook,
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
             severity=severity,
@@ -129,8 +146,10 @@ class WorkOrders:
         or the system quietly requires a diagnosis before it will accept a
         problem.
         """
-        playbook = (
-            self._playbook(conn, symptom_code, machine_model) if symptom_code is not None else None
+        playbook, warning = (
+            self._playbook(conn, symptom_code, machine_model)
+            if symptom_code is not None
+            else (None, None)
         )
         now = self.clock.now()
         order = domain.from_report(
@@ -139,6 +158,7 @@ class WorkOrders:
             reported_by=reported_by,
             description=description,
             playbook=playbook,
+            playbook_warning=warning,
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
             now=now,

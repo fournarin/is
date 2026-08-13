@@ -136,6 +136,8 @@ source_modules =
     pdm.signals.domain
     pdm.authoring.domain
     pdm.authoring.drafting
+    pdm.playbooks.domain
+    pdm.work.domain
     pdm.retrieval.domain
     pdm.platform.auth.domain
     pdm.llm.domain

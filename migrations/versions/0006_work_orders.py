@@ -65,6 +65,10 @@ def upgrade() -> None:
             playbook_snapshot jsonb NOT NULL DEFAULT '[]'::jsonb,
             snapshot_approved_by text,
             snapshot_approved_at timestamptz,
+            -- Set when the playbook was awaiting review at the moment this order
+            -- was issued. ADR-018 serves such a playbook anyway; that is only
+            -- defensible while the person holding the ticket can tell (ADR-041).
+            playbook_warning  text,
 
             -- What the load gate computes with (ADR-041, design.md 13.2).
             estimated_minutes integer NOT NULL CHECK (estimated_minutes > 0),
@@ -126,10 +130,13 @@ def upgrade() -> None:
         )
     """)
 
-    # The dispatch tick reads the queue every five minutes (design.md 6.2), and
-    # partial because closed orders are kept for ever as evidence.
+    # The dispatch tick reads the whole open queue every five minutes and orders
+    # it by age (design.md 6.2). Leading on created_at rather than on severity:
+    # nothing filters by severity - the ranking does that in memory - and an
+    # index that leads with a column no query restricts cannot serve the sort.
+    # Partial, because closed orders are kept for ever as evidence.
     op.execute("""
-        CREATE INDEX work_order_open_idx ON work_order (severity, created_at)
+        CREATE INDEX work_order_open_idx ON work_order (created_at, work_order_ref)
         WHERE status IN ('queued', 'assigned', 'in_progress', 'handed_over')
     """)
 

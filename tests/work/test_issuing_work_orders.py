@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,8 @@ from pdm.contracts import (
     SymptomCode,
     UserId,
     WorkOrderOrigin,
+    WorkOrderStatus,
+    WorkOutcome,
 )
 from pdm.contracts.ids import DocumentId
 from pdm.platform.auth import Authentication, LocalAccounts
@@ -493,3 +495,104 @@ class TestWhatTheDispatchTickWillRead:
         )
 
         assert [ref for ref, _ in work.for_finding(conn, FindingRef("F-1"))] == [issued.ref]
+
+
+class TestWhatTheCodeReviewFound:
+    """Five of them. The first two would have shown up in the plant, not here."""
+
+    def test_closing_an_order_needs_an_outcome_and_says_so(
+        self, conn: Connection[Any], orders: WorkOrders, clock: SimulatedClock
+    ) -> None:
+        """`set_status(CLOSED)` used to reach the database and abort the whole
+        transaction on a CHECK constraint, with a message about the constraint
+        rather than about what the caller forgot."""
+        issued = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.LOW,
+            reported_by=TECHNICIAN,
+            description="something rattles",
+        )
+
+        with pytest.raises(work.CannotCloseThisWay):
+            work.set_status(conn, issued.ref, status=WorkOrderStatus.CLOSED)
+
+        assert work.close(
+            conn,
+            issued.ref,
+            status=WorkOrderStatus.CLOSED,
+            outcome=WorkOutcome.NO_PROBLEM_FOUND,
+            now=clock.now(),
+            technician_feedback="ran it for ten minutes, nothing",
+        )
+        closed = work.get(conn, issued.ref)
+        assert closed is not None
+        assert closed.outcome is WorkOutcome.NO_PROBLEM_FOUND
+        assert orders.open_orders(conn) == []
+
+    def test_the_whole_open_queue_comes_back_not_a_page_of_it(
+        self, conn: Connection[Any], orders: WorkOrders, clock: SimulatedClock
+    ) -> None:
+        """load_ratio is a sum over the queue (design.md 13.2), so a page of it
+        is not a smaller answer - it is a shift that reads emptier than it is,
+        and the gate then releases more work."""
+        for index in range(60):
+            clock.advance(timedelta(minutes=1))
+            orders.from_report(
+                conn,
+                machine_id=MOTOR,
+                machine_model=R2000IC,
+                severity=Severity.LOW,
+                reported_by=TECHNICIAN,
+                description=f"report {index}",
+            )
+
+        assert len(orders.open_orders(conn)) == 60
+
+    def test_a_ticket_from_a_playbook_awaiting_review_says_so(
+        self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
+    ) -> None:
+        """ADR-018 serves a needs_review playbook anyway, which is only
+        defensible while the person holding the ticket can tell (ADR-041 §6).
+        The review screen is not the serving surface; this is."""
+        _approved_playbook(conn, manual)
+        playbooks.flag_for_review(conn, manual, reason="Edition 4 replaced Edition 3")
+
+        issued = orders.from_finding(
+            conn, _finding(), finding_ref=FindingRef("F-1"), machine_model=R2000IC
+        )
+
+        assert issued.order.playbook_warning == "Edition 4 replaced Edition 3"
+        stored = work.get(conn, issued.ref)
+        assert stored is not None and stored.playbook_warning is not None
+
+    def test_a_current_playbook_leaves_no_warning_on_the_ticket(
+        self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
+    ) -> None:
+        _approved_playbook(conn, manual)
+
+        issued = orders.from_finding(
+            conn, _finding(), finding_ref=FindingRef("F-1"), machine_model=R2000IC
+        )
+
+        assert issued.order.playbook_warning is None
+
+    def test_a_timestamp_in_another_offset_is_converted_before_it_is_labelled(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        """`reason` is written once and can never be corrected, so a local wall
+        clock stamped "UTC" would be wrong for the life of the order."""
+        bangkok = timezone(timedelta(hours=7))
+        issued = orders.from_finding(
+            conn,
+            _finding(
+                kind=FindingKind.PREDICTED,
+                eta=datetime(2026, 3, 3, 22, 0, tzinfo=bangkok),
+                eta_confidence=timedelta(hours=2),
+            ),
+            finding_ref=FindingRef("F-1"),
+            machine_model=R2000IC,
+        )
+
+        assert "2026-03-03 15:00 UTC" in issued.order.reason

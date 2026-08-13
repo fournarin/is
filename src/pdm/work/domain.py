@@ -13,7 +13,7 @@ no error anywhere.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from pdm.contracts import (
     Finding,
@@ -89,6 +89,11 @@ def _priced(
 def reason_for(finding: Finding) -> str:
     """Why this job exists, in the words a technician needs.
 
+    Every timestamp is converted before it is formatted. A Finding's `eta` is
+    source time and may arrive in the plant's own offset (ADR-028); formatted
+    without converting, its local wall clock would be stamped "UTC" into a string
+    the order can never correct, because `reason` is written once.
+
     The two kinds read differently because a person decides differently: "over
     threshold for twenty minutes" is a machine that is already wrong, and
     "expected to reach it in about six hours" is one that is not yet. **The
@@ -106,7 +111,7 @@ def reason_for(finding: Finding) -> str:
     assert finding.eta is not None and finding.eta_confidence is not None
     return (
         f"{where}: {finding.symptom_code} predicted by {finding.rule_id}, expected to reach "
-        f"the threshold at {finding.eta:%Y-%m-%d %H:%M} UTC, give or take "
+        f"the threshold at {finding.eta.astimezone(UTC):%Y-%m-%d %H:%M} UTC, give or take "
         f"{_hours(finding.eta_confidence)}"
     )
 
@@ -123,6 +128,7 @@ def from_finding(
     finding_ref: FindingRef,
     *,
     playbook: Playbook | None,
+    playbook_warning: str | None = None,
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
 ) -> WorkOrder:
@@ -150,6 +156,7 @@ def from_finding(
         playbook_snapshot=playbook.steps if playbook else (),
         snapshot_approved_by=playbook.approved_by if playbook else None,
         snapshot_approved_at=playbook.approved_at if playbook else None,
+        playbook_warning=playbook_warning,
         estimated_minutes=minutes,
         required_skill=playbook.required_skill if playbook else None,
         required_technicians=playbook.required_technicians if playbook else 1,
@@ -162,6 +169,7 @@ def from_pm_task(
     task: PMTask,
     *,
     playbook: Playbook | None,
+    playbook_warning: str | None = None,
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
     severity: Severity = PM_SEVERITY,
@@ -187,13 +195,14 @@ def from_pm_task(
         playbook_snapshot=playbook.steps if playbook else (),
         snapshot_approved_by=playbook.approved_by if playbook else None,
         snapshot_approved_at=playbook.approved_at if playbook else None,
+        playbook_warning=playbook_warning,
         estimated_minutes=minutes,
         required_skill=playbook.required_skill if playbook else None,
         required_technicians=playbook.required_technicians if playbook else 1,
         estimate_is_fallback=is_fallback,
         reason=(
             f"{task.machine_id}: {task.symptom_code} scheduled maintenance, "
-            f"due {task.due_at:%Y-%m-%d %H:%M} UTC"
+            f"due {task.due_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC"
         ),
     )
 
@@ -205,6 +214,7 @@ def from_report(
     reported_by: UserId,
     description: str,
     playbook: Playbook | None,
+    playbook_warning: str | None = None,
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
     now: datetime,
@@ -229,11 +239,13 @@ def from_report(
         playbook_snapshot=playbook.steps if playbook else (),
         snapshot_approved_by=playbook.approved_by if playbook else None,
         snapshot_approved_at=playbook.approved_at if playbook else None,
+        playbook_warning=playbook_warning,
         estimated_minutes=minutes,
         required_skill=playbook.required_skill if playbook else None,
         required_technicians=playbook.required_technicians if playbook else 1,
         estimate_is_fallback=is_fallback,
         reason=(
-            f"{machine_id}: reported by {reported_by} at {now:%Y-%m-%d %H:%M} UTC - {description}"
+            f"{machine_id}: reported by {reported_by} at "
+            f"{now.astimezone(UTC):%Y-%m-%d %H:%M} UTC - {description}"
         ),
     )
