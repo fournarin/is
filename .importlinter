@@ -134,6 +134,7 @@ source_modules =
     pdm.platform.jobs.domain
     pdm.platform.documents.domain
     pdm.signals.domain
+    pdm.signals.feed
     pdm.authoring.domain
     pdm.authoring.drafting
     pdm.playbooks.domain

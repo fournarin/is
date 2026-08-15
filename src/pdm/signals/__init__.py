@@ -21,11 +21,13 @@ from pdm.signals.domain import (
     Step,
     SyntheticSource,
 )
+from pdm.signals.feed import Feed
 
 __all__ = [
     "LINE_A_TWELVE_HOURS",
     "Channel",
     "Exponential",
+    "Feed",
     "GroundTruth",
     "LinearDrift",
     "Scenario",

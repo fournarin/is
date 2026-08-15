@@ -46,6 +46,10 @@ class JobKind(StrEnum):
 
     INGEST = "ingest"
     DRAFT = "draft"
+    # Layer 1's pulse. Unlike the two above, nobody asks for it: the tick that
+    # runs enqueues the next one in the same transaction, so the whole of the
+    # trigger loop's schedule is a row anybody can SELECT (ADR-044 section 1).
+    OBSERVE = "observe"
 
 
 class JobStatus(StrEnum):

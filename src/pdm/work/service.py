@@ -168,3 +168,15 @@ class WorkOrders:
     def open_orders(self, conn: Connection[Any]) -> list[tuple[str, WorkOrder]]:
         """What the dispatch tick will be given (design.md 6.2)."""
         return repo.open_orders(conn)
+
+    def open_finding_refs(self, conn: Connection[Any]) -> set[FindingRef]:
+        """Findings that still have an open ticket against them (ADR-044 §6)."""
+        return repo.open_finding_refs(conn)
+
+    def withdraw_for_finding(self, conn: Connection[Any], finding_ref: FindingRef) -> list[str]:
+        """Cancel the untouched orders for a Finding the world has overtaken.
+
+        Returns what was cancelled, which is not the same as what was found: an
+        order somebody has accepted is left where it is (ADR-044 §7).
+        """
+        return repo.cancel_untouched_for_finding(conn, finding_ref, now=self.clock.now())

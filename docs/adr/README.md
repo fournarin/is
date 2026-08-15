@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Forty-three decisions, in the order they were made. Each records the context that
+Forty-four decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -55,6 +55,7 @@ entries replace parts of earlier ones, and both are kept.
 | [041](0041-a-work-order-carries-what-the-scheduler-needs-to-schedule-it.md) | A work order carries what the scheduler needs | |
 | [042](0042-what-the-rule-engine-remembers-and-what-it-is-told.md) | What the rule engine remembers, and what it is told | |
 | [043](0043-how-a-trend-becomes-a-prediction-and-what-its-interval-means.md) | How a trend becomes a prediction, and what its interval means | |
+| [044](0044-the-trigger-loop-what-ticks-it-and-what-feeds-it.md) | The trigger loop: what ticks it, what feeds it, what it cancels | |
 
 ## Where to start
 

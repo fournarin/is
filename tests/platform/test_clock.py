@@ -9,19 +9,21 @@ therefore pass by never being checked.
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from pdm.platform.clock import Clock, SimulatedClock, SystemClock
+from pdm.platform.clock import Clock, ScaledClock, SimulatedClock, SystemClock
 
 BANGKOK = timezone(timedelta(hours=7))
 MORNING_SHIFT_START = datetime(2026, 3, 3, 6, 0, tzinfo=BANGKOK)
 
 
-def test_both_implementations_satisfy_the_port() -> None:
+def test_every_implementation_satisfies_the_port() -> None:
     assert isinstance(SystemClock(), Clock)
     assert isinstance(SimulatedClock(MORNING_SHIFT_START), Clock)
+    assert isinstance(ScaledClock(60.0), Clock)
 
 
 class TestSystemClock:
@@ -33,6 +35,64 @@ class TestSystemClock:
     def test_negative_sleep_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="negative"):
             SystemClock().sleep(-1)
+
+
+class TestScaledClock:
+    """Real time running fast: what a compressed demo runs on (ADR-044 §4).
+
+    It exists because `SimulatedClock` cannot serve a long-running process - its
+    `sleep` returns instantly, so a worker on one spins - and because putting the
+    compression anywhere else splits source time from decision time. Every window
+    in the system is measured on decision time, so a feed that ran fast against a
+    clock that did not would put a ticket's "in about six hours" six minutes
+    away, and no prediction could ever reach its own expiry.
+    """
+
+    def test_now_is_timezone_aware_utc(self) -> None:
+        now = ScaledClock(60.0).now()
+        assert now.tzinfo is not None
+        assert now.utcoffset() == timedelta(0)
+
+    def test_it_starts_where_it_is_told_and_moves_forward(self) -> None:
+        clock = ScaledClock(60.0, origin=MORNING_SHIFT_START)
+        first = clock.now()
+        clock.sleep(60)
+        second = clock.now()
+
+        assert first >= MORNING_SHIFT_START
+        assert second > first
+
+    def test_a_scaled_second_costs_less_real_time(self) -> None:
+        """The whole point: ten seconds of the timings in policy.yaml cost a
+        sixth of a real second at 60x, so twelve hours of degradation fits in one
+        sitting (ADR-007)."""
+        clock = ScaledClock(60.0, origin=MORNING_SHIFT_START)
+        before = time.monotonic()
+
+        clock.sleep(6)
+
+        assert time.monotonic() - before < 0.5
+        assert clock.now() >= MORNING_SHIFT_START + timedelta(seconds=6)
+
+    def test_at_speed_one_it_is_ordinary_time(self) -> None:
+        clock = ScaledClock(1.0, origin=MORNING_SHIFT_START)
+        clock.sleep(0.01)
+
+        assert clock.now() - MORNING_SHIFT_START < timedelta(seconds=1)
+
+    def test_a_negative_sleep_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="negative"):
+            ScaledClock(60.0).sleep(-1)
+
+    def test_a_speed_must_be_positive(self) -> None:
+        with pytest.raises(ValueError, match="positive"):
+            ScaledClock(0.0)
+
+    def test_a_naive_origin_is_rejected(self) -> None:
+        """ADR-028, for the third time in this file: the night shift crosses
+        midnight."""
+        with pytest.raises(ValueError, match="ADR-028"):
+            ScaledClock(60.0, origin=datetime(2026, 3, 3, 6, 0))
 
 
 class TestSimulatedClock:

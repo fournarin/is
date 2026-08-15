@@ -15,6 +15,7 @@ be right when two workers run them at the same moment:
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -171,14 +172,25 @@ def live(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], Finding]:
     return {(row["machine_id"], row["rule_id"]): _to_finding(dict(row)) for row in rows}
 
 
-def refs_of_live(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], FindingRef]:
-    """The same set, as references. What the caller needs to act on one."""
+def rules_behind(
+    conn: Connection[Any], refs: Collection[FindingRef]
+) -> list[tuple[MachineId, RuleId]]:
+    """Which (machine, rule) these Findings belong to, whatever state they are in.
+
+    **No status filter, and that is the point.** The caller is asking which rules
+    somebody currently has repair work open against (ADR-023 §4), and the
+    interesting case is a Finding that was resolved an hour ago while the repair
+    it started is still under way. Filtered to the live ones this returns only
+    pairs that suppress themselves as repeats, which is no answer at all.
+    """
+    if not refs:
+        return []
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT machine_id, rule_id, finding_ref FROM finding "
-            "WHERE status IN ('open', 'acknowledged')"
+            "SELECT machine_id, rule_id FROM finding WHERE finding_ref = ANY(%s)",
+            (list(refs),),
         )
-        return {(row[0], row[1]): FindingRef(row[2]) for row in cur.fetchall()}
+        return [(MachineId(row[0]), RuleId(row[1])) for row in cur.fetchall()]
 
 
 def last_resolved(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], datetime]:

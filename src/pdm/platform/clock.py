@@ -60,6 +60,55 @@ class SystemClock:
         time.sleep(seconds)
 
 
+class ScaledClock:
+    """Real time, running fast. What a compressed demo runs on (ADR-044 §4).
+
+    A twelve-hour degradation has to be watchable in one sitting (ADR-007) and
+    the system has to keep sleeping, claiming and heartbeating in real seconds
+    while it happens - which `SimulatedClock` cannot do, because its `sleep`
+    returns instantly and the worker would spin.
+
+    **Compressing time is this port's job, and nothing else's.** The first
+    version of the trigger loop put a speed factor on the signal feed instead,
+    handing signals over faster while decision time ran at one second per second.
+    Every window in the system is measured on decision time - the cooldown, the
+    ETA a ticket shows, the expiry sweep - so at 60x a ticket said "in about six
+    hours" for something six minutes away, and a prediction could never reach its
+    own expiry. Moving the factor here leaves one axis and one knob: source time
+    and decision time advance together, exactly as they do in the plant.
+
+    Elapsed time comes from a monotonic counter rather than from repeated calls
+    to the wall clock, so an NTP step does not move a demo's whole timeline.
+    """
+
+    def __init__(self, speed: float, *, origin: datetime | None = None) -> None:
+        if speed <= 0:
+            raise ValueError(f"a clock's speed must be positive, not {speed}")
+        if origin is not None and origin.tzinfo is None:
+            raise ValueError("ScaledClock needs a timezone-aware origin (ADR-028)")
+        self._speed = speed
+        self._origin = (origin or datetime.now(UTC)).astimezone(UTC)  # allow: wall-clock
+        self._started = time.monotonic()
+
+    @property
+    def speed(self) -> float:
+        return self._speed
+
+    def now(self) -> datetime:
+        return self._origin + timedelta(seconds=(time.monotonic() - self._started) * self._speed)
+
+    def sleep(self, seconds: float) -> None:
+        """Wait `seconds` of *this* clock's time, which is less real time.
+
+        So a worker asked to poll every ten seconds polls every ten scaled
+        seconds. The queue, the reaper and the trigger tick all keep the timings
+        `policy.yaml` gives them, measured on the timeline the run is on.
+        """
+        if seconds < 0:
+            raise ValueError(f"cannot sleep for a negative duration: {seconds}")
+        time.sleep(seconds / self._speed)
+
+
 class SimulatedClock:
     """Time that only moves when something asks it to.
 

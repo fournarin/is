@@ -1,19 +1,25 @@
-"""Entrypoint for the `worker-runtime` container (ADR-026, ADR-039).
+"""Entrypoint for the `worker-runtime` container (ADR-026, ADR-039, ADR-044).
 
-**It has no work to do yet, and it exists anyway.** The trigger loop and the
-dispatch tick are layers 1 and 3; until they arrive this process claims nothing
-and only sweeps for jobs whose worker died.
+**This is where layer 1 starts running for real.** Until this slice the process
+existed and claimed nothing: the rule engine and the trend extrapolator were
+constructed only by tests and by `scripts/measure_prediction.py`, so a system
+that could detect and predict did neither in any process a technician could open.
 
-That is worth a container because the alternative was worse: `docker-compose.yml`
-has run `python -m pdm.workers.runtime` since slice 0.3 against a module that did
-not exist, so every `docker compose up` produced a container crash-looping under
-`restart: unless-stopped` - noise beside the services that are working, of
-exactly the kind that trains somebody to ignore a red container.
+It now runs one handler, `observe`, which is layer 1's pulse. The tick that runs
+enqueues the next one in the same transaction, so the schedule is a row rather
+than a timer, and the period is the runtime class's own heartbeat interval - no
+new constant (ADR-044 §1, §2).
 
-It claims `job_class = runtime` and nothing else, and with no handlers it does
-not claim at all (invariant 12 twice over: the filter is in the claim's SQL, and
-there is nothing here that could run an authoring job even if one were handed to
-it).
+Its signal source must be asked for. With `SIGNAL_SOURCE` unset the process
+behaves exactly as it did before this slice - no handlers, no chain, reaping only
+- because a deployment that has not been wired to the plant yet must not quietly
+invent its own data (ADR-044 §5).
+
+`SIGNAL_SPEED` scales the **clock**, not the feed. A compressed run moves source
+time and decision time together, so a ticket's ETA, the cooldown and the expiry
+sweep all mean in a demo what they mean in the plant (ADR-044 §4).
+
+It still claims `job_class = runtime` and nothing else (invariant 12).
 """
 
 from __future__ import annotations
@@ -21,17 +27,104 @@ from __future__ import annotations
 import logging
 import os
 import socket
+from datetime import timedelta
 from pathlib import Path
 
-from pdm.platform.clock import SystemClock
+from pdm.contracts import MachineModel, Severity
+from pdm.platform.clock import Clock, ScaledClock, SystemClock
 from pdm.platform.config import load_config
+from pdm.platform.config.loader import Config
 from pdm.platform.db import make_pool
-from pdm.platform.jobs import ClassTiming, JobClass, JobQueue
+from pdm.platform.jobs import ClassTiming, JobClass, JobKind, JobQueue
+from pdm.signals import LINE_A_TWELVE_HOURS, Feed, SyntheticSource
+from pdm.triggers import Triggers
+from pdm.work import WorkOrders
 from pdm.workers.loop import Worker
+from pdm.workers.runtime.handlers import TriggerLoop, ensure_tick_queued, observe_handler
 
 log = logging.getLogger(__name__)
 
 WORKER = f"{socket.gethostname()}:{os.getpid()}"
+
+# How much faster than the plant a compressed run moves. Provenance: recorded
+# decision (ADR-044 §4). Sixty turns the twelve-hour demo scenario into twelve
+# minutes, which is one sitting - the requirement ADR-007 puts on a demo the
+# advisor can negotiate with, and the reason `Clock` is a port at all (ADR-028).
+DEFAULT_SPEED = 60.0
+
+
+def build_clock() -> Clock:
+    """Real time, or real time running fast when a demo is being compressed.
+
+    The speed belongs here rather than on the feed. Every window in the system is
+    measured on decision time - the cooldown, the ETA a ticket shows, the expiry
+    sweep - so a feed that ran fast against a clock that did not would put a
+    ticket's "in about six hours" six minutes away (ADR-044 §4).
+    """
+    speed = float(os.environ.get("SIGNAL_SPEED", DEFAULT_SPEED))
+    return SystemClock() if speed == 1.0 else ScaledClock(speed)
+
+
+def build_feed(clock: Clock) -> Feed | None:
+    """The signal source this process reads, or None if it was not asked for.
+
+    Three sources are in ADR-002 and one exists. `replay` and `live` are named
+    here so that an operator who sets one gets a sentence saying it is not built
+    yet, rather than a process that silently reads nothing.
+    """
+    source = os.environ.get("SIGNAL_SOURCE", "").strip().lower()
+    if not source or source == "none":
+        return None
+    if source in ("replay", "live"):
+        raise ValueError(
+            f"SIGNAL_SOURCE={source} is one of ADR-002's three sources and is not built yet; "
+            "only 'synthetic' exists"
+        )
+    if source != "synthetic":
+        raise ValueError(f"SIGNAL_SOURCE must be 'synthetic' or unset, not {source!r}")
+
+    seed = int(os.environ.get("SIGNAL_SEED", "0"))
+    speed = getattr(clock, "speed", 1.0)
+    scenario = LINE_A_TWELVE_HOURS
+
+    # Loud, and at the top of the log rather than buried in it. Every ticket this
+    # process issues describes a machine that is not there, and the one thing
+    # that must never happen is somebody reading them as the plant (ADR-044 §5,
+    # the same argument ADR-033 made about synthetic manuals).
+    log.warning(
+        "SYNTHETIC SIGNALS: scenario %s, seed %s, clock at %sx. %s covers %s of plant time "
+        "and will be read in about %.0f minutes. Every work order this process issues is "
+        "about data that does not exist.",
+        scenario.name,
+        seed,
+        speed,
+        scenario.name,
+        scenario.duration,
+        scenario.duration.total_seconds() / speed / 60,
+    )
+    return Feed(SyntheticSource(scenario, seed=seed), decision_origin=clock.now())
+
+
+def build_triggers(config: Config, clock: Clock) -> Triggers:
+    """The rule engine with prediction turned on.
+
+    The tests construct it without a trend window, because a mechanism that could
+    not be switched off would have to be reasoned about in every test of the
+    other half. In a real process both halves run: "monitor **and** predict" is
+    the advisor's first requirement, and half of it has been switched off in
+    every process until now.
+    """
+    policy = config.policy.triggers
+    return Triggers(
+        clock,
+        config.rules.rules,
+        cooldown=timedelta(minutes=policy.cooldown_minutes),
+        eta_grace=timedelta(minutes=policy.eta_grace_minutes),
+        model_of=config.model_of,
+        trend_window=timedelta(minutes=policy.trend.window_minutes),
+        trend_min_samples=policy.trend.min_samples,
+        trend_horizon=timedelta(hours=policy.trend.max_horizon_hours),
+    )
 
 
 def main() -> None:
@@ -41,31 +134,68 @@ def main() -> None:
     )
 
     config = load_config(Path(os.environ.get("CONFIG_DIR", "config")))
-    clock = SystemClock()
+    clock = build_clock()
     pool = make_pool(min_size=2, max_size=4)
 
-    queue = JobQueue(
-        job_class=JobClass.RUNTIME,
-        worker=WORKER,
-        timing=ClassTiming(
-            heartbeat_seconds=config.policy.jobs.runtime.heartbeat_seconds,
-            dead_after_seconds=config.policy.jobs.runtime.dead_after_seconds,
-        ),
+    timing = ClassTiming(
+        heartbeat_seconds=config.policy.jobs.runtime.heartbeat_seconds,
+        dead_after_seconds=config.policy.jobs.runtime.dead_after_seconds,
+    )
+    queue = JobQueue(job_class=JobClass.RUNTIME, worker=WORKER, timing=timing, clock=clock)
+
+    fallback: dict[MachineModel, dict[Severity, int]] = config.policy.fallback_minutes
+    loop = TriggerLoop(
+        triggers=build_triggers(config, clock),
+        orders=WorkOrders(clock, fallback_minutes={str(k): v for k, v in fallback.items()}),
+        config=config,
         clock=clock,
+        feed=build_feed(clock),
     )
 
-    # No handlers. `Worker` reads that as "reap and wait" rather than claiming
-    # work it cannot do - a worker that claimed a job and failed it as an unknown
-    # kind would burn the attempts of a job whose handler ships next month.
-    worker = Worker(queue=queue, pool=pool, clock=clock, handlers={})
+    def seed_the_chain() -> None:
+        with pool.connection() as conn:
+            ensure_tick_queued(conn, queue)
+            conn.commit()
+
+    # **No source, no chain.** With nothing to read, a tick would do nothing but
+    # book the next one - a job row every ten seconds for ever, and a process
+    # claiming to run a trigger loop that has no signals in it. No handlers is
+    # also how `Worker` knows not to claim at all (ADR-040), which is exactly the
+    # behaviour this container had before layer 1 arrived.
+    running = loop.feed is not None
+    worker = Worker(
+        queue=queue,
+        pool=pool,
+        clock=clock,
+        handlers={
+            JobKind.OBSERVE.value: observe_handler(
+                loop, queue, clock, period=timedelta(seconds=timing.heartbeat_seconds)
+            )
+        }
+        if running
+        else {},
+        # A tick that exhausts its attempts schedules no successor, and layer 1
+        # would stop for ever with everything else still running (ADR-044 §3).
+        on_idle=seed_the_chain if running else None,
+    )
     worker.install_signal_handlers()
 
-    log.info(
-        "worker-runtime %s: no handlers yet, reaping %s jobs every %ss",
-        WORKER,
-        JobClass.RUNTIME.value,
-        queue.timing.heartbeat_seconds,
-    )
+    if running:
+        seed_the_chain()
+        log.info(
+            "worker-runtime %s: trigger loop every %ss of clock time, signals from %s",
+            WORKER,
+            timing.heartbeat_seconds,
+            os.environ["SIGNAL_SOURCE"],
+        )
+    else:
+        log.info(
+            "worker-runtime %s: SIGNAL_SOURCE is not set, so there is no trigger loop. "
+            "Reaping %s jobs every %ss and claiming nothing.",
+            WORKER,
+            JobClass.RUNTIME.value,
+            timing.heartbeat_seconds,
+        )
     try:
         worker.run_forever()
     finally:
