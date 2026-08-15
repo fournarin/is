@@ -24,6 +24,7 @@ REPO_CONFIG = Path("config")
 
 PLANT: dict[str, Any] = {
     "version": 1,
+    "timezone": "Asia/Bangkok",
     "lines": [
         {
             "line_id": "line-a",

@@ -15,7 +15,8 @@ on paper.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from collections.abc import Iterable
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -172,6 +173,60 @@ class PMTask(BaseModel):
 
     def is_due(self, now: datetime) -> bool:
         return now >= self.due_at
+
+
+class ShiftWindow(BaseModel):
+    """A shift on a particular day, resolved to absolute moments.
+
+    `on_date` is the **local date the shift started on**, which is what a roster
+    is written against: the night shift running into Tuesday morning is Monday
+    night's shift, and its assignments are filed under Monday.
+    """
+
+    model_config = _FROZEN
+
+    shift_id: ShiftId
+    on_date: date
+    starts_at: datetime
+    ends_at: datetime
+
+    def contains(self, moment: datetime) -> bool:
+        return self.starts_at <= moment < self.ends_at
+
+
+def shift_at(
+    shifts: Iterable[ShiftDefinition], moment: datetime, zone: tzinfo
+) -> ShiftWindow | None:
+    """Which shift covers this moment, and the date its roster is filed under.
+
+    `moment` is UTC (everything in this system is); the shift's boundaries are
+    local wall-clock times in the plant's own zone, because that is what they
+    are - the hour people arrive. Converting here rather than at either end is
+    what keeps the two facts from being confused (ADR-028, ADR-045 §7).
+
+    None where no shift covers the moment. A plant that runs sixteen hours a day
+    has eight hours with no shift, and "no shift" is an answer the caller has to
+    handle rather than a case to paper over with the nearest one.
+    """
+    local = moment.astimezone(zone)
+    for shift in shifts:
+        # Two candidate days: a shift that crosses midnight and covers 01:00
+        # started yesterday. Checked in order, so the answer for a moment inside
+        # two overlapping shifts is the earlier-starting one - overlapping shifts
+        # are a config error rather than something to resolve here.
+        for days_back in (0, 1):
+            starts_local = datetime.combine(
+                local.date() - timedelta(days=days_back), shift.starts_at, tzinfo=zone
+            )
+            window = ShiftWindow(
+                shift_id=shift.shift_id,
+                on_date=starts_local.date(),
+                starts_at=starts_local.astimezone(UTC),
+                ends_at=(starts_local + shift.length).astimezone(UTC),
+            )
+            if window.contains(moment):
+                return window
+    return None
 
 
 def shift_capacity_minutes(

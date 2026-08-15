@@ -25,6 +25,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import yaml
 from pydantic import ValidationError
@@ -70,6 +71,10 @@ class Config:
         self.plant = plant
         self.rules = rules
         self.policy = policy
+        # Resolved once. Shift boundaries are local wall-clock times and every
+        # moment they are compared against is UTC, so somebody has to hold the
+        # zone that joins them (ADR-045 section 7).
+        self.timezone = ZoneInfo(plant.timezone)
 
         stations: dict[StationId, Station] = {}
         station_of: dict[MachineId, StationId] = {}
