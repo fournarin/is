@@ -335,6 +335,78 @@ class TestStopping:
         assert clock.now() == START + timedelta(seconds=TIMING.heartbeat_seconds)
 
 
+class TestTheIdleCallback:
+    """What `worker-runtime` restarts a dead trigger chain with (ADR-044 §3).
+
+    It hangs off the idle path rather than a timer for the reason ADR-039 gave
+    for reaping there: an empty queue is exactly when the worker has nothing else
+    to do, and a second thread is a second thing that can be mid-write when
+    SIGTERM arrives.
+    """
+
+    def _stop_after_one_sleep(self, worker: Worker, clock: SimulatedClock) -> None:
+        original = clock.sleep
+
+        def sleep_once(seconds: float) -> None:
+            original(seconds)
+            worker.stopping = True
+
+        clock.sleep = sleep_once  # type: ignore[method-assign]
+
+    def test_it_runs_when_the_queue_comes_up_empty(
+        self, pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        clock = SimulatedClock(START)
+        called: list[int] = []
+        worker = Worker(
+            queue=_queue(clock),
+            pool=pool,
+            clock=clock,
+            handlers={},
+            on_idle=lambda: called.append(1),
+        )
+        self._stop_after_one_sleep(worker, clock)
+
+        worker.run_forever()
+
+        assert called == [1]
+
+    def test_it_does_not_run_while_there_is_work(
+        self, conn: Connection[Any], pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        clock = SimulatedClock(START)
+        called: list[int] = []
+        _queue(clock).enqueue(conn, kind=JobKind.INGEST)
+        conn.commit()
+        worker = Worker(
+            queue=_queue(clock),
+            pool=pool,
+            clock=clock,
+            handlers={JobKind.INGEST.value: lambda _, job: None},
+            on_idle=lambda: called.append(1),
+        )
+
+        assert worker.run_one() is True
+        assert called == []
+
+    def test_a_callback_that_raises_does_not_stop_the_worker(
+        self, pool: ConnectionPool[Connection[Any]]
+    ) -> None:
+        """It runs on every empty poll. A database blip during it is a blip, and
+        letting it out would stop a worker that is otherwise healthy."""
+        clock = SimulatedClock(START)
+
+        def explode() -> None:
+            raise RuntimeError("the database went away for a moment")
+
+        worker = Worker(queue=_queue(clock), pool=pool, clock=clock, handlers={}, on_idle=explode)
+        self._stop_after_one_sleep(worker, clock)
+
+        worker.run_forever()
+
+        assert clock.now() == START + timedelta(seconds=TIMING.heartbeat_seconds)
+
+
 def _status(conn: Connection[Any]) -> str:
     row = conn.execute("SELECT status FROM job ORDER BY id LIMIT 1").fetchone()
     assert row is not None

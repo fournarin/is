@@ -7,11 +7,12 @@
 # makes runtime generation physically impossible rather than merely forbidden,
 # and scripts/check_llm_isolation.py fails CI if that ever changes.
 #
-# Status: `api`, `worker-authoring` and `worker-runtime` run. worker-runtime has
-# no handlers yet - layers 1 and 3 have not been built - so it claims nothing and
-# only reaps; it exists because the alternative was a container crash-looping
-# under `restart: unless-stopped` on every `docker compose up`. `web` still has
-# no entrypoint and arrives with the review screen.
+# Status: `api`, `worker-authoring` and `worker-runtime` run. worker-runtime now
+# runs the trigger loop - signals in, Findings out, tickets issued (ADR-044) -
+# and reads SYNTHETIC signals, because the plant has given us nothing to read
+# yet; see the comment on its SIGNAL_SOURCE below before showing this to
+# anybody. Layer 3 is not built, so the tickets it issues sit in the queue
+# unassigned. `web` still has no entrypoint and arrives with the review screen.
 
 name: pdm
 
@@ -108,6 +109,19 @@ services:
       # Same reasoning one store along: a worker pointed at no Qdrant indexes
       # manuals into nothing and reports success (ADR-035).
       QDRANT_URL: http://qdrant:6333
+      # Layer 1's data. THIS IS INVENTED (ADR-032, ADR-044 section 5): every
+      # work order this container issues describes a machine that is not there,
+      # and the process says so at boot in a warning. It is set here because the
+      # plant has not given us a signal connection and the whole project is
+      # built so that nothing waits for one - not because synthetic is a
+      # sensible default. Unset it and the worker reaps only; there is no
+      # default in the code, deliberately.
+      SIGNAL_SOURCE: ${SIGNAL_SOURCE:-synthetic}
+      # 60x: the twelve-hour scenario is read in about twelve minutes, which is
+      # one sitting (ADR-007). At 1.0 it runs at plant speed and the first
+      # Finding arrives in about two hours.
+      SIGNAL_SPEED: ${SIGNAL_SPEED:-60}
+      SIGNAL_SEED: ${SIGNAL_SEED:-0}
     env_file:
       - path: .env
         required: false

@@ -67,6 +67,12 @@ class Worker:
     pool: ConnectionPool[Connection[Any]]
     clock: Clock
     handlers: dict[str, Handler]
+    # Run where the reaper runs: when a claim finds nothing. `worker-runtime`
+    # uses it to put the trigger tick back if the chain is gone, which is the one
+    # failure mode of a job that schedules its own successor - it stops for ever,
+    # silently, with the rest of the system still running (ADR-044 section 3).
+    # The authoring worker passes nothing and is unchanged.
+    on_idle: Callable[[], None] | None = field(default=None)
     # Set by SIGTERM. Read between jobs, never mid-job: a job abandoned halfway
     # is one the reaper has to rediscover fifteen minutes later, and a
     # `docker compose down` during an ingest should not cost that (ADR-039).
@@ -90,6 +96,7 @@ class Worker:
                 # and a timer thread is a second thing that can be mid-
                 # transaction when SIGTERM arrives (ADR-039).
                 self.reap()
+                self.idle()
                 self.clock.sleep(self.queue.timing.heartbeat_seconds)
 
     def run_one(self) -> bool:
@@ -208,6 +215,21 @@ class Worker:
                 "job %s was abandoned by %s and is back in the queue", job.id, job.claimed_by
             )
         return returned
+
+    def idle(self) -> None:
+        """The callback for a worker with something to do when there is nothing.
+
+        Failures are logged and swallowed. This runs on every empty poll, so a
+        database blip during it is a blip; letting it out would stop a worker
+        that is otherwise healthy, for a housekeeping call that will happen again
+        in `heartbeat_seconds`.
+        """
+        if self.on_idle is None:
+            return
+        try:
+            self.on_idle()
+        except Exception:
+            log.exception("the idle callback failed; the loop continues")
 
     def fail(self, job: Job, error: BaseException) -> None:
         """Record the failure on its own connection.

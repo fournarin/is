@@ -276,6 +276,15 @@ class Triggers:
         """
         return repo.expire_overdue_predictions(conn, now=self.clock.now(), grace=self.eta_grace)
 
+    def live_refs(self, conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], FindingRef]:
+        """Every open or acknowledged Finding, as (machine, rule) -> reference.
+
+        The other half of the trigger loop's `under_repair` (ADR-044 §6): which
+        rule a machine already has work open against is this map intersected with
+        the references layer 2 still has open tickets for.
+        """
+        return repo.refs_of_live(conn)
+
     def resolve(self, conn: Connection[Any], finding_ref: FindingRef) -> bool:
         """The condition is over, and the cooldown starts now."""
         return repo.resolve(conn, finding_ref, now=self.clock.now())

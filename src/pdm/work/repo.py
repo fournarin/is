@@ -219,6 +219,59 @@ def set_status(
         return cur.rowcount == 1
 
 
+def open_finding_refs(conn: Connection[Any]) -> set[FindingRef]:
+    """Which Findings still have an open ticket against them.
+
+    Half of what the trigger loop needs to say a machine is under repair
+    (ADR-044 §6); the other half is the live Findings themselves. Deliberately
+    thin - `open_orders` would deserialise every playbook snapshot in the queue
+    to answer a question about references, ten seconds apart, for ever.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT finding_ref FROM work_order "
+            "WHERE finding_ref IS NOT NULL AND status = ANY(%s)",
+            (list(OPEN_STATUSES),),
+        )
+        return {FindingRef(str(row[0])) for row in cur.fetchall()}
+
+
+def cancel_untouched_for_finding(
+    conn: Connection[Any], finding_ref: FindingRef, *, now: datetime
+) -> list[str]:
+    """Withdraw the orders for this Finding that nobody has picked up (ADR-044 §7).
+
+    For the trigger loop, when the Finding behind an order is overtaken - a
+    prediction superseded by the detection it foresaw, or expired without the
+    crossing happening. Left in the queue, those orders are work for a fault that
+    has already been ticketed or never happened, and `load_ratio` is a sum over
+    the whole open queue (design.md 13.2).
+
+    **The `queued` condition is in the statement, not in the caller.** Between
+    reading an order and cancelling it a technician can accept it, and a check
+    made in Python would cancel the ticket in somebody's hand. What is returned
+    is what was actually cancelled, so a caller cannot report a withdrawal that
+    did not happen - the same correction slice 5.1 had to make to `supersede`.
+
+    No outcome is written. The constraint in migration 0006 requires one only for
+    `closed`, and `no_problem_found` here would feed the only false-alarm signal
+    Loop 2 will ever have with events no person observed. Why it was cancelled is
+    in the Finding this order points at: `expired`, or `superseded` with the
+    reference to whatever replaced it.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET status = 'cancelled', closed_at = %s
+             WHERE finding_ref = %s AND status = 'queued'
+             RETURNING work_order_ref
+            """,
+            (now, finding_ref),
+        )
+        return [str(row[0]) for row in cur.fetchall()]
+
+
 def close(
     conn: Connection[Any],
     work_order_ref: str,
