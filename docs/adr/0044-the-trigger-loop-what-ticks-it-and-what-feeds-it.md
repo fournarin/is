@@ -83,19 +83,31 @@ running - including one waiting out a retry backoff - nothing is enqueued.
 Ordinary retries stay with the queue; this catches only the case where the chain
 is actually gone.
 
-### 4. Signals arrive through a paced feed, and source time is never rewritten
+### 4. Signals arrive through a paced feed, and compression belongs to the clock
+
+*Written first with a `speed` factor on the feed, and corrected before merge -
+the correction is the useful part, so both are kept.*
 
 `signals/feed.py` holds a source's iterator and hands out, per tick, the signals
-whose source time has come due. Due is computed by mapping decision time onto the
-scenario's timeline from a fixed origin:
+whose source time has come due, from a fixed origin:
 
 ```
-source_due = source_origin + (now − decision_origin) × speed
+source_due = source_origin + (now − decision_origin)
 ```
 
-`speed` is what makes ADR-007's demo and ADR-002's twelve-hour degradation
-compatible: at 60× a shift's worth of wear is watchable in twelve minutes, and
-`SimulatedClock` can compress it further with no change here.
+**One second of decision time buys one second of scenario, and a compressed demo
+runs a compressed clock** - `ScaledClock`, real sleeps and an accelerated `now`,
+which is what ADR-028 built the port for and what `SimulatedClock` cannot do in a
+long-running process (its `sleep` returns instantly and the worker would spin).
+
+The first version put the factor on the feed instead, handing signals over 60×
+faster while decision time ran at one second per second. That splits the two axes
+apart, and **every window in this system is measured on decision time**: at 60×
+a ticket read "expected to reach the threshold in about six hours" for a crossing
+six minutes away, `expire_stale_predictions` could never fire inside a
+twelve-minute run - making the whole withdrawal path this record adds
+unreachable in the only mode anybody would demo - and the thirty-minute cooldown
+covered thirty *hours* of plant time. One knob, in the port that exists for it.
 
 **A signal's `timestamp` is never modified.** It is source time, it is what the
 debounce measures duration with, and it is what `SyntheticSource.ground_truth()`
@@ -111,9 +123,11 @@ loop that never ends would make "the demo ran for an hour" mean nothing.
 ### 5. A synthetic source must be asked for, and says what it is
 
 `SIGNAL_SOURCE` has no default in code. Unset, `worker-runtime` runs exactly as
-it does today: no trigger loop, reaping only, and a log line saying layer 1 is
-idle because no source was configured - so a plant deployment that has not been
-wired to OPC UA yet cannot quietly invent its own data.
+it does today: **no handlers and no chain**, reaping only, and a log line saying
+layer 1 is idle because no source was configured - so a plant deployment that has
+not been wired to OPC UA yet cannot quietly invent its own data. Starting the
+chain anyway would mean a job row every ten seconds for ever to run an expiry
+sweep over predictions nothing can produce.
 
 Set to `synthetic`, the process announces at boot which scenario, seed and speed
 it is running, and states that every ticket it produces describes a machine that
@@ -131,16 +145,30 @@ A repeat is not a ticket, which is the whole of ADR-023 and is already true one
 level down: `observe` returns repeats as counts, and this handler issues orders
 only from what was raised.
 
-`under_repair` is assembled from the two queries that already exist -
-`triggers.repo.refs_of_live` and `work.repo.open_orders` - by intersecting them:
-a live Finding with an open ticket against it is a (machine, rule) somebody is
-working on. Not a query per machine, and not a new column: the trace-back
-direction `finding_ref` was kept for (ADR-030) is exactly this.
+`under_repair` is read from the **open tickets**, and from the Findings behind
+them in whatever state those are: the references an open order carries, resolved
+to (machine, rule). Not a query per machine, and not a new column - the
+trace-back direction `finding_ref` was kept for (ADR-030) is exactly this.
+
+*This too was written the other way round: the live Findings that had an open
+ticket. That is dead code, and the review found it before merge. A live Finding
+suppresses its own rule as a repeat (ADR-023 §2) several branches before the
+repair check is reached, so a map built from live Findings can only contain pairs
+that are already handled - the mechanism would have been carried, and tested, and
+never once have fired. The case ADR-023 §4 is actually about is invisible from
+that side: a technician resolves the Finding and then spends an hour repairing
+the machine, the cooldown covers thirty minutes of it, and for the rest the rule
+is free to raise a second ticket for the job somebody is inside the machine
+doing.*
 
 ### 7. A ticket nobody has touched is cancelled when its Finding is overtaken
 
 When a detection supersedes a prediction, or the expiry sweep retires one, the
-prediction's ticket is cancelled **if it is still `queued`**. If somebody has
+prediction's ticket is cancelled **if it is still `queued`**. Forecasts are
+ticketed before detections within a tick, so that a batch carrying both the trend
+and the crossing it predicted has a ticket to withdraw when it withdraws one -
+the other order leaves a ticket issued against an already-superseded Finding,
+which nothing can ever retire. If somebody has
 taken it - assigned, in progress, handed over - it is left alone. A ticket
 disappearing from under a technician who is standing at the machine is worse than
 a ticket whose sentence has aged, and the second ticket the detection raises
@@ -198,8 +226,24 @@ somebody has.
   the feed has already handed those signals over, and the next tick asks for what
   is due at *its* time. A retry does not re-read them. This is acceptable because
   a rule fires on a condition that persists - a hot motor is still hot ten seconds
-  later - and unacceptable for anything that must see every sample, which nothing
-  in layer 1 does.
+  later - and because the in-memory state does *not* roll back: the debounce run
+  and the trend window survive, so the very next hot reading raises the Finding
+  the lost batch would have raised, rather than starting the excess again. It
+  would be unacceptable for anything that must see every sample, which nothing in
+  layer 1 is.
+- **The job table grows by a row per tick** - one every ten seconds, about
+  eight and a half thousand a day, where the authoring queue produced one per
+  manual. They are small and the claim reads a partial index of queued rows, so
+  nothing slows down; but finished ticks are a heartbeat rather than evidence,
+  and unlike an ingest job nobody will ever want to read one. Pruning them needs
+  a retention number, and a number with no source is what `workflow.md` 4.1
+  refuses, so it is left for the slice that has one.
+- **Nothing collapses two chains back into one.** `ensure_tick_queued` only ever
+  adds, so a fork - two replicas, or a commit that was in doubt - leaves two
+  ticks running in parallel for ever. Harmless to the data (the unique index
+  turns the duplicate work into `lost_races`) and doubling the tick rate;
+  the same one-replica assumption as the first consequence, and it ends the same
+  way, with a record.
 - **The first fit is the one the ticket carries**, and
   `docs/prediction-baseline.md` says the first fit is the least accurate, because
   error grows with horizon. Re-issuing a ticket when the ETA moves further than

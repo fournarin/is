@@ -11,7 +11,7 @@ with nothing behind it, and a ticket referring to a Finding that was rolled back
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from datetime import timedelta
 from typing import Any
 
@@ -276,14 +276,16 @@ class Triggers:
         """
         return repo.expire_overdue_predictions(conn, now=self.clock.now(), grace=self.eta_grace)
 
-    def live_refs(self, conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], FindingRef]:
-        """Every open or acknowledged Finding, as (machine, rule) -> reference.
+    def rules_behind(
+        self, conn: Connection[Any], refs: Collection[FindingRef]
+    ) -> list[tuple[MachineId, RuleId]]:
+        """Which (machine, rule) these Findings belong to, in any state.
 
-        The other half of the trigger loop's `under_repair` (ADR-044 §6): which
-        rule a machine already has work open against is this map intersected with
-        the references layer 2 still has open tickets for.
+        The trigger loop's half of `under_repair` (ADR-044 §6). The state is
+        deliberately not filtered: the case ADR-023 §4 is about is a Finding
+        resolved an hour ago whose repair is still under way.
         """
-        return repo.refs_of_live(conn)
+        return repo.rules_behind(conn, refs)
 
     def resolve(self, conn: Connection[Any], finding_ref: FindingRef) -> bool:
         """The condition is over, and the cooldown starts now."""

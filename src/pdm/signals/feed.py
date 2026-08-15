@@ -9,7 +9,14 @@ is also somebody else's: it starts in March, and the process reading it does not
 This module holds the mapping between the two, and it is the only place in the
 system where they touch:
 
-    source_due = source_origin + (now - decision_origin) x speed
+    source_due = source_origin + (now - decision_origin)
+
+One second of decision time buys one second of scenario, and **compression is
+the Clock's job** (`ScaledClock`). This was a `speed` factor here first, which
+put the two axes at different rates: every window in the system is measured on
+decision time - the cooldown, the ETA on a ticket, the expiry sweep - so at 60x
+a ticket read "in about six hours" for something six minutes away, and a
+prediction could never reach its own expiry. One knob, in the port built for it.
 
 **A signal's timestamp is never modified.** It is what the debounce measures
 duration with, and what `SyntheticSource.ground_truth()` is anchored to
@@ -24,7 +31,7 @@ function in the system that needs one (ADR-028).
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from pdm.contracts import Signal
 from pdm.signals.domain import SignalSource
@@ -33,32 +40,20 @@ from pdm.signals.domain import SignalSource
 class Feed:
     """One source, paced against decision time.
 
-    `speed` is what makes ADR-007's demo and ADR-002's twelve-hour degradation
-    compatible: at 60x a shift's worth of wear is watchable in twelve minutes,
-    and a `SimulatedClock` compresses it further with no change here. At 1.0 the
-    scenario runs at plant speed, which is what a replay of a real day wants.
-
     The origin is fixed at construction rather than at the first call, so that a
     process which starts and then waits does not silently rewind its own
-    timeline.
+    timeline. How fast that timeline moves is the clock's business: under a
+    `ScaledClock` at 60x, a shift's worth of wear arrives in twelve minutes and
+    nothing here changes.
     """
 
-    __slots__ = ("_ahead", "_decision_origin", "_done", "_iterator", "_source_origin", "_speed")
+    __slots__ = ("_ahead", "_decision_origin", "_done", "_iterator", "_source_origin")
 
-    def __init__(
-        self,
-        source: SignalSource,
-        *,
-        decision_origin: datetime,
-        speed: float = 1.0,
-    ) -> None:
-        if speed <= 0:
-            raise ValueError(f"a feed's speed must be positive, not {speed}")
+    def __init__(self, source: SignalSource, *, decision_origin: datetime) -> None:
         if decision_origin.tzinfo is None:
             raise ValueError("a feed needs a timezone-aware origin (ADR-028)")
         self._iterator: Iterator[Signal] = iter(source.stream())
         self._decision_origin = decision_origin
-        self._speed = speed
         # One signal of lookahead: read to learn where the source's timeline
         # begins, then held until it is due. Read lazily, because constructing a
         # feed must not start a generator that may open a file or a connection.
@@ -91,8 +86,7 @@ class Feed:
             return []
         assert self._source_origin is not None
 
-        elapsed = timedelta(seconds=(now - self._decision_origin).total_seconds() * self._speed)
-        horizon = self._source_origin + elapsed
+        horizon = self._source_origin + (now - self._decision_origin)
 
         batch: list[Signal] = []
         while True:

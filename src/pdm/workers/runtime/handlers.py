@@ -108,6 +108,16 @@ class TriggerLoop:
         re-fit in `observe`, so expiry afterwards retires only the predictions
         nothing is refreshing. Expiring first would retire a prediction on the
         strength of an ETA that this very batch was about to correct.
+
+        **Forecasts are ticketed before detections**, which is a second ordering
+        with a second reason. One batch can hold both the trend and the crossing
+        it predicted - certain after any stall, since the feed hands over its
+        whole backlog - and `observe` will already have marked the prediction
+        superseded. Ticketing the detection first would withdraw a ticket that
+        did not exist yet, and the forecast's ticket, issued a moment later
+        against a Finding that is already superseded, could never be withdrawn by
+        anything: expiry only touches open and acknowledged records. Two open
+        tickets for one fault, for ever, which is what ADR-023 §7 exists to stop.
         """
         signals, unknown = self._due()
         issued: list[str] = []
@@ -117,7 +127,7 @@ class TriggerLoop:
 
         if signals:
             observation = self.triggers.observe(conn, signals, under_repair=self.under_repair(conn))
-            for raised in (*observation.raised, *observation.forecast):
+            for raised in (*observation.forecast, *observation.raised):
                 self._issue(conn, raised, issued, cancelled, unpriced)
 
         expired = self.triggers.expire_stale_predictions(conn)
@@ -158,18 +168,30 @@ class TriggerLoop:
     def under_repair(self, conn: Connection[Any]) -> dict[MachineId, frozenset[RuleId]]:
         """Which (machine, rule) pairs somebody already has work open against.
 
-        Two queries and an intersection, rather than a query per machine: a live
-        Finding whose reference an open ticket still carries is a rule being
-        worked on. The trace-back direction `finding_ref` was kept for (ADR-030)
-        is exactly this, and it is the last piece slice 5.1 left for the loop.
+        Read from the **tickets**, and the Findings behind them whatever state
+        those are in. This was written the other way round first - the live
+        Findings that had an open ticket - and it was dead code: a live Finding
+        suppresses its own rule as a repeat (ADR-023 §2) before the repair check
+        is ever reached, so the map could only ever contain pairs that were
+        already handled.
+
+        The case ADR-023 §4 is actually about is the one that derivation could
+        not see. A technician resolves the Finding and then spends an hour
+        repairing the machine; the cooldown covers thirty minutes of that, and
+        for the rest of it the rule is free to raise a second Finding and a
+        second ticket for the job somebody is standing inside the machine doing.
+
+        Two queries and a join in Python, rather than one SQL join across two
+        modules' tables: `work_order` belongs to layer 2 and `finding` to
+        layer 1, and a statement naming both would be the coupling ADR-030 keeps
+        out of the import graph, hidden in a string.
         """
         open_refs = self.orders.open_finding_refs(conn)
         if not open_refs:
             return {}
         pairs: dict[MachineId, set[RuleId]] = defaultdict(set)
-        for (machine_id, rule_id), finding_ref in self.triggers.live_refs(conn).items():
-            if finding_ref in open_refs:
-                pairs[machine_id].add(rule_id)
+        for machine_id, rule_id in self.triggers.rules_behind(conn, open_refs):
+            pairs[machine_id].add(rule_id)
         return {machine_id: frozenset(rules) for machine_id, rules in pairs.items()}
 
     def _issue(

@@ -11,9 +11,13 @@ than a timer, and the period is the runtime class's own heartbeat interval - no
 new constant (ADR-044 §1, §2).
 
 Its signal source must be asked for. With `SIGNAL_SOURCE` unset the process
-behaves exactly as it did before this slice - reaping only - because a deployment
-that has not been wired to the plant yet must not quietly invent its own data
-(ADR-044 §5).
+behaves exactly as it did before this slice - no handlers, no chain, reaping only
+- because a deployment that has not been wired to the plant yet must not quietly
+invent its own data (ADR-044 §5).
+
+`SIGNAL_SPEED` scales the **clock**, not the feed. A compressed run moves source
+time and decision time together, so a ticket's ETA, the cooldown and the expiry
+sweep all mean in a demo what they mean in the plant (ADR-044 §4).
 
 It still claims `job_class = runtime` and nothing else (invariant 12).
 """
@@ -27,7 +31,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from pdm.contracts import MachineModel, Severity
-from pdm.platform.clock import Clock, SystemClock
+from pdm.platform.clock import Clock, ScaledClock, SystemClock
 from pdm.platform.config import load_config
 from pdm.platform.config.loader import Config
 from pdm.platform.db import make_pool
@@ -42,11 +46,23 @@ log = logging.getLogger(__name__)
 
 WORKER = f"{socket.gethostname()}:{os.getpid()}"
 
-# How much faster than the plant a synthetic run moves. Provenance: recorded
+# How much faster than the plant a compressed run moves. Provenance: recorded
 # decision (ADR-044 §4). Sixty turns the twelve-hour demo scenario into twelve
 # minutes, which is one sitting - the requirement ADR-007 puts on a demo the
 # advisor can negotiate with, and the reason `Clock` is a port at all (ADR-028).
 DEFAULT_SPEED = 60.0
+
+
+def build_clock() -> Clock:
+    """Real time, or real time running fast when a demo is being compressed.
+
+    The speed belongs here rather than on the feed. Every window in the system is
+    measured on decision time - the cooldown, the ETA a ticket shows, the expiry
+    sweep - so a feed that ran fast against a clock that did not would put a
+    ticket's "in about six hours" six minutes away (ADR-044 §4).
+    """
+    speed = float(os.environ.get("SIGNAL_SPEED", DEFAULT_SPEED))
+    return SystemClock() if speed == 1.0 else ScaledClock(speed)
 
 
 def build_feed(clock: Clock) -> Feed | None:
@@ -68,7 +84,7 @@ def build_feed(clock: Clock) -> Feed | None:
         raise ValueError(f"SIGNAL_SOURCE must be 'synthetic' or unset, not {source!r}")
 
     seed = int(os.environ.get("SIGNAL_SEED", "0"))
-    speed = float(os.environ.get("SIGNAL_SPEED", DEFAULT_SPEED))
+    speed = getattr(clock, "speed", 1.0)
     scenario = LINE_A_TWELVE_HOURS
 
     # Loud, and at the top of the log rather than buried in it. Every ticket this
@@ -76,7 +92,7 @@ def build_feed(clock: Clock) -> Feed | None:
     # that must never happen is somebody reading them as the plant (ADR-044 §5,
     # the same argument ADR-033 made about synthetic manuals).
     log.warning(
-        "SYNTHETIC SIGNALS: scenario %s, seed %s, %sx speed. %s covers %s of plant time "
+        "SYNTHETIC SIGNALS: scenario %s, seed %s, clock at %sx. %s covers %s of plant time "
         "and will be read in about %.0f minutes. Every work order this process issues is "
         "about data that does not exist.",
         scenario.name,
@@ -86,11 +102,7 @@ def build_feed(clock: Clock) -> Feed | None:
         scenario.duration,
         scenario.duration.total_seconds() / speed / 60,
     )
-    return Feed(
-        SyntheticSource(scenario, seed=seed),
-        decision_origin=clock.now(),
-        speed=speed,
-    )
+    return Feed(SyntheticSource(scenario, seed=seed), decision_origin=clock.now())
 
 
 def build_triggers(config: Config, clock: Clock) -> Triggers:
@@ -122,7 +134,7 @@ def main() -> None:
     )
 
     config = load_config(Path(os.environ.get("CONFIG_DIR", "config")))
-    clock = SystemClock()
+    clock = build_clock()
     pool = make_pool(min_size=2, max_size=4)
 
     timing = ClassTiming(
@@ -145,6 +157,12 @@ def main() -> None:
             ensure_tick_queued(conn, queue)
             conn.commit()
 
+    # **No source, no chain.** With nothing to read, a tick would do nothing but
+    # book the next one - a job row every ten seconds for ever, and a process
+    # claiming to run a trigger loop that has no signals in it. No handlers is
+    # also how `Worker` knows not to claim at all (ADR-040), which is exactly the
+    # behaviour this container had before layer 1 arrived.
+    running = loop.feed is not None
     worker = Worker(
         queue=queue,
         pool=pool,
@@ -153,20 +171,31 @@ def main() -> None:
             JobKind.OBSERVE.value: observe_handler(
                 loop, queue, clock, period=timedelta(seconds=timing.heartbeat_seconds)
             )
-        },
+        }
+        if running
+        else {},
         # A tick that exhausts its attempts schedules no successor, and layer 1
         # would stop for ever with everything else still running (ADR-044 §3).
-        on_idle=seed_the_chain,
+        on_idle=seed_the_chain if running else None,
     )
     worker.install_signal_handlers()
 
-    seed_the_chain()
-    log.info(
-        "worker-runtime %s: trigger loop every %ss, signals from %s",
-        WORKER,
-        timing.heartbeat_seconds,
-        "no source (reaping only)" if loop.feed is None else os.environ["SIGNAL_SOURCE"],
-    )
+    if running:
+        seed_the_chain()
+        log.info(
+            "worker-runtime %s: trigger loop every %ss of clock time, signals from %s",
+            WORKER,
+            timing.heartbeat_seconds,
+            os.environ["SIGNAL_SOURCE"],
+        )
+    else:
+        log.info(
+            "worker-runtime %s: SIGNAL_SOURCE is not set, so there is no trigger loop. "
+            "Reaping %s jobs every %ss and claiming nothing.",
+            WORKER,
+            JobClass.RUNTIME.value,
+            timing.heartbeat_seconds,
+        )
     try:
         worker.run_forever()
     finally:

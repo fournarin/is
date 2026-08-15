@@ -134,9 +134,10 @@ def _loop(
         orders=WorkOrders(clock, fallback_minutes=FALLBACK if fallback is None else fallback),
         config=CONFIG,
         clock=clock,
-        # Plant speed, so a test advances the clock by the interval the signals
-        # were sampled at and gets exactly those signals.
-        feed=Feed(Recorded(signals), decision_origin=clock.now(), speed=1.0),
+        # A test advances the clock by the interval the signals were sampled at
+        # and gets exactly those signals. A compressed demo differs only in how
+        # fast the clock moves (ADR-044 §4).
+        feed=Feed(Recorded(signals), decision_origin=clock.now()),
     )
 
 
@@ -277,6 +278,34 @@ class TestAPredictionOvertaken:
         assert order is not None and order.finding_ref is not None
         assert findings.status_of(conn, order.finding_ref) is FindingStatus.SUPERSEDED
 
+    def test_a_batch_carrying_both_the_trend_and_the_crossing_leaves_one_ticket(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        """One tick, both halves. The feed hands over its whole backlog after any
+        stall, so this arrives on its own eventually.
+
+        Written because ticketing detections first passed every other test in
+        this class: they all advance the clock between the two, so the
+        prediction's ticket always existed by the time the detection withdrew it.
+        In one batch it does not, the withdrawal matches nothing, and the
+        forecast's ticket is then issued against a Finding that is already
+        superseded - which expiry cannot touch and no later detection will
+        supersede twice. Two open tickets for one fault, for ever.
+        """
+        signals = _warming() + _two_minutes_of_heat(NOW + timedelta(hours=3))
+        loop = _loop(clock, signals)
+        clock.advance(timedelta(hours=4))
+
+        tick = loop.tick(conn)
+
+        assert len(tick.observation.forecast) == 1
+        assert len(tick.observation.raised) == 1
+        assert len(tick.issued) == 2
+        assert len(tick.cancelled) == 1
+        open_now = _open_orders(conn)
+        assert len(open_now) == 1
+        assert open_now[0][1].finding_kind is FindingKind.DETECTED
+
     def test_a_ticket_somebody_has_accepted_is_left_alone(
         self, conn: Connection[Any], clock: SimulatedClock
     ) -> None:
@@ -335,7 +364,38 @@ class TestAPredictionOvertaken:
 
 
 class TestUnderRepair:
-    """The last piece slice 5.1 left for the loop to fill in."""
+    """The last piece slice 5.1 left for the loop to fill in.
+
+    The first test is the one that matters, and it is the one the first version
+    of `under_repair` could not have passed: the map was built from *live*
+    Findings, and a live Finding suppresses its own rule as a repeat long before
+    the repair check is reached. The mechanism would have been shipped, carried a
+    test, and never once fired.
+    """
+
+    def test_a_rule_stays_suppressed_while_the_repair_is_open(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        """ADR-023 §4's actual case. The technician resolves the Finding and then
+        spends an hour on the machine; the cooldown covers thirty minutes of
+        that, and for the rest of it nothing else stops the rule raising a second
+        ticket for the job somebody is standing inside the machine doing."""
+        later = NOW + timedelta(minutes=45)
+        loop = _loop(clock, _two_minutes_of_heat(NOW) + _two_minutes_of_heat(later))
+        clock.advance(timedelta(minutes=3))
+        first = loop.tick(conn)
+        loop.triggers.resolve(conn, first.observation.raised[0].finding_ref)
+
+        # Past the thirty-minute cooldown, with the repair still open.
+        clock.advance(timedelta(minutes=45))
+        again = loop.tick(conn)
+
+        # Once, on the third reading: the first two are still building the run
+        # the rule's `for_seconds` asks for, and only a rule that would have
+        # fired can be suppressed.
+        assert (again.observation.suppressed, again.observation.quiet) == (1, 2)
+        assert again.issued == ()
+        assert len(_open_orders(conn)) == 1
 
     def test_a_rule_with_an_open_ticket_is_reported_as_under_repair(
         self, conn: Connection[Any], clock: SimulatedClock
@@ -343,6 +403,17 @@ class TestUnderRepair:
         loop = _loop(clock, _two_minutes_of_heat(NOW))
         clock.advance(timedelta(minutes=3))
         loop.tick(conn)
+
+        assert loop.under_repair(conn) == {MOTOR: frozenset({TEMP_RULE})}
+
+    def test_a_resolved_finding_still_reports_its_rule(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        """No status filter, deliberately: the repair outlives the Finding."""
+        loop = _loop(clock, _two_minutes_of_heat(NOW))
+        clock.advance(timedelta(minutes=3))
+        tick = loop.tick(conn)
+        loop.triggers.resolve(conn, tick.observation.raised[0].finding_ref)
 
         assert loop.under_repair(conn) == {MOTOR: frozenset({TEMP_RULE})}
 
