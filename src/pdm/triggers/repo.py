@@ -125,6 +125,39 @@ def repeat(conn: Connection[Any], *, machine_id: MachineId, rule_id: RuleId, now
         return cur.rowcount == 1
 
 
+def refresh_prediction(
+    conn: Connection[Any],
+    *,
+    machine_id: MachineId,
+    rule_id: RuleId,
+    eta: datetime,
+    eta_confidence: timedelta,
+    evidence: dict[str, object],
+    now: datetime,
+) -> bool:
+    """A newer fit for a forecast already open: move the ETA, keep the record.
+
+    Counting the repeat and dropping the refit would leave a live prediction
+    carrying the first window's answer for the rest of its life - so a technician
+    checking at noon would read a crossing time computed at eight, from data six
+    hours stale, on a machine whose trend has since changed.
+
+    One statement, like `repeat`, and for the same reason (ADR-042 section 4).
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE finding
+               SET eta = %s, eta_confidence = %s, evidence = %s,
+                   occurrence_count = occurrence_count + 1, last_seen_at = %s
+             WHERE machine_id = %s AND rule_id = %s
+               AND kind = 'predicted' AND status IN ('open', 'acknowledged')
+            """,
+            (eta, eta_confidence, Jsonb(evidence), now, machine_id, rule_id),
+        )
+        return cur.rowcount == 1
+
+
 def live(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], Finding]:
     """Every open or acknowledged Finding, keyed for suppression.
 

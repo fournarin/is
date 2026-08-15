@@ -471,3 +471,156 @@ class TestWhatMutationTestingFound:
         conn.rollback()
 
         assert findings.live(conn) == {}
+
+
+class TestPredictedFindings:
+    """The other half of ADR-020, through the same lifecycle as detection."""
+
+    @pytest.fixture
+    def predicting(self, clock: SimulatedClock) -> Triggers:
+        return Triggers(
+            clock,
+            CONFIG.rules.rules,
+            cooldown=COOLDOWN,
+            eta_grace=GRACE,
+            trend_window=timedelta(minutes=CONFIG.policy.triggers.trend.window_minutes),
+            trend_min_samples=CONFIG.policy.triggers.trend.min_samples,
+            trend_horizon=timedelta(hours=CONFIG.policy.triggers.trend.max_horizon_hours),
+        )
+
+    def _warming(self, *, per_hour: float = 2.0, count: int = 24) -> list[Signal]:
+        """Rising towards 85 but not there yet, every five minutes."""
+        step = per_hour * (5 / 60)
+        return [
+            _hot(NOW + timedelta(minutes=5 * index), value=70.0 + step * index)
+            for index in range(count)
+        ]
+
+    def test_a_rising_trend_raises_a_predicted_finding(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        observed = predicting.observe(conn, self._warming())
+
+        assert observed.forecast
+        assert observed.raised == ()
+        stored = findings.get(conn, observed.forecast[0].finding_ref)
+        assert stored is not None
+        assert stored.kind is FindingKind.PREDICTED
+        assert stored.eta is not None and stored.eta_confidence is not None
+
+    def test_the_forecast_is_filed_under_its_own_rule_id(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        """ADR-043 section 4. Filed under the threshold rule's id, the detection
+        that should supersede it could not be written at all: the unique index
+        would refuse it first."""
+        observed = predicting.observe(conn, self._warming())
+
+        assert observed.forecast[0].decision.rule_id == "R-motor-temp-high/trend"
+        live = findings.live(conn)
+        assert (MOTOR, RuleId("R-motor-temp-high/trend")) in live
+
+    def test_a_prediction_and_its_detection_can_both_be_live(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        """And the detection then supersedes it, which is where a prediction's
+        error becomes measurable (ADR-023 section 7, ADR-020)."""
+        predicting.observe(conn, self._warming())
+        forecast_ref = findings.live(conn)[(MOTOR, RuleId("R-motor-temp-high/trend"))]
+        assert forecast_ref.kind is FindingKind.PREDICTED
+
+        observed = predicting.observe(conn, _two_minutes_of_heat(NOW + timedelta(hours=3)))
+
+        assert observed.raised
+        assert observed.raised[0].superseded is not None
+        assert findings.status_of(conn, observed.raised[0].superseded) is FindingStatus.SUPERSEDED
+
+    def test_the_same_forecast_updates_rather_than_duplicating(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        """Invariant 8 covers forecasts too: a window that keeps predicting the
+        same crossing is one record with a count, not a record a minute."""
+        predicting.observe(conn, self._warming())
+
+        predicting.observe(conn, self._warming(count=30)[24:])
+
+        live = findings.live(conn)
+        forecasts = [key for key in live if key[1].endswith("/trend")]
+        assert len(forecasts) == 1
+
+    def test_prediction_is_off_when_no_window_is_configured(
+        self, conn: Connection[Any], triggers: Triggers
+    ) -> None:
+        """The detection-only engine the rest of this file uses. A mechanism that
+        could not be turned off would have to be reasoned about in every test of
+        the other half."""
+        observed = triggers.observe(conn, self._warming())
+
+        assert observed.forecast == ()
+
+    def test_a_resolved_forecast_is_not_re_raised_on_the_next_reading(
+        self, conn: Connection[Any], predicting: Triggers, clock: SimulatedClock
+    ) -> None:
+        """Detections had the cooldown and forecasts did not.
+
+        A technician who looked, found nothing and resolved the prediction would
+        have had it back on the next sample - ADR-023 section 3's oscillating
+        sensor wearing a different hat.
+        """
+        first = predicting.observe(conn, self._warming())
+        predicting.resolve(conn, first.forecast[0].finding_ref)
+
+        again = predicting.observe(conn, self._warming(count=30)[24:])
+
+        assert again.forecast == ()
+        assert again.in_cooldown > 0
+
+    def test_a_forecast_does_not_supersede_another_forecast(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        """Supersession is a detection meeting the prediction that foresaw it
+        (ADR-023 section 7). A forecast marking an older forecast superseded
+        would hand ADR-020's accuracy loop a crossing that never happened."""
+        observed = predicting.observe(conn, self._warming())
+
+        assert observed.forecast[0].superseded is None
+
+    def test_a_refit_moves_the_eta_rather_than_only_counting(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        """Otherwise a live prediction carries its first window's answer for
+        life, and a technician checking at noon reads a crossing computed at
+        eight from data six hours stale."""
+        predicting.observe(conn, self._warming())
+        first = findings.live(conn)[(MOTOR, RuleId("R-motor-temp-high/trend"))]
+
+        # Steeper: the machine is heating faster than the first window suggested.
+        steeper = [
+            _hot(NOW + timedelta(minutes=120 + 5 * index), value=80.0 + 0.5 * index)
+            for index in range(12)
+        ]
+        predicting.observe(conn, steeper)
+
+        after = findings.live(conn)[(MOTOR, RuleId("R-motor-temp-high/trend"))]
+        assert first.eta is not None and after.eta is not None
+        assert after.eta != first.eta
+        assert after.occurrence_count > first.occurrence_count
+
+    def test_the_eta_is_on_the_clock_the_system_decides_by(
+        self, conn: Connection[Any], predicting: Triggers, clock: SimulatedClock
+    ) -> None:
+        """ADR-028's two axes, joined where they have to be.
+
+        The crossing is computed in source time; `eta` is read by the expiry
+        sweep, the scheduler and the screen, which all live in decision time.
+        Stored as source time, a replayed scenario would have every prediction
+        expired the moment it was written.
+        """
+        clock.advance(timedelta(days=400))
+        observed = predicting.observe(conn, self._warming())
+        assert observed.forecast
+
+        stored = findings.get(conn, observed.forecast[0].finding_ref)
+        assert stored is not None and stored.eta is not None
+        assert stored.eta > clock.now()
+        assert predicting.expire_stale_predictions(conn) == []

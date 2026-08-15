@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Forty-two decisions, in the order they were made. Each records the context that
+Forty-three decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -54,6 +54,7 @@ entries replace parts of earlier ones, and both are kept.
 | [040](0040-what-happens-when-somebody-asks-twice.md) | Asking twice, and a worker with no handlers | |
 | [041](0041-a-work-order-carries-what-the-scheduler-needs-to-schedule-it.md) | A work order carries what the scheduler needs | |
 | [042](0042-what-the-rule-engine-remembers-and-what-it-is-told.md) | What the rule engine remembers, and what it is told | |
+| [043](0043-how-a-trend-becomes-a-prediction-and-what-its-interval-means.md) | How a trend becomes a prediction, and what its interval means | |
 
 ## Where to start
 

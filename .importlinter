@@ -139,6 +139,7 @@ source_modules =
     pdm.playbooks.domain
     pdm.work.domain
     pdm.triggers.domain
+    pdm.triggers.trend
     pdm.retrieval.domain
     pdm.platform.auth.domain
     pdm.llm.domain

@@ -36,6 +36,7 @@ from pdm.contracts import (
     Signal,
 )
 from pdm.platform.config.schema import RuleConfig
+from pdm.triggers import trend
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
@@ -58,6 +59,8 @@ class Outcome(StrEnum):
     QUIET = "quiet"
     # A new Finding, to be written.
     RAISE = "raise"
+    # A new *predicted* Finding: the trend says this will breach (ADR-020).
+    FORECAST = "forecast"
     # The same condition again: raise occurrence_count, move last_seen_at.
     REPEAT = "repeat"
     # Suppressed by an open Finding on a machine under repair for this rule.
@@ -324,6 +327,150 @@ def evaluate(
         )
 
     return decisions
+
+
+def trend_rule_id(rule: RuleConfig) -> RuleId:
+    """The rule id a forecast is filed under: `<rule_id>/trend` (ADR-043 §4).
+
+    Distinct from the threshold rule's so that a prediction and the detection
+    that supersedes it can both be live: they share a machine and a component,
+    which is what ADR-023 section 7 matches on, but not the suppression key,
+    which is what the unique index in migration 0007 enforces. Filed under the
+    same id, the detection could not be written at all.
+    """
+    return RuleId(f"{rule.rule_id}/trend")
+
+
+def forecast(
+    signal: Signal,
+    rules: Sequence[RuleConfig],
+    *,
+    machine_model: MachineModel | None = None,
+    now: datetime,
+    windows: trend.Window,
+    open_findings: Mapping[SuppressionKey, Finding] = _NO_FINDINGS,
+    resolved_at: Mapping[SuppressionKey, datetime] = _NO_TIMES,
+    cooldown: timedelta = timedelta(minutes=30),
+    horizon: timedelta,
+    min_samples: int,
+) -> list[Decision]:
+    """What the trend says is coming, for the rules watching this signal.
+
+    Separate from `evaluate` rather than folded into it, because the two answer
+    different questions about the same reading - "is it wrong now" and "will it
+    be" - and a single function returning both would make the suppression rules
+    of one apply to the other by accident.
+
+    Detection's suppression does not carry over: a machine under repair still
+    gets forecasts, because the work in progress may not be the work the trend is
+    predicting. What does carry over is invariant 8 - one live forecast per
+    (machine, trend rule), updated rather than duplicated.
+    """
+    readings = windows.add(signal)
+    decisions: list[Decision] = []
+
+    for rule in rules:
+        if rule.metric_name != signal.metric_name:
+            continue
+        if machine_model is not None and rule.machine_model != machine_model:
+            continue
+
+        rule_id = trend_rule_id(rule)
+        key: SuppressionKey = (signal.machine_id, rule_id)
+
+        found = trend.crossing(
+            readings,
+            threshold=rule.threshold,
+            comparison=rule.comparison,
+            now=signal.timestamp,
+            horizon=horizon,
+            min_samples=min_samples,
+        )
+        if found is None:
+            continue
+
+        if key in open_findings:
+            decisions.append(
+                Decision(
+                    outcome=Outcome.REPEAT,
+                    rule_id=rule_id,
+                    machine_id=signal.machine_id,
+                    why="the trend still predicts a crossing already forecast (ADR-023)",
+                    finding=_predicted(signal, rule, rule_id, found, now=now),
+                )
+            )
+            continue
+
+        # The cooldown applies to forecasts too, and it was missing here while
+        # detections had it. A prediction resolved by a technician who looked and
+        # found nothing would otherwise be re-raised on the very next reading -
+        # which is ADR-023 section 3's oscillating sensor wearing a different hat.
+        last_resolved = resolved_at.get(key)
+        if last_resolved is not None and now - last_resolved < cooldown:
+            decisions.append(
+                Decision(
+                    outcome=Outcome.IN_COOLDOWN,
+                    rule_id=rule_id,
+                    machine_id=signal.machine_id,
+                    why=(
+                        "a forecast for this rule was resolved "
+                        f"{int((now - last_resolved).total_seconds() // 60)} minutes ago and the "
+                        "cooldown has not passed (ADR-023)"
+                    ),
+                )
+            )
+            continue
+
+        decisions.append(
+            Decision(
+                outcome=Outcome.FORECAST,
+                rule_id=rule_id,
+                machine_id=signal.machine_id,
+                why=trend.describe(found, metric_name=rule.metric_name, threshold=rule.threshold),
+                finding=_predicted(signal, rule, rule_id, found, now=now),
+            )
+        )
+
+    return decisions
+
+
+def _predicted(
+    signal: Signal,
+    rule: RuleConfig,
+    rule_id: RuleId,
+    found: trend.Crossing,
+    *,
+    now: datetime,
+) -> Finding:
+    """The forecast as a `Finding`, with its ETA on the decision-time axis.
+
+    **The two axes have to be joined here** (ADR-028). The crossing is computed
+    in source time, because that is what the samples are stamped with and what
+    the measurement compares against; but `eta` is read by things living in
+    decision time - the expiry sweep, the scheduler's urgency term, the screen
+    that says "in about six hours". Stored as source time on a replayed or
+    compressed run, every prediction would be expired the moment it was written.
+
+    So what is stored is how far ahead the crossing is, measured from the reading
+    that produced it, laid onto the clock the system is deciding by.
+    """
+    ahead = found.at - signal.timestamp
+    return Finding(
+        machine_id=signal.machine_id,
+        component=rule.component,
+        symptom_code=rule.symptom_code,
+        severity=rule.severity,
+        rule_id=rule_id,
+        detected_at=now,
+        evidence=trend.evidence_for(found, threshold=rule.threshold, comparison=rule.comparison),
+        kind=FindingKind.PREDICTED,
+        # Both, always. A prediction without its interval is an opinion presented
+        # as a forecast, and the contract refuses one without the other
+        # (ADR-020, ui.md 2.2).
+        eta=now + ahead,
+        eta_confidence=found.interval,
+        status=FindingStatus.OPEN,
+    )
 
 
 def rules_watching(rules: Iterable[RuleConfig], metric_name: str) -> list[RuleConfig]:
