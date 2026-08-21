@@ -21,8 +21,9 @@ they are the ones worth reading:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -34,6 +35,7 @@ from pdm.contracts import (
     MachineId,
     PMTaskRef,
     Severity,
+    ShiftDefinition,
     ShiftId,
     SkillId,
     Technician,
@@ -41,8 +43,10 @@ from pdm.contracts import (
     WorkOrder,
     WorkOrderOrigin,
     WorkOrderStatus,
+    shift_at,
 )
 from pdm.dispatch import Band, Queued, Round, dispatch, load_ratio
+from pdm.dispatch.domain import _skill_match
 from pdm.platform.config import load_config
 
 NOW = datetime(2026, 3, 3, 8, 0, tzinfo=UTC)
@@ -630,6 +634,123 @@ class TestAnOrderThatOutlivedTheLayout:
         result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480)))
 
         assert "1 order(s) name a machine the layout does not describe" in result.summary
+
+
+class TestWhatADR049Settles:
+    """The three places ADR-045 and its implementation did not obviously agree.
+
+    Each of these pins a decision rather than a mechanism, which is why they are
+    worth having: without them the next reader finds the same three questions
+    and has to answer them again, possibly differently.
+    """
+
+    def test_the_skill_term_asks_the_shift_not_the_clock(self) -> None:
+        """ADR-049 §1. ADR-045 §1's table says "free" and means rostered.
+
+        The signature is the decision: no capacity reaches this function, so the
+        term cannot move as people finish jobs. That is what stops the queue
+        re-ranking itself under a technician already walking to a machine.
+        """
+        needs_mechanical = _order(skill=MECHANICAL)
+        ana = Technician(user=ANA, skills=frozenset({MECHANICAL}))
+
+        assert _skill_match(needs_mechanical, [ana]) == 1.0
+        assert _skill_match(needs_mechanical, []) == 0.0
+
+    def test_the_only_holder_being_booked_is_reported_not_scored_away(self) -> None:
+        """The consequence at round level, and the reason the term does not need
+        to know about minutes: "nobody with this skill has time left" arrives as
+        a fact a supervisor can act on within the shift, rather than as a job
+        that quietly sank down the list.
+        """
+        # Ana holds the skill and her whole shift is already spent; Ben is free
+        # and holds a different one.
+        booked = Queued(
+            ref="WO-BIG",
+            order=_order(minutes=480, assignees=(ANA,)).model_copy(
+                update={"status": WorkOrderStatus.IN_PROGRESS}
+            ),
+            created_at=NOW,
+        )
+        crew = [
+            Technician(user=ANA, skills=frozenset({MECHANICAL})),
+            Technician(user=BEN, skills=frozenset({ELECTRICAL})),
+        ]
+
+        result = _round(
+            [booked, _queued("WO-1", _order(skill=MECHANICAL))],
+            technicians=crew,
+            roster=_roster((ANA, 480), (BEN, 480)),
+        )
+
+        assert result.band is Band.NORMAL
+        assert [withheld.ref for withheld in result.unassigned] == ["WO-1"]
+        assert "robot_mechanical" in result.unassigned[0].why
+        assert result.held == ()
+
+    def test_a_term_too_small_to_mention_is_still_in_the_number(self) -> None:
+        """ADR-049 §2. The threshold decides which clauses are worth a sentence
+        and nothing else: the score is the weighted sum of every term, computed
+        before `_reason` is called, and the terms are returned in full beside it.
+        """
+        weights = CONFIG.policy.weights
+        result = _round(
+            [
+                _queued("WO-1", _order(), age_minutes=60),
+                _queued("WO-2", _order(), age_minutes=1),
+            ],
+            technicians=_people(ANA, BEN),
+            roster=_roster((ANA, 480), (BEN, 480)),
+        )
+        barely_waited = next(p for p in result.placed if p.ref == "WO-2")
+        terms = barely_waited.terms
+
+        # A minute against an hour: real, and far too small to be worth a clause.
+        assert 0 < weights.waiting * terms.waiting < 0.05
+        assert "waiting" not in barely_waited.priority_reason
+        # And yet the number it was ranked by counted it.
+        assert barely_waited.priority_score == pytest.approx(
+            weights.severity * terms.severity
+            + weights.downtime * terms.downtime
+            + weights.skill_match * terms.skill_match
+            + weights.waiting * terms.waiting
+            + weights.eta_urgency * terms.eta_urgency
+        )
+
+    def test_a_shift_is_its_wall_clock_hours_across_a_daylight_saving_change(self) -> None:
+        """ADR-049 §3. Seven real hours in spring, nine in autumn, and both are
+        what the plant worked. This is the assertion that stops somebody
+        "fixing" it into a fixed eight."""
+        new_york = ZoneInfo("America/New_York")
+        night = (
+            ShiftDefinition(shift_id=ShiftId("night"), starts_at=time(22, 0), ends_at=time(6, 0)),
+        )
+
+        spring = shift_at(night, datetime(2026, 3, 8, 4, 0, tzinfo=UTC), new_york)
+        autumn = shift_at(night, datetime(2026, 11, 1, 4, 0, tzinfo=UTC), new_york)
+
+        assert spring is not None and autumn is not None
+        assert spring.ends_at - spring.starts_at == timedelta(hours=7)
+        assert autumn.ends_at - autumn.starts_at == timedelta(hours=9)
+        # Local wall clock is identical in both: people arrive at ten and leave
+        # at six, which is what a shift is.
+        for window in (spring, autumn):
+            assert window.starts_at.astimezone(new_york).hour == 22
+            assert window.ends_at.astimezone(new_york).hour == 6
+
+    def test_a_boundary_in_the_hour_that_does_not_exist_takes_the_later_offset(self) -> None:
+        """The one case ADR-045 §7 left undefined. 02:30 does not happen on the
+        morning the clocks go forward, and the answer is the hour the plant
+        would actually be standing there."""
+        new_york = ZoneInfo("America/New_York")
+        skipped = (
+            ShiftDefinition(shift_id=ShiftId("odd"), starts_at=time(2, 30), ends_at=time(10, 30)),
+        )
+
+        window = shift_at(skipped, datetime(2026, 3, 8, 9, 0, tzinfo=UTC), new_york)
+
+        assert window is not None
+        assert window.starts_at.astimezone(new_york).strftime("%H:%M") == "03:30"
 
 
 class TestInvariantTen:
