@@ -29,6 +29,8 @@ import heapq
 from datetime import datetime, timedelta
 
 from pdm.contracts import (
+    Assignee,
+    AssigneeRole,
     Finding,
     FindingRef,
     MachineId,
@@ -36,6 +38,7 @@ from pdm.contracts import (
     Technician,
     UserId,
     WorkOrder,
+    WorkOrderStatus,
 )
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import Config
@@ -222,6 +225,30 @@ def run(
                 job = jobs[placement.ref]
                 job.started_at = clock.now()
                 job.users = placement.users
+                # The ticket a policy is shown next round has to say that
+                # somebody is on this one. `dispatch()` reads `order.status` to
+                # decide what it may place and to subtract a technician's
+                # committed minutes, so a ticket still reading `queued` would be
+                # re-placed and would consume nobody's capacity in the meantime
+                # (ADR-046 §5).
+                job.ticket = job.ticket.model_copy(
+                    update={
+                        "order": job.ticket.order.model_copy(
+                            update={
+                                "status": WorkOrderStatus.IN_PROGRESS,
+                                "assignees": tuple(
+                                    Assignee(
+                                        user=user,
+                                        role=AssigneeRole.PRIMARY
+                                        if index == 0
+                                        else AssigneeRole.HELPER,
+                                    )
+                                    for index, user in enumerate(placement.users)
+                                ),
+                            }
+                        )
+                    }
+                )
                 pending.remove(placement.ref)
                 in_progress.append(placement.ref)
                 for user in placement.users:
