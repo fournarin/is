@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Fifty-one decisions, in the order they were made. Each records the context that
+Fifty-two decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -63,6 +63,7 @@ entries replace parts of earlier ones, and both are kept.
 | [049](0049-three-things-adr-045-left-ambiguous.md) | Three things ADR-045 left ambiguous | |
 | [050](0050-the-gates-report-is-computed-when-asked.md) | The gate's report is computed when asked, not stored | |
 | [051](0051-baselines-are-a-module-of-their-own.md) | The baselines are a module of their own | |
+| [052](0052-what-review-was-protecting-and-what-it-was-not.md) | What review was protecting, and what it was not | |
 
 ## Where to start
 
