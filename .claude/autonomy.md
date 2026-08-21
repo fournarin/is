@@ -4,12 +4,17 @@ A scheduled cloud session opens this repository every four hours, does **one
 slice**, and stops. Nobody is watching while it runs.
 
 Everything here is written for an agent that starts cold. It has this checkout,
-`gh`, and nothing else: `docs-md/` - the plan, `design.md`, the invariant table,
-the conversation log with the advisor - **is not in this checkout and never will
+a sandbox with the toolchain already installed, and the built-in GitHub tools -
+and nothing else: `docs-md/` - the plan, `design.md`, the invariant table, the
+conversation log with the advisor - **is not in this checkout and never will
 be**, because `.gitignore` excludes it on purpose. What survives that gap is
 `CLAUDE.md`, `docs/adr/`, and the issue being worked from. If a slice cannot be
 finished without something only `docs-md/` could answer, that is a reason to stop
 and say so, not a reason to guess.
+
+Issues, pull requests, labels and merges go through the built-in GitHub tools,
+which authenticate through a proxy. `gh` is not necessarily installed; `git`
+always is.
 
 ## What one run does, in order
 
@@ -42,9 +47,24 @@ and say so, not a reason to guess.
    uv run pytest -m "not db"
    ```
 
-   Tests marked `db` need a real PostgreSQL (ADR-031 forbids substituting
-   SQLite). If the sandbox has none, say so in the PR body and let GitHub Actions
-   be the authority - do not skip a `db` test by unmarking it.
+   Tests marked `db` need a real PostgreSQL, and ADR-031 forbids substituting
+   SQLite: what most needs testing in the queue - `SKIP LOCKED`, partial indexes,
+   CHECK constraints - is exactly what SQLite lacks, so a substitute would pass
+   tests the real thing fails. **The sandbox ships PostgreSQL 16.** Start it and
+   run them here rather than finding out from CI twenty minutes later:
+
+   ```
+   pg_ctlcluster 16 main start || service postgresql start     # not running by default
+   su postgres -c "psql -c \"CREATE USER pdm PASSWORD 'ci' SUPERUSER\" \
+                        -c 'CREATE DATABASE pdm_test OWNER pdm'"
+   export DATABASE_URL=postgresql://pdm:ci@localhost:5432/pdm_test
+   uv run alembic upgrade head
+   uv run pytest -m db
+   ```
+
+   If PostgreSQL genuinely will not start, say so in the PR body and leave
+   GitHub Actions as the authority - but never unmark a `db` test to make a run
+   look green.
 
 6. **Open the PR** on a `slice/<name>` branch off `main`. English, per
    `CLAUDE.md`: what changed, which ADRs it obeys, which gates were run here and

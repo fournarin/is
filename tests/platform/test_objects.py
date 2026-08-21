@@ -10,6 +10,7 @@ silent - a citation to "page 47" quietly pointing at a different document.
 from __future__ import annotations
 
 import hashlib
+import os
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
@@ -89,10 +90,21 @@ class TestWritesAreAtomic:
 
         assert list((store.root / "incoming").iterdir()) == []
 
+    @pytest.mark.skipif(
+        os.geteuid() == 0,
+        reason="root ignores the permission bits, so the assertion tests nothing",
+    )
     def test_a_stored_blob_is_read_only(self, store: FilesystemObjectStore) -> None:
         """Not a security boundary - a determined chmod defeats it. It turns
         "never modify or delete a stored blob" from something to remember into
-        an error somebody has to explain."""
+        an error somebody has to explain.
+
+        Skipped as root, which is the same hole seen from the other side: the
+        bits are set correctly and the kernel disregards them. CI runs as an
+        ordinary user, so the case is still covered where it counts - but an
+        unattended run in a root sandbox would otherwise stop to investigate a
+        red test that says nothing about the code, every time.
+        """
         path = store.path_for(store.put(MANUAL))
         with pytest.raises(PermissionError):
             path.open("wb")

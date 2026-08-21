@@ -3,3 +3,29 @@
 Must stay a pure function. No database queries inside the algorithm. This is a
 precondition for both the simulator and feedback Loop 6 (design.md 7, ADR-022).
 """
+
+from pdm.dispatch.domain import (
+    Band,
+    Placement,
+    Queued,
+    Round,
+    Terms,
+    Withheld,
+    committed,
+    dispatch,
+    downtime_units,
+    load_ratio,
+)
+
+__all__ = [
+    "Band",
+    "Placement",
+    "Queued",
+    "Round",
+    "Terms",
+    "Withheld",
+    "committed",
+    "dispatch",
+    "downtime_units",
+    "load_ratio",
+]

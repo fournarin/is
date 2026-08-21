@@ -8,6 +8,12 @@
 
 version: 1
 
+# Where the plant is. Shift boundaries below are local wall-clock times and every
+# moment they are compared against is UTC (ADR-028, ADR-045 section 7). Read as
+# UTC, the morning shift would start at one in the afternoon in the plant that is
+# meant to be running it.
+timezone: Asia/Bangkok
+
 lines:
   - line_id: line-a
     # Seconds between units leaving the line. 60s is a placeholder standing for

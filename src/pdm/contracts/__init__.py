@@ -50,8 +50,10 @@ from pdm.contracts.resources import (
     PMTask,
     ShiftAssignment,
     ShiftDefinition,
+    ShiftWindow,
     Station,
     Technician,
+    shift_at,
     shift_capacity_minutes,
 )
 from pdm.contracts.work import (
@@ -92,6 +94,7 @@ __all__ = [
     "ShiftAssignment",
     "ShiftDefinition",
     "ShiftId",
+    "ShiftWindow",
     "Signal",
     "SkillId",
     "Station",
@@ -105,5 +108,6 @@ __all__ = [
     "WorkOrderStatus",
     "WorkOutcome",
     "WorkSegment",
+    "shift_at",
     "shift_capacity_minutes",
 ]
