@@ -310,6 +310,27 @@ def _capacity_left(
     return left
 
 
+def _no_capacity_cause(shift_id: ShiftId | None, assignments: Sequence[tuple[UserId, int]]) -> str:
+    """Which of the ways of having no capacity this round hit (ADR-045 §3).
+
+    "Nobody is rostered" and "there is no shift at this hour" are fixed by
+    different people: the first is a supervisor filling a roster, the second is
+    a plant that does not run at this hour and a tick that should not have asked.
+    A round that says the first when it means the second sends somebody looking
+    for a roster that was never missing.
+
+    `shift_id` is None exactly when no shift covers `now` - it is `shift_at`
+    returning None, passed through by the caller.
+    """
+    if shift_id is None:
+        return "no shift covers this moment"
+    if not assignments:
+        return f"nobody is rostered on the {shift_id} shift"
+    # Rostered, but every one of them is already spent. Saying "nobody is
+    # rostered" here would be false about people who are standing on the line.
+    return f"everybody on the {shift_id} shift has no minutes left to give"
+
+
 def dispatch(
     queue: Sequence[Queued],
     *,
@@ -324,8 +345,12 @@ def dispatch(
 
     `assignments` is (technician, available_minutes) for this shift, already
     resolved by the caller - the roster is a table and this function may not read
-    one (invariant 10). `shift_id` and `on_date` are carried through for the
-    record only.
+    one (invariant 10). `on_date` is carried through for the record only.
+
+    `shift_id` is None when **no shift covers `now`** - what `shift_at` returns
+    at an hour the plant does not run. It is not "the caller did not bother":
+    a round with no capacity says which way it was, and this is the only thing
+    separating an hour with no shift from a shift with nobody on it.
 
     Same arguments, same answer, every time. Every sort names its tie-break and
     no set iteration reaches an output.
@@ -345,6 +370,7 @@ def dispatch(
     ranked = _rank(placeable, available=available, config=config, now=now)
 
     if band is Band.NO_CAPACITY:
+        cause = _no_capacity_cause(shift_id, assignments)
         return Round(
             at=now,
             shift_id=shift_id,
@@ -356,16 +382,11 @@ def dispatch(
             held=tuple(
                 Withheld(
                     ref=item.ref,
-                    why=(
-                        "nobody is rostered on this shift, so there is no capacity to "
-                        "schedule against"
-                    ),
+                    why=f"{cause}, so there is no capacity to schedule against",
                 )
                 for item, _, _ in ranked
             ),
-            summary=(
-                f"no capacity this shift: {len(ranked)} order(s) are waiting and nobody is rostered"
-            ),
+            summary=f"no capacity: {cause}; {len(ranked)} order(s) are waiting",
         )
 
     assert ratio is not None

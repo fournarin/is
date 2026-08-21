@@ -34,6 +34,7 @@ from pdm.contracts import (
     MachineId,
     PMTaskRef,
     Severity,
+    ShiftId,
     SkillId,
     Technician,
     UserId,
@@ -52,6 +53,8 @@ CONFIG = load_config(Path("config"))
 BUFFERED = MachineId("MC-001")
 BOTTLENECK = MachineId("MC-012")
 FAN = MachineId("MC-018")
+
+MORNING = ShiftId("morning")
 
 MECHANICAL = SkillId("robot_mechanical")
 ELECTRICAL = SkillId("electrical")
@@ -113,9 +116,26 @@ def _roster(*pairs: tuple[UserId, int]) -> list[tuple[UserId, int]]:
 
 
 def _round(
-    queue: list[Queued], *, technicians: list[Technician], roster: list[tuple[UserId, int]]
+    queue: list[Queued],
+    *,
+    technicians: list[Technician],
+    roster: list[tuple[UserId, int]],
+    shift_id: ShiftId | None = MORNING,
 ) -> Round:
-    return dispatch(queue, technicians=technicians, assignments=roster, config=CONFIG, now=NOW)
+    """A round on the morning shift unless a test is about not having one.
+
+    `shift_id=None` is not "unspecified": it is `shift_at` finding no shift at
+    this hour, which the round reports differently from an empty roster
+    (ADR-045 §3).
+    """
+    return dispatch(
+        queue,
+        technicians=technicians,
+        assignments=roster,
+        config=CONFIG,
+        now=NOW,
+        shift_id=shift_id,
+    )
 
 
 class TestLoadRatio:
@@ -147,6 +167,81 @@ class TestLoadRatio:
     def test_the_helper_agrees_with_the_round(self) -> None:
         assert load_ratio(240, 480) == 0.5
         assert load_ratio(1, 0) is None
+
+
+class TestNoCapacitySaysWhichKind:
+    """ADR-045 §3: a round with no capacity says which of the ways it was.
+
+    The behaviour is identical in each - nothing is admitted - so the sentence
+    is the entire output of the round, and the three are acted on by different
+    people. Told "nobody is rostered" about an hour the plant does not run, a
+    supervisor goes looking for a roster that was never missing.
+    """
+
+    def test_an_hour_no_shift_covers_does_not_blame_the_roster(self) -> None:
+        """`shift_id` is None because `shift_at` found no shift, which is a tick
+        asking at an hour the plant does not run - not an unfilled roster."""
+        result = _round(
+            [_queued("WO-1", _order())], technicians=[], roster=_roster(), shift_id=None
+        )
+
+        assert result.band is Band.NO_CAPACITY
+        assert result.load_ratio is None
+        assert "no shift covers this moment" in result.summary
+        assert "no shift covers this moment" in result.held[0].why
+        assert "rostered" not in result.held[0].why
+
+    def test_a_shift_with_an_empty_roster_names_the_shift(self) -> None:
+        result = _round(
+            [_queued("WO-1", _order())], technicians=[], roster=_roster(), shift_id=MORNING
+        )
+
+        assert result.band is Band.NO_CAPACITY
+        assert "nobody is rostered on the morning shift" in result.held[0].why
+        assert "nobody is rostered on the morning shift" in result.summary
+
+    def test_people_rostered_with_no_minutes_left_are_not_reported_as_absent(self) -> None:
+        """The case the two-way wording states falsely: they are on the line, and
+        the answer is more people or less work rather than a roster to fill."""
+        result = _round(
+            [_queued("WO-1", _order())],
+            technicians=_people(ANA),
+            roster=_roster((ANA, 0)),
+            shift_id=MORNING,
+        )
+
+        assert result.band is Band.NO_CAPACITY
+        assert "no minutes left to give" in result.held[0].why
+        assert "nobody is rostered" not in result.held[0].why
+
+    def test_the_three_do_not_read_alike(self) -> None:
+        """The point of the section, as one assertion: a reader can tell them
+        apart. They were one sentence before, and the round said the same thing
+        about three different situations."""
+        queue = [_queued("WO-1", _order())]
+        said = {
+            _round(queue, technicians=[], roster=_roster(), shift_id=None).summary,
+            _round(queue, technicians=[], roster=_roster(), shift_id=MORNING).summary,
+            _round(
+                queue,
+                technicians=_people(ANA),
+                roster=_roster((ANA, 0)),
+                shift_id=MORNING,
+            ).summary,
+        }
+
+        assert len(said) == 3
+
+    def test_every_waiting_order_is_still_reported_rather_than_dropped(self) -> None:
+        """No capacity is not a reason for work to disappear: a supervisor
+        reading this round sees the whole queue that nobody can be given."""
+        queue = [_queued(f"WO-{index}", _order()) for index in range(1, 4)]
+
+        result = _round(queue, technicians=[], roster=_roster(), shift_id=None)
+
+        assert sorted(held.ref for held in result.held) == ["WO-1", "WO-2", "WO-3"]
+        assert result.placed == ()
+        assert "3 order(s) are waiting" in result.summary
 
 
 class TestTheGate:
