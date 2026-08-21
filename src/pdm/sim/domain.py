@@ -164,7 +164,22 @@ class RoundState(BaseModel):
 
     `in_progress` is offered and must not be re-ranked. Work already under way
     consumes capacity, and a technician walking to a machine must not watch the
-    queue reshuffle behind them (design.md 6.2).
+    queue reshuffle behind them (design.md 6.2). Those tickets carry an
+    `in_progress` order naming who is on it, so a policy that reads status - as
+    `dispatch()` does, twice - is told the truth by the ticket itself.
+
+    **For an adapter over `dispatch()`**, two mappings are worth stating because
+    both are easy to get backwards and neither fails loudly:
+
+    * a technician in `busy` belongs in that function's `assignments` and not in
+      its `technicians`. Their minutes are capacity the shift really has, so
+      dropping them shrinks the denominator of `load_ratio` and has the gate
+      hold work back; but they cannot take a second job, and offering them as a
+      candidate produces a placement the engine refuses.
+    * `remaining_minutes` is what `assignments` wants as it stands. It counts a
+      job when it finishes rather than while it runs, and `dispatch()` subtracts
+      work in flight itself from the queue - so passing something already net of
+      it would charge the shift twice for the same repair.
     """
 
     model_config = _FROZEN

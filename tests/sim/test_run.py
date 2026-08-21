@@ -42,6 +42,7 @@ from pdm.contracts import (
     SymptomCode,
     Technician,
     UserId,
+    WorkOrderStatus,
 )
 from pdm.platform.config import Config, load_config
 from pdm.sim import (
@@ -346,6 +347,90 @@ class TestTheSeamTheEngineOffersAPolicy:
         assert result.tickets_raised == 1
         assert result.tickets_finished == 0
         assert result.tickets_unfinished == 1
+
+
+class TestTheStateTellsTheTruthAboutWorkInFlight:
+    """ADR-046 §5 claims `RoundState` carries what `dispatch()` takes, so the
+    slice 7.2 adapter is a translation and not a rewrite. That was true of every
+    field except the one inside the ticket."""
+
+    def test_a_ticket_under_way_does_not_still_read_as_queued(self, config: Config) -> None:
+        """`dispatch()` decides what it may place by reading `order.status`, and
+        it subtracts a technician's committed minutes the same way. A ticket
+        that stayed `queued` after somebody started it would be re-placed on the
+        next round and would consume nobody's capacity in the meantime - two
+        wrong answers from one stale field.
+        """
+        seen: list[tuple[str, WorkOrderStatus, tuple[UserId, ...]]] = []
+
+        class Watches:
+            name = "test-watches"
+
+            def choose(self, state: RoundState) -> tuple[Placement, ...]:
+                seen.extend(
+                    (ticket.ref, ticket.order.status, tuple(a.user for a in ticket.order.assignees))
+                    for ticket in state.in_progress
+                )
+                return FirstComeFirstServed().choose(state)
+
+        # One technician and two failures: the second is still waiting while the
+        # first is under way, which is the only arrangement in which a round
+        # runs at all with work in flight - the engine skips a round with an
+        # empty queue.
+        run(
+            _scenario(duration=timedelta(hours=2)),
+            policy=Watches(),
+            config=config,
+            failures=(
+                _failure(BUFFERED, after=timedelta(minutes=5), minutes=45),
+                _failure(BOTTLENECK, after=timedelta(minutes=20), minutes=30),
+            ),
+        )
+
+        assert seen, "the scenario never put a ticket in flight"
+        for ref, status, users in seen:
+            assert status is WorkOrderStatus.IN_PROGRESS, f"{ref} still read as {status}"
+            assert users == (UserId("tech-1"),)
+
+    def test_a_waiting_ticket_still_reads_as_queued(self, config: Config) -> None:
+        """The other half. `dispatch()` places what is queued, so work nobody has
+        started has to keep saying so."""
+        seen: list[WorkOrderStatus] = []
+
+        class Watches:
+            name = "test-watches"
+
+            def choose(self, state: RoundState) -> tuple[Placement, ...]:
+                seen.extend(ticket.order.status for ticket in state.pending)
+                return ()
+
+        run(
+            _scenario(),
+            policy=Watches(),
+            config=config,
+            failures=(_failure(BUFFERED, after=timedelta(minutes=5), minutes=30),),
+        )
+
+        assert seen and all(status is WorkOrderStatus.QUEUED for status in seen)
+
+    def test_the_record_of_a_finished_job_still_prices_it_as_it_was_planned(
+        self, config: Config
+    ) -> None:
+        """Rewriting the order in flight must not disturb what slice 7.3
+        aggregates: the estimate is what the scheduler planned with and stays
+        the playbook-free figure ADR-046 §2 gave it."""
+        result = run(
+            _scenario(),
+            policy=FirstComeFirstServed(),
+            config=config,
+            failures=(_failure(BUFFERED, after=timedelta(minutes=5), minutes=30),),
+        )
+        record = result.tickets[0]
+
+        assert record.estimate_is_fallback
+        assert record.estimated_minutes == 60
+        assert record.repair_minutes == 30
+        assert record.users == (UserId("tech-1"),)
 
 
 class TestTopologyReachesTheResult:
