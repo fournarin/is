@@ -4,7 +4,8 @@ Everything in this directory was produced by a script in this repository and can
 be reproduced from a clean checkout:
 
 ```
-uv run python scripts/compare_policies.py
+uv run python scripts/compare_policies.py       # the table
+uv run python -m scripts.diagnose_comparison    # why it says what it says
 ```
 
 That writes `comparison.csv` - every run - and `comparison.md`, which is one
@@ -58,20 +59,58 @@ roughly one percent. 3C beats the priority matrix on both.
 
 That is a real result and it is not the one the design predicts, so it is worth
 saying plainly rather than burying: **on this scenario, ranking work well does
-not by itself save production.** Two explanations fit the data and this
-directory does not choose between them:
+not by itself save production.**
 
-- oldest-first is close to "the machine that has been down longest", and the
-  cost function integrates downtime, so a policy that spreads attention evenly
-  may keep more outages under their buffer;
-- the gate holds medium-severity work in the heavy band, and in a stress window
-  with a large backlog it can hold work while a technician is free - the load
-  ratio counts everything open as committed, not everything in flight.
+When this file was first written it offered two explanations and chose neither.
+`diagnosis.md` has since taken the system apart one piece at a time, and the
+choice can now be made from measurement rather than argument (ADR-053):
 
-The second one, if it is what is happening, is a finding about the gate rather
-than about the scenario, and it belongs in the report either way. Nothing has
-been tuned to make this table look better; `policy.yaml` says the weights are
-starting values, and they still are.
+- **it is not the gate.** With the load gate removed entirely - admitting
+  everything, ranking and assignment untouched - units lost is 1204.0 against
+  1204.0, and of the 185 rounds that held something, 2 had a technician left
+  idle who could have taken a held ticket. The explanation this file used to
+  offer, that `load_ratio` counting everything open as committed lets the gate
+  hold work while somebody is free, is withdrawn: the mechanism is real and on
+  this scenario it costs nothing.
+- **it is not the harness either.** `GateAndScore._starting_now` drops 60% of
+  the placements `dispatch()` produces, and in none of those rounds could an
+  idle technician have taken one. An adapter that re-dispatches until the round
+  is full returns identical numbers.
+- **it is the waiting term, and it is a trade rather than a defeat.** Raising w4
+  alone walks 3C's units lost down to 1176.8 - past first-come-first-served -
+  while its response climbs from 18.2 minutes to 32.9, back towards
+  first-come-first-served's 37.4. **The two measures trade against each other
+  here and neither policy dominates**, which is the sentence this result
+  supports.
+
+Nothing has been tuned. `policy.yaml` says the weights are starting values and
+they still are; no number in `diagnosis.md` is a recommendation, and 3E is the
+tool for setting them.
+
+One further finding, and it is the one worth carrying into the report:
+**ADR-021's downtime term ranks correctly and still changes nothing here.**
+Moving w2 between zero and four shifts units lost by well under a percent at
+every buffer setting. That looks like a broken term until the shift is split
+into waiting and repairing: at st-03 - no buffer, bottleneck multiplier 3.0, the
+case the record exists for - 3C cuts waiting from 189.7 minutes to 101.9 and
+spends a hundred more technician-minutes there than first-come-first-served
+does. The ranking works. The outcome does not move because **st-03 fails 7.35
+times a shift**, and a machine is down while any unfinished ticket names it, so
+arriving sooner cannot be banked before the next failure merges with the outage.
+
+It is not that the shift is short of people: `diagnosis.md` varies the roster
+from two technicians to eight and the term is worth a few units at every size,
+least of all at eight. What is left is `mean_hours_between_failures` - the one
+number in this project with no measurement behind it (ADR-046 §4). So this
+directory does not show that buffer-aware ranking saves production, and it does
+not show that it fails: **it shows that whether it pays depends on a parameter
+nobody has measured yet**, which is a question for the plant rather than for
+another sweep. ADR-053 records all of it.
+
+One more thing that table says, in passing: 3C's response advantage over
+first-come-first-served is 28.1 minutes at two technicians and 0.5 at eight.
+Scheduling is worth most exactly when there are not enough people, which is the
+condition a plant installs one for.
 
 ## Files
 
@@ -79,3 +118,4 @@ starting values, and they still are.
 |---|---|
 | `comparison.csv` | every run: policy, buffer, arrival rate, seed, and the measures |
 | `comparison.md` | means over the seeds, arranged for reading |
+| `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn |
