@@ -19,7 +19,8 @@ from typing import Any
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from pdm.api import deps, documents, playbooks, sessions
+from pdm.api import deps, dispatch, documents, playbooks, sessions
+from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
 from pdm.platform.config import load_config
@@ -69,6 +70,10 @@ def create_app(
         )
         app.state.authentication = Authentication(LocalAccounts(), the_clock)
         app.state.playbooks = PlaybookStore(the_clock, skills=config.skills)
+        # Read-only here. The API explains what layer 3 decided and never
+        # decides anything itself: rounds run in worker-runtime, which is the
+        # only process that writes a placement (ADR-026, ADR-050).
+        app.state.dispatch_rounds = DispatchRounds(the_clock, config)
         # The API enqueues authoring work and claims none of it. `worker` names
         # this process in `claimed_by` only if it ever claimed anything, which it
         # must not (ADR-026); the name is here so a row written by the API is
@@ -117,6 +122,7 @@ def create_app(
     app.include_router(sessions.router)
     app.include_router(documents.router)
     app.include_router(playbooks.router)
+    app.include_router(dispatch.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:
