@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Forty-seven decisions, in the order they were made. Each records the context that
+Forty-eight decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -59,6 +59,7 @@ entries replace parts of earlier ones, and both are kept.
 | [045](0045-the-load-gate-the-score-and-what-a-round-is-allowed-to-move.md) | The load gate, the score, and what a round may move | |
 | [046](0046-what-the-simulator-models-and-what-it-assumes.md) | What the simulator models, reads from config, and invents | 047 |
 | [047](0047-a-policy-may-not-spend-minutes-the-shift-does-not-have.md) | A policy may not spend minutes the shift does not have | |
+| [048](0048-a-work-order-outlives-the-layout-it-was-created-under.md) | A work order outlives the layout it was created under | |
 
 ## Where to start
 

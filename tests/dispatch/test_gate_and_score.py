@@ -550,6 +550,88 @@ class TestAssignment:
         assert "electrical" in result.unassigned[0].why
 
 
+class TestAnOrderThatOutlivedTheLayout:
+    """ADR-048. A work order carries the machine it was created against, and the
+    layout is edited when the line is rearranged (ADR-027). The two drift, and
+    the drift must not take the round down with it."""
+
+    STALE = MachineId("MC-999")  # in no line in plant.yaml, and never was
+
+    def test_one_stale_order_does_not_take_the_whole_round_with_it(self) -> None:
+        """The failure this fixes: `station_of` raised, the round returned
+        nothing, and three machines that are still on the line went unscheduled
+        because of one that is not."""
+        queue = [
+            _queued("WO-1", _order(machine_id=self.STALE)),
+            _queued("WO-2", _order(machine_id=BOTTLENECK)),
+            _queued("WO-3", _order(machine_id=BUFFERED)),
+        ]
+
+        result = _round(
+            queue, technicians=_people(ANA, BEN), roster=_roster((ANA, 480), (BEN, 480))
+        )
+
+        assert {placement.ref for placement in result.placed} >= {"WO-2", "WO-3"}
+
+    def test_the_work_is_still_released_rather_than_parked(self) -> None:
+        """The machine is real and somebody has to go to it. A stale line in a
+        YAML file is a reason to say so, not a reason to withhold the job -
+        parking real work until somebody edits config is how a system like this
+        gets overruled and then abandoned."""
+        queue = [_queued("WO-1", _order(machine_id=self.STALE))]
+
+        result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480)))
+
+        assert [placement.ref for placement in result.placed] == ["WO-1"]
+        assert result.held == ()
+
+    def test_the_line_cost_is_not_claimed_and_the_ticket_says_which_machine(self) -> None:
+        queue = [_queued("WO-1", _order(machine_id=self.STALE))]
+
+        placement = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480))).placed[0]
+
+        assert placement.terms.downtime == 0.0
+        assert placement.terms.downtime_is_unknown
+        assert "MC-999" in placement.priority_reason
+
+    def test_a_repair_shorter_than_the_buffer_is_not_the_same_as_an_unknown_one(self) -> None:
+        """Both score zero on downtime and they mean opposite things: one is a
+        line that genuinely will not feel this, the other is a line we cannot
+        speak for. A single number could not tell a supervisor which."""
+        queue = [_queued("WO-1", _order(machine_id=BUFFERED, minutes=10))]
+
+        placement = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480))).placed[0]
+
+        assert placement.terms.downtime == 0.0
+        assert not placement.terms.downtime_is_unknown
+        assert "MC-001" not in placement.priority_reason
+
+    def test_the_stale_machine_does_not_flatten_the_others(self) -> None:
+        """Normalisation divides by the largest in the round (ADR-045 §1), so
+        an unknown machine has to enter that list as a zero rather than be left
+        out - dropping it would shift every other order's term."""
+        queue = [
+            _queued("WO-1", _order(machine_id=self.STALE)),
+            _queued("WO-2", _order(machine_id=BOTTLENECK)),
+        ]
+        without = [_queued("WO-2", _order(machine_id=BOTTLENECK))]
+
+        with_stale = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480)))
+        alone = _round(without, technicians=_people(ANA), roster=_roster((ANA, 480)))
+
+        bottleneck = next(p for p in with_stale.placed if p.ref == "WO-2")
+        assert bottleneck.terms.downtime == alone.placed[0].terms.downtime == 1.0
+
+    def test_the_round_tells_the_supervisor_the_layout_has_drifted(self) -> None:
+        """The half of this that keeps the config error loud. The work flows,
+        and every round says the file needs looking at until somebody does."""
+        queue = [_queued("WO-1", _order(machine_id=self.STALE))]
+
+        result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480)))
+
+        assert "1 order(s) name a machine the layout does not describe" in result.summary
+
+
 class TestInvariantTen:
     """`dispatch()` gives the same answer for the same inputs, and touches no
     database. Both halves are load-bearing for slice 7 and Loop 6."""

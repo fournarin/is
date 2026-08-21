@@ -117,6 +117,11 @@ class Terms(BaseModel):
     skill_match: float = 0.0
     waiting: float = 0.0
     eta_urgency: float = 0.0
+    # True where the layout could not price this machine at all (ADR-048). A
+    # repair shorter than the buffer also scores zero, and the two mean opposite
+    # things: one is a line that will not feel this, the other is a line we
+    # cannot speak for. One number could not tell a supervisor which.
+    downtime_is_unknown: bool = False
 
 
 class Placement(BaseModel):
@@ -224,6 +229,25 @@ def downtime_units(order: WorkOrder, station: Station, line: Line) -> float:
     return unbuffered * units_per_minute * station.bottleneck_multiplier
 
 
+def _downtime_or_unknown(order: WorkOrder, config: Config) -> float | None:
+    """Production lost, or None where the layout cannot say (ADR-048).
+
+    A work order carries the machine it was created against and outlives the
+    layout it was created under: ADR-027 keeps `plant.yaml` free to change when
+    the line is rearranged, precisely so old records keep meaning what they
+    meant. An order for a machine since moved or decommissioned is therefore
+    ordinary, not corrupt - and until this returned None it raised `KeyError`
+    here and the whole round returned nothing, so one stale order left every
+    machine still on the line unscheduled.
+    """
+    try:
+        station = config.station_of(order.machine_id)
+        line = config.line_of(order.machine_id)
+    except KeyError:
+        return None
+    return downtime_units(order, station, line)
+
+
 def _skill_match(order: WorkOrder, available: Sequence[Technician]) -> float:
     """1 where somebody on this shift holds the skill, 0.5 where none is named.
 
@@ -271,9 +295,20 @@ def _reason(terms: Terms, order: WorkOrder, config: Config) -> str:
         (weights.eta_urgency * terms.eta_urgency, "the predicted crossing is close"),
     ]
     strongest = [text for value, text in sorted(contributions, key=lambda c: -c[0]) if value > 0.05]
-    if not strongest:
-        return "nothing about this job is urgent; it is here because the shift has room"
-    return "; ".join(strongest[:3])
+    sentence = (
+        "; ".join(strongest[:3])
+        if strongest
+        else "nothing about this job is urgent; it is here because the shift has room"
+    )
+    if terms.downtime_is_unknown:
+        # ADR-005 wants the caveat where the job is, not in a log. A technician
+        # reading this knows the ranking did not count the line stopping,
+        # because nothing here could work out whether it would.
+        sentence += (
+            f"; {order.machine_id} is not in the current line layout, so the cost of "
+            "leaving it down was not counted"
+        )
+    return sentence
 
 
 def _normalised(values: Sequence[float]) -> list[float]:
@@ -406,7 +441,14 @@ def dispatch(
         placed=tuple(placed),
         unassigned=tuple(unassigned),
         held=tuple(held),
-        summary=_summary(band, ratio, placed, unassigned, held),
+        summary=_summary(
+            band,
+            ratio,
+            placed,
+            unassigned,
+            held,
+            unpriced=sum(1 for _, _, terms in ranked if terms.downtime_is_unknown),
+        ),
     )
 
 
@@ -430,11 +472,14 @@ def _rank(
 
     raw_downtime: list[float] = []
     raw_waiting: list[float] = []
+    unpriced: list[bool] = []
     for item in placeable:
-        station = config.station_of(item.order.machine_id)
-        raw_downtime.append(
-            downtime_units(item.order, station, config.line_of(item.order.machine_id))
-        )
+        cost = _downtime_or_unknown(item.order, config)
+        unpriced.append(cost is None)
+        # Zero rather than absent: the normalisation below divides by the largest
+        # in this list, so leaving an order out would move every other order's
+        # term (ADR-045 §1, ADR-048).
+        raw_downtime.append(0.0 if cost is None else cost)
         raw_waiting.append(max(0.0, (now - item.created_at).total_seconds() / 60.0))
 
     downtime = _normalised(raw_downtime)
@@ -448,6 +493,7 @@ def _rank(
             skill_match=_skill_match(item.order, available),
             waiting=waiting[index],
             eta_urgency=_eta_urgency(item.order, now, horizon),
+            downtime_is_unknown=unpriced[index],
         )
         score = (
             weights.severity * terms.severity
@@ -609,6 +655,7 @@ def _summary(
     placed: Sequence[Placement],
     unassigned: Sequence[Withheld],
     held: Sequence[Withheld],
+    unpriced: int,
 ) -> str:
     """The sentence ADR-011 kept the gate separate in order to be able to write.
 
@@ -620,4 +667,9 @@ def _summary(
         parts.append(f"{len(held)} held back")
     if unassigned:
         parts.append(f"{len(unassigned)} admitted with nobody free to take it")
+    if unpriced:
+        # The half of ADR-048 that keeps a stale layout loud. The work flowed;
+        # the file still needs somebody to look at it, and this says so every
+        # round until they do.
+        parts.append(f"{unpriced} order(s) name a machine the layout does not describe")
     return ", ".join(parts)
