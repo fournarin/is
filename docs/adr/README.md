@@ -64,6 +64,7 @@ entries replace parts of earlier ones, and both are kept.
 | [050](0050-the-gates-report-is-computed-when-asked.md) | The gate's report is computed when asked, not stored | |
 | [051](0051-baselines-are-a-module-of-their-own.md) | The baselines are a module of their own | |
 | [052](0052-what-review-was-protecting-and-what-it-was-not.md) | What review was protecting, and what it was not | |
+| [053](0053-what-the-comparison-demonstrated-and-what-it-did-not.md) | What the comparison demonstrated, and what it did not | |
 
 ## Where to start
 
