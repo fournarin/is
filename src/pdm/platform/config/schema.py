@@ -294,6 +294,11 @@ class DispatchPolicy(BaseModel):
     model_config = _STRICT
 
     round_seconds: int = Field(gt=0)
+    # How long CP-SAT may search before the round takes the answer it has
+    # (ADR-054). A bound rather than a target: the solver returns the best
+    # feasible schedule it found, and a round that has not found one falls back
+    # to the ranked queue rather than returning nothing.
+    solver_seconds: float = Field(gt=0)
 
 
 class PolicyConfig(BaseModel):

@@ -29,6 +29,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 from compare_policies import (  # type: ignore[import-not-found]  # noqa: E402
     GateAndScore,
     Row,
+    _policies,
     compare,
     summarise,
     with_arrival_multiplier,
@@ -58,8 +59,10 @@ class TestItReproduces:
         assert rows == again
 
     def test_every_cell_of_the_grid_is_present(self, rows: list[Row]) -> None:
-        assert len(rows) == len(SEEDS) * len(BUFFERS) * len(ARRIVALS) * 3
-        assert len({row.policy for row in rows}) == 3
+        policies = len(_policies(CONFIG))
+        assert policies == 4, "3A, 3B, 3C and 3D; a fifth needs a row in this file too"
+        assert len(rows) == len(SEEDS) * len(BUFFERS) * len(ARRIVALS) * policies
+        assert len({row.policy for row in rows}) == policies
 
 
 class TestTheGridVariesWhatItSaysItVaries:
@@ -96,11 +99,18 @@ class TestTheGridVariesWhatItSaysItVaries:
 
 
 class TestTheGateIsMeasuredAsWellAsRun:
-    def test_only_the_gate_reports_bands_and_held_work(self, rows: list[Row]) -> None:
+    def test_only_the_policies_with_a_gate_report_bands_and_held_work(
+        self, rows: list[Row]
+    ) -> None:
         """The baselines have no gate, so those columns are empty for them -
-        which is a fact about what they are, not a gap in the measurement."""
+        which is a fact about what they are, not a gap in the measurement.
+
+        3D has the same gate as 3C and reports the same way (ADR-054 §1). If it
+        ever stopped, the gate would have been folded into its objective, which
+        is the one thing that record forbids.
+        """
         for row in rows:
-            if row.policy.startswith("3C"):
+            if row.policy.startswith(("3C", "3D")):
                 assert row.light_rounds + row.normal_rounds + row.heavy_rounds > 0
             else:
                 assert row.held_rounds == 0

@@ -79,7 +79,7 @@ POLICY: dict[str, Any] = {
         "eta_urgency": 0.7,
     },
     "load": {"light_below": 0.5, "heavy_at_or_above": 0.8},
-    "dispatch": {"round_seconds": 300},
+    "dispatch": {"round_seconds": 300, "solver_seconds": 5.0},
     "triggers": {
         "cooldown_minutes": 30,
         "eta_grace_minutes": 60,
