@@ -144,6 +144,9 @@ source_modules =
     pdm.triggers.trend
     pdm.retrieval.domain
     pdm.platform.auth.domain
+    pdm.sim.domain
+    pdm.sim.scenario
+    pdm.sim.engine
     pdm.llm.domain
     pdm.llm.extractive
     pdm.llm.prompt
