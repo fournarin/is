@@ -11,6 +11,7 @@ pure function of its inputs (invariant 10).
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from psycopg import Connection
@@ -165,7 +166,7 @@ class WorkOrders:
         )
         return Issued(repo.issue(conn, order, now=now), order)
 
-    def open_orders(self, conn: Connection[Any]) -> list[tuple[str, WorkOrder]]:
+    def open_orders(self, conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
         """What the dispatch tick will be given (design.md 6.2)."""
         return repo.open_orders(conn)
 

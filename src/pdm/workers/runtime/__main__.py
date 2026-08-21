@@ -31,6 +31,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from pdm.contracts import MachineModel, Severity
+from pdm.dispatch.service import DispatchRounds
 from pdm.platform.clock import Clock, ScaledClock, SystemClock
 from pdm.platform.config import load_config
 from pdm.platform.config.loader import Config
@@ -40,7 +41,13 @@ from pdm.signals import LINE_A_TWELVE_HOURS, Feed, SyntheticSource
 from pdm.triggers import Triggers
 from pdm.work import WorkOrders
 from pdm.workers.loop import Worker
-from pdm.workers.runtime.handlers import TriggerLoop, ensure_tick_queued, observe_handler
+from pdm.workers.runtime.handlers import (
+    TriggerLoop,
+    dispatch_handler,
+    ensure_round_queued,
+    ensure_tick_queued,
+    observe_handler,
+)
 
 log = logging.getLogger(__name__)
 
@@ -152,36 +159,54 @@ def main() -> None:
         feed=build_feed(clock),
     )
 
+    rounds = DispatchRounds(clock, config)
+    round_period = timedelta(seconds=config.policy.dispatch.round_seconds)
+
+    # **No source, no trigger chain.** With nothing to read, a tick would do
+    # nothing but book the next one - a job row every ten seconds for ever, and a
+    # process claiming to run a trigger loop that has no signals in it. Layer 3
+    # is not conditional on it: work arrives from a PM schedule and from
+    # technicians reporting faults (ADR-010), so a plant with no sensors still
+    # has a queue that has to be ranked.
+    running = loop.feed is not None
+
     def seed_the_chain() -> None:
+        """Both chains, seeded together and independent afterwards."""
         with pool.connection() as conn:
-            ensure_tick_queued(conn, queue)
+            if running:
+                ensure_tick_queued(conn, queue)
+            ensure_round_queued(conn, queue)
             conn.commit()
 
-    # **No source, no chain.** With nothing to read, a tick would do nothing but
-    # book the next one - a job row every ten seconds for ever, and a process
-    # claiming to run a trigger loop that has no signals in it. No handlers is
-    # also how `Worker` knows not to claim at all (ADR-040), which is exactly the
-    # behaviour this container had before layer 1 arrived.
-    running = loop.feed is not None
     worker = Worker(
         queue=queue,
         pool=pool,
         clock=clock,
         handlers={
-            JobKind.OBSERVE.value: observe_handler(
-                loop, queue, clock, period=timedelta(seconds=timing.heartbeat_seconds)
-            )
-        }
-        if running
-        else {},
-        # A tick that exhausts its attempts schedules no successor, and layer 1
+            JobKind.DISPATCH.value: dispatch_handler(rounds, queue, clock, period=round_period),
+            **(
+                {
+                    JobKind.OBSERVE.value: observe_handler(
+                        loop, queue, clock, period=timedelta(seconds=timing.heartbeat_seconds)
+                    )
+                }
+                if running
+                else {}
+            ),
+        },
+        # A job that exhausts its attempts schedules no successor, and its layer
         # would stop for ever with everything else still running (ADR-044 §3).
-        on_idle=seed_the_chain if running else None,
+        on_idle=seed_the_chain,
     )
     worker.install_signal_handlers()
 
+    seed_the_chain()
+    log.info(
+        "worker-runtime %s: dispatch round every %ss of clock time",
+        WORKER,
+        config.policy.dispatch.round_seconds,
+    )
     if running:
-        seed_the_chain()
         log.info(
             "worker-runtime %s: trigger loop every %ss of clock time, signals from %s",
             WORKER,
@@ -191,7 +216,8 @@ def main() -> None:
     else:
         log.info(
             "worker-runtime %s: SIGNAL_SOURCE is not set, so there is no trigger loop. "
-            "Reaping %s jobs every %ss and claiming nothing.",
+            "Scheduling rounds still run - scheduled and reported work needs no sensor "
+            "(ADR-010) - and %s jobs are reaped every %ss.",
             WORKER,
             JobClass.RUNTIME.value,
             timing.heartbeat_seconds,

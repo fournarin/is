@@ -50,6 +50,10 @@ class JobKind(StrEnum):
     # runs enqueues the next one in the same transaction, so the whole of the
     # trigger loop's schedule is a row anybody can SELECT (ADR-044 section 1).
     OBSERVE = "observe"
+    # Layer 3's pulse, and the same shape as OBSERVE: the round that runs books
+    # the next one in its own transaction, so the schedule is a row anybody can
+    # SELECT rather than a timer inside a process (ADR-044 §1, ADR-045).
+    DISPATCH = "dispatch"
 
 
 class JobStatus(StrEnum):

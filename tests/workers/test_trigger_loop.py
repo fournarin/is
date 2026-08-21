@@ -141,7 +141,7 @@ def _loop(
     )
 
 
-def _open_orders(conn: Connection[Any]) -> list[tuple[str, Any]]:
+def _open_orders(conn: Connection[Any]) -> list[tuple[str, Any, Any]]:
     return work.open_orders(conn)
 
 
@@ -158,7 +158,7 @@ class TestOneFaultOneTicket:
 
         assert len(tick.issued) == 1
         assert len(tick.observation.raised) == 1
-        _, order = _open_orders(conn)[0]
+        _, order, _ = _open_orders(conn)[0]
         assert order.origin is WorkOrderOrigin.CONDITION
         assert order.machine_id == MOTOR
         assert order.finding_kind is FindingKind.DETECTED
@@ -214,7 +214,7 @@ class TestPredictedWork:
         tick = loop.tick(conn)
 
         assert len(tick.observation.forecast) == 1
-        _, order = _open_orders(conn)[0]
+        _, order, _ = _open_orders(conn)[0]
         assert order.finding_kind is FindingKind.PREDICTED
         assert order.eta is not None and order.eta_confidence is not None
         assert "expected to reach the threshold" in order.reason

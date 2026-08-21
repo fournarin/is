@@ -23,6 +23,7 @@ from psycopg import Connection
 from pydantic import BaseModel, ConfigDict
 
 from pdm.contracts import FindingRef, MachineId, RuleId, Signal
+from pdm.dispatch.service import DispatchRounds, describe
 from pdm.platform.clock import Clock
 from pdm.platform.config.loader import Config
 from pdm.platform.jobs import Job, JobKind, JobQueue
@@ -290,3 +291,42 @@ def ensure_tick_queued(conn: Connection[Any], queue: JobQueue) -> Job | None:
         return None
     log.info("no trigger tick was pending; starting the chain")
     return queue.enqueue(conn, kind=JobKind.OBSERVE)
+
+
+def dispatch_handler(
+    rounds: DispatchRounds, queue: JobQueue, clock: Clock, *, period: timedelta
+) -> Any:
+    """Run one scheduling round and book the next one, in the job's transaction.
+
+    The same shape as `observe_handler` and for the same reason (ADR-044 §1): a
+    round that failed leaves no appointment, the whole transaction rolls back,
+    and `ensure_round_queued` is what starts the chain again. Layer 3 does not
+    know it is on a schedule, which is what keeps `dispatch()` replayable.
+
+    Unlike layer 1's tick, this one runs whether or not anything arrived. The
+    queue changes for reasons no event reaches - a shift starts, a technician's
+    remaining minutes fall, a predicted crossing gets closer - so a round that
+    only ran on an event would rank a shift by facts that had stopped being true.
+    """
+
+    def handle(conn: Connection[Any], job: Job) -> None:
+        report = rounds.run(conn)
+        queue.enqueue(conn, kind=JobKind.DISPATCH, available_at=clock.now() + period)
+
+        report_at = log.info if report.worth_reporting else log.debug
+        report_at("round: %s", describe(report))
+
+    return handle
+
+
+def ensure_round_queued(conn: Connection[Any], queue: JobQueue) -> Job | None:
+    """Put the dispatch round back if the chain is gone (ADR-044 §3).
+
+    Layer 3's copy of `ensure_tick_queued`, deliberately not shared with it: the
+    two chains fail independently, and a single helper covering both would have
+    to be told which, at which point it is two functions with an argument.
+    """
+    if queue.pending(conn, kind=JobKind.DISPATCH, payload={}) is not None:
+        return None
+    log.info("no dispatch round was pending; starting the chain")
+    return queue.enqueue(conn, kind=JobKind.DISPATCH)

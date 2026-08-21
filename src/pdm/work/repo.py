@@ -120,8 +120,13 @@ def get(conn: Connection[Any], work_order_ref: str) -> WorkOrder | None:
     return _to_order(row) if row else None
 
 
-def open_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder]]:
+def open_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
     """Everything the dispatch tick has to consider, oldest first.
+
+    The creation time comes back beside the order because the score's waiting
+    term needs it and the contract deliberately does not carry it: a `WorkOrder`
+    that knew when it was written down could be built without ever having been
+    (ADR-045, consequences).
 
     **No limit, and that is deliberate.** `load_ratio` is a sum over the whole
     queue (design.md 13.2), so a page of it is not a smaller version of the
@@ -144,13 +149,13 @@ def open_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder]]:
         # against a generic plan cannot.
         cur.execute(
             f"""
-            SELECT work_order_ref, {_COLUMNS} FROM work_order
+            SELECT work_order_ref, created_at, {_COLUMNS} FROM work_order
              WHERE status IN ('queued', 'assigned', 'in_progress', 'handed_over')
              ORDER BY created_at, work_order_ref
             """
         )
         rows = cur.fetchall()
-    return [(str(row["work_order_ref"]), _to_order(dict(row))) for row in rows]
+    return [(str(row["work_order_ref"]), _to_order(dict(row)), row["created_at"]) for row in rows]
 
 
 def for_finding(conn: Connection[Any], finding_ref: FindingRef) -> list[tuple[str, WorkOrder]]:
