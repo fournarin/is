@@ -340,10 +340,15 @@ def _check(
     run it appears in worthless rather than merely wrong: capacity that never
     existed, or work that was never raised, would show up in the report as an
     improvement.
+
+    Five of them: a ticket nobody raised, somebody off the roster, a technician
+    already under a machine, a crew of the wrong size (ADR-046 §5), and minutes
+    the shift does not have (ADR-047).
     """
     roster = {technician.user for technician in technicians if technician.active}
     waiting = {ticket.ref: ticket for ticket in state.pending}
     taken: dict[UserId, str] = {user: "another job" for user in state.busy}
+    left = dict(state.remaining_minutes)
 
     for placement in placements:
         ticket = waiting.pop(placement.ref, None)
@@ -366,6 +371,16 @@ def _check(
                 raise ValueError(
                     f"policy placed {user} on {placement.ref} while they are on "
                     f"{taken[user]}; nobody is in two places"
+                )
+            # ADR-047. `dispatch()` refuses this itself (ADR-045 §5); a baseline
+            # has no such rule, and a run that tolerated it would compare a
+            # policy that respects the roster with one that invents people.
+            minutes = ticket.order.estimated_minutes
+            if minutes > left.get(user, 0):
+                raise ValueError(
+                    f"{placement.ref} is priced at {minutes} minutes and {user} has "
+                    f"{left.get(user, 0)} left on the {state.shift_id} shift; a policy "
+                    f"cannot spend minutes the shift does not have (ADR-047)"
                 )
             taken[user] = placement.ref
 

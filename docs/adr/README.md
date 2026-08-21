@@ -57,6 +57,7 @@ entries replace parts of earlier ones, and both are kept.
 | [043](0043-how-a-trend-becomes-a-prediction-and-what-its-interval-means.md) | How a trend becomes a prediction, and what its interval means | |
 | [044](0044-the-trigger-loop-what-ticks-it-and-what-feeds-it.md) | The trigger loop: what ticks it, what feeds it, what it cancels | |
 | [046](0046-what-the-simulator-models-and-what-it-assumes.md) | What the simulator models, reads from config, and invents | |
+| [047](0047-a-policy-may-not-spend-minutes-the-shift-does-not-have.md) | A policy may not spend minutes the shift does not have | |
 
 ## Where to start
 

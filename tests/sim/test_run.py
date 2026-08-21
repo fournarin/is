@@ -86,6 +86,7 @@ class FirstComeFirstServed:
     name = "test-fifo"
 
     def choose(self, state: RoundState) -> tuple[Placement, ...]:
+        left = dict(state.remaining_minutes)
         free = [
             technician.user
             for technician in state.technicians
@@ -94,16 +95,19 @@ class FirstComeFirstServed:
         placements: list[Placement] = []
         for ticket in state.pending:
             crew = ticket.order.required_technicians
-            if len(free) < crew:
+            # A policy may not spend minutes the shift does not have (ADR-047),
+            # so even the simplest one has to read what it has left.
+            fits = [user for user in free if left[user] >= ticket.order.estimated_minutes]
+            if len(fits) < crew:
                 continue
+            free = [user for user in free if user not in fits[:crew]]
             placements.append(
                 Placement(
                     ref=ticket.ref,
-                    users=tuple(free[:crew]),
+                    users=tuple(fits[:crew]),
                     priority_reason="oldest first",
                 )
             )
-            free = free[crew:]
         return tuple(placements)
 
 
@@ -133,6 +137,7 @@ def _scenario(
     duration: timedelta = timedelta(hours=2),
     technicians: int = 1,
     windows: tuple[ArrivalWindow, ...] = (),
+    available_minutes: int | None = None,
 ) -> SimScenario:
     roster = tuple(
         Technician(user=UserId(f"tech-{index + 1}"), skills=ALL_SKILLS)
@@ -151,7 +156,11 @@ def _scenario(
                 shift_id=MORNING,
                 on_date=STARTS_AT.date(),
                 technician=technician.user,
-                available_minutes=int(duration.total_seconds() // 60),
+                available_minutes=(
+                    int(duration.total_seconds() // 60)
+                    if available_minutes is None
+                    else available_minutes
+                ),
             )
             for technician in roster
         ),
@@ -264,6 +273,65 @@ class TestTheSeamTheEngineOffersAPolicy:
                     _failure(BOTTLENECK, after=timedelta(minutes=12), minutes=30),
                 ),
             )
+
+    def test_a_technician_cannot_be_given_more_minutes_than_the_shift_has(
+        self, config: Config
+    ) -> None:
+        """ADR-047: the fifth way to describe a shift that could not have run.
+
+        `dispatch()` refuses this itself (ADR-045 §5). A baseline has no such
+        rule, so leaving it unenforced would let slice 7.3's table compare a
+        policy that respects the roster with policies that do not - and the
+        difference would read as the gated policy being slow.
+        """
+        policy = PlacesWhateverItWasTold((Placement(ref="WO-0001", users=(UserId("tech-1"),)),))
+        with pytest.raises(ValueError, match="45"):
+            run(
+                # 60 estimated minutes against 45 on the roster: R-2000iC at
+                # high severity, priced by policy.yaml through the work module.
+                _scenario(available_minutes=45),
+                policy=policy,
+                config=config,
+                failures=(_failure(BUFFERED, after=timedelta(minutes=12), minutes=30),),
+            )
+
+    def test_a_job_that_exactly_fills_the_shift_is_allowed(self, config: Config) -> None:
+        """The boundary is not the bug: sixty minutes of work and sixty minutes
+        of technician is a shift that runs, and refusing it would quietly cost
+        every policy the last job of every shift."""
+        policy = PlacesWhateverItWasTold((Placement(ref="WO-0001", users=(UserId("tech-1"),)),))
+
+        result = run(
+            _scenario(available_minutes=60),
+            policy=policy,
+            config=config,
+            failures=(_failure(BUFFERED, after=timedelta(minutes=12), minutes=30),),
+        )
+
+        assert result.tickets_finished == 1
+
+    def test_minutes_already_spent_this_shift_are_gone(self, config: Config) -> None:
+        """The other half of the rule, read from the policy's side: what is left
+        falls as work completes, so the second job of a shift is judged against
+        what the first one left behind rather than against the roster.
+
+        The work does not vanish - it stays pending and is costed as downtime on
+        a machine still waiting, which is what the shift genuinely could not do.
+        """
+        result = run(
+            _scenario(duration=timedelta(hours=3), available_minutes=80),
+            policy=FirstComeFirstServed(),
+            config=config,
+            failures=(
+                # 60 estimated, 30 actually spent: 50 of the 80 minutes are left
+                # afterwards, and the next job is priced at 60 as well.
+                _failure(BUFFERED, after=timedelta(minutes=5), minutes=30),
+                _failure(BOTTLENECK, after=timedelta(minutes=60), minutes=30),
+            ),
+        )
+
+        assert result.tickets_finished == 1
+        assert result.tickets_unfinished == 1
 
     def test_a_policy_that_places_nothing_leaves_the_work_pending(self, config: Config) -> None:
         """The gate holding work back is a legitimate outcome, not a stall. It
