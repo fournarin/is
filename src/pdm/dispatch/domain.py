@@ -124,6 +124,22 @@ class Terms(BaseModel):
     downtime_is_unknown: bool = False
 
 
+class RawFacts(BaseModel):
+    """The two quantities behind the normalised terms, before the division.
+
+    Carried alongside `Terms` because the sentence a technician reads quotes
+    these and not those: ADR-045 §1 makes downtime and waiting a comparison
+    within one round, and says the result must not be presented as a magnitude.
+    Forty units of production is true whatever else is in the queue; 1.0 only
+    means "the most in this round", which is not a sentence anybody can act on.
+    """
+
+    model_config = _FROZEN
+
+    downtime_units: float = 0.0
+    waited_minutes: float = 0.0
+
+
 class Placement(BaseModel):
     """An order this round is releasing, and to whom."""
 
@@ -134,6 +150,7 @@ class Placement(BaseModel):
     priority_score: float
     priority_reason: str = Field(min_length=1)
     terms: Terms
+    facts: RawFacts = RawFacts()
 
 
 class Withheld(BaseModel):
@@ -284,21 +301,54 @@ def _eta_urgency(order: WorkOrder, now: datetime, horizon_hours: int) -> float:
     return max(0.0, 1.0 - hours_away / horizon_hours)
 
 
-def _reason(terms: Terms, order: WorkOrder, config: Config) -> str:
+def _reason(
+    terms: Terms,
+    order: WorkOrder,
+    config: Config,
+    *,
+    downtime: float,
+    waited: float,
+    now: datetime,
+) -> str:
     """Why this job is ranked where it is, in a technician's words (ADR-005).
 
     Built from the terms that actually moved it - the two or three largest
     contributions - because a sentence listing five terms including three near
     zero reads as a formula rather than as a reason, and the point is to be
     believed by somebody who knows the machine better than the system does.
+
+    **The quantities are the raw ones, never the normalised terms.** ADR-045 §1
+    divides downtime and waiting by the largest in the round, which makes them a
+    comparison and not a magnitude, and says in as many words that the result
+    must not be presented as one. A ticket reading "downtime 1.0" would be
+    printing exactly the number that record forbids. Forty units of production
+    and three hours of waiting are facts about the plant, true whatever else is
+    in the queue, and they are what somebody standing at the machine can check.
+
+    No model writes any of this. Every clause is assembled from a number the
+    system computed (ADR-003).
     """
     weights = config.policy.weights
     contributions = [
         (weights.severity * terms.severity, f"severity is {order.severity.value}"),
-        (weights.downtime * terms.downtime, "this station has little buffer, so the line feels it"),
-        (weights.skill_match * terms.skill_match, "somebody on this shift has the skill"),
-        (weights.waiting * terms.waiting, "it has been waiting longer than most"),
-        (weights.eta_urgency * terms.eta_urgency, "the predicted crossing is close"),
+        (
+            weights.downtime * terms.downtime,
+            f"the line loses about {downtime:.0f} unit(s) while this waits",
+        ),
+        (
+            weights.skill_match * terms.skill_match,
+            f"somebody on this shift holds {order.required_skill}"
+            if order.required_skill is not None
+            else "this job names no skill, so anybody free can take it",
+        ),
+        (weights.waiting * terms.waiting, f"it has been waiting {_span(waited)}"),
+        (
+            weights.eta_urgency * terms.eta_urgency,
+            f"the predicted crossing is about {_span((order.eta - now).total_seconds() / 60.0)} "
+            f"away"
+            if order.eta is not None
+            else "the predicted crossing is close",
+        ),
     ]
     # 0.05 is presentational and its provenance is ADR-049 §2: it decides which
     # clauses appear in this sentence and nothing else. Every term is already in
@@ -319,6 +369,22 @@ def _reason(terms: Terms, order: WorkOrder, config: Config) -> str:
             "leaving it down was not counted"
         )
     return sentence
+
+
+def _span(minutes: float) -> str:
+    """A duration a technician reads at a glance, not an ISO interval.
+
+    Rounded on purpose: "3h 20m" is a fact somebody can check against the clock
+    on the wall, and "3:19:47" claims a precision the estimate behind it does
+    not have.
+    """
+    total = max(0, int(minutes))
+    hours, rest = divmod(total, 60)
+    if hours and rest:
+        return f"{hours}h {rest}m"
+    if hours:
+        return f"{hours}h"
+    return f"{rest}m"
 
 
 def _normalised(values: Sequence[float]) -> list[float]:
@@ -429,7 +495,7 @@ def dispatch(
                     ref=item.ref,
                     why=f"{cause}, so there is no capacity to schedule against",
                 )
-                for item, _, _ in ranked
+                for item, _, _, _ in ranked
             ),
             summary=f"no capacity: {cause}; {len(ranked)} order(s) are waiting",
         )
@@ -437,7 +503,12 @@ def dispatch(
     assert ratio is not None
     admitted, held = _admit(ranked, band=band, ratio=ratio, capacity=capacity, config=config)
     placed, unassigned = _assign(
-        admitted, available=available, assignments=assignments, queue=queue, config=config
+        admitted,
+        available=available,
+        assignments=assignments,
+        queue=queue,
+        config=config,
+        now=now,
     )
 
     return Round(
@@ -457,12 +528,12 @@ def dispatch(
             placed,
             unassigned,
             held,
-            unpriced=sum(1 for _, _, terms in ranked if terms.downtime_is_unknown),
+            unpriced=sum(1 for _, _, terms, _ in ranked if terms.downtime_is_unknown),
         ),
     )
 
 
-_Ranked = tuple[Queued, float, Terms]
+_Ranked = tuple[Queued, float, Terms, RawFacts]
 
 
 def _rank(
@@ -512,7 +583,14 @@ def _rank(
             + weights.waiting * terms.waiting
             + weights.eta_urgency * terms.eta_urgency
         )
-        scored.append((item, score, terms))
+        scored.append(
+            (
+                item,
+                score,
+                terms,
+                RawFacts(downtime_units=raw_downtime[index], waited_minutes=raw_waiting[index]),
+            )
+        )
 
     # Tie-break by age then reference. Two orders with identical scores are
     # common - two low-severity PM jobs on the same station - and leaving their
@@ -543,7 +621,7 @@ def _admit(
     running = ratio
 
     for entry in ranked:
-        item, _, _ = entry
+        item, _, _, _ = entry
         order = item.order
         scheduled = order.origin is WorkOrderOrigin.SCHEDULED
 
@@ -600,6 +678,7 @@ def _assign(
     assignments: Sequence[tuple[UserId, int]],
     queue: Sequence[Queued],
     config: Config,
+    now: datetime,
 ) -> tuple[list[Placement], list[Withheld]]:
     """Greedy down the ranked list: the best-matched free people, or nobody.
 
@@ -611,7 +690,7 @@ def _assign(
     placed: list[Placement] = []
     unassigned: list[Withheld] = []
 
-    for item, score, terms in admitted:
+    for item, score, terms, facts in admitted:
         order = item.order
         candidates = [
             person
@@ -651,7 +730,15 @@ def _assign(
                     for index, person in enumerate(chosen)
                 ),
                 priority_score=score,
-                priority_reason=_reason(terms, order, config),
+                priority_reason=_reason(
+                    terms,
+                    order,
+                    config,
+                    downtime=facts.downtime_units,
+                    waited=facts.waited_minutes,
+                    now=now,
+                ),
+                facts=facts,
                 terms=terms,
             )
         )

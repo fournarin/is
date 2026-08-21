@@ -78,6 +78,29 @@ class DispatchRounds:
 
     def run(self, conn: Connection[Any]) -> RoundReport:
         """Decide and write, in the caller's transaction."""
+        decided = self.decide(conn)
+
+        placed: list[str] = []
+        moved_on: list[str] = []
+        for placement in decided.placed:
+            # Only an order still queued is written. Work somebody accepted
+            # between this round's read and its write keeps its assignee
+            # (ADR-045 §4), and the round says how many it let go rather than
+            # reporting a placement that did not happen.
+            (placed if repo.place(conn, placement) else moved_on).append(placement.ref)
+
+        return RoundReport(
+            at=decided.at, round=decided, placed=tuple(placed), moved_on=tuple(moved_on)
+        )
+
+    def decide(self, conn: Connection[Any]) -> Round:
+        """What a round would do, without doing any of it (ADR-050).
+
+        The read path for the gate's report calls this, so the sentence a
+        supervisor is shown comes from the same function that schedules rather
+        than from a second implementation that could drift from it. Writes
+        nothing, so it is safe on a read-only request.
+        """
         now = self.clock.now()
         window = shift_at(self._shifts, now, self._zone)
 
@@ -94,7 +117,7 @@ class DispatchRounds:
             else []
         )
 
-        decided = dispatch(
+        return dispatch(
             queue,
             technicians=repo.technicians(conn),
             assignments=[(one.technician, one.available_minutes) for one in assignments],
@@ -103,17 +126,6 @@ class DispatchRounds:
             shift_id=window.shift_id if window is not None else None,
             on_date=window.on_date if window is not None else None,
         )
-
-        placed: list[str] = []
-        moved_on: list[str] = []
-        for placement in decided.placed:
-            # Only an order still queued is written. Work somebody accepted
-            # between this round's read and its write keeps its assignee
-            # (ADR-045 §4), and the round says how many it let go rather than
-            # reporting a placement that did not happen.
-            (placed if repo.place(conn, placement) else moved_on).append(placement.ref)
-
-        return RoundReport(at=now, round=decided, placed=tuple(placed), moved_on=tuple(moved_on))
 
 
 def describe(report: RoundReport) -> str:
