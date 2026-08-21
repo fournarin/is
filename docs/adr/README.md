@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Forty-four decisions, in the order they were made. Each records the context that
+Forty-seven decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -56,7 +56,8 @@ entries replace parts of earlier ones, and both are kept.
 | [042](0042-what-the-rule-engine-remembers-and-what-it-is-told.md) | What the rule engine remembers, and what it is told | |
 | [043](0043-how-a-trend-becomes-a-prediction-and-what-its-interval-means.md) | How a trend becomes a prediction, and what its interval means | |
 | [044](0044-the-trigger-loop-what-ticks-it-and-what-feeds-it.md) | The trigger loop: what ticks it, what feeds it, what it cancels | |
-| [046](0046-what-the-simulator-models-and-what-it-assumes.md) | What the simulator models, reads from config, and invents | |
+| [045](0045-the-load-gate-the-score-and-what-a-round-is-allowed-to-move.md) | The load gate, the score, and what a round may move | |
+| [046](0046-what-the-simulator-models-and-what-it-assumes.md) | What the simulator models, reads from config, and invents | 047 |
 | [047](0047-a-policy-may-not-spend-minutes-the-shift-does-not-have.md) | A policy may not spend minutes the shift does not have | |
 
 ## Where to start
