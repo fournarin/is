@@ -251,6 +251,12 @@ def _downtime_or_unknown(order: WorkOrder, config: Config) -> float | None:
 def _skill_match(order: WorkOrder, available: Sequence[Technician]) -> float:
     """1 where somebody on this shift holds the skill, 0.5 where none is named.
 
+    Rostered and active, **not** free (ADR-049 §1). ADR-045 §1's table says
+    "free" and means this: whether anybody has minutes left is answered by
+    `_assign`, and answering it here as well would count one fact twice and
+    re-rank the queue every time somebody finished a job - under a technician
+    already walking to a machine, which design.md 6.2 refuses.
+
     The middle value is for the orders ADR-041 deliberately leaves without a
     skill: a job priced from `fallback_minutes` names none, because guessing one
     sends the wrong person. They must not score as unmatchable - that would push
@@ -294,6 +300,10 @@ def _reason(terms: Terms, order: WorkOrder, config: Config) -> str:
         (weights.waiting * terms.waiting, "it has been waiting longer than most"),
         (weights.eta_urgency * terms.eta_urgency, "the predicted crossing is close"),
     ]
+    # 0.05 is presentational and its provenance is ADR-049 §2: it decides which
+    # clauses appear in this sentence and nothing else. Every term is already in
+    # the weighted sum, which was computed before this function was called, so
+    # no threshold here can move a score, an ordering or an assignment.
     strongest = [text for value, text in sorted(contributions, key=lambda c: -c[0]) if value > 0.05]
     sentence = (
         "; ".join(strongest[:3])

@@ -207,6 +207,13 @@ def shift_at(
     None where no shift covers the moment. A plant that runs sixteen hours a day
     has eight hours with no shift, and "no shift" is an answer the caller has to
     handle rather than a case to paper over with the nearest one.
+
+    **A shift is its wall-clock hours** (ADR-049 §3). 22:00 to 06:00 runs from
+    when people arrive to when they leave, so across a daylight-saving change
+    the window is seven real hours in spring and nine in autumn - which is what
+    the plant worked, and why this is correct in a DST zone rather than merely
+    tolerated. A boundary naming a local time a transition removes - 02:30 on
+    the day the clocks go forward - takes the offset in force after the change.
     """
     local = moment.astimezone(zone)
     for shift in shifts:
