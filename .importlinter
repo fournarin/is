@@ -74,6 +74,7 @@ type = forbidden
 source_modules =
     pdm.sim
 forbidden_modules =
+    pdm.baselines
     pdm.signals
     pdm.triggers
     pdm.playbooks
@@ -107,8 +108,29 @@ forbidden_modules =
     pdm.dispatch
     pdm.sinks
     pdm.sim
+    pdm.baselines
     pdm.api
     pdm.workers
+
+
+# ─────────────────────────────────────────────────────────────
+# Phase 2's deliverable is a comparison, and a comparison needs an outsider
+# ─────────────────────────────────────────────────────────────
+[importlinter:contract:baselines-know-nothing-of-dispatch]
+name = baselines/ must not import dispatch/ (ADR-046 section 5)
+type = forbidden
+source_modules =
+    pdm.baselines
+forbidden_modules =
+    pdm.dispatch
+    pdm.platform.db
+    psycopg
+# A baseline written against the interface of the thing it is compared to is not
+# a baseline: it is that thing with pieces removed, and the comparison measures
+# the pieces rather than the approach. The database is on the list for the same
+# reason the simulator keeps the true repair time out of `RoundState` - a policy
+# that could read the world outside the round it was handed would have an
+# advantage that belongs to the instrument.
 
 
 # ─────────────────────────────────────────────────────────────

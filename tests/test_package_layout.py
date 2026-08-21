@@ -32,6 +32,12 @@ EXPECTED_MODULES = frozenset(
         "dispatch",
         "sinks",
         "sim",
+        # ADR-051. The two baselines slice 7.3 compares `dispatch()` against are
+        # subjects of the measurement, not part of the instrument that takes it,
+        # so they are not inside `sim`. design.md §2's table needs this row too;
+        # that record is the change request, because `docs-md/` is outside this
+        # checkout on purpose.
+        "baselines",
         "api",
         "workers",
     }
