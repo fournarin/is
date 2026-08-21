@@ -14,8 +14,9 @@ behaving as though it says 0.8.
 from __future__ import annotations
 
 from datetime import time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pdm.contracts import (
     ComponentLabel,
@@ -75,11 +76,35 @@ class PlantConfig(BaseModel):
     model_config = _STRICT
 
     version: int = Field(ge=1)
+    # Where the plant is, as an IANA name. Shift boundaries are local wall-clock
+    # times - "06:00" is when people arrive - and every moment they are compared
+    # against is UTC (ADR-028). Read as UTC, a 06:00 shift in a plant at UTC+7
+    # starts in the middle of the afternoon and the night shift's date rolls a
+    # day early: wrong for one shift in three and right for the others, which is
+    # the failure ADR-028 exists to prevent (ADR-045 §7).
+    timezone: str
     lines: tuple[LineConfig, ...]
     # The single list both Playbook.required_skill and Technician.skills draw
     # from. Two vocabularies would fail to match in silence (ADR-027).
     skills: tuple[SkillId, ...]
     shifts: tuple[ShiftConfig, ...]
+
+    @field_validator("timezone")
+    @classmethod
+    def _the_zone_exists_on_this_machine(cls, value: str) -> str:
+        """Checked at boot, like every other name in this file.
+
+        A zone that does not resolve is a container that starts, schedules a
+        whole shift against the wrong roster, and reports nothing.
+        """
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as error:
+            raise ValueError(
+                f"{value!r} is not a timezone this machine knows: {error}. "
+                f"Use an IANA name such as 'Asia/Bangkok' (ADR-045 §7)"
+            ) from error
+        return value
 
 
 # ── rules.yaml: detection rules and the component labels they may use ───────

@@ -139,6 +139,7 @@ source_modules =
     pdm.authoring.drafting
     pdm.playbooks.domain
     pdm.work.domain
+    pdm.dispatch.domain
     pdm.triggers.domain
     pdm.triggers.trend
     pdm.retrieval.domain

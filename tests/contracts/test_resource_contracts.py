@@ -8,6 +8,7 @@ scheduler that quietly does the wrong thing.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -28,12 +29,38 @@ from pdm.contracts import (
     SymptomCode,
     Technician,
     UserId,
+    shift_at,
     shift_capacity_minutes,
 )
 
 LINE_A = Line(line_id=LineId("line-a"), takt_seconds=60.0)
 TODAY = date(2026, 3, 3)
 MORNING = ShiftId("morning")
+AFTERNOON = ShiftId("afternoon")
+NIGHT = ShiftId("night")
+
+# The plant is in Bangkok, seven hours ahead of UTC and with no daylight saving,
+# which is what makes the difference between the two readings visible in every
+# assertion below rather than in one shift a year.
+BANGKOK = ZoneInfo("Asia/Bangkok")
+
+# The three shifts in plant.yaml, written out rather than loaded: a contract test
+# that reads config would pass or fail on the config rather than on the rule.
+SHIFTS = (
+    ShiftDefinition(shift_id=MORNING, starts_at=time(6, 0), ends_at=time(14, 0)),
+    ShiftDefinition(shift_id=AFTERNOON, starts_at=time(14, 0), ends_at=time(22, 0)),
+    ShiftDefinition(shift_id=NIGHT, starts_at=time(22, 0), ends_at=time(6, 0)),
+)
+
+
+def _bangkok(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
+    """A local wall-clock moment in the plant, as the UTC instant it really is."""
+    return datetime(year, month, day, hour, minute, tzinfo=BANGKOK).astimezone(UTC)
+
+
+def _covering(moment: datetime) -> tuple[ShiftId, date] | None:
+    window = shift_at(SHIFTS, moment, BANGKOK)
+    return None if window is None else (window.shift_id, window.on_date)
 
 
 class TestStationsAndBuffers:
@@ -139,6 +166,96 @@ class TestShiftDefinitions:
         )
         assert shift.crosses_midnight
         assert shift.length == timedelta(hours=8)
+
+
+class TestShiftAt:
+    """Which shift covers a moment, and whose roster that is (ADR-045 section 7).
+
+    Shift boundaries are local wall-clock times - `06:00` is the hour people
+    arrive - and every moment compared against them is UTC (ADR-028). Getting
+    that conversion wrong is not a crash: it reads the wrong roster for one
+    shift in three and the right one for the others, which is the failure
+    ADR-028 was written about.
+    """
+
+    def test_a_moment_is_read_in_the_plants_own_zone_and_not_in_utc(self) -> None:
+        """Half past midnight UTC is half past seven in the morning in Bangkok.
+
+        This is the test that fails against the implementation somebody would
+        write without thinking about it. Compared as UTC, `00:30` falls inside
+        the night shift and files under the day before: wrong shift, wrong
+        roster, wrong day, and nothing reports it.
+        """
+        window = shift_at(SHIFTS, datetime(2026, 3, 3, 0, 30, tzinfo=UTC), BANGKOK)
+
+        assert window is not None
+        assert window.shift_id == MORNING
+        assert window.on_date == date(2026, 3, 3)
+
+    def test_the_night_shift_before_midnight_is_filed_under_that_day(self) -> None:
+        window = shift_at(SHIFTS, _bangkok(2026, 3, 3, 23, 30), BANGKOK)
+
+        assert window is not None
+        assert window.shift_id == NIGHT
+        assert window.on_date == date(2026, 3, 3)
+
+    def test_the_night_shift_after_midnight_is_filed_under_the_day_it_started(self) -> None:
+        """Tuesday at one in the morning is Monday night's shift.
+
+        A roster is written against the day the shift began, so filing this
+        under Tuesday would look up people who are not there and count the
+        capacity of a shift that has not started (ADR-027).
+        """
+        window = shift_at(SHIFTS, _bangkok(2026, 3, 4, 1, 30), BANGKOK)
+
+        assert window is not None
+        assert window.shift_id == NIGHT
+        assert window.on_date == date(2026, 3, 3)
+
+    def test_a_boundary_belongs_to_the_shift_it_starts(self) -> None:
+        """Half-open, or the handover minute belongs to two shifts at once and
+        its work is counted against both rosters."""
+        assert _covering(_bangkok(2026, 3, 3, 6, 0)) == (MORNING, date(2026, 3, 3))
+        assert _covering(_bangkok(2026, 3, 3, 13, 59)) == (MORNING, date(2026, 3, 3))
+        assert _covering(_bangkok(2026, 3, 3, 14, 0)) == (AFTERNOON, date(2026, 3, 3))
+
+    def test_an_hour_no_shift_covers_is_not_the_nearest_shift(self) -> None:
+        """A plant that runs one shift a day has sixteen hours with nobody in
+        it. `None` is the answer the caller has to handle - `dispatch()` reads
+        it as no capacity rather than scheduling against an absent roster."""
+        one_shift = (ShiftDefinition(shift_id=MORNING, starts_at=time(6, 0), ends_at=time(14, 0)),)
+
+        assert shift_at(one_shift, _bangkok(2026, 3, 3, 10, 0), BANGKOK) is not None
+        assert shift_at(one_shift, _bangkok(2026, 3, 3, 20, 0), BANGKOK) is None
+        assert shift_at(one_shift, _bangkok(2026, 3, 4, 2, 0), BANGKOK) is None
+
+    def test_the_window_it_returns_is_absolute_utc(self) -> None:
+        """Local times are what a shift *is*; UTC is what the rest of the system
+        compares against. The window carries both facts without confusing them."""
+        window = shift_at(SHIFTS, _bangkok(2026, 3, 3, 7, 0), BANGKOK)
+
+        assert window is not None
+        # 06:00 in Bangkok is 23:00 UTC the evening before.
+        assert window.starts_at == datetime(2026, 3, 2, 23, 0, tzinfo=UTC)
+        assert window.ends_at == datetime(2026, 3, 3, 7, 0, tzinfo=UTC)
+        assert window.ends_at - window.starts_at == timedelta(hours=8)
+
+    def test_a_window_contains_its_start_and_not_its_end(self) -> None:
+        window = shift_at(SHIFTS, _bangkok(2026, 3, 3, 7, 0), BANGKOK)
+
+        assert window is not None
+        assert window.contains(window.starts_at)
+        assert not window.contains(window.ends_at)
+        assert not window.contains(window.starts_at - timedelta(microseconds=1))
+
+    def test_every_hour_of_a_day_lands_on_exactly_one_shift(self) -> None:
+        """Three eight-hour shifts cover the day with no gap and no overlap. A
+        gap loses work; an overlap prices it against two rosters."""
+        covered = [_covering(_bangkok(2026, 3, 3, hour, 0)) for hour in range(24)]
+        named = [entry for entry in covered if entry is not None]
+
+        assert len(named) == 24
+        assert len({shift for shift, _ in named}) == 3
 
 
 class TestSkillsComeFromOneList:
