@@ -14,17 +14,24 @@ own.
 
 ## What was measured
 
-Three scheduling policies over the same simulated shifts:
+Four scheduling policies over the same simulated shifts:
 
 | | what it sees |
 |---|---|
 | **3A** first come first served | the order tickets arrived in |
 | **3B** priority matrix | severity × line importance |
 | **3C** gate + score | ADR-011's load gate and ADR-045's five-term score |
+| **3D** gate + CP-SAT | the same gate, then a plan for the rest of the shift |
+
+3D is not a fourth ranking. It runs the same gate and replaces only the greedy
+assignment, minimising production lost to delay over the orders the gate
+admitted (ADR-054). Where 3C asks *which job is worth most*, 3D asks *which job
+is worth most per minute it holds somebody* - and the two disagree whenever a
+long job at a well-buffered station outweighs a short one at the bottleneck.
 
 One eight-hour shift on line A, three technicians, four machines, a quiet
 four-hour window followed by a deliberately harsh one. Twenty seeds behind every
-number, six buffer settings, and three arrival rates - 1,080 runs, a few seconds.
+number, six buffer settings, and three arrival rates - 1,440 runs, a few minutes.
 
 ## What this is not
 
@@ -106,6 +113,27 @@ directory does not show that buffer-aware ranking saves production, and it does
 not show that it fails: **it shows that whether it pays depends on a parameter
 nobody has measured yet**, which is a question for the plant rather than for
 another sweep. ADR-053 records all of it.
+
+### What 3D changes
+
+The fourth policy is the one that moves the picture. Over the whole grid:
+
+| | units lost | response (min) | unfinished |
+|---|---:|---:|---:|
+| 3A first come first served | 1106.4 | 35.04 | 20.32 |
+| 3B priority matrix | 1121.4 | 19.39 | 22.27 |
+| 3C gate + score | 1117.0 | 17.21 | 22.03 |
+| **3D gate + CP-SAT** | **1101.3** | 17.59 | **20.88** |
+
+**3D loses less production than 3C in all eighteen cells of the sweep** - every
+buffer setting crossed with every arrival rate - and finishes more work, for 0.4
+of a minute of mean response. Against first-come-first-served it wins on units in
+eleven of the eighteen and responds in half the time; where it loses it loses
+narrowly. So the trade-off above **narrows sharply and does not disappear**: 3D
+comes close to dominating first-come-first-served rather than doing it, and the
+cells it loses are the busy shifts with thick buffers - which is the same reading
+as before, that when the bottleneck stops faster than anybody can reach it, no
+plan helps either.
 
 One more thing that table says, in passing: 3C's response advantage over
 first-come-first-served is 28.1 minutes at two technicians and 0.5 at eight.

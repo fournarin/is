@@ -11,11 +11,14 @@ from pdm.dispatch.domain import (
     Round,
     Terms,
     Withheld,
+    capacity_left,
     committed,
     dispatch,
+    downtime_or_unknown,
     downtime_units,
     load_ratio,
 )
+from pdm.dispatch.solver import schedule
 
 __all__ = [
     "Band",
@@ -24,8 +27,11 @@ __all__ = [
     "Round",
     "Terms",
     "Withheld",
+    "capacity_left",
     "committed",
     "dispatch",
+    "downtime_or_unknown",
     "downtime_units",
     "load_ratio",
+    "schedule",
 ]

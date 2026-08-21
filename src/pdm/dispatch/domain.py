@@ -151,6 +151,12 @@ class Placement(BaseModel):
     priority_reason: str = Field(min_length=1)
     terms: Terms
     facts: RawFacts = RawFacts()
+    # Minutes from `now` until this job is meant to begin. `dispatch()` leaves it
+    # None and means it: a ranked queue says who a job belongs to and nothing
+    # about when it starts, and a zero there would be a promise the greedy
+    # assignment never made. Only `schedule()` fills it in, because a solver that
+    # places work over a horizon knows the answer (ADR-054).
+    starts_in_minutes: int | None = None
 
 
 class Withheld(BaseModel):
@@ -246,7 +252,7 @@ def downtime_units(order: WorkOrder, station: Station, line: Line) -> float:
     return unbuffered * units_per_minute * station.bottleneck_multiplier
 
 
-def _downtime_or_unknown(order: WorkOrder, config: Config) -> float | None:
+def downtime_or_unknown(order: WorkOrder, config: Config) -> float | None:
     """Production lost, or None where the layout cannot say (ADR-048).
 
     A work order carries the machine it was created against and outlives the
@@ -400,7 +406,7 @@ def _normalised(values: Sequence[float]) -> list[float]:
     return [value / top for value in values]
 
 
-def _capacity_left(
+def capacity_left(
     technicians: Sequence[Technician],
     minutes: dict[UserId, int],
     queue: Sequence[Queued],
@@ -536,6 +542,42 @@ def dispatch(
 _Ranked = tuple[Queued, float, Terms, RawFacts]
 
 
+def ranking(
+    queue: Sequence[Queued],
+    *,
+    technicians: Sequence[Technician],
+    assignments: Sequence[tuple[UserId, int]],
+    config: Config,
+    now: datetime,
+) -> dict[str, _Ranked]:
+    """The score, the five terms and the raw facts, per queued order.
+
+    `dispatch()` computes these on its way to a decision and a `Round` carries
+    only the ones it placed - an order the gate admitted and greedy could not
+    crew comes back as a `Withheld`, which is a reference and a sentence.
+
+    3D places some of exactly those, and their tickets have to carry the same
+    explanation as everybody else's (ADR-005). Rather than let the solver
+    approximate it, or widen `Withheld` for one caller, the ranking is offered
+    here as what it already was: a function of the round's arguments.
+
+    Ranking twice costs a sort over the queue and is worth it. The alternative
+    is two implementations of the score, and the second one is wrong the first
+    time a weight changes.
+    """
+    rostered = {user for user, _ in assignments}
+    available = sorted(
+        (person for person in technicians if person.active and person.user in rostered),
+        key=lambda person: person.user,
+    )
+    placeable = [item for item in queue if item.order.status is WorkOrderStatus.QUEUED]
+    return {
+        item.ref: entry
+        for entry in _rank(placeable, available=available, config=config, now=now)
+        for item in (entry[0],)
+    }
+
+
 def _rank(
     placeable: Sequence[Queued],
     *,
@@ -555,7 +597,7 @@ def _rank(
     raw_waiting: list[float] = []
     unpriced: list[bool] = []
     for item in placeable:
-        cost = _downtime_or_unknown(item.order, config)
+        cost = downtime_or_unknown(item.order, config)
         unpriced.append(cost is None)
         # Zero rather than absent: the normalisation below divides by the largest
         # in this list, so leaving an order out would move every other order's
@@ -686,7 +728,7 @@ def _assign(
     two-person job cannot be started, and assigning half of it spends one
     person's shift to achieve nothing (ADR-025).
     """
-    left = _capacity_left(available, dict(assignments), queue)
+    left = capacity_left(available, dict(assignments), queue)
     placed: list[Placement] = []
     unassigned: list[Withheld] = []
 

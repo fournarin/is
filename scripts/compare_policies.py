@@ -34,7 +34,7 @@ from typing import Any
 
 from pdm.baselines import FirstComeFirstServed, PriorityMatrix
 from pdm.contracts import UserId
-from pdm.dispatch import Band, Queued, Round, dispatch
+from pdm.dispatch import Band, Queued, Round, dispatch, schedule
 from pdm.platform.config import Config, load_config
 from pdm.platform.config.schema import LineConfig, PlantConfig, StationConfig
 from pdm.sim import Placement, RoundState, SimRun, SimScenario, run
@@ -155,6 +155,52 @@ class GateAndScore:
         for one in self.rounds:
             counted[one.band.value] = counted.get(one.band.value, 0) + 1
         return counted
+
+
+class CpSat(GateAndScore):
+    """3D: the same gate, and a plan instead of a ranking (ADR-054).
+
+    A subclass rather than a second adapter, because the three translations in
+    `GateAndScore`'s docstring are properties of the seam between this simulator
+    and layer 3, not of either policy - and duplicating them here would let the
+    two comparisons drift apart while both kept running.
+
+    One thing does change, and it is a simplification rather than another
+    translation. `_starting_now` exists because `dispatch()` answers *who is this
+    assigned to* while the engine asks *who starts now*; `schedule()` answers the
+    second question directly, so the round starts exactly the placements the
+    solver put at minute zero. Nothing has to be dropped, because the model's
+    no-overlap constraint already says nobody is under two machines at once.
+    """
+
+    name = "cp-sat"
+
+    def choose(self, state: RoundState) -> tuple[Placement, ...]:
+        queue = [
+            Queued(ref=ticket.ref, order=ticket.order, created_at=ticket.created_at)
+            for ticket in (*state.pending, *state.in_progress)
+        ]
+        free = [technician for technician in state.technicians if technician.user not in state.busy]
+        decided = schedule(
+            queue,
+            technicians=free,
+            assignments=list(state.remaining_minutes),
+            config=self.config,
+            now=state.now,
+            shift_id=state.shift_id,
+            on_date=state.on_date,
+        )
+        self.rounds.append(decided)
+        return tuple(
+            Placement(
+                ref=placement.ref,
+                users=tuple(one.user for one in placement.assignees),
+                priority_score=placement.priority_score,
+                priority_reason=placement.priority_reason,
+            )
+            for placement in decided.placed
+            if placement.starts_in_minutes == 0
+        )
 
 
 @dataclass(frozen=True)
@@ -296,10 +342,12 @@ def _policies(config: Config) -> list[tuple[str, Any, GateAndScore | None]]:
     so reusing one across seeds would report the second shift's gate behaviour on
     top of the first's."""
     gate = GateAndScore(config)
+    solver = CpSat(config)
     return [
         ("3A first-come-first-served", FirstComeFirstServed(), None),
         ("3B priority matrix", PriorityMatrix(), None),
         ("3C gate + score", gate, gate),
+        ("3D gate + CP-SAT", solver, solver),
     ]
 
 

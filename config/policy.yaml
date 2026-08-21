@@ -45,6 +45,13 @@ load:
 # reading it. Five minutes is short against a repair and long against a walk.
 dispatch:
   round_seconds: 300
+  # How long 3D's CP-SAT model may search (ADR-054). Provenance: recorded
+  # decision, bounded by the round above. A round is 300 seconds and a solver
+  # that could run for a whole one would leave the queue unranked until the
+  # instant it is replaced; five seconds is a small fraction of that and, on the
+  # scenarios measured here, an order of magnitude more than the model needs.
+  # It is a ceiling, not a duration: an optimal answer stops the search.
+  solver_seconds: 5.0
 
 # ── triggers (ADR-020, ADR-023) ────────────────────────────────────────────
 triggers:
