@@ -34,6 +34,18 @@ load:
   light_below: 0.5
   heavy_at_or_above: 0.8
 
+# ── dispatch rounds (ADR-011, ADR-045) ─────────────────────────────────────
+# Provenance: recorded decision. design.md 6.2 sets the cadence at roughly five
+# minutes, and it is the interval the simulator's scenarios already run at, so
+# a comparison in slice 7.3 measures the same clock the plant would.
+#
+# The number is a trade between two costs, neither of which is a measurement:
+# longer, and a critical fault waits for the next round before anybody is sent;
+# shorter, and the queue re-ranks under technicians often enough that they stop
+# reading it. Five minutes is short against a repair and long against a walk.
+dispatch:
+  round_seconds: 300
+
 # ── triggers (ADR-020, ADR-023) ────────────────────────────────────────────
 triggers:
   # Provenance: recorded decision. Without a cooldown a sensor oscillating across

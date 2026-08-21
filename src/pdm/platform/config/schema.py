@@ -282,6 +282,20 @@ class JobPolicy(BaseModel):
     authoring: JobTiming
 
 
+class DispatchPolicy(BaseModel):
+    """How often a scheduling round runs (ADR-011, design.md 6.2).
+
+    A cadence rather than a trigger: the queue changes for reasons no event
+    reaches - a shift starts, a technician's remaining minutes fall, a predicted
+    crossing gets closer - so a round that only ran when something arrived would
+    leave a shift ranked by facts that stopped being true.
+    """
+
+    model_config = _STRICT
+
+    round_seconds: int = Field(gt=0)
+
+
 class PolicyConfig(BaseModel):
     model_config = _STRICT
 
@@ -289,6 +303,7 @@ class PolicyConfig(BaseModel):
     weights: DispatchWeights
     load: LoadThresholds
     triggers: TriggerPolicy
+    dispatch: DispatchPolicy
     retrieval: RetrievalPolicy
     # Rough estimates used when no playbook exists, so long-tail work still gets
     # a duration and stays in the queue instead of vanishing (design.md 3.2).

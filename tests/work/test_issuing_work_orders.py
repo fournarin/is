@@ -462,7 +462,7 @@ class TestWhatTheDispatchTickWillRead:
             description="second",
         )
 
-        assert [ref for ref, _ in orders.open_orders(conn)] == [first.ref, second.ref]
+        assert [ref for ref, _, _ in orders.open_orders(conn)] == [first.ref, second.ref]
 
     def test_a_closed_order_leaves_the_queue_and_stays_in_the_table(
         self, conn: Connection[Any], orders: WorkOrders, clock: SimulatedClock
