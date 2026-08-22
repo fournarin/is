@@ -76,7 +76,8 @@ always is.
 
 8. **Leave a trail.** A comment on the issue, three or four lines, Thai, so it
    can be read on a phone: what was done, what is left, what needs a decision.
-   Then append one line to `.claude/loop-log.md`.
+   Then append one line to `docs/loop-log.md`, on the same branch as the slice
+   it describes - never in a pull request of its own.
 
 ## Rules that do not bend
 
@@ -91,6 +92,11 @@ always is.
   of the three, the PR is `human-review`.
 - **Architectural decisions become new ADRs.** Never edit an existing one.
   Next free number in `docs/adr/`, and reference the record being revisited.
+- **Nothing under `.claude/` is written by a run.** Those paths are treated as
+  sensitive and every write to one - `Edit`, `Write`, or a shell redirect
+  alike - stops the run dead on a permission prompt that nobody is awake to
+  answer. It has already thrown away finished work more than once. The trail goes
+  in `docs/loop-log.md`; the protocol you are reading is changed by a person.
 - **Never touch `main` directly**, never force-push, never rewrite history,
   never delete a file the issue did not ask you to delete.
 - **The five principles in `CLAUDE.md` outrank the issue.** Runtime stays
