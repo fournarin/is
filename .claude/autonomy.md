@@ -25,7 +25,8 @@ always is.
    - CI green, no `human-review` label → squash-merge it, delete the branch.
    - CI red → fixing it *is* this run's slice. A red CI that nobody fixes is how
      a loop like this quietly stops being worth anything.
-   - Labelled `human-review` → leave it alone. It is waiting for a person.
+   - Labelled `human-review` → merge it the same way, once its decisions are in
+    `docs/decisions-to-defend.md` (step 7).
 
 3. **Pick one slice.** The eligible issue with the lowest slice number, skipping
    any whose stated dependency is still open. One slice per run. Never two.
@@ -70,9 +71,12 @@ always is.
    `CLAUDE.md`: what changed, which ADRs it obeys, which gates were run here and
    which were left to CI, and what a reviewer should look at hardest.
 
-7. **Merge or hand over.** CI green and the issue is not labelled
-   `human-review` → squash-merge and close the issue. Otherwise label the PR
-   `human-review` and leave it open.
+7. **Merge, or stop at one of the two questions.** CI green → squash-merge and
+   close the issue. A slice labelled `human-review` is merged the same way,
+   **after** its decisions are written into `docs/decisions-to-defend.md` -
+   what was decided, why, what changes if it is wrong, where to look. A slice
+   that hits either hard stop below is labelled `blocked` instead, with the
+   question in the issue.
 
 8. **Leave a trail.** A comment on the issue, three or four lines, Thai, so it
    can be read on a phone: what was done, what is left, what needs a decision.
@@ -89,7 +93,8 @@ always is.
 - **Every constant needs a source**: a machine manual, a measurement made here,
   or a decision recorded in an ADR. A number that merely looks reasonable is the
   same defect as an unapproved playbook. If a slice needs a number that has none
-  of the three, the PR is `human-review`.
+    of the three, the issue is labelled `blocked`, with the question in it.
+
 - **Architectural decisions become new ADRs.** Never edit an existing one.
   Next free number in `docs/adr/`, and reference the record being revisited.
 - **Nothing under `.claude/` is written by a run.** Those paths are treated as
@@ -121,12 +126,30 @@ normal and none is a reason to leave nothing behind:
 | Label | Meaning |
 |---|---|
 | `slice` | A unit of work this loop may pick up |
-| `human-review` | Merging needs a person. Build it, test it, open the PR, stop |
+| `human-review` | Decisions here go in `docs/decisions-to-defend.md` before it merges |
 | `blocked` | Waiting on a decision or a dependency. Skip it |
 | `loop` | Opened by the loop itself, not by a person |
 
-`human-review` is not bureaucracy. It marks the code `docs-md/workflow.md`
-identified as the kind an agent writes plausibly and wrongly at the same time:
-the score formula, the load gate's boundaries, CP-SAT constraints, the prompts
-that draft playbooks, and any constant standing in for a measurement. Those get
-built here and merged by a person who can defend them at the end of term.
+`human-review` marks the code `docs-md/workflow.md` identified as the kind an
+agent writes plausibly and wrongly at the same time: the score formula, the load
+gate's boundaries, CP-SAT constraints, the prompts that draft playbooks. What it
+protects is that somebody can defend those at the end of term - and **merging is
+not reading** (ADR-052). A label that waits for a click produces a click. So the
+label now asks for the thing it was actually after: four lines per decision in
+`docs/decisions-to-defend.md`, which is in the repository the report is written
+from, rather than in a pull request nobody reopens in week 13.
+
+## The two questions an agent does not answer
+
+Neither can be fixed by writing it down, so neither is covered by the ledger. A
+slice that hits one is labelled `blocked`, with the question in the issue, and
+the run stops there.
+
+1. **A constant standing in for a measurement.** `policy.yaml` demands a manual,
+   a measurement made here, or a recorded decision behind every number. Where a
+   slice needs one with none of the three, somebody has to decide whether this
+   project will publish a result that rests on it. That is a judgement about the
+   report, not about the code.
+2. **A safety-linked threshold.** ADR-022 forbids any loop from proposing one be
+   loosened, however many false alarms it produces. An agent proposing it inside
+   a slice is the same act with a different name.

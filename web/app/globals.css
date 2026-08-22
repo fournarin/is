@@ -376,3 +376,136 @@ legend {
 .minutes input {
   max-width: 8rem;
 }
+
+/* ── the overview (slice 10.5) ───────────────────────────────────────────── */
+
+/* The diagram is as wide as the line needs; the page never scrolls sideways. */
+.line-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  min-width: 100%;
+  width: max-content;
+  padding: 0.75rem 0;
+}
+
+.station {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+}
+
+.marker {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.station.over_threshold .marker {
+  color: var(--error);
+}
+
+.station.predicted .marker {
+  color: var(--warn);
+}
+
+.station-id {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bottleneck {
+  font-size: 0.7rem;
+  color: var(--warn);
+}
+
+/* Length carries the meaning: this is the buffer, to scale (ADR-021). */
+.gap {
+  flex-basis: 0.5rem;
+  min-width: 0.5rem;
+  border-top: 2px solid var(--line);
+  align-self: flex-start;
+  margin-top: 0.85rem;
+  text-align: center;
+}
+
+.gap-units {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  transform: translateY(-1.35rem);
+}
+
+.legend {
+  font-size: 0.8rem;
+}
+
+.faults {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.faults li {
+  border-left: 6px solid var(--line);
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.faults li.over_threshold {
+  border-left-color: var(--error);
+}
+
+.faults li.predicted {
+  border-left-color: var(--warn);
+}
+
+.faults p {
+  margin: 0.2rem 0 0;
+}
+
+/* Three metres away, this is the only thing that has to be legible. */
+.band .load {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.35rem;
+}
+
+.held-list,
+.gaps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.held {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+
+.held:first-child {
+  border-top: 0;
+}
+
+.gaps li {
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.gaps li:first-child {
+  border-top: 0;
+}
+
+h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.35rem;
+}

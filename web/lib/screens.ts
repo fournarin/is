@@ -37,7 +37,7 @@ export const SCREENS: readonly Screen[] = [
     title: "ภาพรวมสายการผลิต",
     purpose: "สถานีไหนกำลังจะถึงเกณฑ์ กะนี้รับไหวแค่ไหน และใบงานที่ประตูโหลดกั้นไว้",
     slice: "10.5",
-    href: null,
+    href: "/overview",
     roles: ["supervisor", "engineer"],
   },
 ];
