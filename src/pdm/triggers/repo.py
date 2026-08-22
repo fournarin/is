@@ -31,6 +31,7 @@ from pdm.contracts import (
     MachineId,
     RuleId,
 )
+from pdm.triggers.domain import SymptomSeen
 
 _COLUMNS = """
     machine_id, component, symptom_code, severity, rule_id, detected_at,
@@ -205,6 +206,37 @@ def last_resolved(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], datet
             """
         )
         return {(row[0], row[1]): row[2] for row in cur.fetchall()}
+
+
+def symptoms_seen(conn: Connection[Any]) -> list[SymptomSeen]:
+    """How often each symptom has been raised, per machine, and when.
+
+    **No status filter.** The question this answers is "which playbook is worth
+    writing next", and a symptom seen six times and resolved six times has been
+    seen six times: filtering to the live ones would rank the symptoms nobody has
+    got to yet above the ones that keep coming back.
+
+    One row per Finding, not per firing (ADR-023) - see `SymptomSeen`. The
+    firings are summed alongside so a reviewer can see them, and rank on neither
+    without being told which is which.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT symptom_code,
+                   machine_id,
+                   count(*)                                   AS findings,
+                   sum(occurrence_count)                      AS occurrences,
+                   min(detected_at)                           AS first_seen,
+                   -- last_seen_at is null until a Finding repeats, and a
+                   -- symptom seen exactly once still has to say when.
+                   max(coalesce(last_seen_at, detected_at))   AS last_seen
+              FROM finding
+             GROUP BY symptom_code, machine_id
+            """
+        )
+        rows = cur.fetchall()
+    return [SymptomSeen.model_validate(row) for row in rows]
 
 
 def get(conn: Connection[Any], finding_ref: FindingRef) -> Finding | None:

@@ -107,6 +107,24 @@ class Served(BaseModel):
         return self.playbook.status is PlaybookStatus.APPROVED
 
 
+class PendingForPair(BaseModel):
+    """How many proposals are waiting for one pair, and how long the oldest has.
+
+    The count is what the overview shows beside a machine model; the oldest is
+    what says whether the queue is being worked. Both are read from the rows
+    already in `playbook_proposal` - the review queue is the aggregate, and a
+    second table holding a running total would be a number that can disagree
+    with the rows behind it.
+    """
+
+    model_config = _FROZEN
+
+    symptom_code: SymptomCode
+    machine_model: MachineModel
+    waiting: int = Field(ge=1)
+    oldest: datetime
+
+
 def primary_source(steps: tuple[PlaybookStep, ...]) -> tuple[DocumentId, int]:
     """The document and page most of the steps came from.
 

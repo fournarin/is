@@ -16,6 +16,8 @@ from psycopg import Connection
 from pdm.contracts import Role
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
+from pdm.platform.clock import Clock
+from pdm.platform.config import Config
 from pdm.platform.jobs import JobQueue
 
 SESSION_COOKIE = "pdm_session"
@@ -61,6 +63,31 @@ def authentication(request: Request) -> Authentication:
     return auth
 
 
+def clock(request: Request) -> Clock:
+    """The one time port (ADR-028), for a handler that has to stamp something.
+
+    Most do not: the services the routers call carry their own clock, and a
+    handler that read the time to pass it in would be a second source of it. This
+    exists for the writes the API makes on its own account - an override is one -
+    so that a compressed demo stamps simulated time on them like everything else.
+    """
+    the_clock: Clock = request.app.state.clock
+    return the_clock
+
+
+def plant(request: Request) -> Config:
+    """The validated configuration, loaded once at boot (invariant 7).
+
+    A handler that needs the layout - which model a machine is, which station it
+    stands at - reads it from here rather than from the database, because
+    `plant.yaml` is where the layout lives and a second copy is a second answer
+    (ADR-027). Read-only: the config objects are frozen for the same reason
+    `dispatch()` takes them as an argument.
+    """
+    config: Config = request.app.state.config
+    return config
+
+
 def current_account(
     conn: Annotated[Connection[Any], Depends(connection)],
     auth: Annotated[Authentication, Depends(authentication)],
@@ -76,6 +103,8 @@ CurrentAccount = Annotated[Account, Depends(current_account)]
 Jobs = Annotated[JobQueue, Depends(authoring_jobs)]
 Db = Annotated[Connection[Any], Depends(connection)]
 Auth = Annotated[Authentication, Depends(authentication)]
+Time = Annotated[Clock, Depends(clock)]
+Plant = Annotated[Config, Depends(plant)]
 
 
 def requires(*roles: Role, action: str):  # type: ignore[no-untyped-def]

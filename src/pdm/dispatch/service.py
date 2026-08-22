@@ -104,8 +104,13 @@ class DispatchRounds:
         now = self.clock.now()
         window = shift_at(self._shifts, now, self._zone)
 
+        # Read here rather than inside `dispatch()`, which may not read a table
+        # (invariant 10, ADR-045 §6). The released refs are part of the world the
+        # round is handed, in the same sense the roster is: this is the half of
+        # the split that talks to the database (ADR-059).
+        let_through = repo.released(conn)
         queue = [
-            Queued(ref=ref, order=order, created_at=created_at)
+            Queued(ref=ref, order=order, created_at=created_at, released=ref in let_through)
             for ref, order, created_at in work_repo.open_orders(conn)
         ]
         # No shift covers this moment: the plant is not running, and `dispatch()`

@@ -34,6 +34,7 @@ from pdm.contracts import (
     MachineModel,
     RuleId,
     Signal,
+    SymptomCode,
 )
 from pdm.platform.config.schema import RuleConfig
 from pdm.triggers import trend
@@ -476,3 +477,28 @@ def _predicted(
 def rules_watching(rules: Iterable[RuleConfig], metric_name: str) -> list[RuleConfig]:
     """The rules that read this metric. Convenience for a loop that has many."""
     return [rule for rule in rules if rule.metric_name == metric_name]
+
+
+class SymptomSeen(BaseModel):
+    """How often one symptom has been raised on one machine, and when.
+
+    An aggregate over the finding table, read by the overview when it is asked
+    what the system has no answer for. It counts **Findings, not firings**
+    (ADR-060): a motor that stayed over its threshold all morning is one event
+    with a large `occurrence_count` (ADR-023), and ranking on firings puts a stuck
+    channel above a symptom that arrived on six different machines - which is
+    the opposite of what "which playbook is worth writing next" means.
+
+    `occurrences` is carried anyway, because a reviewer deciding between two
+    symptoms with the same event count is helped by knowing one of them fired
+    four hundred times.
+    """
+
+    model_config = _FROZEN
+
+    symptom_code: SymptomCode
+    machine_id: MachineId
+    findings: int = Field(ge=1)
+    occurrences: int = Field(ge=1)
+    first_seen: datetime
+    last_seen: datetime
