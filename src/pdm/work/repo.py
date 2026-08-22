@@ -21,9 +21,11 @@ from psycopg.types.json import Jsonb
 
 from pdm.contracts import (
     Assignee,
+    BlockedReason,
     FindingRef,
     MachineId,
     PlaybookStep,
+    UserId,
     WorkOrder,
     WorkOrderStatus,
     WorkOutcome,
@@ -114,6 +116,25 @@ def get(conn: Connection[Any], work_order_ref: str) -> WorkOrder | None:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             f"SELECT {_COLUMNS} FROM work_order WHERE work_order_ref = %s",
+            (work_order_ref,),
+        )
+        row = cur.fetchone()
+    return _to_order(row) if row else None
+
+
+def get_for_update(conn: Connection[Any], work_order_ref: str) -> WorkOrder | None:
+    """The same read, holding the row until the transaction ends.
+
+    Every transition decides from what it read - which role the next assignee
+    takes, whether a slot is free, whether this person already has a segment
+    open - and two technicians pressing "accept" on the same ticket at the same
+    moment would otherwise both read an unstaffed order and both become primary.
+    The lock is cheap: these rows are contended by at most the few people
+    standing at one machine.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"SELECT {_COLUMNS} FROM work_order WHERE work_order_ref = %s FOR UPDATE",
             (work_order_ref,),
         )
         row = cur.fetchone()
@@ -224,6 +245,115 @@ def set_status(
         return cur.rowcount == 1
 
 
+def add_assignee(conn: Connection[Any], work_order_ref: str, assignee: Assignee) -> bool:
+    """Put one person on the order. Nothing else about the row moves.
+
+    The guard is in the statement rather than in the caller: the caller has read
+    the row and decided, and between the read and the write is exactly where the
+    same person pressing twice on a dropping network lands. Appending is what a
+    second press must not do - two entries for one person double the capacity the
+    scheduler reserves for the job (ADR-025).
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET assignees = assignees || jsonb_build_array(
+                       jsonb_build_object('user', %s::text, 'role', %s::text))
+             WHERE work_order_ref = %s
+               AND NOT EXISTS (
+                   SELECT 1 FROM jsonb_array_elements(assignees) AS one
+                    WHERE one->>'user' = %s)
+            """,
+            (str(assignee.user), assignee.role.value, work_order_ref, str(assignee.user)),
+        )
+        return cur.rowcount == 1
+
+
+def remove_assignee(conn: Connection[Any], work_order_ref: str, user: UserId) -> bool:
+    """Take one person off the order (ADR-056).
+
+    What they did stays in `work_segments`. `assignees` answers who holds the job
+    now, and a technician who has handed it over and gone home does not - layer 3
+    subtracts an order's minutes from every assignee of a `handed_over` order, so
+    a name left here is capacity nobody can spend and nothing reports.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET assignees = COALESCE((
+                       SELECT jsonb_agg(one ORDER BY ord)
+                         FROM jsonb_array_elements(assignees) WITH ORDINALITY AS t(one, ord)
+                        WHERE one->>'user' <> %s), '[]'::jsonb)
+             WHERE work_order_ref = %s
+            """,
+            (str(user), work_order_ref),
+        )
+        return cur.rowcount == 1
+
+
+def open_segment(
+    conn: Connection[Any], work_order_ref: str, *, user: UserId, now: datetime
+) -> bool:
+    """Start one person working. At most one open segment per (order, user).
+
+    False means they already had one open, which is a second press rather than a
+    second stretch of work: a duplicate open segment would be closed twice at the
+    end and count the same minutes twice into the estimate Loop 1 learns from.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET work_segments = work_segments || jsonb_build_array(jsonb_build_object(
+                       'user', %s::text,
+                       'started_at', to_jsonb(%s::timestamptz),
+                       'ended_at', NULL))
+             WHERE work_order_ref = %s
+               AND NOT EXISTS (
+                   SELECT 1 FROM jsonb_array_elements(work_segments) AS one
+                    WHERE one->>'user' = %s AND one->>'ended_at' IS NULL)
+            """,
+            (str(user), now, work_order_ref, str(user)),
+        )
+        return cur.rowcount == 1
+
+
+def close_segments(
+    conn: Connection[Any], work_order_ref: str, *, now: datetime, user: UserId | None = None
+) -> bool:
+    """Stop the clock on the open segments - one person's, or everybody's.
+
+    `user=None` is what closing an order uses. An open segment contributes zero
+    to `actual_minutes` (`WorkSegment.duration`), so one left open at close would
+    silently discard the time somebody worked, which is the opposite of what
+    ADR-025 moved duration onto the segments for.
+
+    The array is rebuilt in order. `jsonb_agg` without `ORDER BY` is free to
+    return the elements in any order, and the order of the segments is the order
+    the work happened in.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET work_segments = COALESCE((
+                       SELECT jsonb_agg(
+                                  CASE WHEN one->>'ended_at' IS NULL
+                                        AND (%s::text IS NULL OR one->>'user' = %s::text)
+                                       THEN jsonb_set(one, '{ended_at}', to_jsonb(%s::timestamptz))
+                                       ELSE one END
+                                  ORDER BY ord)
+                         FROM jsonb_array_elements(work_segments)
+                              WITH ORDINALITY AS t(one, ord)), '[]'::jsonb)
+             WHERE work_order_ref = %s
+            """,
+            (str(user) if user else None, str(user) if user else None, now, work_order_ref),
+        )
+        return cur.rowcount == 1
+
+
 def open_finding_refs(conn: Connection[Any]) -> set[FindingRef]:
     """Which Findings still have an open ticket against them.
 
@@ -284,13 +414,21 @@ def close(
     status: WorkOrderStatus,
     outcome: WorkOutcome,
     now: datetime,
+    blocked_minutes: int = 0,
+    blocked_reason: tuple[BlockedReason, ...] = (),
     technician_feedback: str | None = None,
 ) -> bool:
-    """End an order, with how it ended and when.
+    """End an order, with how it ended, what held it up, and when.
 
     `closed_at` comes from the clock the caller passes, never `now()`: a
     compressed demo would otherwise stamp real time on a job whose segments are
     simulated (ADR-028).
+
+    The blocked figures are written here rather than through `set_status`,
+    because they are part of how the job ended and are what
+    `WorkOrder.repair_minutes` subtracts. Waiting for a part is not repair time,
+    and left in it inflates the estimate for that symptom every cycle until
+    `load_ratio` reads every shift as full (ADR-006, ADR-025).
     """
     if status not in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED):
         raise ValueError(f"{status.value} is not an ending; use set_status()")
@@ -299,9 +437,18 @@ def close(
             """
             UPDATE work_order
                SET status = %s, outcome = %s, closed_at = %s,
+                   blocked_minutes = %s, blocked_reason = %s,
                    technician_feedback = COALESCE(%s, technician_feedback)
              WHERE work_order_ref = %s
             """,
-            (status.value, outcome.value, now, technician_feedback, work_order_ref),
+            (
+                status.value,
+                outcome.value,
+                now,
+                blocked_minutes,
+                [reason.value for reason in blocked_reason],
+                technician_feedback,
+                work_order_ref,
+            ),
         )
         return cur.rowcount == 1
