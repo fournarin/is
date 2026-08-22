@@ -94,6 +94,7 @@ POLICY: dict[str, Any] = {
             "abstain": True,
         },
     },
+    "estimates": {"min_observations": 5, "max_change_ratio": 0.20},
     "fallback_minutes": {"R-2000iC": {"low": 30, "medium": 45, "high": 60, "critical": 90}},
     "jobs": {
         "runtime": {"heartbeat_seconds": 10, "dead_after_seconds": 60},
@@ -218,6 +219,21 @@ class TestPolicyRelationships:
         policy = _deep(POLICY)
         policy["retrieval"]["runtime"]["abstain"] = False
         with pytest.raises(ConfigError, match="must abstain"):
+            load_config(_write(tmp_path, **{"policy.yaml": policy}))
+
+    def test_an_estimate_may_not_move_further_in_one_cycle_than_adr_022_allows(
+        self, tmp_path: Path
+    ) -> None:
+        """ADR-022's bound, enforced where the number lives (ADR-066).
+
+        Written only in the record, it is a sentence a later edit to policy.yaml
+        can pass straight through - and the effect of passing it is an estimate
+        that chases one week's evidence, which is the oscillation the bound
+        exists to prevent.
+        """
+        policy = _deep(POLICY)
+        policy["estimates"]["max_change_ratio"] = 0.5
+        with pytest.raises(ConfigError, match="twenty percent per cycle"):
             load_config(_write(tmp_path, **{"policy.yaml": policy}))
 
     def test_a_model_without_a_fallback_estimate_stops_the_boot(self, tmp_path: Path) -> None:

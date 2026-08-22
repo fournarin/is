@@ -210,6 +210,50 @@ load. It is a floor on how long review took, and it should be reported as one.
 
 ---
 
+## 11. The duration loop declines the exception ADR-022 gave it
+
+**Decided.** Loop 1 proposes a new `estimated_minutes` and writes nothing, even
+though ADR-022 explicitly allows this one loop to adjust itself within plus or
+minus twenty percent per cycle. The bound is kept as a cap on the proposal.
+
+**Why.** ADR-022's argument is about safety and the accountability argument
+points the other way: the estimate is what `load_ratio` is computed from,
+`load_ratio` decides which work the gate releases, and the release decision is
+the one the advisor asked for by name. A figure that moves on its own is one
+nobody can explain in the week somebody asks why the shift filled up - and
+applying the proposal is the cheap half anyway.
+
+**If it is wrong.** Estimates stay stale until a screen exists to approve the
+proposals, so the loop is a mechanism rather than a loop that turns, and the
+report has to say so. Reversing it is one `UPDATE` behind an approval.
+
+**Look at.** [ADR-066 §1](adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md),
+`src/pdm/work/estimates.py::propose`,
+`tests/work/test_what_the_finished_jobs_say.py::TestNothingHereWrites`.
+
+---
+
+## 12. Five closed jobs is the floor, and it is an argument rather than a measurement
+
+**Decided.** `estimates.min_observations` is 5 in `policy.yaml`, with ADR-066 as
+its provenance. Below it the loop proposes nothing.
+
+**Why.** Five is the smallest count that leaves two observations either side of
+the median, so one unusual morning cannot be the middle. There is no manual and
+no measurement of this plant to appeal to; the alternative was to invent a
+number quietly, which this project treats as the same defect as an unapproved
+playbook.
+
+**If it is wrong.** Too low and one bad week reprices a symptom; too high and
+the loop never says anything at all for the long-tail work that closes twice a
+year. The failure is silent in both directions, which is why it is here.
+
+**Look at.** [ADR-066 §4](adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md),
+`config/policy.yaml::estimates`,
+`tests/work/test_what_the_finished_jobs_say.py::TestWhatIsNotEvidence`.
+
+---
+
 # What still stops and waits for a person
 
 Two things, per [ADR-052](adr/0052-what-review-was-protecting-and-what-it-was-not.md).

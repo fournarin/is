@@ -76,6 +76,7 @@ entries replace parts of earlier ones, and both are kept.
 | [063](0063-what-the-line-overview-reads-and-what-it-may-not-compute.md) | What the line overview reads, and what it may not compute | |
 | [064](0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md) | What a reviewer may change, and what the review screen records | |
 | [065](0065-how-this-web-layer-submits-things.md) | How this web layer submits things | |
+| [066](0066-what-the-finished-jobs-may-change-and-what-stops-them.md) | What the finished jobs may change, and what stops them | |
 
 ## Where to start
 

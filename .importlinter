@@ -161,6 +161,11 @@ source_modules =
     pdm.authoring.drafting
     pdm.playbooks.domain
     pdm.work.domain
+    # Loop 1's arithmetic (ADR-066). On the list for the reason dispatch/ is: it
+    # is the module that decides what every future shift is priced at, and a
+    # version of it that could open a connection could also be a version that
+    # writes the estimate it just proposed.
+    pdm.work.estimates
     pdm.dispatch.domain
     # Not a domain.py by name, and on the list for the same reason: the override
     # record is a type the API builds and the repo writes, and a module that
