@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { signOut } from "@/app/actions";
 import { screensFor } from "@/lib/screens";
 import { ROLE_NAMES, requireAccount } from "@/lib/session";
@@ -38,11 +40,17 @@ export default async function HomePage() {
         screens.map((screen) => (
           <section className="card" key={screen.slice}>
             <div className="screen-head">
-              <h2>{screen.title}</h2>
-              <span className="pending">slice {screen.slice}</span>
+              <h2>
+                {screen.href === null ? (
+                  screen.title
+                ) : (
+                  <Link href={screen.href}>{screen.title}</Link>
+                )}
+              </h2>
+              {screen.href === null && <span className="pending">slice {screen.slice}</span>}
             </div>
             <p className="muted">{screen.purpose}</p>
-            <p className="muted">ยังไม่ได้สร้าง</p>
+            {screen.href === null && <p className="muted">ยังไม่ได้สร้าง</p>}
           </section>
         ))
       )}

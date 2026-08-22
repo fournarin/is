@@ -27,18 +27,33 @@ places anybody on anything; that is still the round's job, in worker-runtime.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from psycopg import Connection
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pdm.api.deps import Db, Time, requires
-from pdm.contracts import Role, Severity, WorkOrderStatus
+from pdm.contracts import (
+    FindingKind,
+    Role,
+    Severity,
+    WorkOrder,
+    WorkOrderOrigin,
+    WorkOrderStatus,
+)
 from pdm.dispatch import Band
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.overrides import Override, OverrideKind
 from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.domain import Account
+
+# Reading a Finding here is not the thing `.importlinter` forbids. That rule
+# names `pdm.dispatch` - layer 3's own code, which must schedule from the order
+# alone (invariant 10, ADR-030) - and this module is `pdm.api.dispatch`, the
+# composition layer that already reaches into work/, dispatch/ and playbooks/ to
+# assemble a screen.
+from pdm.triggers import repo as findings
 from pdm.work import repo as work
 
 router = APIRouter(tags=["dispatch"])
@@ -87,6 +102,13 @@ class RoundView(BaseModel):
     """
 
     at: datetime
+    # Every timestamp in this system is UTC (config/plant.yaml), and every
+    # timestamp a person reads is plant-local. The zone is a fact about the
+    # plant rather than about the device holding the screen - a supervisor
+    # reading this from a laptop set to UTC still has to see the shift's own
+    # clock - so it comes from the configuration, here, rather than from the
+    # browser.
+    timezone: str
     shift_id: str | None = None
     on_date: date | None = None
     band: str
@@ -97,6 +119,36 @@ class RoundView(BaseModel):
     placed: list[Ranked] = []
     unassigned: list[Withheld] = []
     held: list[Withheld] = []
+
+
+class Step(BaseModel):
+    """One instruction as it was issued, with the page it came from.
+
+    Taken from `playbook_snapshot` and never from the playbook table. The order
+    has to be able to prove what it instructed, and the served row is
+    overwritten on re-approval (ADR-018) - so a screen reading the current
+    playbook would show a technician steps nobody gave them.
+    """
+
+    text: str
+    source_doc: str
+    page: int
+
+
+class Recurrence(BaseModel):
+    """How often the rule behind this ticket has fired, read now.
+
+    Through `finding_ref`, deliberately: `machine_id`, `severity`, `eta` and the
+    rest are snapshots frozen onto the order at creation (ADR-041), and "seen 34
+    times since 08:12" is the one figure on the screen that has to be current.
+    ADR-023 raises `occurrence_count` on the existing record rather than opening
+    a second one, which is what makes the count mean anything.
+    """
+
+    occurrence_count: int
+    detected_at: datetime
+    last_seen_at: datetime | None = None
+    status: str
 
 
 class TicketView(BaseModel):
@@ -113,6 +165,7 @@ class TicketView(BaseModel):
     machine_id: str
     severity: Severity
     status: WorkOrderStatus
+    origin: WorkOrderOrigin
     reason: str
     priority_reason: str
     priority_score: float
@@ -122,6 +175,18 @@ class TicketView(BaseModel):
     required_technicians: int
     assignees: tuple[str, ...] = ()
     playbook_warning: str | None = None
+
+    # A predicted job must not be able to reach a screen looking like a detected
+    # one. `eta_confidence` is serialised as whole minutes and is **never**
+    # optional when `finding_kind` is predicted - the contract validates that on
+    # the Finding (ADR-020) and the test at this seam validates it again, because
+    # this is the layer where dropping it would be invisible.
+    finding_kind: FindingKind | None = None
+    eta: datetime | None = None
+    eta_confidence_minutes: int | None = None
+
+    steps: tuple[Step, ...] = ()
+    recurrence: Recurrence | None = None
 
 
 class Objection(BaseModel):
@@ -195,6 +260,7 @@ def current_round(
     decided = rounds.decide(conn)
     return RoundView(
         at=decided.at,
+        timezone=rounds.config.plant.timezone,
         shift_id=decided.shift_id,
         on_date=decided.on_date,
         band=decided.band.value,
@@ -215,6 +281,27 @@ def current_round(
         ],
         unassigned=[Withheld(ref=one.ref, why=one.why) for one in decided.unassigned],
         held=[Withheld(ref=one.ref, why=one.why) for one in decided.held],
+    )
+
+
+def _recurrence(conn: Connection[Any], order: WorkOrder) -> Recurrence | None:
+    """How often the rule behind this order has fired, or None.
+
+    None for scheduled and manual work, which has no Finding at all (ADR-010) -
+    and None rather than a count of one, because "seen once" and "there is
+    nothing to count" are different sentences and a screen must not print the
+    first when it means the second.
+    """
+    if order.finding_ref is None:
+        return None
+    finding = findings.get(conn, order.finding_ref)
+    if finding is None:
+        return None
+    return Recurrence(
+        occurrence_count=finding.occurrence_count,
+        detected_at=finding.detected_at,
+        last_seen_at=finding.last_seen_at,
+        status=finding.status.value,
     )
 
 
@@ -240,6 +327,7 @@ def ticket(
         machine_id=str(order.machine_id),
         severity=order.severity,
         status=order.status,
+        origin=order.origin,
         reason=order.reason,
         priority_reason=order.priority_reason,
         priority_score=order.priority_score,
@@ -249,6 +337,18 @@ def ticket(
         required_technicians=order.required_technicians,
         assignees=tuple(str(who.user) for who in order.assignees),
         playbook_warning=order.playbook_warning,
+        finding_kind=order.finding_kind,
+        eta=order.eta,
+        eta_confidence_minutes=(
+            None
+            if order.eta_confidence is None
+            else round(order.eta_confidence.total_seconds() / 60)
+        ),
+        steps=tuple(
+            Step(text=step.text, source_doc=str(step.source_doc), page=step.page)
+            for step in order.playbook_snapshot
+        ),
+        recurrence=_recurrence(conn, order),
     )
 
 

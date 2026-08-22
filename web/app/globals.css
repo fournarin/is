@@ -193,3 +193,125 @@ button.quiet {
   align-items: baseline;
   justify-content: space-between;
 }
+
+/* ── the technician's screens (slice 10.3) ───────────────────────────────── */
+
+a {
+  color: var(--accent);
+}
+
+.button-link {
+  display: block;
+  min-height: var(--tap);
+  padding: 0.65rem 1rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-radius: var(--radius);
+}
+
+.button-link.quiet {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+/* The band down the left edge is the one thing readable at arm's length, and
+   `planned` must never be mistaken for `urgent` (ADR-020). */
+.job {
+  border-left: 6px solid var(--line);
+}
+
+.job.urgent {
+  border-left-color: var(--error);
+}
+
+.job.planned {
+  border-left-color: var(--warn);
+}
+
+.job.normal {
+  border-left-color: var(--accent);
+}
+
+.reason {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.warning {
+  color: var(--warn);
+  background: var(--warn-paper);
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
+summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.next {
+  margin: 0.5rem 0;
+  padding-left: 1.1rem;
+}
+
+.next li {
+  margin-bottom: 0.6rem;
+}
+
+/* One step, large, because it is read standing up with a tool in one hand. */
+.step-text {
+  font-size: 1.25rem;
+  line-height: 1.55;
+  margin-bottom: 0.75rem;
+}
+
+.step-nav {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.step-nav .button-link {
+  flex: 1 1 0;
+  margin-bottom: 0;
+}
+
+.step-nav .done {
+  flex: 1 1 0;
+  text-align: center;
+}
+
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.recorded {
+  color: var(--ink-soft);
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  font-size: 0.9rem;
+}

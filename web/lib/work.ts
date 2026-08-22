@@ -1,0 +1,95 @@
+/**
+ * What the technician's screen reads, and where each figure comes from.
+ *
+ * Two sources, deliberately: the round says which jobs are this person's and in
+ * what order (layer 3 decided that, and this app does not re-sort it), and the
+ * ticket says everything about one job. Nothing here computes a priority, a
+ * duration or a reason - every sentence on the screen was written by the
+ * backend, because a screen that phrases its own explanation is a second
+ * opinion nobody approved (ADR-005).
+ */
+import { callApi } from "@/lib/api";
+
+export type Ranked = {
+  ref: string;
+  priority_score: number;
+  priority_reason: string;
+  assignees: string[];
+  downtime_units: number;
+  waited_minutes: number;
+};
+
+export type Round = {
+  at: string;
+  timezone: string;
+  shift_id: string | null;
+  on_date: string | null;
+  band: string;
+  load_ratio: number | null;
+  capacity_minutes: number;
+  committed_minutes: number;
+  summary: string;
+  placed: Ranked[];
+  unassigned: { ref: string; why: string }[];
+  held: { ref: string; why: string }[];
+};
+
+export type Step = { text: string; source_doc: string; page: number };
+
+export type Recurrence = {
+  occurrence_count: number;
+  detected_at: string;
+  last_seen_at: string | null;
+  status: string;
+};
+
+export type Ticket = {
+  ref: string;
+  machine_id: string;
+  severity: "low" | "medium" | "high" | "critical";
+  status: "queued" | "assigned" | "in_progress" | "handed_over" | "closed" | "cancelled";
+  origin: "condition" | "scheduled" | "manual";
+  reason: string;
+  priority_reason: string;
+  priority_score: number;
+  estimated_minutes: number;
+  estimate_is_fallback: boolean;
+  required_skill: string | null;
+  required_technicians: number;
+  assignees: string[];
+  playbook_warning: string | null;
+  finding_kind: "detected" | "predicted" | null;
+  eta: string | null;
+  eta_confidence_minutes: number | null;
+  steps: Step[];
+  recurrence: Recurrence | null;
+};
+
+async function read<T>(path: string): Promise<T> {
+  const response = await callApi(path);
+  if (!response.ok) {
+    throw new Error(`the API answered ${response.status} for ${path}`);
+  }
+  return (await response.json()) as T;
+}
+
+export async function currentRound(): Promise<Round> {
+  return read<Round>("/dispatch/round");
+}
+
+export async function ticket(ref: string): Promise<Ticket> {
+  return read<Ticket>(`/work-orders/${encodeURIComponent(ref)}`);
+}
+
+/**
+ * This person's jobs, in the order the scheduler put them in.
+ *
+ * `placed` arrives ranked and is passed through untouched. Re-sorting it here -
+ * by severity, by machine, by anything - would quietly replace layer 3's answer
+ * with this file's opinion, and the whole argument for a load gate is that the
+ * order is not negotiable at the edges (ADR-011).
+ */
+export async function myWork(round: Round, user: string): Promise<Ticket[]> {
+  const mine = round.placed.filter((one) => one.assignees.includes(user));
+  return Promise.all(mine.map((one) => ticket(one.ref)));
+}
