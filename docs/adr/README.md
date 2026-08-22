@@ -70,6 +70,7 @@ entries replace parts of earlier ones, and both are kept.
 | [056](0056-handing-over-ends-the-assignment.md) | Handing over ends the assignment | |
 | [058](0058-what-the-web-layer-may-not-contain-and-how-it-reaches-the-api.md) | What the web layer may not contain, and how it reaches the API | |
 | [059](0059-an-override-is-recorded-and-only-one-of-them-changes-a-round.md) | An override is recorded, and only one of the two changes a round | |
+| [060](0060-how-the-authoring-queue-is-ordered.md) | How the authoring queue is ordered, and what counts as a gap | |
 
 ## Where to start
 

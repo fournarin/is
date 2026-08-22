@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from pdm.api import deps, dispatch, documents, playbooks, sessions, work_orders
+from pdm.api import deps, dispatch, documents, overview, playbooks, sessions, work_orders
 from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
@@ -66,6 +66,10 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.pool = pool or make_pool()
+        # The layout, for the handlers that have to resolve a machine id to the
+        # model whose manual answers for it (ADR-027). One copy, loaded above, so
+        # the API and the workers cannot be reading different plants.
+        app.state.config = config
         # The single time port (ADR-028), for the few writes a handler makes on
         # its own account rather than through a service that already holds one.
         app.state.clock = the_clock
@@ -138,6 +142,7 @@ def create_app(
     app.include_router(playbooks.router)
     app.include_router(dispatch.router)
     app.include_router(work_orders.router)
+    app.include_router(overview.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:

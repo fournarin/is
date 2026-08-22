@@ -17,6 +17,7 @@ from pdm.contracts import Role
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
 from pdm.platform.clock import Clock
+from pdm.platform.config import Config
 from pdm.platform.jobs import JobQueue
 
 SESSION_COOKIE = "pdm_session"
@@ -74,6 +75,19 @@ def clock(request: Request) -> Clock:
     return the_clock
 
 
+def plant(request: Request) -> Config:
+    """The validated configuration, loaded once at boot (invariant 7).
+
+    A handler that needs the layout - which model a machine is, which station it
+    stands at - reads it from here rather than from the database, because
+    `plant.yaml` is where the layout lives and a second copy is a second answer
+    (ADR-027). Read-only: the config objects are frozen for the same reason
+    `dispatch()` takes them as an argument.
+    """
+    config: Config = request.app.state.config
+    return config
+
+
 def current_account(
     conn: Annotated[Connection[Any], Depends(connection)],
     auth: Annotated[Authentication, Depends(authentication)],
@@ -90,6 +104,7 @@ Jobs = Annotated[JobQueue, Depends(authoring_jobs)]
 Db = Annotated[Connection[Any], Depends(connection)]
 Auth = Annotated[Authentication, Depends(authentication)]
 Time = Annotated[Clock, Depends(clock)]
+Plant = Annotated[Config, Depends(plant)]
 
 
 def requires(*roles: Role, action: str):  # type: ignore[no-untyped-def]

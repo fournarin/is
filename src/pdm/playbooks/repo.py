@@ -26,6 +26,7 @@ from pdm.contracts import (
     UserId,
 )
 from pdm.playbooks.domain import (
+    PendingForPair,
     Proposal,
     ProposalOrigin,
     ProposalStatus,
@@ -91,6 +92,23 @@ def needing_review(conn: Connection[Any]) -> list[tuple[Playbook, str | None]]:
         )
         rows = cur.fetchall()
     return [_to_playbook(row) for row in rows]
+
+
+def served_pairs(conn: Connection[Any]) -> set[tuple[SymptomCode, MachineModel]]:
+    """Every pair runtime has something to give a technician for.
+
+    Both statuses this table can hold, because both are served: a `needs_review`
+    row still reaches a technician, with a warning (ADR-018), so it is a
+    different question - "these are being served while their manual has changed"
+    - and not an unanswered symptom.
+
+    A pair whose only playbook is a draft has no row here at all, because drafts
+    live in the other table (ADR-038). That is what makes the gap list correct
+    without a `status` filter: from a technician's side, a draft is nothing.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT symptom_code, machine_model FROM playbook")
+        return {(SymptomCode(row[0]), MachineModel(row[1])) for row in cur.fetchall()}
 
 
 def save_approved(
@@ -261,6 +279,29 @@ def queue(conn: Connection[Any], *, limit: int = 50) -> list[Proposal]:
         )
         rows = cur.fetchall()
     return [_to_proposal(row) for row in rows]
+
+
+def pending_by_pair(conn: Connection[Any]) -> list[PendingForPair]:
+    """What the review queue holds, counted per pair rather than listed.
+
+    The queue itself is `queue()`, bounded and ordered for a person to work
+    through. This is the same rows asked a different question - how much is
+    waiting, and since when - so the overview can report the size of the queue
+    without loading it (ADR-050: computed when asked, from the rows that are
+    already there).
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT symptom_code, machine_model,
+                   count(*) AS waiting, min(created_at) AS oldest
+              FROM playbook_proposal
+             WHERE status = 'pending'
+             GROUP BY symptom_code, machine_model
+            """
+        )
+        rows = cur.fetchall()
+    return [PendingForPair.model_validate(row) for row in rows]
 
 
 def proposal(conn: Connection[Any], proposal_id: int) -> Proposal | None:
