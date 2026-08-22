@@ -29,11 +29,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, Time, requires
+from pdm.api.deps import Db, Rounds, Time, requires
 from pdm.contracts import (
     FindingKind,
     Role,
@@ -45,7 +45,6 @@ from pdm.contracts import (
 from pdm.dispatch import Band
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.overrides import Override, OverrideKind
-from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.domain import Account
 
 # Reading a Finding here is not the thing `.importlinter` forbids. That rule
@@ -241,15 +240,11 @@ def _recorded(override: Override) -> OverrideRecorded:
     )
 
 
-def _rounds(request: Request) -> DispatchRounds:
-    return request.app.state.dispatch_rounds  # type: ignore[no-any-return]
-
-
 @router.get("/dispatch/round", response_model=RoundView)
 def current_round(
     conn: Db,
     account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_dispatch_round"))],
-    rounds: Annotated[DispatchRounds, Depends(_rounds)],
+    rounds: Rounds,
 ) -> RoundView:
     """The gate's own sentence, and everything behind it (ADR-011).
 
@@ -399,7 +394,7 @@ def release_held(
     objection: Objection,
     conn: Db,
     clock: Time,
-    rounds: Annotated[DispatchRounds, Depends(_rounds)],
+    rounds: Rounds,
     account: Annotated[Account, Depends(requires(*_MAY_RELEASE, action="release_held_work_order"))],
 ) -> OverrideRecorded:
     """One held ticket, into the next round, on the shift lead's authority.

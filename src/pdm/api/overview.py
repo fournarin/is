@@ -1,4 +1,13 @@
-"""What the system has no answer for yet (design.md 4, ADR-038, ADR-060).
+"""The two read paths behind the overview screen (ADR-050, ADR-060, ADR-063).
+
+`/overview/gaps` is what the system has no answer for yet; `/overview/line` is
+what the line is doing right now. Both obey the same rule, which is the one the
+screen is built around: **show operational state that is already computed and
+that somebody can act on now.** Nothing here invents an aggregate in order to
+have something to display, and the test for every figure is one question - when
+this number is bad, who does what immediately?
+
+## What the system has no answer for yet (design.md 4, ADR-038, ADR-060)
 
 A symptom arriving with no playbook is queued for authoring and ordered by how
 often it is seen, so the system works out for itself which playbook is worth
@@ -15,20 +24,43 @@ number a reader cannot act on. The test for each list is the same one the
 overview screen has to pass - *when this number is bad, who does what
 immediately?* - and each answers it with an identifier that takes somebody
 straight to the queue.
+
+## The line (ADR-020, ADR-021, ADR-050)
+
+The advisor's first requirement was "monitor **and** predict", and until this
+endpoint both were visible in exactly one place: a ticket in one technician's
+hand, which is a monitoring system nobody can watch. Two things it carries look
+like detail and are not - the buffers between stations, without which a reader
+cannot see why the ranking is what it is (ADR-021), and the prediction interval,
+which is the half of an ETA a person actually plans around (ADR-020).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from enum import StrEnum
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from pdm.api.deps import Db, Plant, Time, requires
-from pdm.contracts import MachineId, MachineModel, Role, SymptomCode
+from pdm.api.deps import Db, Plant, Rounds, Time, requires
+from pdm.contracts import (
+    ComponentLabel,
+    Finding,
+    FindingKind,
+    Line,
+    MachineId,
+    MachineModel,
+    Role,
+    RuleId,
+    Severity,
+    Station,
+    StationId,
+    SymptomCode,
+)
 from pdm.platform.auth.domain import Account
 from pdm.playbooks import repo as playbooks
 from pdm.playbooks.domain import PendingForPair
@@ -311,5 +343,324 @@ def gaps(
             count=sum(group.waiting for group in by_model), rows=tuple(by_model[:limit])
         ),
         manual_changed=ManualChanged(count=len(flagged), rows=tuple(flagged[:limit])),
+        unplaced_machines=tuple(unplaced),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# The line, as the overview will draw it (ADR-020, ADR-021, ADR-050, ADR-063)
+# ─────────────────────────────────────────────────────────────
+
+
+class StationState(StrEnum):
+    """What one position on the line is doing, in one word.
+
+    Three states and no fourth. "Degraded", "warning" and the rest are gradations
+    of the same two facts - it has crossed, or it is going to - and a scale a
+    reader has to interpret is a scale two readers interpret differently.
+    """
+
+    NORMAL = "normal"
+    PREDICTED = "predicted"
+    OVER_THRESHOLD = "over_threshold"
+
+
+class StationView(BaseModel):
+    """One station: where it sits, what it buys, and what is wrong with it.
+
+    The buffer is here because ADR-021 prices downtime with it, and a screen
+    that could not draw it would leave a reader unable to see why the ranking is
+    what it is: a red station with twenty units in front of it is not a red
+    bottleneck, and equal boxes say they are.
+    """
+
+    model_config = _FROZEN
+
+    station_id: StationId
+    seq: int
+    # Both, deliberately. The units are what `plant.yaml` holds and what an
+    # engineer argues about; the minutes are that at the line's takt, which is
+    # the only form comparable with a repair time (ADR-021).
+    buffer_units: int
+    buffer_minutes: float
+    bottleneck: bool
+    bottleneck_multiplier: float
+    machines: tuple[MachineId, ...] = ()
+
+    state: StationState = StationState.NORMAL
+
+    # The fault the marker stands for, when there is one. A station is one marker
+    # and may hold several faults, so `live_findings` says how many there are:
+    # showing one of three without saying so reads as though there were one.
+    machine_id: MachineId | None = None
+    component: ComponentLabel | None = None
+    symptom_code: SymptomCode | None = None
+    severity: Severity | None = None
+    rule_id: RuleId | None = None
+    live_findings: int = 0
+
+    over_threshold_minutes: int | None = None
+    eta: datetime | None = None
+    eta_confidence_minutes: int | None = None
+
+    @model_validator(mode="after")
+    def _a_prediction_is_never_shown_without_its_interval(self) -> StationView:
+        """ADR-020's rule, enforced by the shape rather than by the handler.
+
+        "About six hours" reads as more trustworthy than "about six hours, give
+        or take two", and it is a promise the system cannot keep. The tidier
+        screen is the dishonest one, so the model refuses to be built that way -
+        including by whatever assembles this later for a test or a fixture.
+        """
+        predicted = self.state is StationState.PREDICTED
+        if predicted and (self.eta is None or self.eta_confidence_minutes is None):
+            raise ValueError(
+                "a predicted station carries its eta and its interval together, always (ADR-020)"
+            )
+        if not predicted and (self.eta is not None or self.eta_confidence_minutes is not None):
+            raise ValueError(
+                f"a {self.state.value} station has no crossing to expect; an eta on one would "
+                "read as a forecast nobody made"
+            )
+        over = self.state is StationState.OVER_THRESHOLD
+        if over is (self.over_threshold_minutes is None):
+            raise ValueError(
+                "over_threshold_minutes belongs to a station that is over its threshold, and to "
+                "no other"
+            )
+        return self
+
+
+class LineView(BaseModel):
+    """One production line and its stations, in the order units pass through."""
+
+    model_config = _FROZEN
+
+    line_id: str
+    # The seconds the buffers are measured in. On the response so a screen
+    # redrawing at a different scale does not have to fetch the plant.
+    takt_seconds: float
+    stations: tuple[StationView, ...] = ()
+
+
+class ShiftBand(BaseModel):
+    """How loaded the shift is, taken from the round rather than recomputed.
+
+    Every figure here is one the round already produced (ADR-050). `held` is a
+    count and not the list, because the list is `/dispatch/round`'s answer and
+    two endpoints returning the same rows is how they come to disagree - the
+    screen asks the other one when the shift lead opens the panel.
+    """
+
+    model_config = _FROZEN
+
+    shift_id: str | None = None
+    on_date: date | None = None
+    band: str
+    load_ratio: float | None = None
+    capacity_minutes: int
+    committed_minutes: int
+    technicians_on_shift: int
+    open_orders: int
+    held: int
+    summary: str
+
+
+class LineOverview(BaseModel):
+    """The screen the project is demonstrated from, as data.
+
+    `at` is the moment the whole response describes - the one the round was
+    computed at, so the stations and the shift band cannot be reporting two
+    different instants (ADR-050).
+    """
+
+    model_config = _FROZEN
+
+    at: datetime
+    # A fact about the plant rather than about the device holding the screen: a
+    # supervisor reading this from a laptop set to UTC still has to see the
+    # shift's own clock (ADR-045 §7).
+    timezone: str
+    lines: tuple[LineView, ...] = ()
+    shift: ShiftBand
+    # Machines with a live Finding and no station in `plant.yaml`. Named rather
+    # than dropped, exactly as the gap list names them: their fault cannot be
+    # drawn anywhere, and a line that quietly omitted them would read as quieter
+    # than it is (ADR-048 §3).
+    unplaced_machines: tuple[MachineId, ...] = ()
+
+
+def group_by_machine(
+    findings: Iterable[Finding], *, known: Container[MachineId]
+) -> tuple[dict[MachineId, list[Finding]], list[MachineId]]:
+    """Live Findings against the machines that stand somewhere, and the rest."""
+    grouped: dict[MachineId, list[Finding]] = {}
+    unplaced: set[MachineId] = set()
+    for finding in findings:
+        if finding.machine_id not in known:
+            unplaced.add(finding.machine_id)
+            continue
+        grouped.setdefault(finding.machine_id, []).append(finding)
+    return grouped, sorted(unplaced)
+
+
+def _worst_detected(findings: Sequence[Finding]) -> Finding:
+    """The fault the marker stands for, among several that have crossed.
+
+    Severity first, because that is what the load gate admits on and what a
+    shift lead is deciding between; then the one that has been over longest,
+    because at equal severity the older fault is the one nobody has reached.
+    The machine and the rule end the key so the same data always draws the same
+    screen.
+    """
+    return min(
+        findings,
+        key=lambda one: (-one.severity.rank, one.detected_at, one.machine_id, one.rule_id),
+    )
+
+
+def _soonest_predicted(findings: Sequence[Finding]) -> Finding:
+    """Among forecasts, the crossing that arrives first.
+
+    Not the most severe: a critical crossing in nine hours and a medium one in
+    two are decided in the other order, and the second is the one the shift in
+    front of somebody has to absorb (ADR-011's quiet-shift argument).
+    """
+    return min(
+        findings,
+        # `eta` is not optional here: the caller admits only predictions that
+        # carry one, which the contract guarantees they all do (ADR-020).
+        key=lambda one: (one.eta, -one.severity.rank, one.machine_id, one.rule_id),
+    )
+
+
+def _marker(view: dict[str, object], finding: Finding) -> None:
+    """Fill in the fault a station's marker stands for."""
+    view["machine_id"] = finding.machine_id
+    view["component"] = finding.component
+    view["symptom_code"] = finding.symptom_code
+    view["severity"] = finding.severity
+    view["rule_id"] = finding.rule_id
+
+
+def read_the_line(
+    line: Line,
+    stations: Iterable[Station],
+    *,
+    live: Mapping[MachineId, Sequence[Finding]],
+    now: datetime,
+) -> tuple[StationView, ...]:
+    """Fold the live Findings onto the layout, in the order units flow.
+
+    Pure, and separate from the handler for the reason invariant 10 gives: what
+    a station shows when it holds two faults at once is the whole content of the
+    top band, and it should be assertable without a database, a session and a
+    plant.
+
+    **A crossing that has happened outranks one that is expected.** Both can be
+    live at the same station - ADR-023 §7 has a detection supersede an open
+    prediction, and until it does there are two - and the one already costing
+    production is the one a shift lead is deciding about.
+    """
+    drawn: list[StationView] = []
+    for station in sorted(stations, key=lambda one: (one.seq, one.station_id)):
+        here = [
+            finding for machine_id in station.machine_ids for finding in live.get(machine_id, ())
+        ]
+        view: dict[str, object] = {
+            "station_id": station.station_id,
+            "seq": station.seq,
+            "buffer_units": station.buffer_units,
+            "buffer_minutes": station.buffer_minutes(line),
+            # The only signal `plant.yaml` carries for it. A station whose
+            # downtime is priced above the rest of the line is a bottleneck; the
+            # multiplier is returned beside the flag so a reader can see by how
+            # much rather than take the word for it (ADR-021).
+            "bottleneck": station.bottleneck_multiplier > 1.0,
+            "bottleneck_multiplier": station.bottleneck_multiplier,
+            "machines": station.machine_ids,
+            "live_findings": len(here),
+        }
+
+        crossed = [one for one in here if one.kind is FindingKind.DETECTED]
+        expected = [
+            one for one in here if one.kind is FindingKind.PREDICTED and one.eta is not None
+        ]
+
+        if crossed:
+            leading = _worst_detected(crossed)
+            _marker(view, leading)
+            view["state"] = StationState.OVER_THRESHOLD
+            # Floored at zero rather than allowed negative: a Finding detected
+            # after `now` is a clock that moved, and "-3 minutes over threshold"
+            # is not something to put in front of somebody at a machine.
+            view["over_threshold_minutes"] = max(
+                0, int((now - leading.detected_at).total_seconds() // 60)
+            )
+        elif expected:
+            leading = _soonest_predicted(expected)
+            _marker(view, leading)
+            view["state"] = StationState.PREDICTED
+            view["eta"] = leading.eta
+            assert leading.eta_confidence is not None  # the contract guarantees the pair
+            view["eta_confidence_minutes"] = round(leading.eta_confidence.total_seconds() / 60)
+        else:
+            view["state"] = StationState.NORMAL
+
+        drawn.append(StationView.model_validate(view))
+    return tuple(drawn)
+
+
+@router.get("/overview/line", response_model=LineOverview)
+def line_overview(
+    conn: Db,
+    plant: Plant,
+    rounds: Rounds,
+    account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_line_overview"))],
+) -> LineOverview:
+    """Monitor and predict, on one screen, for the shift in front of somebody.
+
+    Three reads and no arithmetic of its own: the layout from `plant.yaml`, the
+    live Findings from the table, and the shift from the same `dispatch()` the
+    rounds use. Nothing is stored and nothing is summarised into a figure that
+    could drift from what the scheduler thinks (ADR-050).
+    """
+    decided = rounds.decide(conn)
+    known = {
+        machine_id for station in plant.stations.values() for machine_id in station.machine_ids
+    }
+    grouped, unplaced = group_by_machine(triggers.live(conn).values(), known=known)
+
+    return LineOverview(
+        # The round's own moment, so the stations and the band describe one
+        # instant. A second clock read here would put them milliseconds apart
+        # and invite a reader to compare them.
+        at=decided.at,
+        timezone=plant.plant.timezone,
+        lines=tuple(
+            LineView(
+                line_id=str(line_id),
+                takt_seconds=line.takt_seconds,
+                stations=read_the_line(
+                    line,
+                    [one for one in plant.stations.values() if one.line_id == line_id],
+                    live=grouped,
+                    now=decided.at,
+                ),
+            )
+            for line_id, line in sorted(plant.lines.items())
+        ),
+        shift=ShiftBand(
+            shift_id=str(decided.shift_id) if decided.shift_id is not None else None,
+            on_date=decided.on_date,
+            band=decided.band.value,
+            load_ratio=decided.load_ratio,
+            capacity_minutes=decided.capacity_minutes,
+            committed_minutes=decided.committed_minutes,
+            technicians_on_shift=decided.technicians_on_shift,
+            open_orders=decided.open_orders,
+            held=len(decided.held),
+            summary=decided.summary,
+        ),
         unplaced_machines=tuple(unplaced),
     )

@@ -14,6 +14,7 @@ from fastapi import Cookie, Depends, HTTPException, Request, status
 from psycopg import Connection
 
 from pdm.contracts import Role
+from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
 from pdm.platform.clock import Clock
@@ -88,6 +89,18 @@ def plant(request: Request) -> Config:
     return config
 
 
+def dispatch_rounds(request: Request) -> DispatchRounds:
+    """Layer 3, for the two read paths that report what it decided.
+
+    Read-only from here. The API never writes a placement (ADR-026), and both
+    screens that report the gate - the ticket queue and the line overview - call
+    the same `decide()` the rounds themselves use, so a supervisor and the
+    scheduler cannot be looking at two different shifts (ADR-050).
+    """
+    rounds: DispatchRounds = request.app.state.dispatch_rounds
+    return rounds
+
+
 def current_account(
     conn: Annotated[Connection[Any], Depends(connection)],
     auth: Annotated[Authentication, Depends(authentication)],
@@ -105,6 +118,7 @@ Db = Annotated[Connection[Any], Depends(connection)]
 Auth = Annotated[Authentication, Depends(authentication)]
 Time = Annotated[Clock, Depends(clock)]
 Plant = Annotated[Config, Depends(plant)]
+Rounds = Annotated[DispatchRounds, Depends(dispatch_rounds)]
 
 
 def requires(*roles: Role, action: str):  # type: ignore[no-untyped-def]
