@@ -18,12 +18,16 @@ from pdm.dispatch.domain import (
     downtime_units,
     load_ratio,
 )
+from pdm.dispatch.explain import Answer, Explainer, Reason
 from pdm.dispatch.solver import schedule
 
 __all__ = [
+    "Answer",
     "Band",
+    "Explainer",
     "Placement",
     "Queued",
+    "Reason",
     "Round",
     "Terms",
     "Withheld",
