@@ -13,3 +13,4 @@ Format: `YYYY-MM-DD HH:MM UTC · slice · outcome · PR`
 - 2026-08-22 10:20 UTC · slice 9.3 (#53) · `GET /overview/gaps`: symptoms with nothing to serve, ranked by events not firings (ADR-060); the review queue per model; playbooks whose manual changed · #65
 - 2026-08-22 11:59 UTC · slice 10.3 (#57, by hand) · one job, its reason, its steps, and the objection that changes nothing (ADR-061) · #66
 - 2026-08-22 12:21 UTC · slice 10.4 (#58, by hand) · closing in two taps, and the one thing kept on the device when the network drops (ADR-062) · #67
+- 2026-08-22 14:32 UTC · slice 9.4 (#54) · `GET /overview/line`: stations in line order with their buffers, one marker per station, and the shift band taken from the round itself (ADR-063) · #68

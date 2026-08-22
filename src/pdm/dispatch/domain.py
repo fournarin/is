@@ -191,6 +191,17 @@ class Round(BaseModel):
     on_date: date | None = None
     capacity_minutes: int = 0
     committed_minutes: int = 0
+    # How many people the capacity above was summed over, and how many open
+    # orders the round was handed - taken ones included, which is why this is not
+    # `len(placed) + len(unassigned) + len(held)`.
+    #
+    # Counts, not decisions: nothing here changes what the round does. They are
+    # on the round because the overview reports them beside the ratio, and the
+    # alternative was a second roster query and a second pass over the same
+    # orders - a copy of the gate's own arithmetic, which is the thing ADR-050
+    # exists to prevent.
+    technicians_on_shift: int = 0
+    open_orders: int = 0
     # None when there is no capacity to divide by - not zero, which would read as
     # an empty shift with people on it.
     load_ratio: float | None = None
@@ -503,6 +514,8 @@ def dispatch(
             on_date=on_date,
             capacity_minutes=capacity,
             committed_minutes=committed_minutes,
+            technicians_on_shift=len(assignments),
+            open_orders=len(queue),
             load_ratio=None,
             band=band,
             held=tuple(
@@ -532,6 +545,8 @@ def dispatch(
         on_date=on_date,
         capacity_minutes=capacity,
         committed_minutes=committed_minutes,
+        technicians_on_shift=len(assignments),
+        open_orders=len(queue),
         load_ratio=ratio,
         band=band,
         placed=tuple(placed),

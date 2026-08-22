@@ -73,6 +73,7 @@ entries replace parts of earlier ones, and both are kept.
 | [060](0060-how-the-authoring-queue-is-ordered.md) | How the authoring queue is ordered, and what counts as a gap | |
 | [061](0061-what-the-technicians-screen-reads-and-from-where.md) | What the technician's screen reads, and from where | |
 | [062](0062-what-the-offline-queue-promises-and-what-it-does-not.md) | What the offline queue promises, and what it does not | |
+| [063](0063-what-the-line-overview-reads-and-what-it-may-not-compute.md) | What the line overview reads, and what it may not compute | |
 
 ## Where to start
 
