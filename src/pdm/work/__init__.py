@@ -8,11 +8,13 @@ invariant 10).
 """
 
 from pdm.work.domain import NoEstimateAvailable, playbook_ref_for, reason_for
-from pdm.work.service import Issued, WorkOrders
+from pdm.work.service import Issued, NoSuchOrder, TransitionRefused, WorkOrders
 
 __all__ = [
     "Issued",
     "NoEstimateAvailable",
+    "NoSuchOrder",
+    "TransitionRefused",
     "WorkOrders",
     "playbook_ref_for",
     "reason_for",

@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from pdm.api import deps, dispatch, documents, playbooks, sessions
+from pdm.api import deps, dispatch, documents, playbooks, sessions, work_orders
 from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
@@ -29,6 +29,7 @@ from pdm.platform.documents import DocumentLibrary
 from pdm.platform.jobs import ClassTiming, JobClass, JobQueue
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 from pdm.playbooks import PlaybookStore
+from pdm.work import WorkOrders
 
 # A scanned two-hundred-page manual is tens of megabytes; this leaves room for
 # several times the largest thing anybody should be uploading and stops the
@@ -74,6 +75,16 @@ def create_app(
         # decides anything itself: rounds run in worker-runtime, which is the
         # only process that writes a placement (ADR-026, ADR-050).
         app.state.dispatch_rounds = DispatchRounds(the_clock, config)
+        # Creation and the four transitions in one service. The API drives the
+        # second half only - a ticket is created by the trigger loop, the PM
+        # schedule or a report, and what happens here is what a person did with
+        # the job they were handed (ADR-026).
+        app.state.work_orders = WorkOrders(
+            the_clock,
+            fallback_minutes={
+                str(model): dict(rows) for model, rows in config.policy.fallback_minutes.items()
+            },
+        )
         # The API enqueues authoring work and claims none of it. `worker` names
         # this process in `claimed_by` only if it ever claimed anything, which it
         # must not (ADR-026); the name is here so a row written by the API is
@@ -123,6 +134,7 @@ def create_app(
     app.include_router(documents.router)
     app.include_router(playbooks.router)
     app.include_router(dispatch.router)
+    app.include_router(work_orders.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:

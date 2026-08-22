@@ -36,7 +36,7 @@ entries replace parts of earlier ones, and both are kept.
 | [022](0022-every-improvement-loop-proposes-rather-than-changes.md) | Every improvement loop proposes; it does not change | |
 | [023](0023-findings-have-a-lifecycle-and-a-suppression-window.md) | Findings have a lifecycle and a suppression window | |
 | [024](0024-roles-and-approval-authority.md) | Roles and approval authority | |
-| [025](0025-work-orders-support-handover-and-multi-person-jobs.md) | Shift handover and multi-person jobs | |
+| [025](0025-work-orders-support-handover-and-multi-person-jobs.md) | Shift handover and multi-person jobs | 056 |
 | [026](0026-split-the-worker-into-two-roles.md) | Split the worker into runtime and authoring | |
 | [027](0027-operational-data-contracts.md) | Operational contracts: station, technician, shift, PM task | |
 | [028](0028-clock-is-the-single-time-port.md) | `Clock` is the single time port | |

@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from pdm.contracts import (
+    AssigneeRole,
     Finding,
     FindingKind,
     FindingRef,
@@ -28,6 +29,7 @@ from pdm.contracts import (
     UserId,
     WorkOrder,
     WorkOrderOrigin,
+    WorkOrderStatus,
 )
 
 # PM work is the low-priority work a quiet shift is meant to absorb (ADR-010,
@@ -43,6 +45,57 @@ class NoEstimateAvailable(Exception):
     `load_ratio` as though somebody had measured it, and the whole point of the
     fallback table is that its numbers are declared in one readable place.
     """
+
+
+# A job somebody can still pick up, put down or finish. `closed` and `cancelled`
+# are endings, and an ending is the one state from which nothing moves: a
+# transition applied to a closed order would write over the record of a job that
+# is already evidence (ADR-018).
+STILL_LIVE = (
+    WorkOrderStatus.QUEUED,
+    WorkOrderStatus.ASSIGNED,
+    WorkOrderStatus.IN_PROGRESS,
+    WorkOrderStatus.HANDED_OVER,
+)
+
+
+def holds_it(order: WorkOrder, user: UserId) -> bool:
+    """Whether this person is on the order now.
+
+    `assignees` is the present tense; `work_segments` is the record of who
+    worked. Handing over takes somebody out of the first and leaves them in the
+    second (ADR-056).
+    """
+    return any(one.user == user for one in order.assignees)
+
+
+def has_an_open_segment(order: WorkOrder, user: UserId) -> bool:
+    return any(one.user == user and one.ended_at is None for one in order.work_segments)
+
+
+def role_for_new_assignee(order: WorkOrder) -> AssigneeRole:
+    """First on is the primary, everybody after is a helper (ADR-056 §4).
+
+    By count rather than by skill: layer 3 already matched the skill against the
+    primary when it placed the order, and re-deriving it here would mean two
+    answers to one question, disagreeing on the shift where it matters.
+    """
+    return AssigneeRole.PRIMARY if not order.assignees else AssigneeRole.HELPER
+
+
+def minutes_worked_if_closed_at(order: WorkOrder, now: datetime) -> int:
+    """What `actual_minutes` will read once the open segments are closed.
+
+    Computed before anything is written, because the checks that can refuse a
+    close - blocked minutes larger than the job - have to refuse without leaving
+    the order half ended. An `HTTPException` commits the request's transaction
+    (api/deps.py), so "raise and let it roll back" is not available here.
+    """
+    total = timedelta(0)
+    for segment in order.work_segments:
+        ended = segment.ended_at if segment.ended_at is not None else now
+        total += max(ended - segment.started_at, timedelta(0))
+    return int(total.total_seconds() // 60)
 
 
 def playbook_ref_for(symptom_code: SymptomCode, machine_model: str) -> PlaybookRef:
