@@ -147,6 +147,13 @@ jobs:
       - name: lint
         run: npm run lint
 
+      # Node 24 runs TypeScript directly, so `node --test` needs no framework
+      # and no dependency. What it covers is the offline close queue, which is
+      # the one piece of logic here that a person cannot check by looking at a
+      # screen (ADR-062).
+      - name: unit tests
+        run: npm test
+
       # Before the type check on purpose. `next-env.d.ts` is generated and it
       # references the route types `next build` writes into .next/, so a
       # checkout that has never been built has nothing for tsc to read.

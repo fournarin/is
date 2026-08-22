@@ -42,6 +42,9 @@ export default async function StepsPage({
           อย่าเดาขั้นตอน
         </p>
         <p>{job.reason}</p>
+        <Link className="button-link quiet" href={`/work/${encodeURIComponent(job.ref)}/close`}>
+          ปิดงาน
+        </Link>
         <HandoverForm workOrder={job.ref} />
       </>
     );
@@ -101,6 +104,10 @@ export default async function StepsPage({
           <span className="muted done">ขั้นตอนสุดท้าย</span>
         )}
       </div>
+
+      <Link className="button-link quiet" href={`/work/${encodeURIComponent(job.ref)}/close`}>
+        ปิดงาน
+      </Link>
 
       <HandoverForm workOrder={job.ref} />
     </>

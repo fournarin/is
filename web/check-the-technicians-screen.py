@@ -356,22 +356,86 @@ def main() -> None:
     last = get("/work/" + ref_from(steps) + "/steps?step=3")
     expect("ขั้นตอนสุดท้าย" in last, "and the last one says so instead of offering another")
 
-    print("\n4. handing over needs a note")
-    refused = submit(
-        "/work/" + ref_from(steps) + "/steps?step=3",
-        form_with(last, 'name="note"'),
+    print("\n4. closing the job")
+    ref = ref_from(steps)
+    close_page = get(f"/work/{ref}/close")
+    expect("ปิดงาน" in close_page, "the close screen is reachable from the steps")
+    expect("ไม่พบปัญหา" in close_page, "and offers the false-alarm outcome (ADR-022)")
+    expect(
+        "ระบบไม่ถามว่าใช้เวลาไปเท่าไร" in readable(close_page),
+        "and says plainly that it never asks for a duration (ADR-006, ADR-025)",
+    )
+    expect(
+        'name="actual_minutes"' not in close_page and 'name="minutes"' not in close_page,
+        "no field anywhere asks for one",
+    )
+
+    refused = submit(f"/work/{ref}/close/send", [], [("blocked_reason", "waiting_parts")])
+    expect("เลือกก่อนว่างานจบอย่างไร" in readable(refused), "a close with no outcome is refused")
+
+    # The job started seconds ago, so twenty minutes of waiting is longer than
+    # the work it interrupted and the API refuses it (ADR-056). What matters
+    # here is that the screen hands back the sentence saying so rather than a
+    # status code, because somebody is reading it at a machine.
+    impossible = submit(
+        f"/work/{ref}/close/send",
+        [],
+        [("outcome", "fixed"), ("blocked_reason", "waiting_parts"), ("blocked_minutes", "20")],
+    )
+    expect(
+        "waiting cannot be longer than the work it interrupted" in impossible,
+        "an impossible number comes back as the sentence that says what to change",
+    )
+
+    closed = submit(
+        f"/work/{ref}/close/send",
+        [],
+        [
+            ("outcome", "no_problem_found"),
+            ("blocked_reason", "waiting_parts"),
+            ("blocked_minutes", "0"),
+            ("technician_feedback", "วัดแล้วอุณหภูมิปกติ น่าจะเป็นเซนเซอร์"),
+        ],
+    )
+    expect("งานของคุณ" in closed, "closing lands back on the queue")
+
+    print("\n5. the queue advances to the next job")
+    after_closing = readable(get("/work"))
+    expect(ref not in after_closing, "the job that was closed is gone")
+    expect("MC-001" in after_closing, "and the one that was queued behind it is now on top")
+    expect("ถัดไป" not in after_closing, "with nothing left behind it")
+
+    print("\n6. what the close actually wrote")
+    stored = closed_order(ref)
+    expect(stored["status"] == "closed", "the order is closed")
+    expect(stored["outcome"] == "no_problem_found", "with the outcome that was chosen")
+    # ADR-006: waiting for a part is not repair time, and left in it inflates the
+    # estimate for this symptom every cycle.
+    expect(stored["blocked_reason"] == ["waiting_parts"], "and the chip that was tapped")
+    expect(stored["blocked_minutes"] == 0, "and the minutes that were not repair")
+    expect(
+        stored["technician_feedback"] == "วัดแล้วอุณหภูมิปกติ น่าจะเป็นเซนเซอร์",
+        "and the note, which is the only thing here a person wrote in words",
+    )
+
+    print("\n7. handing over the next job needs a note")
+    next_ref = ref_from(after_closing)
+    next_steps = submit("/work", form_with(get("/work"), "เริ่มงาน"))
+    expect(next_ref in readable(next_steps), "the next job starts")
+    blank = submit(
+        f"/work/{next_ref}/steps",
+        form_with(next_steps, 'name="note"'),
         [("note", "   ")],
     )
-    expect("ก่อนส่งเวร" in refused, "whitespace is not a handover note (ADR-025)")
-
+    expect("ก่อนส่งเวร" in readable(blank), "whitespace is not a handover note (ADR-025)")
     handed = submit(
-        "/work/" + ref_from(steps) + "/steps?step=3",
-        form_with(last, 'name="note"'),
-        [("note", "ถอดฝาครอบพัดลมแล้ว รออะไหล่ตลับลูกปืน")],
+        f"/work/{next_ref}/steps",
+        form_with(next_steps, 'name="note"'),
+        [("note", "ถอดฝาครอบแล้ว รออะไหล่")],
     )
-    expect("งานของคุณ" in handed, "with a note it goes through and lands back on the queue")
+    expect("งานของคุณ" in handed, "with a note it goes through")
 
-    print("\n5. the manual opens at a page rather than downloading whole")
+    print("\n8. the manual opens at a page rather than downloading whole")
     document = re.search(r'href="/manual/([^"#]+)#page=(\d+)"', steps)
     assert document is not None
     request = urllib.request.Request(f"{WEB}/manual/{document.group(1)}")
@@ -381,6 +445,30 @@ def main() -> None:
         expect(len(response.read()) == 100, "with only the bytes that were asked for")
 
     print("\nall checks passed")
+
+
+def closed_order(ref: str) -> dict[str, object]:
+    """What the close wrote, read back from the database.
+
+    Not from a screen: a screen agreeing with itself proves nothing about what
+    was stored. `actual_minutes` and `repair_minutes` are deliberately absent -
+    they are computed from the work segments (ADR-025) and are 9.1's tests to
+    make, not this screen's.
+    """
+    with connect(os.environ["DATABASE_URL"]) as conn:
+        row = conn.execute(
+            "SELECT status, outcome, blocked_minutes, blocked_reason, technician_feedback "
+            "FROM work_order WHERE work_order_ref = %s",
+            (ref,),
+        ).fetchone()
+    assert row is not None, f"no work order {ref}"
+    return {
+        "status": row[0],
+        "outcome": row[1],
+        "blocked_minutes": row[2],
+        "blocked_reason": list(row[3] or []),
+        "technician_feedback": row[4],
+    }
 
 
 def ref_from(page: str) -> str:

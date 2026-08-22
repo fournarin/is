@@ -29,7 +29,10 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    // `node --test` resolves the file it will actually run, so the test
+    // files import with the extension. Safe with noEmit: nothing is written.
+    "allowImportingTsExtensions": true
   },
   "include": [
     "next-env.d.ts",
