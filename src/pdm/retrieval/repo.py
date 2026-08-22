@@ -108,6 +108,23 @@ def needing_ocr(conn: Connection[Any], document_id: DocumentId) -> list[int]:
     return [int(row[0]) for row in rows]
 
 
+def outcome_of(conn: Connection[Any], document_id: DocumentId, page: int) -> PageOutcome | None:
+    """What one page gave up when it was read, or None if it was never read.
+
+    The review screen asks this before it shows an empty evidence panel. "The
+    index has no text for page 88 because it is a scan" and "this document has
+    no page 88" are different sentences to somebody deciding whether to approve
+    a step citing it, and a blank panel says neither (principle 5).
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT outcome FROM document_page WHERE document_id = %s AND page = %s",
+            (document_id, page),
+        )
+        row = cur.fetchone()
+    return PageOutcome(row[0]) if row else None
+
+
 def chunks_by_key(conn: Connection[Any], keys: Sequence[ChunkKey]) -> list[Chunk]:
     """Fetch chunks the vector half returned by key.
 

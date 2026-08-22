@@ -30,6 +30,7 @@ from pdm.playbooks.domain import (
     Proposal,
     ProposalOrigin,
     ProposalStatus,
+    StepEdit,
     cited_documents,
 )
 
@@ -42,7 +43,8 @@ _PLAYBOOK_COLUMNS = """
 _PROPOSAL_COLUMNS = """
     proposal_id, symptom_code, machine_model, origin, outcome, steps, tools,
     proposed_skill, proposed_minutes, rejected, reason, created_at, created_by,
-    status, decided_by, decided_at, decision_note
+    status, decided_by, decided_at, decision_note, opened_at, review_seconds,
+    edits
 """
 
 
@@ -62,6 +64,7 @@ def _to_proposal(row: dict[str, Any]) -> Proposal:
     row["steps"] = tuple(PlaybookStep.model_validate(step) for step in row["steps"])
     row["tools"] = tuple(row["tools"])
     row["rejected"] = tuple(row["rejected"])
+    row["edits"] = tuple(StepEdit.model_validate(edit) for edit in row["edits"])
     return Proposal.model_validate(row)
 
 
@@ -314,6 +317,26 @@ def proposal(conn: Connection[Any], proposal_id: int) -> Proposal | None:
     return _to_proposal(row) if row else None
 
 
+def opened(conn: Connection[Any], proposal_id: int, *, at: datetime) -> None:
+    """Somebody who may review this has just looked at it.
+
+    Written on every read of the detail rather than only the first, so what the
+    decision is measured against is the sitting it was made in. A proposal
+    opened on Monday and decided on Thursday would otherwise report three days
+    of review, which is a number that would make the median meaningless and the
+    mean absurd (ADR-064).
+
+    Only `pending` rows move: reading a decided proposal is reading history, and
+    it must not restate when the decision that is already recorded was taken.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE playbook_proposal SET opened_at = %s "
+            "WHERE proposal_id = %s AND status = 'pending'",
+            (at, proposal_id),
+        )
+
+
 def decide(
     conn: Connection[Any],
     proposal_id: int,
@@ -322,22 +345,47 @@ def decide(
     decided_by: UserId,
     decided_at: datetime,
     note: str | None,
+    edits: tuple[StepEdit, ...] = (),
 ) -> Proposal:
     """Record that a person looked at this and what they concluded.
 
     The `WHERE status = 'pending'` is what makes deciding twice impossible: the
     second call finds no row and raises, rather than overwriting the first
     person's decision with the second's.
+
+    `review_seconds` is computed in the same statement, from the row's own
+    `opened_at` and the decision time the caller passes - both from the Clock
+    (ADR-028). Reading the open time out and subtracting in Python would be the
+    same arithmetic across two statements, with room between them for the read
+    that moves `opened_at` on. Null when the proposal was decided without the
+    detail ever being opened, which is a real thing to be able to say: it is an
+    approval made without the evidence panel in front of anybody (ADR-064).
     """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
             UPDATE playbook_proposal
-               SET status = %s, decided_by = %s, decided_at = %s, decision_note = %s
+               SET status = %s, decided_by = %s, decided_at = %s, decision_note = %s,
+                   edits = %s,
+                   review_seconds = CASE
+                       WHEN opened_at IS NULL THEN NULL
+                       -- greatest(0, ...) rather than a bare subtraction: a
+                       -- SimulatedClock can be wound back between the open and
+                       -- the decision, and the column refuses a negative.
+                       ELSE greatest(0, extract(epoch FROM (%s - opened_at))::integer)
+                   END
              WHERE proposal_id = %s AND status = 'pending'
             RETURNING """
             + _PROPOSAL_COLUMNS,
-            (status.value, decided_by, decided_at, note, proposal_id),
+            (
+                status.value,
+                decided_by,
+                decided_at,
+                note,
+                Jsonb([edit.model_dump(mode="json") for edit in edits]),
+                decided_at,
+                proposal_id,
+            ),
         )
         row = cur.fetchone()
     if row is None:

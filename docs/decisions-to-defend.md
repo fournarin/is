@@ -163,6 +163,53 @@ makes the delay small; a longer cadence would make this choice matter more.
 
 ---
 
+## 9. A reviewer's edit is not put through the figure gate
+
+**Decided.** "Edit and approve" lets an engineer reword a drafted step, and the
+figure check of ADR-037 §2 - every number in a step must appear in the chunk it
+cites - is not re-run over what they wrote. Their citation, step count and
+ordering are fixed; only the words are theirs.
+
+**Why.** The gate exists to stop a model quoting a torque the page does not
+carry. The engineer is the authority ADR-003 put in the model's way, and
+refusing their correction on the strength of the model's check makes the
+reviewer the least-trusted party in the system. What replaces it is
+attribution: the diff is stored on the proposal, the approval names the person
+and the role held at that moment, and the work order snapshots the lot.
+
+**If it is wrong.** An engineer can approve a figure no manual states, and the
+system will serve it with a provenance that says a person wrote it rather than
+that the manual did. The fix is a check at the edit, not a rollback: the
+distinction is already recorded per step.
+
+**Look at.** [ADR-064 §2](adr/0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md),
+`src/pdm/playbooks/domain.py::apply_edits`, `tests/playbooks/test_what_a_reviewer_may_change.py`.
+
+---
+
+## 10. Review time is the last sitting, not the whole span
+
+**Decided.** `review_seconds` is measured from the most recent open of a
+proposal's detail to the decision, both from the Clock. Reopening resets the
+start. Null when the detail was never opened.
+
+**Why.** The report quotes minutes-per-proposal, and a proposal opened on Monday
+and decided on Thursday is not a three-day review - it is a two-minute one after
+a gap. Measuring first-open-to-decision would put days in the same column as
+minutes and make the median meaningless. A timer in the browser was the other
+option and is worse twice over: the number would be the screen's word for it,
+and a visible clock pressures somebody reading safety-critical text.
+
+**If it is wrong.** The figure under-reports: a reviewer who leaves the detail
+open, reads the manual for ten minutes and comes back is measured from the last
+load. It is a floor on how long review took, and it should be reported as one.
+
+**Look at.** [ADR-064 §4](adr/0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md),
+`src/pdm/playbooks/repo.py::decide`,
+`tests/api/test_the_review_screen.py::TestTheTimeIsRecordedAndNeverShown`.
+
+---
+
 # What still stops and waits for a person
 
 Two things, per [ADR-052](adr/0052-what-review-was-protecting-and-what-it-was-not.md).

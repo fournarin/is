@@ -23,8 +23,12 @@ export const SCREENS: readonly Screen[] = [
     title: "คิวรีวิว playbook",
     purpose: "อนุมัติขั้นตอนซ่อมทีละใบ โดยมีหลักฐานจากคู่มืออยู่ข้างกันในจอเดียว",
     slice: "10.2",
-    href: null,
-    roles: ["engineer"],
+    href: "/review",
+    // The supervisor is offered it because the API lets them read it: a
+    // supervisor who cannot see the queue cannot ask why it is not moving.
+    // Approving is still an engineer's alone, refused at the endpoint rather
+    // than by this list (invariant 6, ADR-024).
+    roles: ["engineer", "supervisor"],
   },
   {
     title: "งานของคุณ",

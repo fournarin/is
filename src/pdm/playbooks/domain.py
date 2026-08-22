@@ -42,6 +42,74 @@ class ProposalStatus(StrEnum):
     # because "why does this symptom still have no playbook" is otherwise
     # unanswerable (ADR-038).
     DISMISSED = "dismissed"
+    # Wrong, and worth another attempt: the reviewer's note becomes the question
+    # a fresh drafting job is asked. A separate status rather than a dismissal
+    # with a particular note, because the two answer different questions about a
+    # symptom that still has nothing to serve - nobody wants a playbook for it,
+    # against the drafts so far being wrong (ADR-064).
+    SENT_BACK = "sent_back"
+
+
+class StepEdit(BaseModel):
+    """One step the approver rewrote, before and after.
+
+    Stored on the proposal rather than only in the approved playbook, because
+    the playbook table is overwritten on the next approval (ADR-018) and the
+    question this answers - *what did a person change, and which person* - is
+    asked about an approval that happened months ago.
+    """
+
+    model_config = _FROZEN
+
+    index: int = Field(ge=0)
+    before: str = Field(min_length=1)
+    after: str = Field(min_length=1)
+
+
+def edits_between(
+    steps: tuple[PlaybookStep, ...], rewritten: tuple[str, ...]
+) -> tuple[StepEdit, ...]:
+    """What changed between the drafted steps and the approver's text.
+
+    Pure, and separate from the store for the usual reason (invariant 10): the
+    edit rate in the report is counted from these rows, and how a difference is
+    decided should be testable without a database.
+
+    Position for position. A reviewer may reword a step; they may not add one,
+    drop one or reorder them, so the two lists are the same length and index `i`
+    means the same instruction in both. ADR-064 gives the reason: a shorter
+    procedure that still reads as complete is the failure ADR-037 section 4
+    refused to allow the drafter, and there is no argument for allowing it to
+    the person the drafter is checked by.
+    """
+    if len(rewritten) != len(steps):
+        raise ValueError(
+            f"{len(rewritten)} rewritten step(s) against {len(steps)} drafted: a reviewer "
+            "rewords steps, and adding or dropping one means sending the draft back (ADR-064)"
+        )
+    return tuple(
+        StepEdit(index=index, before=step.text, after=text)
+        for index, (step, text) in enumerate(zip(steps, rewritten, strict=True))
+        if text != step.text
+    )
+
+
+def apply_edits(
+    steps: tuple[PlaybookStep, ...], edits: tuple[StepEdit, ...]
+) -> tuple[PlaybookStep, ...]:
+    """The steps as approved: the reviewer's words, the drafter's provenance.
+
+    `source_doc`, `page` and `confidence` are carried across untouched and are
+    not editable through any path. A step whose citation a person may retype is
+    a step whose citation says what somebody wished the manual said, and
+    invariant 4 - every step in an approved playbook carries its source - would
+    be true of the field and false of the fact (ADR-015, ADR-064).
+    """
+    rewritten = {edit.index: edit.after for edit in edits}
+    return tuple(
+        step.model_copy(update={"text": rewritten[index]}) if index in rewritten else step
+        for index, step in enumerate(steps)
+    )
 
 
 class Proposal(BaseModel):
@@ -81,6 +149,14 @@ class Proposal(BaseModel):
     decided_by: UserId | None = None
     decided_at: datetime | None = None
     decision_note: str | None = None
+
+    # When somebody who may review it last opened the detail, and how long from
+    # that open to the decision. Never rendered: a visible clock pressures a
+    # person reviewing safety-critical text into hurrying, which buys a better
+    # number and a worse review (ADR-064).
+    opened_at: datetime | None = None
+    review_seconds: int | None = Field(default=None, ge=0)
+    edits: tuple[StepEdit, ...] = ()
 
     @property
     def can_be_applied(self) -> bool:
