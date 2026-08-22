@@ -123,8 +123,11 @@ PEOPLE = [
         "demo-supervisor",
         "Anan",
         "หัวหน้ากะ",
-        ["ภาพรวมสายการผลิต"],
-        ["คิวรีวิว playbook", "งานของคุณ"],
+        # The review queue is offered from slice 10.2 on: a supervisor may read
+        # it and may not decide it, and the refusal is at the endpoint rather
+        # than by hiding the door (ADR-064, invariant 6).
+        ["ภาพรวมสายการผลิต", "คิวรีวิว playbook"],
+        ["งานของคุณ"],
     ),
     # An operator has no screen, and ADR-058 says the shell admits that rather
     # than offering a door onto nothing.

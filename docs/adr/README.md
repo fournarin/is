@@ -75,6 +75,7 @@ entries replace parts of earlier ones, and both are kept.
 | [062](0062-what-the-offline-queue-promises-and-what-it-does-not.md) | What the offline queue promises, and what it does not | |
 | [063](0063-what-the-line-overview-reads-and-what-it-may-not-compute.md) | What the line overview reads, and what it may not compute | |
 | [064](0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md) | What a reviewer may change, and what the review screen records | |
+| [065](0065-how-this-web-layer-submits-things.md) | How this web layer submits things | |
 
 ## Where to start
 
