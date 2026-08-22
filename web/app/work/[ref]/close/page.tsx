@@ -1,0 +1,57 @@
+import Link from "next/link";
+
+import { CloseForm } from "@/app/work/[ref]/close/close-form";
+import { requireAccount } from "@/lib/session";
+import { ticket } from "@/lib/work";
+
+/**
+ * How the job ended, in two taps.
+ *
+ * Anything heavier is not filled in truthfully at the end of a shift, and the
+ * fields here are the ones the feedback loops need rather than the ones a form
+ * would naturally grow: how it ended (ADR-022's only false-alarm signal is one
+ * of the four), and how much of the elapsed time was not repair (ADR-006).
+ */
+export default async function ClosePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ ref: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
+  await requireAccount();
+  const { ref } = await params;
+  const { error } = await searchParams;
+  const job = await ticket(decodeURIComponent(ref));
+
+  return (
+    <>
+      <div className="who">
+        <span>
+          <Link href={`/work/${encodeURIComponent(job.ref)}/steps`}>‹ {job.machine_id}</Link>
+        </span>
+        <span className="muted">{job.ref}</span>
+      </div>
+
+      <h1>ปิดงาน</h1>
+      <p className="muted">{job.reason}</p>
+
+      {/* The path with no JavaScript comes back here with the reason in the
+          URL, because a redirect cannot carry state any other way. It is the
+          API's own sentence and is shown as written. */}
+      {error !== undefined && error !== "" && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      <CloseForm workOrder={job.ref} />
+
+      {/* Never asked for, and saying so is the point: a technician who thinks
+          the clock is a grade stops pressing start (ADR-058, ADR-006). */}
+      <p className="muted">
+        ระบบไม่ถามว่าใช้เวลาไปเท่าไร — นับจากตอนกด &ldquo;เริ่มงาน&rdquo; และ &ldquo;ส่งเวร&rdquo; ให้เอง
+      </p>
+    </>
+  );
+}
