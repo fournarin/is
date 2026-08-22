@@ -17,6 +17,8 @@ from typing import Any
 from psycopg import Connection
 
 from pdm.contracts import (
+    Assignee,
+    BlockedReason,
     Finding,
     FindingRef,
     MachineId,
@@ -28,10 +30,26 @@ from pdm.contracts import (
     SymptomCode,
     UserId,
     WorkOrder,
+    WorkOrderStatus,
+    WorkOutcome,
 )
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo as playbooks
 from pdm.work import domain, repo
+
+
+class NoSuchOrder(LookupError):
+    """There is no order with that reference."""
+
+
+class TransitionRefused(Exception):
+    """The order is not in a state where this makes sense.
+
+    A conflict rather than a failure: the person pressed a real button on a real
+    ticket, and what refuses them is the state the order is in - somebody else
+    has it, they never accepted it, it ended an hour ago. The message says which,
+    because a technician standing at a machine cannot read a stack trace.
+    """
 
 
 class Issued:
@@ -165,6 +183,160 @@ class WorkOrders:
             now=now,
         )
         return Issued(repo.issue(conn, order, now=now), order)
+
+    # ── the four buttons a technician has (ADR-024, ADR-025, ADR-056) ────
+    #
+    # Every one of them reads the row under a lock, decides from what it read,
+    # and writes. Deciding from a stale read is what puts two primaries on one
+    # ticket or two open segments on one person, and both are wrong in a way
+    # nothing downstream can detect: the first doubles the capacity the
+    # scheduler reserves, the second doubles the minutes the estimate learns
+    # from.
+
+    def _live(self, conn: Connection[Any], ref: str) -> WorkOrder:
+        order = repo.get_for_update(conn, ref)
+        if order is None:
+            raise NoSuchOrder(f"no work order {ref}")
+        if order.status not in domain.STILL_LIVE:
+            raise TransitionRefused(
+                f"{ref} is {order.status.value} and nothing moves after that; "
+                f"a new problem on this machine is a new ticket"
+            )
+        return order
+
+    def _reread(self, conn: Connection[Any], ref: str) -> WorkOrder:
+        order = repo.get(conn, ref)
+        if order is None:  # pragma: no cover - the row is locked by this transaction
+            raise NoSuchOrder(f"no work order {ref}")
+        return order
+
+    def accept(self, conn: Connection[Any], ref: str, *, user: UserId) -> WorkOrder:
+        """A technician takes the job (ADR-024: technicians, and only them).
+
+        Accepting one they already hold changes nothing rather than failing. The
+        button is pressed on a phone at a machine on a network that drops, and a
+        second press is not a mistake worth refusing.
+        """
+        order = self._live(conn, ref)
+        if domain.holds_it(order, user):
+            return order
+        if len(order.assignees) >= order.required_technicians:
+            held_by = ", ".join(str(one.user) for one in order.assignees)
+            raise TransitionRefused(
+                f"{ref} needs {order.required_technicians} and already has {held_by}"
+            )
+        repo.add_assignee(conn, ref, Assignee(user=user, role=domain.role_for_new_assignee(order)))
+        # A helper joining a job somebody is already working must not push it
+        # back to `assigned`; a handed-over job somebody picks up must leave that
+        # status, or it reads as waiting for a shift that has started.
+        if order.status in (WorkOrderStatus.QUEUED, WorkOrderStatus.HANDED_OVER):
+            repo.set_status(conn, ref, status=WorkOrderStatus.ASSIGNED)
+        return self._reread(conn, ref)
+
+    def start(self, conn: Connection[Any], ref: str, *, user: UserId) -> WorkOrder:
+        """Open a segment and put the order in progress.
+
+        Refused for somebody who has not accepted it: the segment is a claim
+        about who did the work, and the order has to be able to say whose
+        capacity it is spending before it starts spending it.
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"{user} has not accepted {ref}")
+        if domain.has_an_open_segment(order, user):
+            raise TransitionRefused(
+                f"{user} is already working on {ref}; a second segment would count "
+                f"the same minutes twice"
+            )
+        repo.open_segment(conn, ref, user=user, now=self.clock.now())
+        repo.set_status(conn, ref, status=WorkOrderStatus.IN_PROGRESS)
+        return self._reread(conn, ref)
+
+    def hand_over(self, conn: Connection[Any], ref: str, *, user: UserId, note: str) -> WorkOrder:
+        """Put the job down for somebody else, and say how far it got.
+
+        The note is checked before anything is written. ADR-025 asks for it
+        because without it the next shift finds an open order and starts from
+        step one, and a handover recorded without one would be worse than none -
+        it would look complete.
+
+        The handover ends this person's assignment (ADR-056). The order becomes
+        `handed_over` only when nobody is left on it: a helper stepping off a job
+        the primary is still working has not handed anything over.
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"{user} has not accepted {ref}")
+        if not note.strip():
+            raise ValueError(
+                "handing over needs a note saying how far the job got; without it the "
+                "next shift starts again from step one (ADR-025)"
+            )
+
+        repo.close_segments(conn, ref, user=user, now=self.clock.now())
+        repo.remove_assignee(conn, ref, user)
+        remaining = self._reread(conn, ref)
+        repo.set_status(
+            conn,
+            ref,
+            status=(WorkOrderStatus.HANDED_OVER if not remaining.assignees else remaining.status),
+            handover_note=note.strip(),
+        )
+        return self._reread(conn, ref)
+
+    def close(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        *,
+        user: UserId,
+        outcome: WorkOutcome,
+        blocked_minutes: int = 0,
+        blocked_reason: tuple[BlockedReason, ...] = (),
+        technician_feedback: str | None = None,
+    ) -> WorkOrder:
+        """End the job, with how it ended and what held it up.
+
+        `outcome` is mandatory at the signature, so there is no call that can
+        forget it. `no_problem_found` is one of the four and the most valuable of
+        them: it is the only false-alarm signal the system will ever receive, and
+        the loop that tunes rule thresholds does not exist without it (ADR-022).
+
+        Every open segment is closed, not only this person's - one left open
+        contributes nothing to `actual_minutes` and would silently discard the
+        time somebody worked (ADR-056 §5).
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"{user} has not accepted {ref}")
+
+        now = self.clock.now()
+        worked = domain.minutes_worked_if_closed_at(order, now)
+        if blocked_minutes > worked:
+            # Refused rather than clamped. `repair_minutes` already floors at
+            # zero, which keeps the arithmetic safe and hides the input that was
+            # wrong - and these are the numbers Loop 1 learns estimates from.
+            raise ValueError(
+                f"{blocked_minutes} blocked minutes on a job of {worked} minutes: "
+                f"waiting cannot be longer than the work it interrupted (ADR-056)"
+            )
+        if blocked_minutes > 0 and not blocked_reason:
+            raise ValueError(
+                "blocked minutes need a reason: parts, a line stop, or waiting for help"
+            )
+
+        repo.close_segments(conn, ref, now=now)
+        repo.close(
+            conn,
+            ref,
+            status=WorkOrderStatus.CLOSED,
+            outcome=outcome,
+            now=now,
+            blocked_minutes=blocked_minutes,
+            blocked_reason=blocked_reason,
+            technician_feedback=technician_feedback,
+        )
+        return self._reread(conn, ref)
 
     def open_orders(self, conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
         """What the dispatch tick will be given (design.md 6.2)."""
