@@ -16,6 +16,7 @@ from psycopg import Connection
 from pdm.contracts import Role
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
+from pdm.platform.clock import Clock
 from pdm.platform.jobs import JobQueue
 
 SESSION_COOKIE = "pdm_session"
@@ -61,6 +62,18 @@ def authentication(request: Request) -> Authentication:
     return auth
 
 
+def clock(request: Request) -> Clock:
+    """The one time port (ADR-028), for a handler that has to stamp something.
+
+    Most do not: the services the routers call carry their own clock, and a
+    handler that read the time to pass it in would be a second source of it. This
+    exists for the writes the API makes on its own account - an override is one -
+    so that a compressed demo stamps simulated time on them like everything else.
+    """
+    the_clock: Clock = request.app.state.clock
+    return the_clock
+
+
 def current_account(
     conn: Annotated[Connection[Any], Depends(connection)],
     auth: Annotated[Authentication, Depends(authentication)],
@@ -76,6 +89,7 @@ CurrentAccount = Annotated[Account, Depends(current_account)]
 Jobs = Annotated[JobQueue, Depends(authoring_jobs)]
 Db = Annotated[Connection[Any], Depends(connection)]
 Auth = Annotated[Authentication, Depends(authentication)]
+Time = Annotated[Clock, Depends(clock)]
 
 
 def requires(*roles: Role, action: str):  # type: ignore[no-untyped-def]

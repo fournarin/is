@@ -162,6 +162,11 @@ source_modules =
     pdm.playbooks.domain
     pdm.work.domain
     pdm.dispatch.domain
+    # Not a domain.py by name, and on the list for the same reason: the override
+    # record is a type the API builds and the repo writes, and a module that
+    # could reach a connection would be the second place layer 3 talks to the
+    # database (ADR-059).
+    pdm.dispatch.overrides
     pdm.triggers.domain
     pdm.triggers.trend
     pdm.retrieval.domain

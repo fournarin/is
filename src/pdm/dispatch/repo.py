@@ -33,6 +33,7 @@ from pdm.contracts import (
     WorkOrderStatus,
 )
 from pdm.dispatch.domain import Placement
+from pdm.dispatch.overrides import Override, OverrideKind
 
 
 def technicians(conn: Connection[Any]) -> list[Technician]:
@@ -112,6 +113,57 @@ def place(conn: Connection[Any], placement: Placement) -> bool:
             ),
         )
         return cur.rowcount == 1
+
+
+def record_override(conn: Connection[Any], override: Override) -> None:
+    """Write down that a person overruled layer 3, and against what (ADR-059).
+
+    In the request's transaction, like every other write here, so an override
+    that was recorded is an override that happened: a release committed without
+    its record would change the next round with nothing to explain why, which is
+    the state ADR-005 exists to prevent.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO work_order_override
+                   (at, kind, work_order_ref, user_id, role, reason,
+                    band, load_ratio, shift_id, on_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                override.at,
+                override.kind.value,
+                override.work_order_ref,
+                str(override.user),
+                override.role.value,
+                override.reason,
+                override.band.value if override.band is not None else None,
+                override.load_ratio,
+                str(override.shift_id) if override.shift_id is not None else None,
+                override.on_date,
+            ),
+        )
+
+
+def released(conn: Connection[Any]) -> set[str]:
+    """The orders a shift lead has taken out of the gate's hands.
+
+    A release has no expiry, and that is the decision rather than an omission
+    (ADR-059): "do this job" stays true until the job is done, and any lifetime
+    put on it would be a constant with nothing behind it. It stops mattering on
+    its own, because a round only ranks orders that are still queued and a
+    released order that gets placed is not one of those any more.
+
+    A set rather than a list: the caller asks it one question, per order, and the
+    only thing an ordering here could do is reach an output somewhere else.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT work_order_ref FROM work_order_override WHERE kind = %s",
+            (OverrideKind.RELEASE_HELD.value,),
+        )
+        return {str(row[0]) for row in cur.fetchall()}
 
 
 def _assignee(one: Assignee) -> dict[str, str]:
