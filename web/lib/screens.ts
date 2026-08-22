@@ -11,8 +11,10 @@ import type { Role } from "@/lib/session";
 export type Screen = {
   title: string;
   purpose: string;
-  /** The backlog slice that builds it, shown on screen while it does not exist. */
+  /** The backlog slice that builds it. Shown on screen while `href` is null. */
   slice: string;
+  /** Where it lives, once it exists. Null means the slice has not landed. */
+  href: string | null;
   roles: readonly Role[];
 };
 
@@ -21,18 +23,21 @@ export const SCREENS: readonly Screen[] = [
     title: "คิวรีวิว playbook",
     purpose: "อนุมัติขั้นตอนซ่อมทีละใบ โดยมีหลักฐานจากคู่มืออยู่ข้างกันในจอเดียว",
     slice: "10.2",
+    href: null,
     roles: ["engineer"],
   },
   {
     title: "งานของคุณ",
     purpose: "ใบงานที่ระบบจัดให้ เหตุผลว่าทำไมใบนี้ก่อน ขั้นตอนซ่อม และการปิดงาน",
     slice: "10.3-10.4",
+    href: "/work",
     roles: ["technician"],
   },
   {
     title: "ภาพรวมสายการผลิต",
     purpose: "สถานีไหนกำลังจะถึงเกณฑ์ กะนี้รับไหวแค่ไหน และใบงานที่ประตูโหลดกั้นไว้",
     slice: "10.5",
+    href: null,
     roles: ["supervisor", "engineer"],
   },
 ];

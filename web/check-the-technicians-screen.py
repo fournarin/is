@@ -1,0 +1,348 @@
+"""Drive the technician's screen end to end, the way a phone with no JavaScript does.
+
+Slice 10.3's "done when" asks for exactly this: see the job, read the reason,
+start it, step through, hand over with a note. Every assertion below goes
+through http://localhost:3000, so what is being checked is the screen and the
+web server's calls to the API - not the API on its own, which
+`tests/api/test_the_job_a_technician_opens.py` covers.
+
+It seeds its own world, because a screen showing one job needs a shift with
+somebody on it, a playbook, a Finding and an order, and the round has to place
+the one on the other. The shift is chosen from the clock rather than hardcoded,
+so the check works at whatever hour somebody runs it.
+
+    export DATABASE_URL=postgresql://$USER@localhost:5432/pdm_web_check
+    export STORAGE_DIR=/tmp/pdm-storage PYTHONPATH=.
+    uv run alembic upgrade head
+    uv run python -m pdm.api &
+    cd web && npm run build
+    mkdir -p .next/standalone/.next && cp -R .next/static .next/standalone/.next/
+    API_URL=http://localhost:8000 node .next/standalone/server.js &
+
+    uv run python web/check-the-technicians-screen.py
+"""
+
+from __future__ import annotations
+
+import html as htmllib
+import http.cookiejar
+import os
+import re
+import sys
+import urllib.error
+import urllib.request
+from datetime import datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from psycopg import connect
+
+from pdm.contracts import (
+    ComponentLabel,
+    Finding,
+    FindingKind,
+    MachineId,
+    MachineModel,
+    Playbook,
+    PlaybookStatus,
+    PlaybookStep,
+    Role,
+    RuleId,
+    Severity,
+    ShiftAssignment,
+    ShiftId,
+    SkillId,
+    SymptomCode,
+    Technician,
+    UserId,
+)
+from pdm.dispatch import repo as dispatch_repo
+from pdm.platform.auth.service import Authentication, LocalAccounts
+from pdm.platform.clock import SystemClock
+from pdm.platform.config import load_config
+from pdm.platform.documents import DocumentLibrary
+from pdm.platform.objects import FilesystemObjectStore, storage_root
+from pdm.playbooks import repo as playbooks
+from pdm.triggers import repo as findings
+from pdm.work import WorkOrders
+
+WEB = "http://localhost:3000"
+TECHNICIAN = UserId("tech-1")
+ENGINEER = UserId("eng-1")
+PASSWORD = "demo-technician"
+ENGINEER_PASSWORD = "demo-engineer"
+BOTTLENECK = MachineId("MC-012")
+R2000 = MachineModel("R-2000iC")
+SYM = SymptomCode("SYM-014")
+RULE = RuleId("R-motor-temp-high/trend")
+STEPS = (
+    "หยุดหุ่นยนต์ด้วยปุ่มหยุดฉุกเฉิน",
+    "ตัดเบรกเกอร์ CP-3 แล้วใส่กุญแจล็อกของตัวเอง",
+    "ถอดฝาครอบพัดลมออก",
+)
+
+jar = http.cookiejar.CookieJar()
+opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+
+def expect(condition: bool, message: str) -> None:
+    print(("  ok   " if condition else "  FAIL ") + message)
+    if not condition:
+        sys.exit(1)
+
+
+# ── the world the screen needs ────────────────────────────────────────────
+
+
+def shift_now(config: object, now: datetime) -> tuple[ShiftId, datetime]:
+    """The shift the plant is in right now, and the date it is filed under.
+
+    Chosen rather than hardcoded so the check passes at any hour. Shift
+    boundaries in `plant.yaml` are local wall-clock times (ADR-045 §7), and a
+    night shift that runs past midnight is filed under the day it began.
+    """
+    zone = ZoneInfo(config.plant.timezone)  # type: ignore[attr-defined]
+    local = now.astimezone(zone)
+    for shift in config.plant.shifts:  # type: ignore[attr-defined]
+        starts, ends = shift.starts_at, shift.ends_at
+        if starts < ends:
+            if starts <= local.time() < ends:
+                return ShiftId(str(shift.shift_id)), local
+        elif local.time() >= starts:
+            return ShiftId(str(shift.shift_id)), local
+        elif local.time() < ends:
+            return ShiftId(str(shift.shift_id)), local - timedelta(days=1)
+    raise AssertionError("the shifts in plant.yaml do not cover the whole day")
+
+
+def seed() -> None:
+    url = os.environ["DATABASE_URL"]
+    clock = SystemClock()
+    now = clock.now()
+    config = load_config(Path("config"))
+    auth = Authentication(LocalAccounts(), clock)
+    library = DocumentLibrary(FilesystemObjectStore(storage_root()), clock)
+    fallback = {str(m): dict(rows) for m, rows in config.policy.fallback_minutes.items()}
+    orders = WorkOrders(clock, fallback_minutes=fallback)
+    shift_id, local = shift_now(config, now)
+
+    with connect(url) as conn:
+        conn.execute(
+            "TRUNCATE work_order, finding, job, shift_assignment, technician, "
+            "playbook, playbook_proposal, access_log, session, account CASCADE"
+        )
+        for user, name, role, password in [
+            (TECHNICIAN, "Somchai (technician)", Role.TECHNICIAN, PASSWORD),
+            (ENGINEER, "Pranee (engineer)", Role.ENGINEER, ENGINEER_PASSWORD),
+        ]:
+            auth.create_account(conn, user=user, display_name=name, role=role, password=password)
+
+        dispatch_repo.add_technician(
+            conn,
+            Technician(user=TECHNICIAN, skills=frozenset({SkillId("robot_mechanical")})),
+            now=now,
+        )
+        dispatch_repo.assign_to_shift(
+            conn,
+            ShiftAssignment(
+                shift_id=shift_id,
+                on_date=local.date(),
+                technician=TECHNICIAN,
+                available_minutes=240,
+            ),
+        )
+
+        manual = library.add(
+            conn,
+            content=b"%PDF-1.4 a manual with enough bytes to range over" + b" " * 4096,
+            filename="r-2000ic.pdf",
+            content_type="application/pdf",
+            machine_model=R2000,
+            title="R-2000iC Maintenance Manual",
+            uploaded_by=ENGINEER,
+        ).document_id
+        playbook = Playbook(
+            symptom_code=SYM,
+            machine_model=R2000,
+            steps=tuple(
+                PlaybookStep(text=text, source_doc=manual, page=142 + index, confidence=0.9)
+                for index, text in enumerate(STEPS)
+            ),
+            estimated_minutes=45,
+            required_skill=SkillId("robot_mechanical"),
+            required_technicians=1,
+            source_doc=manual,
+            page=142,
+            status=PlaybookStatus.APPROVED,
+            approved_by=ENGINEER,
+            approved_at=now,
+            approver_role=Role.ENGINEER,
+        )
+        playbooks.save_approved(
+            conn, playbook, approved_by=ENGINEER, approved_at=now, approver_role=Role.ENGINEER
+        )
+
+        finding = Finding(
+            machine_id=BOTTLENECK,
+            component=ComponentLabel("belt_motor"),
+            symptom_code=SYM,
+            severity=Severity.HIGH,
+            rule_id=RULE,
+            detected_at=now - timedelta(hours=1),
+            evidence={"trend": True, "slope_per_hour": 1.4},
+            kind=FindingKind.PREDICTED,
+            eta=now + timedelta(hours=6),
+            eta_confidence=timedelta(hours=2),
+        )
+        finding_ref = findings.raise_finding(conn, finding)
+        for minute in range(3):
+            findings.repeat(
+                conn,
+                machine_id=BOTTLENECK,
+                rule_id=RULE,
+                now=now - timedelta(minutes=30 - minute),
+            )
+        orders.from_finding(conn, finding, finding_ref=finding_ref, machine_model=R2000)
+        # A second job, so the screen has something to keep collapsed.
+        orders.from_report(
+            conn,
+            machine_id=MachineId("MC-001"),
+            machine_model=R2000,
+            severity=Severity.LOW,
+            reported_by=ENGINEER,
+            description="weeping seal on the gearbox",
+        )
+        conn.commit()
+    print(f"seeded: {shift_id} on {local.date()}, {len(STEPS)} steps")
+
+
+# ── driving the screen ────────────────────────────────────────────────────
+
+
+def hidden_fields(page: str) -> list[tuple[str, str]]:
+    fields: list[tuple[str, str]] = []
+    for tag in re.findall(r'<input[^>]*type="hidden"[^>]*>', page):
+        name = re.search(r'name="([^"]*)"', tag)
+        value = re.search(r'value="([^"]*)"', tag)
+        if name is not None:
+            unescaped = htmllib.unescape(value.group(1)) if value is not None else ""
+            fields.append((htmllib.unescape(name.group(1)), unescaped))
+    return fields
+
+
+def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
+    boundary = "----pdm-check-the-screen"
+    body = b""
+    for name, value in fields:
+        body += (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
+        ).encode()
+    body += f"--{boundary}--\r\n".encode()
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+def readable(page: str) -> str:
+    """The page with React's text-node separators taken out.
+
+    Server-rendered React writes `<!-- -->` between two adjacent text nodes, so
+    `ถัดไป (1)` arrives as `ถัดไป (<!-- -->1<!-- -->)`. A person reads the
+    first; matching on the second would make every assertion here a statement
+    about React's renderer instead of about the screen.
+    """
+    return re.sub(r"<!--.*?-->", "", page)
+
+
+def get(path: str) -> str:
+    with opener.open(f"{WEB}{path}") as response:
+        return str(response.read().decode())
+
+
+def submit(path: str, page: str, extra: list[tuple[str, str]] | None = None) -> str:
+    body, content_type = multipart([*hidden_fields(page), *(extra or [])])
+    request = urllib.request.Request(
+        f"{WEB}{path}",
+        data=body,
+        # Next refuses a server action whose origin it cannot check. A
+        # browser sends this for free; a script has to say so.
+        headers={"content-type": content_type, "origin": WEB},
+        method="POST",
+    )
+    with opener.open(request) as response:
+        return str(response.read().decode())
+
+
+def sign_in() -> None:
+    page = get("/sign-in")
+    submit("/sign-in", page, [("user", str(TECHNICIAN)), ("password", PASSWORD)])
+
+
+def main() -> None:
+    seed()
+    sign_in()
+
+    print("\n1. the queue shows one job, and says why it is that one")
+    queue = get("/work")
+    shown = readable(queue)
+    above_the_fold, _, behind = shown.partition("<details")
+    expect("MC-012" in above_the_fold, "the machine the scheduler chose")
+    expect(
+        "วางแผนไว้" in above_the_fold,
+        "a predicted job is banded as planned, never as urgent (ADR-020)",
+    )
+    expect("ด่วน" not in above_the_fold, "and nothing above the fold calls it urgent")
+    expect("expected to reach" in above_the_fold, "the reason the backend wrote is on it")
+    expect("เห็นมาแล้ว 4 ครั้ง" in above_the_fold, "how often the rule has fired (ADR-023)")
+    expect("ทำไมงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)")
+    expect(
+        "<summary>ถัดไป (1)</summary>" in behind, "what is queued behind it is visible, collapsed"
+    )
+    expect(
+        'href="/work/' not in behind,
+        "and nothing in that list is a link, so it cannot be picked (ADR-011)",
+    )
+
+    print("\n2. starting the job goes straight to the steps")
+    steps = submit("/work", queue)
+    expect("ขั้นที่ 1 จาก 3" in readable(steps), "the first step of three")
+    expect(STEPS[0] in steps, "and it is the first step of the playbook that was snapshotted")
+    expect("เปิดคู่มือหน้า 142" in readable(steps), "with the page it came from")
+    expect("/manual/" in steps, "opened through this server, not straight at the API (ADR-058)")
+
+    print("\n3. stepping through")
+    second = get("/work/" + ref_from(steps) + "/steps?step=2")
+    expect("ขั้นที่ 2 จาก 3" in readable(second), "step two")
+    expect(STEPS[1] in second, "shows the second instruction")
+    last = get("/work/" + ref_from(steps) + "/steps?step=3")
+    expect("ขั้นตอนสุดท้าย" in last, "and the last one says so instead of offering another")
+
+    print("\n4. handing over needs a note")
+    refused = submit("/work/" + ref_from(steps) + "/steps?step=3", last, [("note", "   ")])
+    expect("ก่อนส่งเวร" in refused, "whitespace is not a handover note (ADR-025)")
+
+    handed = submit(
+        "/work/" + ref_from(steps) + "/steps?step=3",
+        last,
+        [("note", "ถอดฝาครอบพัดลมแล้ว รออะไหล่ตลับลูกปืน")],
+    )
+    expect("งานของคุณ" in handed, "with a note it goes through and lands back on the queue")
+
+    print("\n5. the manual opens at a page rather than downloading whole")
+    document = re.search(r'href="/manual/([^"#]+)#page=(\d+)"', steps)
+    assert document is not None
+    request = urllib.request.Request(f"{WEB}/manual/{document.group(1)}")
+    request.add_header("range", "bytes=0-99")
+    with opener.open(request) as response:
+        expect(response.status == 206, "a range request comes back 206 (ADR-019)")
+        expect(len(response.read()) == 100, "with only the bytes that were asked for")
+
+    print("\nall checks passed")
+
+
+def ref_from(page: str) -> str:
+    found = re.search(r"WO-[0-9]+", readable(page))
+    assert found is not None, "no work order ref on the steps page"
+    return found.group(0)
+
+
+if __name__ == "__main__":
+    main()

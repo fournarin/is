@@ -1,0 +1,76 @@
+"use server";
+
+import { redirect } from "next/navigation";
+
+import { callApi } from "@/lib/api";
+
+/**
+ * Take the job and open a segment, in that order.
+ *
+ * One button, two calls. `accept` is idempotent for somebody who already holds
+ * the order - a round that placed it has already written them in - and `start`
+ * refuses anybody who does not, so calling both is one code path rather than a
+ * branch on what a previous round happened to do. The technician presses one
+ * thing, which is what a phone at a machine deserves.
+ */
+export async function startWork(ref: string): Promise<void> {
+  const accepted = await callApi(`/work-orders/${encodeURIComponent(ref)}/accept`, {
+    method: "POST",
+  });
+  if (!accepted.ok) {
+    throw new Error(`accepting ${ref} answered ${accepted.status}`);
+  }
+  const started = await callApi(`/work-orders/${encodeURIComponent(ref)}/start`, {
+    method: "POST",
+  });
+  if (!started.ok) {
+    throw new Error(`starting ${ref} answered ${started.status}`);
+  }
+  redirect(`/work/${encodeURIComponent(ref)}/steps`);
+}
+
+export type HandoverState = { error: string | null };
+
+/**
+ * Put the job down for somebody else, and say how far it got.
+ *
+ * The work order arrives as a hidden field rather than through `.bind()`, and
+ * that is not a style choice. A bound action that **returns state** instead of
+ * redirecting never finishes its response on the no-JavaScript path - the
+ * request hangs, and the phone this is built for is exactly the one whose
+ * bundle did not arrive. `startWork` above may stay bound because it always
+ * redirects. Nothing catches this but running the page: see
+ * `check-the-technicians-screen.py`.
+ *
+ * A hidden field can be edited, and it does not need to be trusted: the API
+ * refuses a handover from somebody who does not hold the order.
+ *
+ * The note is not optional and the API refuses an empty one. It is checked here
+ * as well so that the button cannot be pressed into a round trip that was
+ * always going to fail - ADR-025 wants the note because without it the next
+ * shift finds an open order and starts from step one.
+ */
+export async function handOver(
+  _previous: HandoverState,
+  form: FormData,
+): Promise<HandoverState> {
+  const ref = String(form.get("ref") ?? "");
+  const note = String(form.get("note") ?? "").trim();
+  if (note === "") {
+    return { error: "เขียนสั้น ๆ ว่าทำถึงไหนแล้ว ก่อนส่งเวร" };
+  }
+
+  const response = await callApi(`/work-orders/${encodeURIComponent(ref)}/handover`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+  if (response.status === 409) {
+    return { error: "งานนี้ถูกเปลี่ยนสถานะไปแล้ว ลองโหลดหน้าใหม่" };
+  }
+  if (!response.ok) {
+    return { error: `ระบบตอบกลับผิดปกติ (${response.status})` };
+  }
+
+  redirect("/work");
+}
