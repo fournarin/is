@@ -7,14 +7,22 @@ this layer achieves by keeping them in a different table altogether, so there is
 no draft row for a serving query to reach (ADR-038).
 """
 
-from pdm.playbooks.domain import Proposal, ProposalOrigin, ProposalStatus, Served
-from pdm.playbooks.service import NotAnEngineer, PlaybookStore
+from pdm.playbooks.domain import (
+    Proposal,
+    ProposalOrigin,
+    ProposalStatus,
+    Served,
+    StepEdit,
+)
+from pdm.playbooks.service import NotADraft, NotAnEngineer, PlaybookStore
 
 __all__ = [
+    "NotADraft",
     "NotAnEngineer",
     "PlaybookStore",
     "Proposal",
     "ProposalOrigin",
     "ProposalStatus",
     "Served",
+    "StepEdit",
 ]

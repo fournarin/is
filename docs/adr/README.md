@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Fifty-two decisions, in the order they were made. Each records the context that
+Sixty-three decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -74,6 +74,7 @@ entries replace parts of earlier ones, and both are kept.
 | [061](0061-what-the-technicians-screen-reads-and-from-where.md) | What the technician's screen reads, and from where | |
 | [062](0062-what-the-offline-queue-promises-and-what-it-does-not.md) | What the offline queue promises, and what it does not | |
 | [063](0063-what-the-line-overview-reads-and-what-it-may-not-compute.md) | What the line overview reads, and what it may not compute | |
+| [064](0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md) | What a reviewer may change, and what the review screen records | |
 
 ## Where to start
 

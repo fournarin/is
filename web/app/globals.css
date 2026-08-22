@@ -377,6 +377,107 @@ legend {
   max-width: 8rem;
 }
 
+/* ── the review screen (slice 10.2) ──────────────────────────────────────── */
+
+/* Wider than the technician's screens on purpose: this one is worked at a desk
+   with two things side by side, and the draft is meaningless without the page
+   it came from (ADR-064). It still collapses to one column on a phone. */
+main:has(.two-up) {
+  max-width: 62rem;
+}
+
+.two-up {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 48rem) {
+  .two-up {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 0.9rem;
+  text-decoration: none;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tab.current {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.draft {
+  margin: 0 0 0.75rem;
+  padding-left: 1.4rem;
+}
+
+.draft li {
+  margin-bottom: 0.5rem;
+}
+
+.draft a {
+  display: block;
+  padding: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+/* The step whose evidence is on the right. Something has to say which of the
+   seven the panel is showing. */
+.draft li.current a {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.cite {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+/* The page as it was read, wrapped rather than scrolling sideways. */
+.page {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  font: inherit;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* The span the draft was taken from. Contrast, not colour alone: this is read
+   on laptops of every age under shop-floor lighting. */
+.page mark {
+  color: var(--ink);
+  background: var(--warn-paper);
+  border-bottom: 2px solid var(--warn);
+  padding: 0.05rem 0;
+
 /* ── the overview (slice 10.5) ───────────────────────────────────────────── */
 
 /* The diagram is as wide as the line needs; the page never scrolls sideways. */

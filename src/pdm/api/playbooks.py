@@ -24,7 +24,7 @@ from pdm.platform.auth.domain import Account
 from pdm.platform.jobs import JobKind
 from pdm.playbooks.domain import Proposal
 from pdm.playbooks.repo import NothingToApply
-from pdm.playbooks.service import NotAnEngineer, PlaybookStore
+from pdm.playbooks.service import NotADraft, NotAnEngineer, PlaybookStore
 
 router = APIRouter(tags=["playbooks"])
 
@@ -83,6 +83,13 @@ class ProposalDetail(BaseModel):
     figure gate is a different thing from one that never had them, and the
     reviewer is the only one who can tell whether the manual is wrong or the
     backend is (ADR-037).
+
+    **`opened_at` and `review_seconds` are deliberately not on it.** The numbers
+    are recorded and they matter for the report; a screen that could read them
+    is a screen that can show a clock, and a visible timer pressures somebody
+    reviewing safety-critical text into hurrying - which buys a better number
+    and a worse review. Not serialising them is what makes "no timer on screen"
+    a property of the API rather than a promise about the markup (ADR-064).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -108,6 +115,12 @@ class Approval(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    # "Edit and approve": the reviewer's wording for every step, position for
+    # position, or nothing at all. Text only - the citation on each step is
+    # carried across from the draft and is not editable through this or any
+    # other path, because a step whose source a person may retype is a step that
+    # says what somebody wished the manual said (ADR-064, invariant 4).
+    steps: tuple[str, ...] | None = None
     required_skill: SkillId | None = None
     estimated_minutes: int | None = Field(default=None, gt=0)
     # ADR-025: a two-person job consumes twice the shift's capacity, and the
@@ -115,6 +128,19 @@ class Approval(BaseModel):
     # approver is the only person who can say.
     required_technicians: int | None = Field(default=None, ge=1, le=4)
     note: str | None = None
+
+    @field_validator("steps")
+    @classmethod
+    def _no_empty_step(cls, value: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        """A blank step is not an edit, and the screen's textarea can produce one.
+
+        Deleting a step is a change to the shape of the procedure, which the
+        approval path does not do: what it means is that the draft is wrong, and
+        the button for that is "send back" (ADR-064).
+        """
+        if value is not None and any(not text.strip() for text in value):
+            raise ValueError("a step cannot be blank; deleting a step means sending the draft back")
+        return value
 
 
 class DraftRequested(BaseModel):
@@ -141,6 +167,14 @@ class DraftRequested(BaseModel):
         if not stripped:
             raise ValueError("a drafting question cannot be only whitespace")
         return stripped
+
+
+class SentBack(BaseModel):
+    """What is wrong with the draft, which is also the next drafting question."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    note: str = Field(min_length=1)
 
 
 class Dismissal(BaseModel):
@@ -216,11 +250,21 @@ def proposal_detail(
     playbooks: Store,
     account: Annotated[Account, Depends(requires(*_MAY_REVIEW, action="read_proposal"))],
 ) -> ProposalDetail:
+    """One proposal, and the note that somebody has just opened it.
+
+    The open is recorded here rather than by the screen sending a timestamp,
+    which is what makes "how long does a review take" a figure the report can
+    quote (ADR-064). It is a write on a GET, deliberately: the alternative is a
+    clock in the browser, and a clock in the browser is both a number this
+    system cannot vouch for and a timer somebody reviewing safety-critical text
+    can see.
+    """
     from pdm.playbooks import repo
 
     found = repo.proposal(conn, proposal_id)
     if found is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no proposal {proposal_id}")
+    playbooks.opened(conn, proposal_id)
     return ProposalDetail(
         proposal_id=found.proposal_id,
         symptom_code=found.symptom_code,
@@ -263,6 +307,7 @@ def approve(
             estimated_minutes=approval.estimated_minutes,
             required_technicians=approval.required_technicians,
             note=approval.note,
+            rewritten_steps=approval.steps,
         )
     except NothingToApply as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
@@ -280,6 +325,61 @@ def approve(
         "revision": playbook.revision,
         "status": playbook.status.value,
         "approved_by": playbook.approved_by,
+    }
+
+
+@router.post("/playbooks/queue/{proposal_id}/send-back", status_code=status.HTTP_200_OK)
+def send_back(
+    proposal_id: int,
+    sending_back: SentBack,
+    conn: Db,
+    jobs: Jobs,
+    playbooks: Store,
+    account: Annotated[Account, Depends(requires(Role.ENGINEER, action="send_back_proposal"))],
+) -> dict[str, Any]:
+    """Refuse the draft and ask for another, in one transaction.
+
+    The refusal and the job that answers it commit together, which is ADR-017's
+    argument in the small: a run that recorded the refusal and lost the request
+    would leave a symptom with nothing to serve and nothing coming, and nobody
+    would know to press the button again.
+
+    The reviewer's note becomes the question. "SYM-014" retrieves nothing while
+    "the belt tension procedure, not the motor one" retrieves the page - and it
+    is also the only thing that makes a second attempt different from the first
+    (ADR-039 section 7, ADR-064).
+    """
+    try:
+        decided = playbooks.send_back(
+            conn,
+            proposal_id,
+            decided_by=account.user,
+            decided_role=account.role,
+            note=sending_back.note,
+        )
+    except NothingToApply as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except NotADraft as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
+
+    pair: dict[str, object] = {
+        "symptom_code": decided.symptom_code,
+        "machine_model": decided.machine_model,
+    }
+    # The same courtesy `request_draft` extends (ADR-040): a redraft already
+    # queued for this pair is the answer to this one as well, and each press
+    # costs a pass on the one GPU.
+    already = jobs.pending(conn, kind=JobKind.DRAFT, payload=pair)
+    job = already or jobs.enqueue(
+        conn, kind=JobKind.DRAFT, payload={**pair, "question": sending_back.note}
+    )
+    return {
+        "proposal_id": decided.proposal_id,
+        "status": decided.status.value,
+        "job": job.id,
+        "queued_already": already is not None,
     }
 
 
