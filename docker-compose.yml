@@ -12,7 +12,8 @@
 # and reads SYNTHETIC signals, because the plant has given us nothing to read
 # yet; see the comment on its SIGNAL_SOURCE below before showing this to
 # anybody. Layer 3 is not built, so the tickets it issues sit in the queue
-# unassigned. `web` still has no entrypoint and arrives with the review screen.
+# unassigned. `web` now serves the shell - signing in, and which screens a role
+# is offered - and the screens themselves arrive in slices 10.2 to 10.5.
 
 name: pdm
 
@@ -183,9 +184,15 @@ services:
 
   # ── frontend ──────────────────────────────────────────────────────────
   web:
-    build: ./web                                    # Next.js app: later slice
+    build: ./web
     environment:
-      NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:8000}
+      # Read by the Next server, never by the browser (ADR-058). The browser
+      # only ever reaches this container, which calls the API for it - so the
+      # address below is an internal one, no CORS configuration exists anywhere,
+      # and moving the API does not mean rebuilding the image. A
+      # NEXT_PUBLIC_ variable would have been compiled into the bundle at build
+      # time and could do none of that.
+      API_URL: http://api:8000
     depends_on: [api]
     ports: ["3000:3000"]
     networks: [app]                                 # deliberately not [llm]

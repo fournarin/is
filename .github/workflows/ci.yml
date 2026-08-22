@@ -123,6 +123,46 @@ jobs:
           print('stored', document_id, 'as uid', os.getuid())
           "
 
+  web:
+    name: tier 0 - the web app builds
+    runs-on: ubuntu-latest
+    # A job of its own, not a step in `gate`, so that a broken screen and a
+    # broken rule engine are two different red lines. They are fixed by
+    # different work and one must never hide the other.
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: install
+        run: npm ci
+
+      - name: lint
+        run: npm run lint
+
+      # Before the type check on purpose. `next-env.d.ts` is generated and it
+      # references the route types `next build` writes into .next/, so a
+      # checkout that has never been built has nothing for tsc to read.
+      - name: build
+        run: npm run build
+
+      - name: type check
+        run: npm run typecheck
+
+      # The same argument as the backend image one step up: the artefact handed
+      # over for the on-premise install is the image, and a Dockerfile that only
+      # ever builds on the author's laptop fails on a machine we cannot reach.
+      # The context is `web/`, which is this job's working directory.
+      - name: the image builds (ADR-029)
+        run: docker build -t pdm-web:ci .
+
 # Steps to add once there is something for them to check. Do not add them early:
 # a CI run that is red from day one is a CI run nobody reads
 # (lessons_carried.md 4.4, and the table in git.md section 6.5).
