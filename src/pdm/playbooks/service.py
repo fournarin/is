@@ -27,11 +27,29 @@ from pdm.contracts import (
 )
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo
-from pdm.playbooks.domain import Proposal, ProposalStatus, Served, primary_source
+from pdm.playbooks.domain import (
+    Proposal,
+    ProposalOrigin,
+    ProposalStatus,
+    Served,
+    apply_edits,
+    edits_between,
+    primary_source,
+)
 
 
 class NotAnEngineer(Exception):
     """Only an engineer may approve a playbook (ADR-024, invariant 6)."""
+
+
+class NotADraft(Exception):
+    """Sending back asks the drafter to try again, and only a draft has one.
+
+    A technician's objection came from a person standing at a machine (ADR-038
+    section 4). There is nothing to re-run it through, and answering it with a
+    drafting job would file the model's opinion as a reply to somebody who saw
+    the fault.
+    """
 
 
 class PlaybookStore:
@@ -79,6 +97,16 @@ class PlaybookStore:
     def review_queue(self, conn: Connection[Any], *, limit: int = 50) -> list[Proposal]:
         return repo.queue(conn, limit=limit)
 
+    def opened(self, conn: Connection[Any], proposal_id: int) -> None:
+        """Stamp when a reviewer opened this, from the Clock and nowhere else.
+
+        The measurement ADR-064 wants is how long a decision took, and the only
+        honest way to have it without a timer on the screen is to note the open
+        here and subtract at the decision. A number the browser sends would be a
+        number the browser can be wrong about, and this one goes in the report.
+        """
+        repo.opened(conn, proposal_id, at=self.clock.now())
+
     def flagged(self, conn: Connection[Any]) -> list[tuple[Playbook, str | None]]:
         return repo.needing_review(conn)
 
@@ -93,6 +121,7 @@ class PlaybookStore:
         estimated_minutes: int | None = None,
         required_technicians: int | None = None,
         note: str | None = None,
+        rewritten_steps: tuple[str, ...] | None = None,
     ) -> Playbook:
         """Apply a pending proposal to the served row.
 
@@ -106,6 +135,16 @@ class PlaybookStore:
         where the manual stated nothing. Passing neither uses what the page said,
         and a proposal that has neither raises rather than inventing a figure the
         scheduler would compute with (ADR-037 section 8).
+
+        `rewritten_steps` is "edit and approve": the reviewer's wording, position
+        for position, with the drafter's provenance carried across untouched. The
+        difference is stored on the proposal, so an approval that changed what the
+        manual said names the person who changed it and what they changed
+        (ADR-064). The figure gate is deliberately **not** re-run over the result:
+        it exists to stop a model quoting a torque the page does not carry, and
+        the engineer approving here is the authority ADR-003 put in the model's
+        way. Refusing their correction on the strength of the check the model has
+        to pass would make the reviewer the least trusted party in the system.
         """
         if approver_role is not Role.ENGINEER:
             raise NotAnEngineer(
@@ -123,6 +162,13 @@ class PlaybookStore:
             )
 
         now = self.clock.now()
+        # Raises before anything is claimed when the lists do not line up: a
+        # reviewer who added or dropped a step is asking for something the
+        # approval path does not do, and finding that out after the proposal has
+        # been marked applied would leave a decided row with no playbook.
+        edits = () if rewritten_steps is None else edits_between(pending.steps, rewritten_steps)
+        steps = apply_edits(pending.steps, edits)
+
         skill = required_skill or pending.proposed_skill
         minutes = estimated_minutes or pending.proposed_minutes
         if skill is None or minutes is None:
@@ -153,17 +199,18 @@ class PlaybookStore:
             decided_by=approver,
             decided_at=now,
             note=note,
+            edits=edits,
         )
 
         # Built through the contract, so invariant 4 - every step in an approved
         # playbook carries its source document and page - is checked by the same
         # validator wherever a playbook is approved from, and cannot be skipped
         # by an endpoint that forgot (ADR-015).
-        source_doc, page = primary_source(pending.steps)
+        source_doc, page = primary_source(steps)
         playbook = Playbook(
             symptom_code=pending.symptom_code,
             machine_model=pending.machine_model,
-            steps=pending.steps,
+            steps=steps,
             tools=pending.tools,
             estimated_minutes=minutes,
             required_skill=skill,
@@ -189,6 +236,53 @@ class PlaybookStore:
             approved_by=approver,
             approved_at=now,
             approver_role=approver_role,
+        )
+
+    def send_back(
+        self,
+        conn: Connection[Any],
+        proposal_id: int,
+        *,
+        decided_by: UserId,
+        decided_role: Role,
+        note: str,
+    ) -> Proposal:
+        """This draft is wrong; ask again, with the reviewer's note as the question.
+
+        The note is required and it is not a formality: the caller turns it into
+        the question the next drafting job is given, and "no" retrieves the same
+        pages as the attempt that has just been refused (ADR-039 section 7,
+        ADR-064). Queuing that job is the endpoint's business, not this method's -
+        the queue is the API's to write, and a store that enqueued would be layer
+        2 deciding when the one GPU is spent (ADR-026).
+
+        Only a drafted proposal can be sent back. `NotADraft` says why.
+        """
+        if decided_role is not Role.ENGINEER:
+            raise NotAnEngineer(
+                f"{decided_by} holds {decided_role.value}; only an engineer may decide on a "
+                "proposal (ADR-024)"
+            )
+        if not note.strip():
+            raise ValueError("sending a draft back has to say what is wrong with it")
+
+        pending = repo.proposal(conn, proposal_id)
+        if pending is None:
+            raise repo.NothingToApply(f"there is no proposal {proposal_id}")
+        if pending.origin is not ProposalOrigin.DRAFTED:
+            raise NotADraft(
+                f"proposal {proposal_id} came from {pending.origin.value}, not from the "
+                "drafter; there is nothing to send it back to, and a report from somebody "
+                "at the machine is dismissed with a reason or acted on (ADR-038)"
+            )
+
+        return repo.decide(
+            conn,
+            proposal_id,
+            status=ProposalStatus.SENT_BACK,
+            decided_by=decided_by,
+            decided_at=self.clock.now(),
+            note=note,
         )
 
     def dismiss(

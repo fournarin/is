@@ -38,10 +38,11 @@ from pdm.api.deps import SESSION_COOKIE, Db, Jobs, requires
 from pdm.contracts import DocumentId, MachineModel, Role
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
-from pdm.platform.documents import Document, DocumentLibrary
+from pdm.platform.documents import Document, DocumentLibrary, DocumentStatus
 from pdm.platform.documents.repo import DocumentModelConflict, DocumentRegistrationConflict
 from pdm.platform.jobs import JobKind
 from pdm.platform.objects import READ_CHUNK_BYTES, ObjectNotFound
+from pdm.retrieval import repo as index
 
 router = APIRouter(tags=["documents"])
 
@@ -293,6 +294,80 @@ def fetch(
             "Content-Range": f"bytes {first}-{last}/{size}",
             "Content-Length": str(last - first + 1),
         },
+    )
+
+
+class PageEvidence(BaseModel):
+    """One page as the index holds it: what the review screen reads from.
+
+    Text rather than the file, and the two are not alternatives. The bytes are
+    the record and the route above serves them at the cited page (ADR-019); this
+    is what lets the screen put the drafted step beside the sentence it was taken
+    from without a person opening a PDF for every proposal - which is the
+    difference between a review that takes seconds and one that gets waved
+    through (ADR-064).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    document_id: DocumentId
+    title: str
+    # The model this manual is for. The screen compares it against the
+    # proposal's: a step drafted from another model's manual is the one thing
+    # ADR-015's recall setting cannot be relaxed about, and reviewers are bad at
+    # noticing it unaided.
+    machine_model: MachineModel
+    edition: str | None
+    withdrawn: bool
+    page: int
+    # Why there is no text, when there is none: `no_text` is a scan,
+    # `unreadable` is a damaged page, and `not_indexed` is a manual ingest has
+    # not read - or has not read this far. Three different problems with three
+    # different answers, and an empty panel states none of them (principle 5).
+    outcome: str
+    text: str | None
+
+
+@router.get("/documents/{document_id}/pages/{page}", response_model=PageEvidence)
+def page_evidence(
+    request: Request,
+    document_id: DocumentId,
+    page: int,
+    conn: Db,
+    account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_page_text"))],
+) -> PageEvidence:
+    """The indexed text of one page, for the panel beside a drafted step.
+
+    Authorised and logged like the bytes are. It is the same NDA material in
+    another form, and an endpoint that served the text of a manual without the
+    check the file route applies would be the way round it (ADR-019).
+    """
+    library: DocumentLibrary = request.app.state.library
+    document = library.get(conn, document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such document")
+
+    # A page the index has never read is answered, not refused. The document is
+    # real, and which manual - and which machine model - a step cites is the one
+    # thing ADR-015 does not relax about: a reviewer has to be told that step 3
+    # points at another model's bulletin whether or not there is text to show
+    # beside it. The 404 above is for a document that does not exist at all.
+    outcome = index.outcome_of(conn, document_id, page)
+
+    chunks = index.chunks_on_pages(conn, [(document_id, page)])
+    # Chunks are pieces of one page in reading order (ADR-034), so joining them
+    # back is the page as the drafter saw it - which is what makes locating the
+    # span in it meaningful.
+    text = "\n\n".join(chunk.text for chunk in chunks) if chunks else None
+    return PageEvidence(
+        document_id=document.document_id,
+        title=document.title,
+        machine_model=document.machine_model,
+        edition=document.edition,
+        withdrawn=document.status is DocumentStatus.WITHDRAWN,
+        page=page,
+        outcome="not_indexed" if outcome is None else outcome.value,
+        text=text,
     )
 
 

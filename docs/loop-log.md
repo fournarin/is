@@ -14,3 +14,4 @@ Format: `YYYY-MM-DD HH:MM UTC · slice · outcome · PR`
 - 2026-08-22 11:59 UTC · slice 10.3 (#57, by hand) · one job, its reason, its steps, and the objection that changes nothing (ADR-061) · #66
 - 2026-08-22 12:21 UTC · slice 10.4 (#58, by hand) · closing in two taps, and the one thing kept on the device when the network drops (ADR-062) · #67
 - 2026-08-22 14:32 UTC · slice 9.4 (#54) · `GET /overview/line`: stations in line order with their buffers, one marker per station, and the shift band taken from the round itself (ADR-063) · #68
+- 2026-08-22 16:46 UTC · slice 10.2 (#56) · the review screen: draft beside the page it came from, edit and approve with the diff stored, send back as a redraft, and review time measured with no clock on screen (ADR-064) · #69
