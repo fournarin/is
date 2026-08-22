@@ -66,6 +66,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.pool = pool or make_pool()
+        # The single time port (ADR-028), for the few writes a handler makes on
+        # its own account rather than through a service that already holds one.
+        app.state.clock = the_clock
         app.state.library = library or DocumentLibrary(
             FilesystemObjectStore(storage_root()), the_clock
         )

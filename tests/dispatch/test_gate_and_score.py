@@ -105,8 +105,13 @@ def _order(
     )
 
 
-def _queued(ref: str, order: WorkOrder, *, age_minutes: int = 0) -> Queued:
-    return Queued(ref=ref, order=order, created_at=NOW - timedelta(minutes=age_minutes))
+def _queued(ref: str, order: WorkOrder, *, age_minutes: int = 0, released: bool = False) -> Queued:
+    return Queued(
+        ref=ref,
+        order=order,
+        created_at=NOW - timedelta(minutes=age_minutes),
+        released=released,
+    )
 
 
 def _people(
@@ -345,6 +350,130 @@ class TestTheGate:
 
         assert result.band is Band.LIGHT
         assert "WO-cond" in {placed.ref for placed in result.placed}
+
+
+class TestAReleaseOverridesTheGate:
+    """ADR-059: what a shift lead pressing "release" does to a round.
+
+    The gate is a default, not a verdict - ADR-011 kept it separate precisely so
+    that the sentence it writes could be shown to a person, and showing somebody
+    a decision they cannot overrule is how a scheduler gets worked around instead
+    of argued with. What a release must not do is buy anything else: it does not
+    change the score, it does not conjure a technician, and it does not stop the
+    minutes it spends from counting.
+    """
+
+    def test_a_released_ticket_passes_a_heavy_gate(self) -> None:
+        """The same shift as `test_a_heavy_shift_releases_only_high_and_critical`,
+        with the supervisor having said yes to the low-severity job."""
+        taken = _order(minutes=200, status=WorkOrderStatus.ASSIGNED, assignees=(ANA,))
+        queue = [
+            _queued("WO-taken", taken),
+            _queued("WO-low", _order(severity=Severity.LOW, minutes=30), released=True),
+            _queued("WO-high", _order(severity=Severity.HIGH, minutes=30)),
+        ]
+
+        result = _round(
+            queue, technicians=_people(ANA, BEN), roster=_roster((ANA, 120), (BEN, 120))
+        )
+
+        assert result.band is Band.HEAVY
+        assert {placed.ref for placed in result.placed} == {"WO-low", "WO-high"}
+        assert result.held == ()
+
+    def test_a_release_does_not_conjure_a_technician(self) -> None:
+        """Releasing work says the gate should not hold it. It does not say
+        anybody is free to do it, and an order nobody can take comes back
+        unassigned with the same sentence as everybody else's (ADR-025)."""
+        queue = [
+            _queued(
+                "WO-electrical",
+                _order(severity=Severity.LOW, minutes=30, skill=ELECTRICAL),
+                released=True,
+            )
+        ]
+
+        result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 240)))
+
+        assert result.placed == ()
+        assert [one.ref for one in result.unassigned] == ["WO-electrical"]
+        assert "electrical" in result.unassigned[0].why
+
+    def test_released_condition_work_is_not_counted_twice(self) -> None:
+        """The failure this test exists for is silent and would look like the
+        top-up being conservative.
+
+        Queued condition work is already demand and is in `load_ratio`; queued PM
+        work is the reserve and is not (ADR-045 §2). A release that added its
+        order's minutes to the running ratio whatever its origin would spend the
+        condition job's hour twice, and the shift would top up one PM job fewer
+        than it has room for - every round, for ever, with every number still
+        adding up.
+        """
+        queue = [_queued("WO-cond", _order(minutes=60), released=True)] + [
+            _queued(
+                f"WO-pm-{index}",
+                _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=60),
+                age_minutes=index,
+            )
+            for index in range(8)
+        ]
+
+        result = _round(
+            queue, technicians=_people(ANA, BEN), roster=_roster((ANA, 300), (BEN, 300))
+        )
+
+        # 60 committed of 600, boundary 50%: four PM hours reach 300/600 and the
+        # fifth would cross - the same four the gate releases when nothing has
+        # been released by hand.
+        released_pm = [placed.ref for placed in result.placed if placed.ref.startswith("WO-pm")]
+        assert len(released_pm) == 4
+
+    def test_released_maintenance_still_spends_the_shift(self) -> None:
+        """The other side of the same rule, and the one a supervisor would
+        notice.
+
+        PM work becomes demand when it is released, whoever released it. Priced
+        in, the release changes *which* maintenance this shift does - the job the
+        supervisor chose displaces the one the top-up would have added. Not
+        priced in, it would buy the shift a fifth hour of maintenance nobody
+        decided to spend, and the boundary a supervisor is shown would be a
+        boundary the system does not keep.
+        """
+        queue = [_queued("WO-cond", _order(minutes=60))] + [
+            _queued(
+                f"WO-pm-{index}",
+                _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=60),
+                age_minutes=index,
+                released=index == 0,
+            )
+            for index in range(8)
+        ]
+
+        result = _round(
+            queue, technicians=_people(ANA, BEN), roster=_roster((ANA, 300), (BEN, 300))
+        )
+
+        released_pm = {placed.ref for placed in result.placed if placed.ref.startswith("WO-pm")}
+        # Four PM hours is what 600 minutes of capacity leaves under the 50%
+        # boundary, with or without a supervisor. WO-pm-0 is the newest and would
+        # never have been the round's own choice; it is here because somebody
+        # said so, and WO-pm-4 - which the round would have taken - is not.
+        assert "WO-pm-0" in released_pm
+        assert len(released_pm) == 4
+        assert "WO-pm-4" in {held.ref for held in result.held}
+
+    def test_no_capacity_is_not_something_a_release_can_answer(self) -> None:
+        """An hour the plant does not run is not the gate holding work back, and
+        releasing into it would place nobody on anything (ADR-045 §3). The round
+        says so rather than pretending the release did something."""
+        queue = [_queued("WO-1", _order(), released=True)]
+
+        result = _round(queue, technicians=[], roster=_roster(), shift_id=None)
+
+        assert result.band is Band.NO_CAPACITY
+        assert [held.ref for held in result.held] == ["WO-1"]
+        assert result.placed == ()
 
 
 class TestTheDowntimeTerm:

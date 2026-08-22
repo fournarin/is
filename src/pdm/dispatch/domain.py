@@ -74,6 +74,15 @@ class Queued(BaseModel):
     order: WorkOrder
     created_at: datetime
 
+    # A shift lead has taken this one out of the gate's hands (ADR-011, ADR-059).
+    # It arrives on the queue item because `dispatch()` may not read a table to
+    # find out (invariant 10): the released set is part of the world the round is
+    # handed, exactly like the roster and the orders themselves. The gate skips a
+    # released order; nothing else about the round changes, and in particular it
+    # is not scored differently - a supervisor released this job, they did not
+    # rank it.
+    released: bool = False
+
     @property
     def person_minutes(self) -> int:
         """What this job costs the shift (ADR-025, design.md 13.2).
@@ -656,16 +665,29 @@ def _admit(
     boundary - not all of it, because a quiet shift handed its whole maintenance
     backlog is a heavy shift one round later, and the work released last is the
     work most likely to be abandoned at handover.
+
+    An order a shift lead has released passes all of that (ADR-059), and it is
+    priced into the shift **before** the round decides how much more maintenance
+    to pull forward - see `_released_demand`. It still has to be crewed:
+    releasing work does not conjure a technician, and an order nobody can take
+    comes back unassigned with the same sentence as everybody else's.
     """
     load = config.policy.load
     admitted: list[_Ranked] = []
     held: list[Withheld] = []
-    running = ratio
+    running = ratio + _released_demand(ranked, capacity=capacity)
 
     for entry in ranked:
         item, _, _, _ = entry
         order = item.order
         scheduled = order.origin is WorkOrderOrigin.SCHEDULED
+
+        if item.released:
+            # A supervisor has answered the question the gate was going to ask,
+            # in writing (ADR-011's sentence runs in both directions). Its
+            # minutes are already in `running`.
+            admitted.append(entry)
+            continue
 
         if band is Band.HEAVY and order.severity.rank < Severity.HIGH.rank:
             held.append(
@@ -711,6 +733,32 @@ def _admit(
         admitted.append(entry)
 
     return (admitted, held)
+
+
+def _released_demand(ranked: Sequence[_Ranked], *, capacity: int) -> float:
+    """What the hand-released maintenance work costs the shift, as a ratio.
+
+    Counted once, up front, and only for scheduled work. Two decisions are in
+    that sentence (ADR-059).
+
+    **Only scheduled.** Queued PM work is the reserve rather than demand
+    (ADR-045 §2), so it is not in `load_ratio` yet and releasing it is what makes
+    it demand. Condition and manual work is already counted there, and adding it
+    again would spend the same hour twice - the shift would top up one PM job
+    fewer than it has room for, every round, with every number still adding up.
+
+    **Up front**, rather than as the loop reaches each one, so that a release
+    changes *which* maintenance the shift does and not *how much*. Added in rank
+    order instead, a release would displace the automatic top-up when it happened
+    to rank high and pile on top of it when it happened to rank low, and the
+    boundary a supervisor is being shown would mean two different things
+    depending on how old their ticket was.
+    """
+    return sum(
+        item.person_minutes / capacity
+        for item, _, _, _ in ranked
+        if item.released and item.order.origin is WorkOrderOrigin.SCHEDULED
+    )
 
 
 def _assign(

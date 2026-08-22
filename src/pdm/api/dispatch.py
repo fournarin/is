@@ -12,9 +12,16 @@ supervisor whose work does not appear has no way to tell a system that is
 holding it from a system that lost it - which is how a scheduler gets overruled
 and then abandoned (principle 3).
 
-**Nothing here writes.** The report is computed when asked (ADR-050), from the
-same `dispatch()` the rounds use, so a supervisor and the scheduler cannot
-disagree about what is being held.
+**The two read paths write nothing.** The report is computed when asked
+(ADR-050), from the same `dispatch()` the rounds use, so a supervisor and the
+scheduler cannot disagree about what is being held.
+
+The two writes here are the same argument running the other way (ADR-059): a
+person overruling the scheduler explains themselves to it. A technician records
+that the queue put the wrong job first - and the queue does not move, because a
+ranking that could be argued down is not a ranking - and a shift lead releases
+one held ticket, with the reason and the shift it was released against. Neither
+places anybody on anything; that is still the round's job, in worker-runtime.
 """
 
 from __future__ import annotations
@@ -23,10 +30,13 @@ from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, requires
+from pdm.api.deps import Db, Time, requires
 from pdm.contracts import Role, Severity, WorkOrderStatus
+from pdm.dispatch import Band
+from pdm.dispatch import repo as dispatch_repo
+from pdm.dispatch.overrides import Override, OverrideKind
 from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.domain import Account
 from pdm.work import repo as work
@@ -37,6 +47,15 @@ router = APIRouter(tags=["dispatch"])
 # Restricting the gate's report to supervisors would leave a technician with a
 # ranking and no way to check it, which is the state ADR-005 exists to prevent.
 _MAY_READ = (Role.TECHNICIAN, Role.ENGINEER, Role.SUPERVISOR, Role.OPERATOR)
+
+# Whoever may be shown a ranking may object to it. Narrowing this to the person
+# holding the ticket would record only the objections that are convenient, and
+# the record is the entire value of the button (ADR-059).
+_MAY_OBJECT = _MAY_READ
+
+# ADR-024's table and ADR-011's sentence: the gate reports to the shift lead, and
+# taking work out of its hands is the shift lead's decision to defend.
+_MAY_RELEASE = (Role.SUPERVISOR,)
 
 
 class Ranked(BaseModel):
@@ -103,6 +122,58 @@ class TicketView(BaseModel):
     required_technicians: int
     assignees: tuple[str, ...] = ()
     playbook_warning: str | None = None
+
+
+class Objection(BaseModel):
+    """The typed reason, required by the schema so the request never reaches the
+    code that would have to decide what an empty one means."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reason: str = Field(min_length=1)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_only_whitespace(cls, value: str) -> str:
+        """`min_length` admits "   ", and a reason of spaces leaves whoever reads
+        this back exactly where no reason would."""
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("an override needs a reason (ADR-005)")
+        return stripped
+
+
+class OverrideRecorded(BaseModel):
+    """What was written down, returned so the screen shows the record rather
+    than a hopeful message about one.
+
+    A release carries the round it was taken against and a disagreement does not,
+    because a disagreement is about one ticket's rank and not about the shift.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    kind: OverrideKind
+    at: datetime
+    reason: str
+    by: str
+    band: str | None = None
+    load_ratio: float | None = None
+    shift_id: str | None = None
+
+
+def _recorded(override: Override) -> OverrideRecorded:
+    return OverrideRecorded(
+        ref=override.work_order_ref,
+        kind=override.kind,
+        at=override.at,
+        reason=override.reason,
+        by=str(override.user),
+        band=override.band.value if override.band is not None else None,
+        load_ratio=override.load_ratio,
+        shift_id=str(override.shift_id) if override.shift_id is not None else None,
+    )
 
 
 def _rounds(request: Request) -> DispatchRounds:
@@ -179,3 +250,107 @@ def ticket(
         assignees=tuple(str(who.user) for who in order.assignees),
         playbook_warning=order.playbook_warning,
     )
+
+
+@router.post(
+    "/work-orders/{work_order_ref}/disagreement",
+    response_model=OverrideRecorded,
+    status_code=status.HTTP_201_CREATED,
+)
+def disagree(
+    work_order_ref: str,
+    objection: Objection,
+    conn: Db,
+    clock: Time,
+    account: Annotated[Account, Depends(requires(*_MAY_OBJECT, action="record_disagreement"))],
+) -> OverrideRecorded:
+    """ "I disagree" - recorded, and changing nothing else (ADR-005, ADR-059).
+
+    The queue does not move. Re-ranking on an objection would make it negotiable,
+    and a queue that can be argued down is how the load gate stops mattering: the
+    easy job gets talked to the top on the shift where that is worst. What the
+    button is worth is the record - a hundred of these against the same term is
+    an argument about the score that can be had with evidence rather than with
+    recollection, and it is worth nothing at all if it is not written down while
+    somebody is standing at the machine.
+    """
+    if work.get(conn, work_order_ref) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no work order {work_order_ref}")
+
+    override = Override(
+        kind=OverrideKind.PRIORITY_DISAGREEMENT,
+        work_order_ref=work_order_ref,
+        user=account.user,
+        role=account.role,
+        at=clock.now(),
+        reason=objection.reason,
+    )
+    dispatch_repo.record_override(conn, override)
+    return _recorded(override)
+
+
+@router.post(
+    "/dispatch/held/{work_order_ref}/release",
+    response_model=OverrideRecorded,
+    status_code=status.HTTP_201_CREATED,
+)
+def release_held(
+    work_order_ref: str,
+    objection: Objection,
+    conn: Db,
+    clock: Time,
+    rounds: Annotated[DispatchRounds, Depends(_rounds)],
+    account: Annotated[Account, Depends(requires(*_MAY_RELEASE, action="release_held_work_order"))],
+) -> OverrideRecorded:
+    """One held ticket, into the next round, on the shift lead's authority.
+
+    The round is computed here rather than remembered, for ADR-050's reason and
+    for one more: the band and ratio written onto the record have to be the ones
+    in force at the moment of the decision, and a round that ran five minutes ago
+    describes a different shift. They are copied onto the record because the
+    round itself is never stored - six weeks later there is nothing else to read
+    the decision back against.
+
+    What this does **not** do is place anybody on anything. The next round ranks
+    and crews the released order like any other, which is why releasing work into
+    a shift that has nobody on it is refused below rather than accepted with
+    nothing to show for it.
+    """
+    if work.get(conn, work_order_ref) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no work order {work_order_ref}")
+
+    if work_order_ref in dispatch_repo.released(conn):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{work_order_ref} has already been released; it is waiting for a round, not "
+            "for the gate",
+        )
+
+    decided = rounds.decide(conn)
+    if decided.band is Band.NO_CAPACITY:
+        # Everything is held here, and the gate is not what is holding it: there
+        # is no shift, or nobody on it (ADR-045 §3). Releasing would record a
+        # decision that could not have an effect, and the honest answer is the
+        # sentence the round already wrote.
+        raise HTTPException(status.HTTP_409_CONFLICT, decided.summary)
+
+    if work_order_ref not in {one.ref for one in decided.held}:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"the gate is not holding {work_order_ref}",
+        )
+
+    override = Override(
+        kind=OverrideKind.RELEASE_HELD,
+        work_order_ref=work_order_ref,
+        user=account.user,
+        role=account.role,
+        at=clock.now(),
+        reason=objection.reason,
+        band=decided.band,
+        load_ratio=decided.load_ratio,
+        shift_id=decided.shift_id,
+        on_date=decided.on_date,
+    )
+    dispatch_repo.record_override(conn, override)
+    return _recorded(override)

@@ -22,7 +22,7 @@ entries replace parts of earlier ones, and both are kept.
 | [008](0008-technology-stack.md) | Technology stack, and the boundary around Redis | 017, 035 |
 | [009](0009-component-comes-from-the-rule-not-from-inference.md) | Component comes from the rule, never from inference | 016 |
 | [010](0010-work-orders-have-an-origin.md) | Work does not only come from a Finding | |
-| [011](0011-load-ratio-switches-dispatch-behaviour.md) | Dispatch switches behaviour on load, not on score alone | |
+| [011](0011-load-ratio-switches-dispatch-behaviour.md) | Dispatch switches behaviour on load, not on score alone | 059 |
 | [012](0012-tickets-leave-through-an-adapter.md) | Tickets leave through an adapter interface | |
 | [013](0013-playbooks-are-immutable-versions.md) | A playbook version cannot be edited in place | 018 |
 | [014](0014-report-and-technician-trial-are-reserved-unconditionally.md) | Reserve time for the report and the technician trial | |
@@ -69,6 +69,7 @@ entries replace parts of earlier ones, and both are kept.
 | [055](0055-the-counterfactual-is-a-re-solve-and-what-it-must-not-cancel.md) | The counterfactual is a re-solve, and what it must not cancel | |
 | [056](0056-handing-over-ends-the-assignment.md) | Handing over ends the assignment | |
 | [058](0058-what-the-web-layer-may-not-contain-and-how-it-reaches-the-api.md) | What the web layer may not contain, and how it reaches the API | |
+| [059](0059-an-override-is-recorded-and-only-one-of-them-changes-a-round.md) | An override is recorded, and only one of the two changes a round | |
 
 ## Where to start
 
