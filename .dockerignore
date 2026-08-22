@@ -1,0 +1,21 @@
+# The build context is sent to the daemon in full before a single COPY runs, so
+# anything large and irrelevant here is time added to every image build. `web/`
+# is the reason this file exists: a node_modules tree is hundreds of megabytes
+# that the backend image never touches.
+.git
+.venv
+node_modules
+web/node_modules
+web/.next
+
+# Working notes, in Thai, outside version control on purpose (CLAUDE.md). They
+# have no business inside an image handed to a plant.
+docs-md
+
+**/__pycache__
+*.pyc
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.import_linter_cache
+storage

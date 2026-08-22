@@ -1,0 +1,195 @@
+/*
+ * Plain CSS, and there will not be a framework here: a new dependency needs an
+ * ADR (CLAUDE.md), and a component library would be argued for by a screen that
+ * needs it rather than by the shell.
+ *
+ * Built for a phone held at a machine. Everything below follows from that: one
+ * column, tap targets no smaller than a fingertip, and contrast that survives
+ * a bright shop floor.
+ */
+
+:root {
+  --ink: #10151c;
+  --ink-soft: #4a5568;
+  --paper: #f4f6f8;
+  --card: #ffffff;
+  --line: #d3dae2;
+  --accent: #14487a;
+  --accent-ink: #ffffff;
+  --warn: #8a4b08;
+  --warn-paper: #fdf3e3;
+  --error: #98211a;
+  --error-paper: #fdeceb;
+
+  --tap: 3rem; /* the smallest thing a gloved thumb should have to hit */
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #eef2f6;
+    --ink-soft: #a4b1c0;
+    --paper: #11161c;
+    --card: #1a212a;
+    --line: #313c48;
+    --accent: #6fb0ef;
+    --accent-ink: #0b1119;
+    --warn: #f0c07a;
+    --warn-paper: #2c2314;
+    --error: #f2a19c;
+    --error-paper: #2e1715;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family:
+    "IBM Plex Sans Thai", "Noto Sans Thai", "Sarabun", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+h1 {
+  font-size: 1.35rem;
+  line-height: 1.4;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.25rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+}
+
+.muted {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.field {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.field span {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.field input:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  min-height: var(--tap);
+  width: 100%;
+  padding: 0 1rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+button.quiet {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--line);
+}
+
+.error {
+  color: var(--error);
+  background: var(--error-paper);
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.pending {
+  color: var(--warn);
+  background: var(--warn-paper);
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.who form {
+  flex: 0 0 auto;
+}
+
+.who button {
+  width: auto;
+}
+
+.screen-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  justify-content: space-between;
+}

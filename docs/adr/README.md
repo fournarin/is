@@ -67,6 +67,7 @@ entries replace parts of earlier ones, and both are kept.
 | [053](0053-what-the-comparison-demonstrated-and-what-it-did-not.md) | What the comparison demonstrated, and what it did not | |
 | [054](0054-what-cp-sat-optimises-and-what-it-may-not-touch.md) | What CP-SAT optimises, and what it may not touch | |
 | [056](0056-handing-over-ends-the-assignment.md) | Handing over ends the assignment | |
+| [058](0058-what-the-web-layer-may-not-contain-and-how-it-reaches-the-api.md) | What the web layer may not contain, and how it reaches the API | |
 
 ## Where to start
 
