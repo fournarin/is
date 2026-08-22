@@ -66,6 +66,7 @@ entries replace parts of earlier ones, and both are kept.
 | [052](0052-what-review-was-protecting-and-what-it-was-not.md) | What review was protecting, and what it was not | |
 | [053](0053-what-the-comparison-demonstrated-and-what-it-did-not.md) | What the comparison demonstrated, and what it did not | |
 | [054](0054-what-cp-sat-optimises-and-what-it-may-not-touch.md) | What CP-SAT optimises, and what it may not touch | |
+| [055](0055-the-counterfactual-is-a-re-solve-and-what-it-must-not-cancel.md) | The counterfactual is a re-solve, and what it must not cancel | |
 | [056](0056-handing-over-ends-the-assignment.md) | Handing over ends the assignment | |
 | [058](0058-what-the-web-layer-may-not-contain-and-how-it-reaches-the-api.md) | What the web layer may not contain, and how it reaches the API | |
 

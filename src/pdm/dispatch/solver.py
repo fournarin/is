@@ -43,6 +43,7 @@ from pdm.dispatch.domain import (
     Round,
     Terms,
     Withheld,
+    _Ranked,  # the ranking's row type, shared by the explainer
     capacity_left,
     dispatch,
     downtime_or_unknown,
@@ -82,6 +83,68 @@ def schedule(
     that need to force the timeout path. A round that hits the limit without a
     feasible schedule returns 3C's answer unchanged.
     """
+    shift = _shift(
+        queue,
+        technicians=technicians,
+        assignments=assignments,
+        config=config,
+        now=now,
+        shift_id=shift_id,
+        on_date=on_date,
+    )
+    if shift.jobs is None:
+        return shift.ranked
+
+    built = _build(shift.jobs, available=shift.available, left=shift.left, horizon=shift.horizon)
+    answer = _run(
+        built,
+        seconds=seconds if seconds is not None else config.policy.dispatch.solver_seconds,
+    )
+    if answer is None:
+        # No feasible schedule inside the limit. The issue for this slice names
+        # this case explicitly: fall back to 3C rather than returning nothing.
+        # A round that answers "no plan" leaves a shift with a queue nobody is
+        # working, which is strictly worse than a good-enough ranking.
+        return shift.ranked
+
+    solver, status = answer
+    plan = _plan_of(built, solver, status, shift.available)
+    return _round_from(plan, ranked=shift.ranked, admitted=shift.admitted, ranks=shift.ranks)
+
+
+@dataclass(frozen=True)
+class _Shift:
+    """Everything one round needs, resolved once.
+
+    `schedule()` and `Explainer` both start here, so a counterfactual is
+    computed against the same admitted set, the same capacity and the same
+    ranking the plan was built from. Two resolutions of "the same" shift is the
+    copy that stops being the same without saying so (ADR-055 §1).
+
+    `jobs` is None when there is nothing to solve - no capacity, nothing
+    admitted, or nobody available - and `ranked` is then the whole answer.
+    """
+
+    ranked: Round
+    admitted: list[Queued]
+    available: list[Technician]
+    left: dict[UserId, int]
+    ranks: dict[str, _Ranked]
+    horizon: int
+    jobs: list[_Job] | None
+
+
+def _shift(
+    queue: Sequence[Queued],
+    *,
+    technicians: Sequence[Technician],
+    assignments: Sequence[tuple[UserId, int]],
+    config: Config,
+    now: datetime,
+    shift_id: ShiftId | None,
+    on_date: date | None,
+) -> _Shift:
+    """Run the gate, then work out what a solver would be given."""
     ranked = dispatch(
         queue,
         technicians=technicians,
@@ -91,24 +154,6 @@ def schedule(
         shift_id=shift_id,
         on_date=on_date,
     )
-    if ranked.band is Band.NO_CAPACITY:
-        # Nothing was admitted and nothing can be: there is no shift covering
-        # this moment, or nobody on it. A solver over an empty set would return
-        # an empty plan and lose the sentence saying which of the two it was.
-        return ranked
-
-    admitted = _admitted(ranked, queue)
-    if not admitted:
-        return ranked
-
-    rostered = {user for user, _ in assignments}
-    available = sorted(
-        (person for person in technicians if person.active and person.user in rostered),
-        key=lambda person: person.user,
-    )
-    if not available:
-        return ranked
-
     # The same ranking `dispatch()` computed, including for the orders it
     # admitted and could not crew. Those are the ones the solver may place by
     # moving something else, and their tickets need the same explanation as
@@ -120,23 +165,33 @@ def schedule(
         config=config,
         now=now,
     )
-    left = capacity_left(available, dict(assignments), queue)
-    plan = _solve(
-        admitted,
+    admitted = _admitted(ranked, queue)
+
+    rostered = {user for user, _ in assignments}
+    available = sorted(
+        (person for person in technicians if person.active and person.user in rostered),
+        key=lambda person: person.user,
+    )
+    left = capacity_left(available, dict(assignments), queue) if available else {}
+    horizon = max(left.values(), default=0)
+
+    nothing = ranked.band is Band.NO_CAPACITY or not admitted or not available or horizon <= 0
+    return _Shift(
+        ranked=ranked,
+        admitted=admitted,
         available=available,
         left=left,
-        scores={ref: entry[1] for ref, entry in ranks.items()},
-        config=config,
-        seconds=seconds if seconds is not None else config.policy.dispatch.solver_seconds,
+        ranks=ranks,
+        horizon=horizon,
+        jobs=(
+            None
+            if nothing
+            else [
+                _job(item, ranks[item.ref][1] if item.ref in ranks else 0.0, config)
+                for item in admitted
+            ]
+        ),
     )
-    if plan is None:
-        # No feasible schedule inside the limit. The issue for this slice names
-        # this case explicitly: fall back to 3C rather than returning nothing.
-        # A round that answers "no plan" leaves a shift with a queue nobody is
-        # working, which is strictly worse than a good-enough ranking.
-        return ranked
-
-    return _round_from(plan, ranked=ranked, admitted=admitted, ranks=ranks)
 
 
 @dataclass(frozen=True)
@@ -189,40 +244,50 @@ def _admitted(ranked: Round, queue: Sequence[Queued]) -> list[Queued]:
     return [by_ref[ref] for ref in admitted if ref in by_ref]
 
 
+@dataclass(frozen=True)
 class _Plan:
-    """What the solver decided: who does what, and when it starts."""
+    """What the solver decided: who does what, when it starts, and what it cost."""
 
-    def __init__(
-        self,
-        starts: dict[str, int],
-        crews: dict[str, tuple[UserId, ...]],
-        status: str,
-    ) -> None:
-        self.starts = starts
-        self.crews = crews
-        self.status = status
+    starts: dict[str, int]
+    crews: dict[str, tuple[UserId, ...]]
+    status: str
 
 
-def _solve(
-    admitted: Sequence[Queued],
-    *,
-    available: Sequence[Technician],
-    left: dict[UserId, int],
-    scores: dict[str, float],
-    config: Config,
-    seconds: float,
-) -> _Plan | None:
-    """Build the model and solve it. None means no feasible schedule was found."""
-    jobs = [_job(item, scores.get(item.ref, 0.0), config) for item in admitted]
-    horizon = max(left.values(), default=0)
-    if horizon <= 0:
-        return None
+@dataclass
+class _Model:
+    """The model and the handles needed to read an answer out of it.
 
+    Kept as a value rather than built twice, because `explain.py` re-solves the
+    same shift with one order forced late, and a second construction of "the
+    same" model is the kind of copy that stops being the same without saying so.
+    """
+
+    model: cp_model.CpModel
+    jobs: list[_Job]
+    horizon: int
+    starts: dict[str, cp_model.IntVar]
+    present: dict[str, cp_model.IntVar]
+    effective: dict[str, cp_model.IntVar]
+    doing: dict[tuple[str, UserId], cp_model.IntVar]
+    # Who holds the skill at all, and who holds it *and* has the minutes. The
+    # two are separate because they are different sentences to a supervisor:
+    # "nobody on this shift can do it" is a rostering problem and "everybody who
+    # can is out of time" is a capacity one (ADR-055 §3).
+    skilled: dict[str, tuple[UserId, ...]]
+    with_time: dict[str, tuple[UserId, ...]]
+
+
+def _build(
+    jobs: list[_Job], *, available: Sequence[Technician], left: dict[UserId, int], horizon: int
+) -> _Model:
+    """The model of ADR-054 §2, with nothing solved yet."""
     model = cp_model.CpModel()
     starts: dict[str, cp_model.IntVar] = {}
     present: dict[str, cp_model.IntVar] = {}
     effective: dict[str, cp_model.IntVar] = {}
     doing: dict[tuple[str, UserId], cp_model.IntVar] = {}
+    skilled: dict[str, tuple[UserId, ...]] = {}
+    with_time: dict[str, tuple[UserId, ...]] = {}
     intervals: dict[UserId, list[cp_model.IntervalVar]] = {person.user: [] for person in available}
 
     for job in jobs:
@@ -248,12 +313,16 @@ def _solve(
             for person in available
             if job.required_skill is None or person.can_perform(job.required_skill)
         ]
+        skilled[job.ref] = tuple(person.user for person in can)
+
         chosen = []
+        fits = []
         for person in can:
             if left[person.user] < job.minutes:
                 # This person cannot fit the job in what is left of their shift
                 # at all, so the variable would only ever be zero.
                 continue
+            fits.append(person.user)
             picked = model.new_bool_var(f"doing[{job.ref},{person.user}]")
             doing[(job.ref, person.user)] = picked
             chosen.append(picked)
@@ -267,6 +336,7 @@ def _solve(
             # a budget alone would allow a job to be planned into time the shift
             # does not reach.
             model.add(start + job.minutes <= left[person.user]).only_enforce_if(picked)
+        with_time[job.ref] = tuple(fits)
 
         # `required_technicians` people or none at all (ADR-025). Half a
         # two-person job cannot be started and would spend one person's shift
@@ -281,13 +351,28 @@ def _solve(
             # Nobody is under two machines at once (ADR-047).
             model.add_no_overlap(intervals[person.user])
 
-    model.minimize(
-        sum(
-            (round(job.rate * _RATE_SCALE) + round(job.score * _SCORE_SCALE)) * effective[job.ref]
-            for job in jobs
-        )
+    model.minimize(sum(_weight(job) * effective[job.ref] for job in jobs))
+
+    return _Model(
+        model=model,
+        jobs=jobs,
+        horizon=horizon,
+        starts=starts,
+        present=present,
+        effective=effective,
+        doing=doing,
+        skilled=skilled,
+        with_time=with_time,
     )
 
+
+def _weight(job: _Job) -> int:
+    """The objective's coefficient for one job, in scaled integers."""
+    return round(job.rate * _RATE_SCALE) + round(job.score * _SCORE_SCALE)
+
+
+def _run(built: _Model, *, seconds: float) -> tuple[cp_model.CpSolver, str] | None:
+    """Solve, deterministically. None means no feasible answer inside the limit."""
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = seconds
     # One worker and a fixed seed. CP-SAT's portfolio is parallel and the first
@@ -296,30 +381,60 @@ def _solve(
     # every figure in `docs/results/` unreproducible, and quietly (ADR-054 §4).
     solver.parameters.num_workers = 1
     solver.parameters.random_seed = 0
-    status = solver.solve(model)
+    status = solver.solve(built.model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None
+    return solver, str(solver.status_name(status))
 
+
+def _plan_of(
+    built: _Model,
+    solver: cp_model.CpSolver,
+    status: str,
+    available: Sequence[Technician],
+) -> _Plan:
+    scheduled = [job for job in built.jobs if solver.boolean_value(built.present[job.ref])]
     return _Plan(
-        starts={
-            job.ref: int(solver.value(starts[job.ref]))
-            for job in jobs
-            if solver.boolean_value(present[job.ref])
-        },
+        starts={job.ref: int(solver.value(built.starts[job.ref])) for job in scheduled},
         crews={
             job.ref: tuple(
                 sorted(
                     person.user
                     for person in available
-                    if (job.ref, person.user) in doing
-                    and solver.boolean_value(doing[(job.ref, person.user)])
+                    if (job.ref, person.user) in built.doing
+                    and solver.boolean_value(built.doing[(job.ref, person.user)])
                 )
             )
-            for job in jobs
-            if solver.boolean_value(present[job.ref])
+            for job in scheduled
         },
-        status=solver.status_name(status),
+        status=status,
     )
+
+
+def _solve(
+    admitted: Sequence[Queued],
+    *,
+    available: Sequence[Technician],
+    left: dict[UserId, int],
+    scores: dict[str, float],
+    config: Config,
+    seconds: float,
+) -> _Plan | None:
+    """Build the model and solve it. None means no feasible schedule was found."""
+    horizon = max(left.values(), default=0)
+    if horizon <= 0:
+        return None
+    built = _build(
+        [_job(item, scores.get(item.ref, 0.0), config) for item in admitted],
+        available=available,
+        left=left,
+        horizon=horizon,
+    )
+    answer = _run(built, seconds=seconds)
+    if answer is None:
+        return None
+    solver, status = answer
+    return _plan_of(built, solver, status, available)
 
 
 def _round_from(
