@@ -230,6 +230,19 @@ def hidden_fields(page: str) -> list[tuple[str, str]]:
     return fields
 
 
+def form_with(page: str, marker: str) -> list[tuple[str, str]]:
+    """The hidden fields of the one form containing `marker`.
+
+    A page with two server actions on it carries two sets of `$ACTION_*` fields,
+    and posting them together sends a request that names both. Scoping to one
+    form is what a browser does for free.
+    """
+    for form in re.findall(r"<form\b.*?</form>", page, re.DOTALL):
+        if marker in form:
+            return hidden_fields(form)
+    raise AssertionError(f"no form containing {marker!r}")
+
+
 def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
     boundary = "----pdm-check-the-screen"
     body = b""
@@ -257,8 +270,10 @@ def get(path: str) -> str:
         return str(response.read().decode())
 
 
-def submit(path: str, page: str, extra: list[tuple[str, str]] | None = None) -> str:
-    body, content_type = multipart([*hidden_fields(page), *(extra or [])])
+def submit(
+    path: str, fields: list[tuple[str, str]], extra: list[tuple[str, str]] | None = None
+) -> str:
+    body, content_type = multipart([*fields, *(extra or [])])
     request = urllib.request.Request(
         f"{WEB}{path}",
         data=body,
@@ -273,7 +288,7 @@ def submit(path: str, page: str, extra: list[tuple[str, str]] | None = None) -> 
 
 def sign_in() -> None:
     page = get("/sign-in")
-    submit("/sign-in", page, [("user", str(TECHNICIAN)), ("password", PASSWORD)])
+    submit("/sign-in", hidden_fields(page), [("user", str(TECHNICIAN)), ("password", PASSWORD)])
 
 
 def main() -> None:
@@ -283,7 +298,9 @@ def main() -> None:
     print("\n1. the queue shows one job, and says why it is that one")
     queue = get("/work")
     shown = readable(queue)
-    above_the_fold, _, behind = shown.partition("<details")
+    # Split at the collapsed "next" list. The objection form is a <details>
+    # too, and it belongs above the fold with the reason it sits beside.
+    above_the_fold, _, behind = shown.partition("<summary>ถัดไป")
     expect("MC-012" in above_the_fold, "the machine the scheduler chose")
     expect(
         "วางแผนไว้" in above_the_fold,
@@ -294,15 +311,39 @@ def main() -> None:
     expect("เห็นมาแล้ว 4 ครั้ง" in above_the_fold, "how often the rule has fired (ADR-023)")
     expect("ทำไมงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)")
     expect(
-        "<summary>ถัดไป (1)</summary>" in behind, "what is queued behind it is visible, collapsed"
+        behind.startswith(" (1)</summary>"),
+        "one more job is queued behind it, visible and collapsed",
     )
     expect(
         'href="/work/' not in behind,
         "and nothing in that list is a link, so it cannot be picked (ADR-011)",
     )
 
+    print("\n1b. disagreeing is recorded, and the queue does not move")
+    expect("ไม่เห็นด้วยกับลำดับนี้" in above_the_fold, "the objection sits beside the reason (ADR-005)")
+    blank = submit("/work", form_with(queue, 'name="reason"'), [("reason", "  ")])
+    expect("เขียนสั้น ๆ" in readable(blank), "an objection with no reason is refused (ADR-059)")
+
+    objected = submit(
+        "/work",
+        form_with(queue, 'name="reason"'),
+        [("reason", "MC-004 หยุดสายจริง งานนี้รอได้")],
+    )
+    expect(
+        "บันทึกไว้แล้วเมื่อ" in readable(objected), "it says what was written down, not that it hopes so"
+    )
+    expect("ลำดับงานไม่เปลี่ยน" in readable(objected), "and says plainly that nothing reordered")
+
+    # The assertion the whole button rests on: a queue that could be argued down
+    # is not a queue, and the load gate stops meaning anything (ADR-011, ADR-059).
+    after = readable(get("/work"))
+    expect(
+        after.partition("<summary>ถัดไป")[0] == above_the_fold,
+        "the job on top is byte-for-byte the one that was there before the objection",
+    )
+
     print("\n2. starting the job goes straight to the steps")
-    steps = submit("/work", queue)
+    steps = submit("/work", form_with(queue, "เริ่มงาน"))
     expect("ขั้นที่ 1 จาก 3" in readable(steps), "the first step of three")
     expect(STEPS[0] in steps, "and it is the first step of the playbook that was snapshotted")
     expect("เปิดคู่มือหน้า 142" in readable(steps), "with the page it came from")
@@ -316,12 +357,16 @@ def main() -> None:
     expect("ขั้นตอนสุดท้าย" in last, "and the last one says so instead of offering another")
 
     print("\n4. handing over needs a note")
-    refused = submit("/work/" + ref_from(steps) + "/steps?step=3", last, [("note", "   ")])
+    refused = submit(
+        "/work/" + ref_from(steps) + "/steps?step=3",
+        form_with(last, 'name="note"'),
+        [("note", "   ")],
+    )
     expect("ก่อนส่งเวร" in refused, "whitespace is not a handover note (ADR-025)")
 
     handed = submit(
         "/work/" + ref_from(steps) + "/steps?step=3",
-        last,
+        form_with(last, 'name="note"'),
         [("note", "ถอดฝาครอบพัดลมแล้ว รออะไหล่ตลับลูกปืน")],
     )
     expect("งานของคุณ" in handed, "with a note it goes through and lands back on the queue")

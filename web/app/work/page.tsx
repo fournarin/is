@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { startWork } from "@/app/work/actions";
+import { DisagreeForm } from "@/app/work/disagree-form";
 import { bandFor, seenLine } from "@/lib/display";
 import { ROLE_NAMES, requireAccount } from "@/lib/session";
 import { currentRound, myWork, type Ticket } from "@/lib/work";
@@ -85,8 +86,7 @@ export default async function WorkPage() {
         ) : (
           <p>{now.priority_reason}</p>
         )}
-        {/* Beside the reason, where somebody is already reading it. */}
-        <p className="muted">ไม่เห็นด้วยกับลำดับนี้? บอกระบบได้ (กำลังจะมาใน slice 9.2)</p>
+        <DisagreeForm workOrder={now.ref} timezone={round.timezone} />
       </section>
 
       {inProgress ? (

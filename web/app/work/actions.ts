@@ -74,3 +74,40 @@ export async function handOver(
 
   redirect("/work");
 }
+
+export type ObjectionState = { error: string | null; recordedAt: string | null };
+
+/**
+ * "I disagree" - recorded, and the queue does not move.
+ *
+ * That is the whole design (ADR-005, ADR-059): a ranking that can be argued
+ * down is not a ranking, and what the button is worth is the record. So this
+ * returns what was written rather than a message hoping it was, and the screen
+ * says plainly that nothing reordered - a button that looked like it changed
+ * something and did not is worse than no button.
+ *
+ * Unbound, and the ref comes through the form, for the reason `handOver` above
+ * gives: this one returns state rather than redirecting.
+ */
+export async function disagree(
+  _previous: ObjectionState,
+  form: FormData,
+): Promise<ObjectionState> {
+  const ref = String(form.get("ref") ?? "");
+  const reason = String(form.get("reason") ?? "").trim();
+  if (reason === "") {
+    return { error: "เขียนสั้น ๆ ว่าทำไมไม่เห็นด้วย", recordedAt: null };
+  }
+
+  const response = await callApi(`/work-orders/${encodeURIComponent(ref)}/disagreement`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  if (!response.ok) {
+    return { error: `ระบบตอบกลับผิดปกติ (${response.status})`, recordedAt: null };
+  }
+
+  const recorded = (await response.json()) as { at: string };
+  return { error: null, recordedAt: recorded.at };
+}

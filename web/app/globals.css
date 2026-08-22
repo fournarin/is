@@ -308,3 +308,10 @@ textarea:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+
+.recorded {
+  color: var(--ink-soft);
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  font-size: 0.9rem;
+}
