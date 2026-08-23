@@ -95,6 +95,7 @@ POLICY: dict[str, Any] = {
         },
     },
     "estimates": {"min_observations": 5, "max_change_ratio": 0.20},
+    "thresholds": {"min_observations": 10, "max_change_ratio": 0.10},
     "fallback_minutes": {"R-2000iC": {"low": 30, "medium": 45, "high": 60, "critical": 90}},
     "jobs": {
         "runtime": {"heartbeat_seconds": 10, "dead_after_seconds": 60},
@@ -234,6 +235,21 @@ class TestPolicyRelationships:
         policy = _deep(POLICY)
         policy["estimates"]["max_change_ratio"] = 0.5
         with pytest.raises(ConfigError, match="twenty percent per cycle"):
+            load_config(_write(tmp_path, **{"policy.yaml": policy}))
+
+    def test_a_threshold_may_not_move_further_in_one_cycle_than_adr_067_allows(
+        self, tmp_path: Path
+    ) -> None:
+        """Half of what a duration may move, and refused at boot (ADR-067).
+
+        The tempting edit is to make Loop 2's bound Loop 1's, because they sit
+        beside each other in the same file. What that edit buys is a threshold
+        layer 1 fires on moving twice as far per cycle on evidence that can only
+        ever say "too tight".
+        """
+        policy = _deep(POLICY)
+        policy["thresholds"]["max_change_ratio"] = 0.20
+        with pytest.raises(ConfigError, match="ten percent of the threshold"):
             load_config(_write(tmp_path, **{"policy.yaml": policy}))
 
     def test_a_model_without_a_fallback_estimate_stops_the_boot(self, tmp_path: Path) -> None:

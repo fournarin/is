@@ -166,6 +166,11 @@ source_modules =
     # version of it that could open a connection could also be a version that
     # writes the estimate it just proposed.
     pdm.work.estimates
+    # Loop 2's arithmetic (ADR-067), and on the list for a sharper version of the
+    # same reason: the number it proposes is one layer 1 fires on, so a version of
+    # it that could open a connection could also be a version that writes a
+    # threshold nobody approved.
+    pdm.work.thresholds
     pdm.dispatch.domain
     # Not a domain.py by name, and on the list for the same reason: the override
     # record is a type the API builds and the repo writes, and a module that

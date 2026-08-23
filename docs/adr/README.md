@@ -77,6 +77,7 @@ entries replace parts of earlier ones, and both are kept.
 | [064](0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md) | What a reviewer may change, and what the review screen records | |
 | [065](0065-how-this-web-layer-submits-things.md) | How this web layer submits things | |
 | [066](0066-what-the-finished-jobs-may-change-and-what-stops-them.md) | What the finished jobs may change, and what stops them | |
+| [067](0067-what-a-false-alarm-may-propose-about-a-threshold.md) | What a false alarm may propose about a threshold, and what it may not | |
 
 ## Where to start
 
