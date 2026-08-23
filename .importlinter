@@ -116,6 +116,25 @@ forbidden_modules =
 # ─────────────────────────────────────────────────────────────
 # Phase 2's deliverable is a comparison, and a comparison needs an outsider
 # ─────────────────────────────────────────────────────────────
+[importlinter:contract:the-scheduler-does-not-know-the-destination]
+name = dispatch/ and work/ must not import sinks/ (ADR-012, ADR-068)
+# ADR-012 puts layer 4 behind an interface because nobody knows yet whether the
+# plant has a CMMS, and its claim is that the scheduler never learns what the
+# destination is. That is stated here as an absolute ban rather than "no
+# concrete sink": importing the port would already be layer 3 knowing that
+# somewhere to send things exists, and the interesting failure - a scheduler
+# that starts scoring by whether a ticket was delivered - needs only the port.
+#
+# It is statable at all because delivery is a step the composition root takes
+# after a round (ADR-068). Only pdm.workers and pdm.api may reach this package.
+type = forbidden
+source_modules =
+    pdm.dispatch
+    pdm.work
+forbidden_modules =
+    pdm.sinks
+
+
 [importlinter:contract:baselines-know-nothing-of-dispatch]
 name = baselines/ must not import dispatch/ (ADR-046 section 5)
 type = forbidden

@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Sixty-three decisions, in the order they were made. Each records the context that
+Sixty-seven decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".

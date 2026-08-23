@@ -18,11 +18,17 @@ Two things are checked, and the second is the one that is easy to lose:
   2. llm-server publishes no host port. A published port bypasses the network
      split entirely, since anything on the host can then reach the model. That
      is a one-line change somebody makes while debugging and forgets to revert.
+
+Every other `docker-compose*.yml` in the repository is checked too. A service
+added in an override joins the same networks as one added in the base file, and
+a gate reading only the base file would not see it - which is exactly how a hole
+opens quietly. The first such file is the rehearsal's (ADR-067).
 """
 
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +36,13 @@ import yaml
 
 COMPOSE = Path("docker-compose.yml")
 LLM_SERVICE = "llm-server"
+
+# Overrides, additions, anything else somebody writes beside the base file.
+OTHER_FILES = tuple(sorted(Path().glob("docker-compose.*.yml")))
+
+# The only two things allowed on the LLM's network, in any compose file
+# (ADR-026, ADR-029). Everything else is a violation wherever it is declared.
+MAY_REACH_THE_LLM = frozenset({"worker-authoring", LLM_SERVICE})
 
 # Everything that serves or schedules work for technicians. ADR-026 puts the
 # trigger loop and the dispatch tick in worker-runtime, so it belongs here too.
@@ -43,6 +56,35 @@ def _networks(service: dict[str, Any]) -> set[str]:
     if isinstance(declared, dict):  # long form: {app: {aliases: [...]}}
         return set(declared)
     return set(declared)
+
+
+def llm_networks_in(compose_path: Path) -> set[str]:
+    """The networks llm-server is on, read from the file that declares it."""
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8")) or {}
+    service = (compose.get("services") or {}).get(LLM_SERVICE)
+    return _networks(service) if service else set()
+
+
+def check_other_files(paths: Sequence[Path], *, llm_networks: set[str]) -> list[str]:
+    """Any service in any other compose file that joins the LLM's network.
+
+    Deliberately not a copy of `check()`: those files declare no llm-server and
+    need not declare every runtime service, so the question here is the opposite
+    one - not "are the four services isolated" but "has anything at all been put
+    on the network the isolation depends on".
+    """
+    violations: list[str] = []
+    for path in paths:
+        compose = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for name, service in (compose.get("services") or {}).items():
+            if name in MAY_REACH_THE_LLM:
+                continue
+            shared = _networks(service or {}) & llm_networks
+            if shared:
+                violations.append(
+                    f"{path}: {name} shares network(s) {sorted(shared)} with {LLM_SERVICE}"
+                )
+    return violations
 
 
 def check(compose_path: Path) -> list[str]:
@@ -75,7 +117,9 @@ def check(compose_path: Path) -> list[str]:
 
 
 def main() -> int:
-    violations = check(COMPOSE)
+    violations = check(COMPOSE) + check_other_files(
+        OTHER_FILES, llm_networks=llm_networks_in(COMPOSE)
+    )
     if violations:
         print("LLM reachable from a runtime service (ADR-029, invariant 15).")
         print(f"Only worker-authoring may reach {LLM_SERVICE}.\n")

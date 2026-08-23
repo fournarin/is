@@ -13,6 +13,7 @@ import type { NextRequest } from "next/server";
 
 import { callApi } from "@/lib/api";
 import { type ClosePayload, closeFromForm, isBlockedReason, isOutcome } from "@/lib/close";
+import { seeOther } from "@/lib/redirect";
 
 async function sendClose(ref: string, close: ClosePayload): Promise<Response> {
   return callApi(`/work-orders/${encodeURIComponent(ref)}/close`, {
@@ -55,10 +56,7 @@ export async function POST(
   const back = (message: string, status: number): Response =>
     wantsJson
       ? Response.json({ error: message }, { status })
-      : Response.redirect(
-          new URL(`/work/${encoded}/close?error=${encodeURIComponent(message)}`, request.url),
-          303,
-        );
+      : seeOther(`/work/${encoded}/close?error=${encodeURIComponent(message)}`);
 
   const close = wantsJson ? fromJson(await request.json()) : closeFromForm(await request.formData());
   if (close === null) {
@@ -75,7 +73,5 @@ export async function POST(
     return back(detail, response.status);
   }
 
-  // 303 rather than 302 so the browser follows with GET; a repeated POST would
-  // be a second close of a job that is already closed.
-  return wantsJson ? new Response(null, { status: 204 }) : Response.redirect(new URL("/work", request.url), 303);
+  return wantsJson ? new Response(null, { status: 204 }) : seeOther("/work");
 }

@@ -22,12 +22,14 @@ from typing import Any
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict
 
-from pdm.contracts import FindingRef, MachineId, RuleId, Signal
+from pdm.contracts import FindingRef, MachineId, RuleId, Signal, WorkOrderRef
 from pdm.dispatch.service import DispatchRounds, describe
 from pdm.platform.clock import Clock
 from pdm.platform.config.loader import Config
 from pdm.platform.jobs import Job, JobKind, JobQueue
 from pdm.signals import Feed
+from pdm.sinks import Deliveries
+from pdm.sinks import describe as describe_deliveries
 from pdm.triggers import Observation, Raised, Triggers
 from pdm.work import NoEstimateAvailable, WorkOrders
 
@@ -294,9 +296,25 @@ def ensure_tick_queued(conn: Connection[Any], queue: JobQueue) -> Job | None:
 
 
 def dispatch_handler(
-    rounds: DispatchRounds, queue: JobQueue, clock: Clock, *, period: timedelta
+    rounds: DispatchRounds,
+    queue: JobQueue,
+    clock: Clock,
+    *,
+    period: timedelta,
+    deliveries: Deliveries | None = None,
 ) -> Any:
-    """Run one scheduling round and book the next one, in the job's transaction.
+    """Run one scheduling round, send what it placed, and book the next one.
+
+    All three in the job's transaction. This is the composition root's half of
+    ADR-068: layer 3 places the work, layer 4 takes it somewhere, and neither
+    imports the other. A delivery that fails does not roll the round back - the
+    placement stands and the record says the destination refused it - but a
+    round that fails takes the queued deliveries with it, which is the direction
+    that has to hold.
+
+    `deliveries` is optional so that a test asserting on scheduling alone need
+    not stand up a destination. `None` means the tickets stay where the round
+    put them, which is exactly the behaviour before layer 4 existed.
 
     The same shape as `observe_handler` and for the same reason (ADR-044 §1): a
     round that failed leaves no appointment, the whole transaction rolls back,
@@ -315,6 +333,11 @@ def dispatch_handler(
 
         report_at = log.info if report.worth_reporting else log.debug
         report_at("round: %s", describe(report))
+
+        if deliveries is not None:
+            sent = deliveries.run(conn, placed=[WorkOrderRef(ref) for ref in report.placed])
+            sent_at = log.info if sent.worth_reporting else log.debug
+            sent_at("delivery: %s", describe_deliveries(sent))
 
     return handle
 

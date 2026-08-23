@@ -38,6 +38,7 @@ from pdm.platform.config.loader import Config
 from pdm.platform.db import make_pool
 from pdm.platform.jobs import ClassTiming, JobClass, JobKind, JobQueue
 from pdm.signals import LINE_A_TWELVE_HOURS, Feed, SyntheticSource
+from pdm.sinks import Deliveries, OwnSystemSink
 from pdm.triggers import Triggers
 from pdm.work import WorkOrders
 from pdm.workers.loop import Worker
@@ -160,6 +161,10 @@ def main() -> None:
     )
 
     rounds = DispatchRounds(clock, config)
+    # One destination, chosen here and nowhere else (ADR-012, ADR-068). Slice
+    # 12.2 makes the choice configuration; until it does, hard-wiring it in the
+    # composition root is the honest form of "there is only one".
+    deliveries = Deliveries(OwnSystemSink(), clock)
     round_period = timedelta(seconds=config.policy.dispatch.round_seconds)
 
     # **No source, no trigger chain.** With nothing to read, a tick would do
@@ -183,7 +188,9 @@ def main() -> None:
         pool=pool,
         clock=clock,
         handlers={
-            JobKind.DISPATCH.value: dispatch_handler(rounds, queue, clock, period=round_period),
+            JobKind.DISPATCH.value: dispatch_handler(
+                rounds, queue, clock, period=round_period, deliveries=deliveries
+            ),
             **(
                 {
                     JobKind.OBSERVE.value: observe_handler(

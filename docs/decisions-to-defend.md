@@ -254,6 +254,29 @@ year. The failure is silent in both directions, which is why it is here.
 
 ---
 
+## 13. A refused ticket is retried for ever, with no attempt cap
+
+**Decided.** Delivery to layer 4 is at-least-once with the state stored in
+`ticket_delivery`. A destination that refuses a ticket leaves the order placed
+and the row outstanding, `attempts` climbs, and nothing ever gives up on it.
+
+**Why.** A cap means choosing how many failures are acceptable before a machine
+goes unattended, and there is no number that answers that. The alternative -
+fire-and-forget - makes an undeliverable ticket indistinguishable from a
+delivered one, and the person who finds out is the technician who was never sent
+the job.
+
+**If it is wrong.** A destination that is misconfigured rather than merely down
+produces a row that retries every round for ever, and nothing on any screen says
+so yet. The failure is quiet in the wrong direction: the system looks busy and a
+ticket is going nowhere. The fix is a panel on the overview (ADR-063), not a cap.
+
+**Look at.** [ADR-068 §4](adr/0068-a-ticket-that-was-dispatched-and-a-ticket-that-arrived.md),
+`src/pdm/sinks/service.py`,
+`tests/sinks/test_a_destination_that_says_no.py::TestARefusedTicketComesBackNextRound`.
+
+---
+
 # What still stops and waits for a person
 
 Two things, per [ADR-052](adr/0052-what-review-was-protecting-and-what-it-was-not.md).
