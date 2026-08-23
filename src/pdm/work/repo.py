@@ -47,7 +47,7 @@ _COLUMNS = """
     blocked_minutes, blocked_reason, outcome, technician_feedback
 """
 
-OPEN_STATUSES = ("queued", "assigned", "in_progress", "handed_over")
+OPEN_STATUSES = ("queued", "proposed", "assigned", "in_progress", "handed_over")
 
 # The same columns, qualified, for the one query that joins `finding` - which
 # carries a machine_id, a severity, an eta and a status of its own. Derived from
@@ -181,12 +181,50 @@ def open_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
         cur.execute(
             f"""
             SELECT work_order_ref, created_at, {_COLUMNS} FROM work_order
-             WHERE status IN ('queued', 'assigned', 'in_progress', 'handed_over')
+             WHERE status IN ('queued', 'proposed', 'assigned', 'in_progress', 'handed_over')
              ORDER BY created_at, work_order_ref
             """
         )
         rows = cur.fetchall()
     return [(str(row["work_order_ref"]), _to_order(dict(row)), row["created_at"]) for row in rows]
+
+
+def assigned_to(conn: Connection[Any], user: UserId) -> list[tuple[str, WorkOrder]]:
+    """This person's own live work, in the order layer 3 put it in (ADR-071 §7).
+
+    **Read from the orders rather than from a recomputed round.** The technician's
+    screen used to filter `round.placed`, and `dispatch()` considers only orders
+    whose status is `queued` - so a job left that list at the instant a round
+    wrote it, which is the instant the system decided to give it to somebody. The
+    rehearsal could not see it because it stops `worker-runtime` while the screen
+    checks run.
+
+    `priority_score` is the copy layer 3 froze onto the order when it placed it,
+    so this ordering is the ranking as it was decided and not as it would be
+    decided now. That is deliberate (design.md 6.2): a queue that re-ranked on
+    every page load would re-order itself under a technician already walking to a
+    machine. `created_at` breaks ties so two jobs scored the same never swap
+    places between refreshes.
+
+    `proposed` is absent, and that is the second half of ADR-071 §7: work nobody
+    has confirmed is not this person's, and the query that fixes the disappearing
+    job is the one that keeps unapproved work off the screen.
+
+    Bounded by the same fact `open_orders` relies on - open work orders are jobs
+    somebody has to do - so there is no index on `assignees` and no LIMIT here.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT work_order_ref, {_COLUMNS} FROM work_order
+             WHERE status IN ('assigned', 'in_progress', 'handed_over')
+               AND assignees @> %s
+             ORDER BY priority_score DESC, created_at, work_order_ref
+            """,
+            (Jsonb([{"user": str(user)}]),),
+        )
+        rows = cur.fetchall()
+    return [(str(row["work_order_ref"]), _to_order(dict(row))) for row in rows]
 
 
 def for_finding(conn: Connection[Any], finding_ref: FindingRef) -> list[tuple[str, WorkOrder]]:

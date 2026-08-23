@@ -73,7 +73,13 @@ The web app is at **http://localhost:3000**, the API at
    (ADR-064). This is where ADR-003 stops being a claim: nothing reaches a
    technician that a person did not approve. **See the note below about what the
    queue contains.**
-4. **Sign in as `tech-1`** → **งานของคุณ** (`/work`). One job, why it exists, why
+4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
+   **งานที่รอคุณยืนยัน**. Every placement a round decides waits here for the
+   shift lead, which is what the advisor asked for on 2026-08-23 - a person
+   presses first, and automatic approval is a switch to be thrown later on
+   evidence (ADR-071). Confirm one and it becomes the technician's; reject it
+   with a reason and it is back in the queue for the next round.
+5. **Sign in as `tech-1`** → **งานของคุณ** (`/work`). One job, why it exists, why
    it is ranked where it is, its steps, and closing it in two taps (ADR-061,
    ADR-062). Open this one on a phone if there is one in the room; it is built
    for a screen at a machine, without JavaScript.
@@ -92,7 +98,9 @@ Say these rather than letting somebody find them.
   `seed_demo.py` deliberately creates neither. It is the script an operator
   reruns on the plant's machine, and inventing technicians there would be the
   same defect as inventing signals (ADR-032, ADR-044 §5). A demo roster is a
-  separate thing that does not exist yet.
+  separate thing that does not exist yet. With one, step 4 above comes first:
+  `policy.yaml` ships `confirmation: supervisor`, so a technician's screen says
+  the work is waiting on their shift lead until somebody confirms it.
 - **Every work order in this demo is about a machine that is not there.**
   `SIGNAL_SOURCE=synthetic` in `.env.example`, and `worker-runtime` says so in a
   warning at boot. On screen a synthetic ticket is indistinguishable from a real

@@ -98,14 +98,21 @@ class WorkOrderOrigin(StrEnum):
 class WorkOrderStatus(StrEnum):
     """Work order lifecycle.
 
-    Derived rather than quoted: no ADR enumerates this set. HANDED_OVER is
-    required by ADR-025, and the rest follow the technician screens in ui.md
-    (a queue, a start button, a close button) plus the load gate holding orders
-    back (ADR-011). Worth confirming before layer 3 is built on it.
+    Mostly derived rather than quoted: HANDED_OVER is required by ADR-025, and
+    the rest follow the technician screens in ui.md (a queue, a start button, a
+    close button) plus the load gate holding orders back (ADR-011). This
+    docstring used to end "worth confirming before layer 3 is built on it", and
+    PROPOSED is what that confirmation turned up (ADR-071).
     """
 
     # Created and waiting. Includes orders the load gate is holding back.
     QUEUED = "queued"
+    # A round has decided who should do this and nobody has agreed to it yet
+    # (ADR-071). It consumes its assignees' capacity, no round touches it again,
+    # and it is not on anybody's screen as work: a supervisor confirms it into
+    # ASSIGNED, rejects it back to QUEUED, or it expires back to QUEUED on its
+    # own. Absent in `automatic` mode, where a round writes ASSIGNED directly.
+    PROPOSED = "proposed"
     # Assigned to technicians but not started.
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"

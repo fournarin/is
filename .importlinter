@@ -191,6 +191,10 @@ source_modules =
     # could reach a connection would be the second place layer 3 talks to the
     # database (ADR-059).
     pdm.dispatch.overrides
+    # Same again for the proposal record (ADR-071). It is the evidence about how
+    # often a shift lead agreed with the scheduler, and a module that could open
+    # a connection could be one that decides what it says by asking again.
+    pdm.dispatch.proposals
     pdm.triggers.domain
     pdm.triggers.trend
     pdm.retrieval.domain

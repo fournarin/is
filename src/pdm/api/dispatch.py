@@ -26,26 +26,37 @@ places anybody on anything; that is still the round's job, in worker-runtime.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, Rounds, Time, requires
+from pdm.api.deps import Confirming, Db, Plant, Rounds, Time, requires
 from pdm.contracts import (
     FindingKind,
     Role,
     Severity,
     WorkOrder,
     WorkOrderOrigin,
+    WorkOrderRef,
     WorkOrderStatus,
 )
 from pdm.dispatch import Band
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.overrides import Override, OverrideKind
+from pdm.dispatch.proposals import Proposal, ProposalState
+from pdm.dispatch.service import AlreadyAnswered, NoProposal
 from pdm.platform.auth.domain import Account
+from pdm.platform.config import Config
+
+# Layer 4, for one line in `confirm_proposal`. `.importlinter` bans `pdm.dispatch`
+# and `pdm.work` from importing this package at all and names only the workers
+# and this layer as allowed to (ADR-068) - which is what makes it possible for
+# the transaction that gives a technician a job to be the one that queues the
+# ticket, without layer 3 learning that a destination exists (ADR-071 §5).
+from pdm.sinks import repo as deliveries
 
 # Reading a Finding here is not the thing `.importlinter` forbids. That rule
 # names `pdm.dispatch` - layer 3's own code, which must schedule from the order
@@ -70,6 +81,11 @@ _MAY_OBJECT = _MAY_READ
 # ADR-024's table and ADR-011's sentence: the gate reports to the shift lead, and
 # taking work out of its hands is the shift lead's decision to defend.
 _MAY_RELEASE = (Role.SUPERVISOR,)
+
+# The press the advisor asked for on 2026-08-23 (ADR-071). Same role as the
+# release above and for the same reason: ADR-024 makes the shift lead the person
+# who answers for what the shift is sent to do.
+_MAY_CONFIRM = (Role.SUPERVISOR,)
 
 
 class Ranked(BaseModel):
@@ -188,6 +204,56 @@ class TicketView(BaseModel):
     recurrence: Recurrence | None = None
 
 
+class Mine(BaseModel):
+    """One job that is this person's now, as their screen lists it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    status: WorkOrderStatus
+    priority_score: float
+    priority_reason: str
+
+
+class ProposalView(BaseModel):
+    """One decision waiting for a supervisor (ADR-071).
+
+    Carries the round it was decided against rather than the round in front of
+    the reader. The two differ by up to one cadence and sometimes by more, and a
+    supervisor answering "should this go out" is answering about the shift the
+    scheduler saw - which is the whole reason those four columns are copied onto
+    the record (ADR-050, ADR-059).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    proposed_at: datetime
+    assignees: tuple[str, ...]
+    priority_score: float
+    priority_reason: str
+    band: str | None = None
+    load_ratio: float | None = None
+    shift_id: str | None = None
+    # When it goes back into the queue if nobody answers (ADR-071 §6). Computed
+    # here rather than shown as a duration, because "expires at 14:32" is a
+    # decision a person can make and "expires in a while" is not.
+    expires_at: datetime
+
+
+class ProposalAnswered(BaseModel):
+    """What was recorded, returned so the screen shows the record rather than a
+    hopeful message about one - the same argument as `OverrideRecorded`."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    state: ProposalState
+    at: datetime
+    by: str
+    reason: str | None = None
+
+
 class Objection(BaseModel):
     """The typed reason, required by the schema so the request never reaches the
     code that would have to decide what an empty one means."""
@@ -276,6 +342,158 @@ def current_round(
         ],
         unassigned=[Withheld(ref=one.ref, why=one.why) for one in decided.unassigned],
         held=[Withheld(ref=one.ref, why=one.why) for one in decided.held],
+    )
+
+
+@router.get("/work-orders/mine", response_model=list[Mine])
+def my_work(
+    conn: Db,
+    account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_my_work"))],
+) -> list[Mine]:
+    """This caller's own live work, ranked as layer 3 ranked it (ADR-071 §7).
+
+    **Registered before `/work-orders/{work_order_ref}`**, and it has to stay
+    there: Starlette matches in definition order, and behind the parameterised
+    route this would be a 404 for a work order called "mine".
+
+    Always the caller's own work and never a parameter, so there is nothing here
+    to leak and no reason to narrow it to technicians - an engineer who opens it
+    gets an empty list, which is the true answer.
+
+    It reads the orders. The screen used to filter `GET /dispatch/round`, which
+    computes what a round *would* decide, and `dispatch()` only ever places work
+    that is still `queued` - so a job disappeared from the technician's screen at
+    the moment a round wrote it. Nothing is `proposed` here either: work nobody
+    has confirmed is not this person's.
+    """
+    return [
+        Mine(
+            ref=ref,
+            status=order.status,
+            priority_score=order.priority_score,
+            priority_reason=order.priority_reason,
+        )
+        for ref, order in work.assigned_to(conn, account.user)
+    ]
+
+
+def _expires_at(proposal: Proposal, config: Config) -> datetime:
+    return proposal.proposed_at + timedelta(minutes=config.policy.dispatch.proposal_expires_minutes)
+
+
+def _proposed(proposal: Proposal, config: Config) -> ProposalView:
+    return ProposalView(
+        ref=proposal.work_order_ref,
+        proposed_at=proposal.proposed_at,
+        assignees=tuple(str(one.user) for one in proposal.assignees),
+        priority_score=proposal.priority_score,
+        priority_reason=proposal.priority_reason,
+        band=proposal.band.value if proposal.band is not None else None,
+        load_ratio=proposal.load_ratio,
+        shift_id=str(proposal.shift_id) if proposal.shift_id is not None else None,
+        expires_at=_expires_at(proposal, config),
+    )
+
+
+@router.get("/dispatch/proposals", response_model=list[ProposalView])
+def proposals(
+    conn: Db,
+    config: Plant,
+    account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_proposals"))],
+) -> list[ProposalView]:
+    """What the scheduler is waiting to be told about, oldest first.
+
+    Read by everybody who may be shown a ranking, for ADR-005's reason: a
+    technician who can see that their next job is waiting on an approval knows
+    something different from one whose screen is simply empty.
+
+    Read from the table rather than recomputed. A proposal is a decision that was
+    taken and written down, and the round that took it is gone (ADR-050); asking
+    `decide()` again would answer a different question - what a round would do
+    now, with those orders already out of the queue.
+    """
+    return [_proposed(one, config) for one in dispatch_repo.pending_proposals(conn)]
+
+
+def _answer(error: Exception) -> HTTPException:
+    """404 for a proposal that is not there, 409 for one somebody else settled."""
+    if isinstance(error, NoProposal):
+        return HTTPException(status.HTTP_404_NOT_FOUND, str(error))
+    return HTTPException(status.HTTP_409_CONFLICT, str(error))
+
+
+@router.post(
+    "/dispatch/proposals/{work_order_ref}/confirm",
+    response_model=ProposalAnswered,
+    status_code=status.HTTP_201_CREATED,
+)
+def confirm_proposal(
+    work_order_ref: str,
+    conn: Db,
+    clock: Time,
+    confirming: Confirming,
+    account: Annotated[Account, Depends(requires(*_MAY_CONFIRM, action="confirm_proposal"))],
+) -> ProposalAnswered:
+    """The press the advisor asked for: this goes out, to these people, now.
+
+    **The delivery is queued here**, in the request's transaction, and not by the
+    round that decided it. ADR-068 wrote the delivery row beside the placement so
+    that a ticket could never be somebody's job without something knowing it had
+    to go out; with a person in the middle, the transaction that makes it
+    somebody's job is this one (ADR-071 §5). Queued rather than sent: the worker
+    drains the outstanding rows, so a destination that is down delays a ticket
+    instead of failing a supervisor's button.
+    """
+    try:
+        confirming.confirm(conn, work_order_ref, by=account.user, role=account.role)
+    except (NoProposal, AlreadyAnswered) as error:
+        raise _answer(error) from error
+
+    at = clock.now()
+    deliveries.queue(conn, [WorkOrderRef(work_order_ref)], at=at)
+    return ProposalAnswered(
+        ref=work_order_ref, state=ProposalState.CONFIRMED, at=at, by=str(account.user)
+    )
+
+
+@router.post(
+    "/dispatch/proposals/{work_order_ref}/reject",
+    response_model=ProposalAnswered,
+    status_code=status.HTTP_201_CREATED,
+)
+def reject_proposal(
+    work_order_ref: str,
+    objection: Objection,
+    conn: Db,
+    clock: Time,
+    confirming: Confirming,
+    account: Annotated[Account, Depends(requires(*_MAY_CONFIRM, action="reject_proposal"))],
+) -> ProposalAnswered:
+    """Not this, and here is why - and the order is back in the queue at once.
+
+    No delivery is queued, because nothing became anybody's job. The next round
+    ranks the order against what is true then and may well propose the same
+    pairing again (ADR-071 §4); a second rejection with a second reason is
+    evidence about the score rather than a loop, and suppressing it would throw
+    away the only measurement of the score a real shift produces.
+    """
+    try:
+        confirming.reject(
+            conn,
+            work_order_ref,
+            by=account.user,
+            role=account.role,
+            reason=objection.reason,
+        )
+    except (NoProposal, AlreadyAnswered) as error:
+        raise _answer(error) from error
+
+    return ProposalAnswered(
+        ref=work_order_ref,
+        state=ProposalState.REJECTED,
+        at=clock.now(),
+        by=str(account.user),
+        reason=objection.reason,
     )
 
 

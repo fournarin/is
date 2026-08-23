@@ -52,6 +52,22 @@ dispatch:
   # scenarios measured here, an order of magnitude more than the model needs.
   # It is a ceiling, not a duration: an optimal answer stops the search.
   solver_seconds: 5.0
+  # Who makes a round's decision real (ADR-071). Provenance: recorded decision -
+  # the advisor was asked on 2026-08-23 who presses the button and answered that
+  # a person should at first, and that automatic approval is something to
+  # consider later once there is a record to judge it by.
+  #
+  # `supervisor` is the default because it is the mode that cannot lose work: a
+  # plant that meant to review and got automatic dispatch finds out from a
+  # technician who was sent somewhere nobody approved. `automatic` is the other
+  # value, and it is the behaviour every record before ADR-071 assumed.
+  confirmation: supervisor
+  # How long a proposal waits for an answer before it returns to the queue.
+  # Provenance: recorded decision, bounded by the round above and by the shift.
+  # Longer than one round, so nothing is swept before a supervisor has had a
+  # screen refresh to see it; far shorter than a shift, so nothing is confirmed
+  # against a world eight hours old. Thirty minutes is six rounds.
+  proposal_expires_minutes: 30
 
 # ── triggers (ADR-020, ADR-023) ────────────────────────────────────────────
 triggers:
