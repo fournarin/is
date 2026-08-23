@@ -17,3 +17,4 @@ Format: `YYYY-MM-DD HH:MM UTC · slice · outcome · PR`
 - 2026-08-22 16:46 UTC · slice 10.2 (#56) · the review screen: draft beside the page it came from, edit and approve with the diff stored, send back as a redraft, and review time measured with no clock on screen (ADR-064) · #69
 - 2026-08-22 17:10 UTC · slice 10.5 (#59, by hand) · the overview: the line to scale, held work named, and what the system cannot answer (ADR-065) · #70
 - 2026-08-22 20:18 UTC · slice 11.1 (#60) · Loop 1: the median of `repair_minutes` over closed jobs, capped at ADR-022's 20%, proposing and never writing (ADR-066); false alarms counted per rule · #71, left for a person as the issue asks
+- 2026-08-23 03:14 UTC · slice 12.1 (#73, by hand) · layer 4 gets its port: `TicketSink`, `OwnSystemSink`, and a delivery record that is at-least-once rather than fire-and-forget (ADR-068); dispatch and work may not import sinks at all · #79
