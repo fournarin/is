@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Seventy-two decisions, in the order they were made. Each records the context that
+Seventy-three decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -83,6 +83,7 @@ entries replace parts of earlier ones, and both are kept.
 | [070](0070-the-plant-has-a-cmms-and-what-that-changes.md) | The plant has a CMMS, and our own system is the floor rather than the plan | |
 | [071](0071-a-round-proposes-and-a-person-decides.md) | **A round proposes, and a person decides** | |
 | [072](0072-machine-health-is-read-not-a-source-of-work.md) | Machine health is something read, and never a source of work | |
+| [073](0073-what-a-false-alarm-may-propose-about-a-threshold.md) | What a false alarm may propose about a threshold, and what it may not | |
 
 ## Where to start
 

@@ -109,6 +109,28 @@ estimates:
   # rather than an edit here.
   max_change_ratio: 0.20
 
+# ── what the false alarms say a threshold should be (ADR-022, ADR-073) ─────
+# Provenance: recorded decision, both of them, and ADR-073 is the record. They
+# are deliberately not the two above, and section 4 of that record is the
+# argument: a count that is enough to reprice a job is not enough to loosen a
+# threshold layer 1 fires on.
+thresholds:
+  # Below this many closed orders behind a rule, nothing is proposed. Ten rather
+  # than the five above, because a separating threshold is decided by the two
+  # observations either side of it and every other order only says the boundary
+  # is not somewhere else - and because of which loop can afford to be wrong.
+  # A wrong estimate announces itself in the next batch of durations; a threshold
+  # moved too far is a fault that no longer fires, and nothing here reports that.
+  # The silent one gets the higher floor.
+  min_observations: 10
+  # How far one proposal may move a threshold, as a fraction of its magnitude.
+  # Half of ADR-022's bound for durations, for that same asymmetry and because
+  # rules.yaml says real thresholds come from the machine manuals: ten percent is
+  # about as far as an argument built from ten work orders carries against a
+  # document written by the people who built the machine. The schema refuses a
+  # larger value, so raising it is a new record rather than an edit here.
+  max_change_ratio: 0.10
+
 # ── retrieval (ADR-015) ────────────────────────────────────────────────────
 # Provenance: measured, but on somebody else's corpus. These come from the
 # author's earlier on-premise RAG system and are starting points, not universal

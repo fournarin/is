@@ -353,6 +353,34 @@ class EstimatePolicy(BaseModel):
         return self
 
 
+class ThresholdPolicy(BaseModel):
+    """The two numbers Loop 2 needs before it may say anything (ADR-073).
+
+    Deliberately not Loop 1's two. ADR-073 section 4 states why a count that is
+    enough to reprice a job is not enough to loosen a threshold: one loop's error
+    announces itself in the next batch of durations, and this one's error is a
+    fault that no longer fires, which nothing in this system will ever report.
+    """
+
+    model_config = _STRICT
+
+    # How many closed orders behind a rule before the loop proposes at all.
+    min_observations: int = Field(ge=2)
+    # How far one proposal may move a threshold, as a fraction of its magnitude.
+    max_change_ratio: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _one_cycle_may_not_move_further_than_adr_073_allows(self) -> ThresholdPolicy:
+        if self.max_change_ratio > 0.10:
+            raise ValueError(
+                f"ADR-073 bounds a threshold proposal at ten percent of the threshold's "
+                f"magnitude - half of what ADR-022 allows a duration, because a threshold "
+                f"comes from a machine manual and this loop's mistakes are silent - "
+                f"got {self.max_change_ratio}. Raising it is a new record, not a config edit"
+            )
+        return self
+
+
 class SinkPolicy(BaseModel):
     """Where a placed ticket goes (ADR-012, ADR-069).
 
@@ -384,6 +412,7 @@ class PolicyConfig(BaseModel):
     triggers: TriggerPolicy
     dispatch: DispatchPolicy
     estimates: EstimatePolicy
+    thresholds: ThresholdPolicy
     retrieval: RetrievalPolicy
     sinks: SinkPolicy
     # Rough estimates used when no playbook exists, so long-tail work still gets

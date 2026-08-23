@@ -22,6 +22,7 @@ from psycopg.types.json import Jsonb
 from pdm.contracts import (
     Assignee,
     BlockedReason,
+    FindingKind,
     FindingRef,
     MachineId,
     PlaybookStep,
@@ -35,6 +36,7 @@ from pdm.contracts import (
     WorkSegment,
 )
 from pdm.work.estimates import ClosedJob, FalseAlarmCount
+from pdm.work.thresholds import RuleFiring, RuleFirings
 
 # `actual_minutes` is absent on purpose: it is the sum of the segments, and a
 # stored copy could disagree with them (ADR-025).
@@ -575,3 +577,64 @@ def false_alarms(conn: Connection[Any]) -> list[FalseAlarmCount]:
             )
             for row in cur.fetchall()
         ]
+
+
+def firings_behind_rules(conn: Connection[Any]) -> list[RuleFirings]:
+    """The closed work behind every rule, with the reading each one fired on.
+
+    Loop 2's evidence (ADR-073). Read here rather than in `triggers/` for the
+    reason `false_alarms` is: the outcome lives on the work order, and a layer-1
+    module querying layer 2's table to find out what happened to its own Findings
+    is the coupling ADR-030 spends the `machine_id` copy to avoid.
+
+    **One row per closed order, never per occurrence.** ADR-023's suppression key
+    makes one Finding stand for an unbroken run of breaching samples, so a sensor
+    that flapped forty times is one Finding, one order and one observation here.
+    Counting `occurrence_count` would let that one sensor supply an entire
+    evidence set while the proposal read as though forty jobs supported it
+    (ADR-073 section 2).
+
+    A Finding whose evidence recorded no numeric reading is counted rather than
+    dropped: it is a gap in what layer 1 wrote down, and a set that quietly shrank
+    would look like a rule with less history than it has.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT o.work_order_ref, o.outcome, f.rule_id, f.kind,
+                   f.evidence -> 'value' AS reading
+              FROM work_order o
+              JOIN finding f ON f.finding_ref = o.finding_ref
+             WHERE o.status = 'closed' AND o.outcome IS NOT NULL
+             ORDER BY f.rule_id, o.work_order_ref
+            """
+        )
+        rows = cur.fetchall()
+
+    firings: dict[RuleId, list[RuleFiring]] = {}
+    missing: dict[RuleId, int] = {}
+    for row in rows:
+        rule_id = RuleId(str(row["rule_id"]))
+        firings.setdefault(rule_id, [])
+        missing.setdefault(rule_id, 0)
+        reading = row["reading"]
+        if not isinstance(reading, int | float) or isinstance(reading, bool):
+            missing[rule_id] += 1
+            continue
+        firings[rule_id].append(
+            RuleFiring(
+                work_order_ref=WorkOrderRef(str(row["work_order_ref"])),
+                outcome=WorkOutcome(str(row["outcome"])),
+                value=float(reading),
+                finding_kind=FindingKind(str(row["kind"])),
+            )
+        )
+
+    return [
+        RuleFirings(
+            rule_id=rule_id,
+            firings=tuple(firings[rule_id]),
+            without_a_reading=missing[rule_id],
+        )
+        for rule_id in sorted(firings)
+    ]
