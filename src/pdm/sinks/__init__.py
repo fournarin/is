@@ -8,6 +8,7 @@ round rather than something layer 3 does (ADR-068).
 """
 
 from pdm.sinks.domain import DeliveryFailed, Receipt, Ticket, TicketSink
+from pdm.sinks.file import FileSink
 from pdm.sinks.own_system import OwnSystemSink
 from pdm.sinks.service import Deliveries, DeliveryReport, describe
 
@@ -15,6 +16,7 @@ __all__ = [
     "Deliveries",
     "DeliveryFailed",
     "DeliveryReport",
+    "FileSink",
     "OwnSystemSink",
     "Receipt",
     "Ticket",

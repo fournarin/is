@@ -277,6 +277,30 @@ ticket is going nowhere. The fix is a panel on the overview (ADR-063), not a cap
 
 ---
 
+## 14. The destination is configuration; where it writes is not
+
+**Decided.** `policy.yaml` names the destination and holds no path. Where the
+`file` sink writes comes from `TICKET_DIR` in the environment, with no default,
+and `file` configured without it is a startup failure.
+
+**Why.** Which destination a site sends tickets to is a decision about how that
+plant works and belongs beside the load thresholds an operator reads. A host
+path is a fact about the machine the container runs on. Keeping them apart is
+what lets `policy.yaml` stay free of paths, and it is why the same config file
+can be read on a laptop and in the plant.
+
+**If it is wrong.** It is two places to look instead of one, and somebody
+configuring `file` for the first time meets an error rather than a working
+default. That is the intended trade - a guessed directory is a worker that
+starts healthy and writes tickets where nobody looks - but it is a real cost to
+whoever installs this, and the error message is the whole mitigation.
+
+**Look at.** [ADR-069 §1](adr/0069-the-destination-is-a-name-in-policy-and-a-path-in-the-environment.md),
+`config/policy.yaml::sinks`, `src/pdm/sinks/registry.py`,
+`tests/sinks/test_a_second_destination.py::TestAnUnknownDestinationStopsTheProcess`.
+
+---
+
 # What still stops and waits for a person
 
 Two things, per [ADR-052](adr/0052-what-review-was-protecting-and-what-it-was-not.md).

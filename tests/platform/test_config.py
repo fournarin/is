@@ -100,6 +100,10 @@ POLICY: dict[str, Any] = {
         "runtime": {"heartbeat_seconds": 10, "dead_after_seconds": 60},
         "authoring": {"heartbeat_seconds": 30, "dead_after_seconds": 900},
     },
+    # Required, and deliberately so: a policy file that named no destination
+    # would leave the choice to whatever the composition root defaulted to
+    # (ADR-069 section 2).
+    "sinks": {"destination": "own-system"},
 }
 
 
@@ -234,6 +238,17 @@ class TestPolicyRelationships:
         policy = _deep(POLICY)
         policy["estimates"]["max_change_ratio"] = 0.5
         with pytest.raises(ConfigError, match="twenty percent per cycle"):
+            load_config(_write(tmp_path, **{"policy.yaml": policy}))
+
+    def test_a_destination_this_build_does_not_have_stops_the_boot(self, tmp_path: Path) -> None:
+        """ADR-069 section 2. Never a quiet fall back to own-system: a plant that
+        configured `cmms` and got our own system would look like it was working,
+        and the tickets nobody was reading would be the first anybody heard of
+        it. Rejected here, before anything starts, because `config` is the
+        command a deployment runs first."""
+        policy = _deep(POLICY)
+        policy["sinks"]["destination"] = "cmms"
+        with pytest.raises(ConfigError, match="own-system"):
             load_config(_write(tmp_path, **{"policy.yaml": policy}))
 
     def test_a_model_without_a_fallback_estimate_stops_the_boot(self, tmp_path: Path) -> None:

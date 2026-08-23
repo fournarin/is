@@ -14,6 +14,7 @@ behaving as though it says 0.8.
 from __future__ import annotations
 
 from datetime import time
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -327,6 +328,28 @@ class EstimatePolicy(BaseModel):
         return self
 
 
+class SinkPolicy(BaseModel):
+    """Where a placed ticket goes (ADR-012, ADR-069).
+
+    A name, and only a name. Where the `file` destination writes comes from the
+    environment instead, because a host path is a deployment fact rather than a
+    plant policy - the argument ADR-019 makes for `STORAGE_DIR`, and the reason
+    this file has no paths in it anywhere.
+
+    The `Literal` repeats `NAMES` in `pdm/sinks/registry.py`, and cannot import
+    it: `pdm.platform` sits underneath everything and reaching up to `pdm.sinks`
+    would invert the package layout (ADR-030). The duplication is what lets
+    `python -m pdm.platform.config config` reject an unknown destination before
+    anything starts, and
+    `tests/sinks/test_a_second_destination.py::TestTheConfigAndTheRegistryAgree`
+    is what keeps the two lists in step.
+    """
+
+    model_config = _STRICT
+
+    destination: Literal["own-system", "file"]
+
+
 class PolicyConfig(BaseModel):
     model_config = _STRICT
 
@@ -337,6 +360,7 @@ class PolicyConfig(BaseModel):
     dispatch: DispatchPolicy
     estimates: EstimatePolicy
     retrieval: RetrievalPolicy
+    sinks: SinkPolicy
     # Rough estimates used when no playbook exists, so long-tail work still gets
     # a duration and stays in the queue instead of vanishing (design.md 3.2).
     fallback_minutes: dict[MachineModel, dict[Severity, int]]

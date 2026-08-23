@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Sixty-seven decisions, in the order they were made. Each records the context that
+Sixty-eight decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -79,6 +79,7 @@ entries replace parts of earlier ones, and both are kept.
 | [066](0066-what-the-finished-jobs-may-change-and-what-stops-them.md) | What the finished jobs may change, and what stops them | |
 | [067](0067-the-rehearsal-runs-inside-the-stack-it-rehearses.md) | The rehearsal runs inside the stack it rehearses | |
 | [068](0068-a-ticket-that-was-dispatched-and-a-ticket-that-arrived.md) | A ticket that was dispatched and a ticket that arrived are two facts | |
+| [069](0069-the-destination-is-a-name-in-policy-and-a-path-in-the-environment.md) | The destination is a name in policy and a path in the environment | |
 
 ## Where to start
 
