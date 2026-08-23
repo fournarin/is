@@ -38,7 +38,8 @@ from pdm.platform.config.loader import Config
 from pdm.platform.db import make_pool
 from pdm.platform.jobs import ClassTiming, JobClass, JobKind, JobQueue
 from pdm.signals import LINE_A_TWELVE_HOURS, Feed, SyntheticSource
-from pdm.sinks import Deliveries, OwnSystemSink
+from pdm.sinks import Deliveries
+from pdm.sinks.registry import build as build_sink
 from pdm.triggers import Triggers
 from pdm.work import WorkOrders
 from pdm.workers.loop import Worker
@@ -161,10 +162,19 @@ def main() -> None:
     )
 
     rounds = DispatchRounds(clock, config)
-    # One destination, chosen here and nowhere else (ADR-012, ADR-068). Slice
-    # 12.2 makes the choice configuration; until it does, hard-wiring it in the
-    # composition root is the honest form of "there is only one".
-    deliveries = Deliveries(OwnSystemSink(), clock)
+    # The destination `policy.yaml` asked for, resolved here and nowhere else
+    # (ADR-012, ADR-069). An unknown name raises before the first round rather
+    # than falling back, and `TICKET_DIR` has no default for the reason ADR-019
+    # gives `STORAGE_DIR` none.
+    ticket_dir = os.environ.get("TICKET_DIR", "").strip()
+    deliveries = Deliveries(
+        build_sink(
+            config.policy.sinks.destination,
+            clock=clock,
+            ticket_dir=Path(ticket_dir) if ticket_dir else None,
+        ),
+        clock,
+    )
     round_period = timedelta(seconds=config.policy.dispatch.round_seconds)
 
     # **No source, no trigger chain.** With nothing to read, a tick would do

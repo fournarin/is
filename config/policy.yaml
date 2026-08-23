@@ -169,3 +169,17 @@ jobs:
     # Fifteen minutes: the upper end of the 5-20 minute range ADR-017 gives for
     # ingest and drafting work, plus room for a slow model server.
     dead_after_seconds: 900
+
+# ── where a placed ticket goes (ADR-012, ADR-069) ──────────────────────────
+# Provenance: recorded decision. A name, and only a name. `own-system` puts the
+# ticket where the technician's screen already reads it; `file` writes one JSON
+# file per ticket into TICKET_DIR, which is set in the environment because a
+# host path is a deployment fact rather than a plant policy (ADR-019's argument
+# for STORAGE_DIR).
+#
+# A name this build does not have is a startup failure that says so, never a
+# quiet fall back to own-system: a plant that configured `cmms` and got our own
+# system would look like it was working, and the tickets nobody was reading
+# would be the first anybody heard of it.
+sinks:
+  destination: own-system
