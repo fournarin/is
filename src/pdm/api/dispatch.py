@@ -45,6 +45,7 @@ from pdm.contracts import (
 )
 from pdm.dispatch import Band
 from pdm.dispatch import repo as dispatch_repo
+from pdm.dispatch.agreement import AgreementReport, agreement
 from pdm.dispatch.overrides import Override, OverrideKind
 from pdm.dispatch.proposals import Proposal, ProposalState
 from pdm.dispatch.service import AlreadyAnswered, NoProposal
@@ -86,6 +87,13 @@ _MAY_RELEASE = (Role.SUPERVISOR,)
 # release above and for the same reason: ADR-024 makes the shift lead the person
 # who answers for what the shift is sent to do.
 _MAY_CONFIRM = (Role.SUPERVISOR,)
+
+# The confirmation record is about the shift lead rather than for them (ADR-075
+# section 6), so it is not on the technician's side of the house: a report of how
+# often somebody's decisions were overruled by nobody in particular is read by
+# the people who would act on it - the shift lead themselves, and the engineer
+# who would take it to the maintenance department with the switch in hand.
+_MAY_READ_THE_RECORD = (Role.SUPERVISOR, Role.ENGINEER)
 
 
 class Ranked(BaseModel):
@@ -413,6 +421,27 @@ def proposals(
     now, with those orders already out of the queue.
     """
     return [_proposed(one, config) for one in dispatch_repo.pending_proposals(conn)]
+
+
+@router.get("/dispatch/confirmations", response_model=AgreementReport)
+def confirmation_record(
+    conn: Db,
+    account: Annotated[Account, Depends(requires(*_MAY_READ_THE_RECORD, action="read_agreement"))],
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> AgreementReport:
+    """How far the shift lead and the scheduler agreed, and how much nobody answered.
+
+    The report the advisor's "ต้องดู performance ไปก่อน" asks for (ADR-071 §8),
+    to the shape ADR-075 fixed. It computes when asked and writes nothing, like
+    the gate's report beside it, and it returns the domain reading rather than a
+    view of one: the figures *are* the answer here, and a second shape for them
+    would be a second place to get a denominator wrong.
+
+    Both bounds are optional and neither has a default, because how much history
+    is enough to argue from belongs to the person arguing (ADR-071 §8).
+    """
+    return agreement(dispatch_repo.proposal_record(conn, since=since, until=until))
 
 
 def _answer(error: Exception) -> HTTPException:

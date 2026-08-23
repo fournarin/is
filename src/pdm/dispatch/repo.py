@@ -223,6 +223,41 @@ def pending_proposals(conn: Connection[Any]) -> list[Proposal]:
         return [_to_proposal(dict(row)) for row in cur.fetchall()]
 
 
+def proposal_record(
+    conn: Connection[Any], *, since: datetime | None = None, until: datetime | None = None
+) -> list[Proposal]:
+    """Every proposal in a window, oldest first, whatever became of it (ADR-075).
+
+    Pending rows are returned with the settled ones because a reading that
+    dropped them could not say how much of the record is still open, and a report
+    written on a quiet afternoon would look like a shift lead who had answered
+    everything.
+
+    The window is the caller's, and it has no default. How much history is enough
+    to argue from is exactly the judgement ADR-071 §8 refuses to let this project
+    make on a plant's behalf, and a default here would make it silently.
+
+    Bounded on `proposed_at` rather than `decided_at`: the question is what a
+    shift lead was asked during a stretch of time, and a proposal answered after
+    the window closed still belongs to the shift that was asked about it.
+    """
+    where = " AND ".join(
+        clause
+        for clause, wanted in (("proposed_at >= %s", since), ("proposed_at < %s", until))
+        if wanted is not None
+    )
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT {_PROPOSAL_COLUMNS} FROM dispatch_proposal
+            {f"WHERE {where}" if where else ""}
+             ORDER BY proposed_at, proposal_id
+            """,
+            tuple(one for one in (since, until) if one is not None),
+        )
+        return [_to_proposal(dict(row)) for row in cur.fetchall()]
+
+
 def pending_proposal(conn: Connection[Any], work_order_ref: str) -> Proposal | None:
     """The open question about one order, or None.
 
