@@ -129,6 +129,15 @@ services:
       # healthy and writes tickets where nobody will look. Setting the
       # destination to `file` without this is a startup failure that says so.
       TICKET_DIR: ${TICKET_DIR:-}
+      # Where the `cmms` destination sends, and what it authenticates with
+      # (ADR-070, ADR-074). Unset for the same two reasons as TICKET_DIR: the
+      # configured destination is `own-system`, and neither has a default in the
+      # code. Integration with the plant's work-order system is prepared, not
+      # delivered - the contract these point at is ours (ADR-070 §3), and a
+      # base URL guessed at somebody's endpoint would be a stack that starts
+      # healthy and sends tickets nowhere.
+      CMMS_BASE_URL: ${CMMS_BASE_URL:-}
+      CMMS_TOKEN: ${CMMS_TOKEN:-}
       SIGNAL_SEED: ${SIGNAL_SEED:-0}
     env_file:
       - path: .env

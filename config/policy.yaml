@@ -215,6 +215,12 @@ jobs:
 # host path is a deployment fact rather than a plant policy (ADR-019's argument
 # for STORAGE_DIR).
 #
+# `cmms` is the third and is deliberately not selected here. It is an adapter
+# written against a contract of our own (ADR-070 section 2, ADR-074), and until
+# somebody with access to the plant's work-order system confirms that contract,
+# naming it here would point the plant at a host nobody has checked - the
+# failure the paragraph below refuses, arriving by another route.
+#
 # A name this build does not have is a startup failure that says so, never a
 # quiet fall back to own-system: a plant that configured `cmms` and got our own
 # system would look like it was working, and the tickets nobody was reading

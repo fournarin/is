@@ -164,14 +164,18 @@ def main() -> None:
     rounds = DispatchRounds(clock, config)
     # The destination `policy.yaml` asked for, resolved here and nowhere else
     # (ADR-012, ADR-069). An unknown name raises before the first round rather
-    # than falling back, and `TICKET_DIR` has no default for the reason ADR-019
-    # gives `STORAGE_DIR` none.
+    # than falling back, and none of the three environment variables below has a
+    # default, for the reason ADR-019 gives `STORAGE_DIR` none: a worker pointed
+    # at a guessed directory or a guessed host starts healthy and delivers
+    # nowhere (ADR-074 §5).
     ticket_dir = os.environ.get("TICKET_DIR", "").strip()
     deliveries = Deliveries(
         build_sink(
             config.policy.sinks.destination,
             clock=clock,
             ticket_dir=Path(ticket_dir) if ticket_dir else None,
+            cmms_base_url=os.environ.get("CMMS_BASE_URL", "").strip() or None,
+            cmms_token=os.environ.get("CMMS_TOKEN", "").strip() or None,
         ),
         clock,
     )

@@ -21,12 +21,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from pdm.platform.clock import Clock
+from pdm.sinks.cmms import SCHEMES, CmmsSink, is_a_network_address
 from pdm.sinks.domain import TicketSink
 from pdm.sinks.file import FileSink
 from pdm.sinks.own_system import OwnSystemSink
 
 # The destinations this build can reach. `SinkPolicy.destination` repeats them.
-NAMES = ("own-system", "file")
+#
+# `cmms` being here is not a claim that the plant's system is reachable. It is
+# an adapter written against a contract of our own (ADR-070 §2, ADR-074), and
+# `policy.yaml` keeps `own-system` until somebody with access says otherwise.
+NAMES = ("own-system", "file", "cmms")
 
 
 class UnknownDestination(Exception):
@@ -43,7 +48,25 @@ class TicketDirectoryNotSet(Exception):
     """
 
 
-def build(name: str, *, clock: Clock, ticket_dir: Path | None = None) -> TicketSink:
+class CmmsEndpointNotSet(Exception):
+    """`cmms` was configured and the environment does not say where, or with what.
+
+    The same argument as `TicketDirectoryNotSet`, one destination further out
+    (ADR-069 §1, ADR-074 §5): an endpoint and a credential are deployment facts
+    with no sensible default, and a sink pointed at a guessed host looks healthy
+    while writing nowhere. The scheme is checked here too, because `urllib`
+    would open a `file://` base URL as readily as an address.
+    """
+
+
+def build(
+    name: str,
+    *,
+    clock: Clock,
+    ticket_dir: Path | None = None,
+    cmms_base_url: str | None = None,
+    cmms_token: str | None = None,
+) -> TicketSink:
     """The destination `policy.yaml` asked for, or a failure that says why."""
     if name == "own-system":
         return OwnSystemSink()
@@ -54,7 +77,31 @@ def build(name: str, *, clock: Clock, ticket_dir: Path | None = None) -> TicketS
                 "see the worker services in docker-compose.yml"
             )
         return FileSink(ticket_dir, clock)
+    if name == "cmms":
+        return _cmms(cmms_base_url, cmms_token)
     raise UnknownDestination(
         f"policy.yaml asks for destination {name!r}, which this build does not have. "
         f"Known destinations: {', '.join(NAMES)}"
     )
+
+
+def _cmms(base_url: str | None, token: str | None) -> CmmsSink:
+    """Three refusals, all of them before the first round rather than during it."""
+    if not base_url:
+        raise CmmsEndpointNotSet(
+            "destination 'cmms' needs CMMS_BASE_URL, and it has no default - "
+            "see the worker services in docker-compose.yml"
+        )
+    if not token:
+        raise CmmsEndpointNotSet(
+            "destination 'cmms' needs CMMS_TOKEN, and it has no default: a bearer "
+            "token is what the contract in ADR-074 authenticates with"
+        )
+    if not is_a_network_address(base_url):
+        raise CmmsEndpointNotSet(
+            f"CMMS_BASE_URL is {base_url!r}, which is not a network address. "
+            f"Accepted schemes: {', '.join(SCHEMES)} - a sink built on anything "
+            f"else would report every delivery as successful while writing to a "
+            f"local path (ADR-074 section 5)"
+        )
+    return CmmsSink(base_url, token=token)

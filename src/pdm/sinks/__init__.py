@@ -7,12 +7,14 @@ possible only because delivery is a step the composition root takes after a
 round rather than something layer 3 does (ADR-068).
 """
 
+from pdm.sinks.cmms import CmmsSink
 from pdm.sinks.domain import DeliveryFailed, Receipt, Ticket, TicketSink
 from pdm.sinks.file import FileSink
 from pdm.sinks.own_system import OwnSystemSink
 from pdm.sinks.service import Deliveries, DeliveryReport, describe
 
 __all__ = [
+    "CmmsSink",
     "Deliveries",
     "DeliveryFailed",
     "DeliveryReport",

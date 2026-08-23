@@ -73,19 +73,30 @@ class TestTheConfigAndTheRegistryAgree:
 
     @pytest.mark.parametrize("name", NAMES)
     def test_and_every_accepted_name_builds_something(self, name: str, tmp_path: Path) -> None:
-        sink = build(name, clock=SimulatedClock(NOW), ticket_dir=tmp_path)
+        sink = build(
+            name,
+            clock=SimulatedClock(NOW),
+            ticket_dir=tmp_path,
+            cmms_base_url="https://cmms.example",
+            cmms_token="a-token-that-exists-only-in-this-test",
+        )
         assert sink.destination == name
 
 
 class TestAnUnknownDestinationStopsTheProcess:
     def test_it_raises_rather_than_falling_back(self) -> None:
-        """Never a quiet fall back to own-system. A plant that configured `cmms`
-        and got our own system would look like it was working, and the tickets
-        nobody was reading would be the first anybody heard of it (ADR-069)."""
-        with pytest.raises(UnknownDestination) as raised:
-            build("cmms", clock=SimulatedClock(NOW))
+        """Never a quiet fall back to own-system. A plant that configured a name
+        this build does not have and got our own system would look like it was
+        working, and the tickets nobody was reading would be the first anybody
+        heard of it (ADR-069).
 
-        assert "cmms" in str(raised.value)
+        `cmms` was this test's unknown name until ADR-074 built it. A product
+        name that is not ours takes its place, which is the case that will keep
+        recurring."""
+        with pytest.raises(UnknownDestination) as raised:
+            build("maximo", clock=SimulatedClock(NOW))
+
+        assert "maximo" in str(raised.value)
         # And says what it does have, because the next thing somebody does is
         # look for the spelling they got wrong.
         assert "own-system" in str(raised.value)
