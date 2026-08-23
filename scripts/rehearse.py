@@ -16,6 +16,11 @@ unconditionally; neither can be booked until somebody can be sure the stack stil
 starts. `docs/demo.md` is the page to read afterwards - what to click, in what
 order, as whom.
 
+It needs room - something like ten gigabytes for the images, the build cache and
+the volumes together. A Docker daemon that meets a full disk mid-pull stops
+answering and has to be restarted, so `docker system df` first is cheaper than it
+looks.
+
 Nothing here is a substitute for CI. Every gate in `.github/workflows/ci.yml`
 still runs on every push; this covers the one seam those gates cannot reach.
 """
@@ -37,9 +42,16 @@ REPO = Path(__file__).resolve().parent.parent
 # `.env` - copying the example is the first thing its own header tells you to do
 # - so rehearsing against the example is rehearsing what a newcomer actually has.
 # A key that is missing from it then fails here rather than on their machine.
+#
+# `--progress` is chosen from whether anybody is watching. Compose redraws its
+# progress in a terminal and reprints it line by line when it is not in one, and
+# a redirected first run - every layer of three images, a line at a time - wrote
+# a log large enough to fill the disk and take the Docker daemon down with it.
 COMPOSE = [
     "docker",
     "compose",
+    "--progress",
+    "tty" if sys.stdout.isatty() else "quiet",
     "-f",
     "docker-compose.yml",
     "-f",
@@ -177,6 +189,8 @@ def main() -> int:
     # a check that is asserting on the ones it seeded itself. It is started at
     # the end, after the checks, because a demo wants it and the checks do not.
     say("Starting the stack (the first run builds two images and pulls three)")
+    if not sys.stdout.isatty():
+        print("  no terminal here, so Compose is quiet; this is the slow step")
     compose("up", "-d", "--build", "--scale", "worker-runtime=0")
 
     say("Waiting for the two addresses a person types")

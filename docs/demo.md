@@ -18,9 +18,14 @@ all seven containers up, seeds the accounts and the manuals, runs the four
 `web/check-*.py` screen checks in the order the seeding allows, seeds again over
 what those checks truncated, and leaves the stack running.
 
-Expect the first run to take a while - it builds two images and pulls three, one
-of which is over a gigabyte. It ends with four lines saying `ok` or `FAIL` and
-the output of each check above them.
+Expect the first run to take a while, and to need room: it builds two images and
+pulls three, and between the layers, the build cache and the volumes it wants
+**something like ten gigabytes free**. Finding that out the hard way costs more
+than a `docker system df` beforehand does - a Docker daemon that hits a full disk
+mid-pull stops answering and has to be restarted.
+
+It ends with four lines saying `ok` or `FAIL` and the output of each check above
+them.
 
 Without `--fresh` it reuses whatever volumes are already there, which is faster
 and proves less. The report says which of the two happened.
