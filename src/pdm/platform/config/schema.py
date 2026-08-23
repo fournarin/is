@@ -384,10 +384,11 @@ class ThresholdPolicy(BaseModel):
 class SinkPolicy(BaseModel):
     """Where a placed ticket goes (ADR-012, ADR-069).
 
-    A name, and only a name. Where the `file` destination writes comes from the
-    environment instead, because a host path is a deployment fact rather than a
-    plant policy - the argument ADR-019 makes for `STORAGE_DIR`, and the reason
-    this file has no paths in it anywhere.
+    A name, and only a name. Where the `file` destination writes, and where the
+    `cmms` destination sends, come from the environment instead, because a host
+    path and an endpoint are deployment facts rather than plant policy - the
+    argument ADR-019 makes for `STORAGE_DIR`, and the reason this file has no
+    paths in it anywhere.
 
     The `Literal` repeats `NAMES` in `pdm/sinks/registry.py`, and cannot import
     it: `pdm.platform` sits underneath everything and reaching up to `pdm.sinks`
@@ -400,7 +401,7 @@ class SinkPolicy(BaseModel):
 
     model_config = _STRICT
 
-    destination: Literal["own-system", "file"]
+    destination: Literal["own-system", "file", "cmms"]
 
 
 class PolicyConfig(BaseModel):

@@ -84,6 +84,7 @@ entries replace parts of earlier ones, and both are kept.
 | [071](0071-a-round-proposes-and-a-person-decides.md) | **A round proposes, and a person decides** | |
 | [072](0072-machine-health-is-read-not-a-source-of-work.md) | Machine health is something read, and never a source of work | |
 | [073](0073-what-a-false-alarm-may-propose-about-a-threshold.md) | What a false alarm may propose about a threshold, and what it may not | |
+| [074](0074-the-cmms-contract-is-ours-and-what-the-third-destination-may-promise.md) | The CMMS contract is ours, and what the third destination may promise | |
 
 ## Where to start
 

@@ -263,12 +263,15 @@ class TestPolicyRelationships:
 
     def test_a_destination_this_build_does_not_have_stops_the_boot(self, tmp_path: Path) -> None:
         """ADR-069 section 2. Never a quiet fall back to own-system: a plant that
-        configured `cmms` and got our own system would look like it was working,
-        and the tickets nobody was reading would be the first anybody heard of
-        it. Rejected here, before anything starts, because `config` is the
-        command a deployment runs first."""
+        configured a destination this build does not have and got our own system
+        would look like it was working, and the tickets nobody was reading would
+        be the first anybody heard of it. Rejected here, before anything starts,
+        because `config` is the command a deployment runs first.
+
+        The name used to be `cmms`, which this build now has (ADR-074). That it
+        had to be changed is the point of the test: the list is real."""
         policy = _deep(POLICY)
-        policy["sinks"]["destination"] = "cmms"
+        policy["sinks"]["destination"] = "maximo"
         with pytest.raises(ConfigError, match="own-system"):
             load_config(_write(tmp_path, **{"policy.yaml": policy}))
 
