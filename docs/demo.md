@@ -108,3 +108,6 @@ Say these rather than letting somebody find them.
   `/health` but signing in fails.
 - Ports 3000 and 8000 are published on the host. Another stack already using
   them is the most common reason the rehearsal reports that nothing answered.
+- A Docker daemon that met a full disk mid-pull stops answering altogether and
+  has to be restarted before anything here works. `docker system df` first, and
+  see the space this wants, above.

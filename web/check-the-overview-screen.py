@@ -222,8 +222,35 @@ def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary}"
 
 
+# The name the API sets. `SESSION_COOKIE` in src/pdm/api/deps.py.
+SESSION_COOKIE = "pdm_session"
+
+
+def session_token() -> str | None:
+    for cookie in jar:
+        if cookie.name == SESSION_COOKIE:
+            return cookie.value
+    return None
+
+
 def get(path: str, where: str = WEB) -> str:
-    with opener.open(f"{where}{path}") as response:
+    request = urllib.request.Request(f"{where}{path}")
+    if where != WEB:
+        # Reading the API directly means standing in for the Next server, which
+        # forwards this visitor's session cookie (web/lib/api.ts). The jar will
+        # not do it: the cookie was set for the web host and the API is a
+        # different one.
+        #
+        # That is only true in the topology this ships as. Published on
+        # localhost the two are one host and two ports, and cookies ignore the
+        # port - so the jar sent it by accident, and the check passed for a
+        # reason that has nothing to do with what it is testing. Running the
+        # checks inside the stack is what exposed it (ADR-067). The sibling
+        # check-sign-in.py has always done this deliberately.
+        token = session_token()
+        if token is not None:
+            request.add_header("cookie", f"{SESSION_COOKIE}={token}")
+    with opener.open(request) as response:
         return str(response.read().decode())
 
 
@@ -243,6 +270,12 @@ def sign_in(user: UserId) -> None:
     jar.clear()
     page = get("/sign-in")
     submit("/sign-in", hidden_fields(page), [("user", str(user)), ("password", PASSWORDS[user])])
+    # Signing in either worked or it did not, and the next thing this check does
+    # is read the API directly with whatever the jar holds. Without this line a
+    # sign-in that quietly failed surfaces several calls later as an unexplained
+    # 401 from a different host, which is what it did during the first
+    # rehearsals of the whole stack (ADR-067) and cost an hour to place.
+    expect(session_token() is not None, f"signing in as {user} left a session")
 
 
 def overrides_for(ref: str) -> list[str]:

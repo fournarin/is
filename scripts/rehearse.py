@@ -190,7 +190,7 @@ def main() -> int:
     # the end, after the checks, because a demo wants it and the checks do not.
     say("Starting the stack (the first run builds two images and pulls three)")
     if not sys.stdout.isatty():
-        print("  no terminal here, so Compose is quiet; this is the slow step")
+        print("  no terminal here, so Compose is quiet; this is the slow step", flush=True)
     compose("up", "-d", "--build", "--scale", "worker-runtime=0")
 
     say("Waiting for the two addresses a person types")

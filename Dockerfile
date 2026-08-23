@@ -32,6 +32,19 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ ./src/
 RUN uv sync --frozen --no-dev
 
+# The migrations ship inside the image, and `config/` deliberately does not.
+# They are two different kinds of thing: a migration is code, and the host that
+# runs `alembic upgrade head` must not need a checkout of this repository to do
+# it, while `config/` is the plant's own - lines, stations, shifts, thresholds -
+# and is bind-mounted read-only so that changing a threshold is not a rebuild.
+#
+# Their absence is what the first rehearsal found (ADR-067). The `migrate`
+# service had never once run: CI builds this image and never starts it, so
+# `alembic upgrade head` inside a container with no alembic.ini failed the first
+# time anybody asked the stack to come up, which was months after it was written.
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
+
 # The document volume mounts here. The directory has to exist in the image and
 # be owned by the runtime user *before* the volume is attached: Docker copies
 # the image's ownership onto a fresh named volume, and creates it root-owned if
