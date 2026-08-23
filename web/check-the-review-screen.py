@@ -51,7 +51,11 @@ from pdm.playbooks import repo as playbooks
 from pdm.retrieval import repo as index
 from pdm.retrieval.domain import Chunk, IndexedPage, PageOutcome
 
-WEB = "http://localhost:3000"
+# Where the screens are. The defaults are the ports docker-compose.yml publishes
+# on the host, which is what a person running this check by hand has. The
+# rehearsal runs it from inside the compose network instead, where the addresses
+# are service names (ADR-067).
+WEB = os.environ.get("PDM_WEB_URL", "http://localhost:3000")
 ENGINEER = UserId("eng-1")
 TECHNICIAN = UserId("tech-1")
 PASSWORD = "demo-engineer"

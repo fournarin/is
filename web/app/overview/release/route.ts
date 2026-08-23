@@ -15,6 +15,7 @@
 import type { NextRequest } from "next/server";
 
 import { callApi } from "@/lib/api";
+import { seeOther } from "@/lib/redirect";
 
 export async function POST(request: NextRequest): Promise<Response> {
   const form = await request.formData();
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const reason = String(form.get("reason") ?? "").trim();
 
   const back = (query: string): Response =>
-    Response.redirect(new URL(`/overview?${query}`, request.url), 303);
+    seeOther(`/overview?${query}`);
 
   if (ref === "") {
     return back(`error=${encodeURIComponent("ไม่รู้ว่าจะปล่อยงานไหน")}`);

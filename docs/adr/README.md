@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Sixty-six decisions, in the order they were made. Each records the context that
+Sixty-seven decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -77,6 +77,7 @@ entries replace parts of earlier ones, and both are kept.
 | [064](0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md) | What a reviewer may change, and what the review screen records | |
 | [065](0065-how-this-web-layer-submits-things.md) | How this web layer submits things | |
 | [066](0066-what-the-finished-jobs-may-change-and-what-stops-them.md) | What the finished jobs may change, and what stops them | |
+| [067](0067-the-rehearsal-runs-inside-the-stack-it-rehearses.md) | The rehearsal runs inside the stack it rehearses | |
 | [068](0068-a-ticket-that-was-dispatched-and-a-ticket-that-arrived.md) | A ticket that was dispatched and a ticket that arrived are two facts | |
 
 ## Where to start
