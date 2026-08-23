@@ -12,6 +12,12 @@ That writes `comparison.csv` - every run - and `comparison.md`, which is one
 reading of it. If you disagree with the reading, the rows are there to do your
 own.
 
+One exception, and it is named rather than quietly filed among the rest:
+`confirmations.md` reports a measurement that has no simulator behind it. Its
+rows come from a shift lead pressing confirm or reject on ADR-014's technician
+trial, which has not been run, so that file carries the method and the endpoint
+and states plainly that it has no figures yet (ADR-075).
+
 ## What was measured
 
 Four scheduling policies over the same simulated shifts:
@@ -147,3 +153,4 @@ condition a plant installs one for.
 | `comparison.csv` | every run: policy, buffer, arrival rate, seed, and the measures |
 | `comparison.md` | means over the seeds, arranged for reading |
 | `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn |
+| `confirmations.md` | how far the shift lead and the scheduler agree, and how much nobody answers - the method and the endpoint, with no figures until a trial has been run |
