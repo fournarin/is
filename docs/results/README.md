@@ -6,17 +6,22 @@ be reproduced from a clean checkout:
 ```
 uv run python scripts/compare_policies.py       # the table
 uv run python -m scripts.diagnose_comparison    # why it says what it says
+PYTHONPATH=. uv run python scripts/measure_health.py   # the health ranking
 ```
 
-That writes `comparison.csv` - every run - and `comparison.md`, which is one
+The first writes `comparison.csv` - every run - and `comparison.md`, which is one
 reading of it. If you disagree with the reading, the rows are there to do your
 own.
 
-One exception, and it is named rather than quietly filed among the rest:
-`confirmations.md` reports a measurement that has no simulator behind it. Its
+Two exceptions, both named rather than quietly filed among the rest.
+`confirmations.md` reports a measurement that has no simulator behind it: its
 rows come from a shift lead pressing confirm or reject on ADR-014's technician
 trial, which has not been run, so that file carries the method and the endpoint
-and states plainly that it has no figures yet (ADR-075).
+and states plainly that it has no figures yet (ADR-075). `health.md` prints
+rather than writes, like `measure_prediction.py` does, and the figures are copied
+into it by hand when they change - a measurement belongs in a document with a
+date on it, and a number that changes silently on every commit is a number
+nobody trusts.
 
 ## What was measured
 
@@ -154,3 +159,4 @@ condition a plant installs one for.
 | `comparison.md` | means over the seeds, arranged for reading |
 | `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn |
 | `confirmations.md` | how far the shift lead and the scheduler agree, and how much nobody answers - the method and the endpoint, with no figures until a trial has been run |
+| `health.md` | whether the history half of a health reading ranks the machines a generator degraded above the ones it left alone, and which half of the reading it says nothing about |

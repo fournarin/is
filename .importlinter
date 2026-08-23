@@ -25,6 +25,7 @@ source_modules =
     pdm.retrieval
     pdm.work
     pdm.dispatch
+    pdm.health
     pdm.sinks
     pdm.sim
     pdm.api
@@ -52,6 +53,50 @@ forbidden_modules =
 
 
 # ─────────────────────────────────────────────────────────────
+# ADR-072 sections 3 and 4 - health is read, and it is never a source of work
+# ─────────────────────────────────────────────────────────────
+[importlinter:contract:health-creates-no-work]
+name = health/ may reach contracts/ and nothing else (ADR-072, ADR-076)
+type = forbidden
+source_modules =
+    pdm.health
+forbidden_modules =
+    pdm.work
+    pdm.dispatch
+    pdm.triggers
+    pdm.playbooks
+    pdm.retrieval
+    pdm.sinks
+    pdm.llm
+    pdm.authoring
+    pdm.baselines
+    pdm.platform.db
+    psycopg
+# ADR-010's three origins stand, and this is what makes that structural rather
+# than remembered: a module that cannot reach the work service cannot issue an
+# order, however badly one screen wants a button. The database is on the list for
+# the reason the domain rule below puts it there - the arithmetic has to be
+# checkable against records written out by hand.
+
+
+[importlinter:contract:the-score-does-not-read-health]
+name = dispatch/ and work/ must not import health/ (ADR-072 section 4)
+type = forbidden
+source_modules =
+    pdm.dispatch
+    pdm.work
+forbidden_modules =
+    pdm.health
+# The other half of the same decision. Health ranks machines for a person
+# deciding what to look at; the score ranks work orders for a round deciding who
+# goes where, and health is partly computed from severity and downtime - the
+# score's own terms. A sixth term reading it would double-count them and would
+# change every figure in docs/results/comparison.md, so that slice 7.3's
+# measurements would describe a scheduler nobody had measured. A module that
+# cannot import health cannot become one.
+
+
+# ─────────────────────────────────────────────────────────────
 # Runtime must not depend on build time
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:runtime-not-depend-on-authoring]
@@ -75,6 +120,7 @@ source_modules =
     pdm.sim
 forbidden_modules =
     pdm.baselines
+    pdm.health
     pdm.signals
     pdm.triggers
     pdm.playbooks
@@ -109,6 +155,7 @@ forbidden_modules =
     pdm.sinks
     pdm.sim
     pdm.baselines
+    pdm.health
     pdm.api
     pdm.workers
 
@@ -200,6 +247,10 @@ source_modules =
     # often a shift lead agreed with the scheduler, and a module that could open
     # a connection could be one that decides what it says by asking again.
     pdm.dispatch.proposals
+    # ADR-076 section 7. On the list for the reason work.thresholds is: it is
+    # arithmetic somebody has to be able to check, and a version of it that could
+    # open a connection could also be a version that answers by asking again.
+    pdm.health.domain
     pdm.triggers.domain
     pdm.triggers.trend
     pdm.retrieval.domain
