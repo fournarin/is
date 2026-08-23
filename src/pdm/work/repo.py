@@ -25,12 +25,16 @@ from pdm.contracts import (
     FindingRef,
     MachineId,
     PlaybookStep,
+    RuleId,
+    SymptomCode,
     UserId,
     WorkOrder,
+    WorkOrderRef,
     WorkOrderStatus,
     WorkOutcome,
     WorkSegment,
 )
+from pdm.work.estimates import ClosedJob, FalseAlarmCount
 
 # `actual_minutes` is absent on purpose: it is the sum of the segments, and a
 # stored copy could disagree with them (ADR-025).
@@ -44,6 +48,12 @@ _COLUMNS = """
 """
 
 OPEN_STATUSES = ("queued", "assigned", "in_progress", "handed_over")
+
+# The same columns, qualified, for the one query that joins `finding` - which
+# carries a machine_id, a severity, an eta and a status of its own. Derived from
+# the list above rather than written out again, so a column added there cannot be
+# missing here and read back as a default.
+_COLUMNS_FOR_JOIN = ", ".join(f"o.{name.strip()}" for name in _COLUMNS.split(","))
 
 
 def _to_order(row: dict[str, Any]) -> WorkOrder:
@@ -452,3 +462,78 @@ def close(
             ),
         )
         return cur.rowcount == 1
+
+
+def closed_jobs_for(conn: Connection[Any], *, playbook_ref: str) -> list[ClosedJob]:
+    """Every closed order that was priced from one playbook, as evidence.
+
+    Joined to `finding` for the rule that raised it and for nothing else: the
+    rule is what a false alarm is a false alarm *of* (ADR-022). The join is left,
+    because scheduled and manual work has no Finding and dropping it would hide
+    the false alarms nobody's rule produced.
+
+    `repair_minutes` is not computed in SQL. It is `WorkOrder.repair_minutes`,
+    read off the reconstructed order, so the subtraction of blocked time has one
+    definition in this system rather than one here and one in the contract
+    (ADR-025).
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT o.work_order_ref, f.rule_id, {_COLUMNS_FOR_JOIN}
+              FROM work_order o
+              LEFT JOIN finding f ON f.finding_ref = o.finding_ref
+             WHERE o.status = 'closed' AND o.playbook_ref = %s
+             ORDER BY o.created_at, o.work_order_ref
+            """,
+            (playbook_ref,),
+        )
+        rows = cur.fetchall()
+
+    jobs = []
+    for row in rows:
+        work_order_ref = WorkOrderRef(str(row["work_order_ref"]))
+        rule = row.pop("rule_id")
+        jobs.append(
+            ClosedJob.from_order(
+                work_order_ref,
+                _to_order(row),
+                rule_id=RuleId(str(rule)) if rule is not None else None,
+            )
+        )
+    return jobs
+
+
+def false_alarms(conn: Connection[Any]) -> list[FalseAlarmCount]:
+    """How much of the closed work turned out to be nothing, per rule and symptom.
+
+    Counted here rather than in `triggers/`, where the rules live: the outcome is
+    on the work order, and a layer-1 module querying layer 2's table to find out
+    what happened to its own Findings is the coupling ADR-030 spends the
+    `machine_id` copy to avoid.
+
+    Ordered by count, because the question this answers is "which rule is sending
+    people out for nothing", and the answer is read from the top (ADR-060 orders
+    the authoring queue on the same argument).
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT f.symptom_code, f.rule_id, count(*) AS orders
+              FROM work_order o
+              LEFT JOIN finding f ON f.finding_ref = o.finding_ref
+             WHERE o.status = 'closed' AND o.outcome = 'no_problem_found'
+             GROUP BY f.symptom_code, f.rule_id
+             ORDER BY orders DESC, f.symptom_code NULLS LAST, f.rule_id NULLS LAST
+            """
+        )
+        return [
+            FalseAlarmCount(
+                symptom_code=(
+                    SymptomCode(str(row["symptom_code"])) if row["symptom_code"] else None
+                ),
+                rule_id=RuleId(str(row["rule_id"])) if row["rule_id"] else None,
+                orders=int(row["orders"]),
+            )
+            for row in cur.fetchall()
+        ]

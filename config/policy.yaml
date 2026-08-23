@@ -73,6 +73,26 @@ triggers:
     # rather than as one number that hides it.
     max_horizon_hours: 24
 
+# ── what the finished jobs say the estimate should be (ADR-006, ADR-066) ───
+# Provenance: recorded decision, both of them, and neither is a measurement -
+# there is no manual that says how many closed jobs make a duration trustworthy.
+# ADR-066 states the reasoning and is the record to revisit when this project has
+# enough closed work to measure either.
+estimates:
+  # Below this many usable closed jobs, nothing is proposed. Five is the smallest
+  # count that leaves two observations either side of the median, so one unusual
+  # morning cannot be the middle. It is an argument about the statistic, not a
+  # measurement of this plant, and it is deliberately on the cautious side: the
+  # cost of waiting is a stale estimate, and the cost of moving too early is a
+  # figure the scheduler prices every shift with.
+  min_observations: 5
+  # How far one proposal may move the estimate. ADR-022 set this bound, for the
+  # oscillation it prevents: the estimate feeds load_ratio, load_ratio decides
+  # which work is released, and which work is released decides which durations
+  # come back. The schema refuses a larger value, so raising it is a new record
+  # rather than an edit here.
+  max_change_ratio: 0.20
+
 # ── retrieval (ADR-015) ────────────────────────────────────────────────────
 # Provenance: measured, but on somebody else's corpus. These come from the
 # author's earlier on-premise RAG system and are starting points, not universal

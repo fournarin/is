@@ -301,6 +301,32 @@ class DispatchPolicy(BaseModel):
     solver_seconds: float = Field(gt=0)
 
 
+class EstimatePolicy(BaseModel):
+    """The two numbers Loop 1 needs before it may say anything (ADR-066).
+
+    Both are recorded decisions rather than measurements, and the reasoning is in
+    ADR-066. The validator below is the part that matters: ADR-022 bounds how far
+    one cycle may move an estimate, and a bound that lives only in a document is
+    one a later edit to this file can raise without anybody noticing.
+    """
+
+    model_config = _STRICT
+
+    # How many usable closed jobs before the loop proposes at all.
+    min_observations: int = Field(ge=2)
+    # How far one proposal may move the estimate, as a fraction of it.
+    max_change_ratio: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _one_cycle_may_not_move_further_than_adr_022_allows(self) -> EstimatePolicy:
+        if self.max_change_ratio > 0.20:
+            raise ValueError(
+                f"ADR-022 bounds the duration loop at plus or minus twenty percent per cycle, "
+                f"got {self.max_change_ratio}. Raising it is a new record, not a config edit"
+            )
+        return self
+
+
 class PolicyConfig(BaseModel):
     model_config = _STRICT
 
@@ -309,6 +335,7 @@ class PolicyConfig(BaseModel):
     load: LoadThresholds
     triggers: TriggerPolicy
     dispatch: DispatchPolicy
+    estimates: EstimatePolicy
     retrieval: RetrievalPolicy
     # Rough estimates used when no playbook exists, so long-tail work still gets
     # a duration and stays in the queue instead of vanishing (design.md 3.2).
