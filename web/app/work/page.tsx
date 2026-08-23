@@ -4,7 +4,7 @@ import { startWork } from "@/app/work/actions";
 import { DisagreeForm } from "@/app/work/disagree-form";
 import { bandFor, seenLine } from "@/lib/display";
 import { ROLE_NAMES, requireAccount } from "@/lib/session";
-import { currentRound, myWork, type Ticket } from "@/lib/work";
+import { currentRound, myWork, proposals, type Ticket } from "@/lib/work";
 
 /**
  * One job, not a menu.
@@ -30,15 +30,21 @@ export default async function WorkPage() {
     );
   }
 
-  const round = await currentRound();
-  const mine = await myWork(round, account.user);
+  const [round, mine] = await Promise.all([currentRound(), myWork()]);
 
   if (mine.length === 0) {
+    // "Nothing yet" and "waiting for your shift lead" are different sentences,
+    // and a screen that prints the first when it means the second tells a
+    // technician the system has no work for them when it has already decided
+    // otherwise (ADR-005, ADR-071 §7).
+    const waiting = (await proposals()).filter((one) => one.assignees.includes(account.user));
     return (
       <>
         <h1>งานของคุณ</h1>
         <p className="card">
-          ตอนนี้ยังไม่มีงานที่ถูกจัดให้คุณ รอบถัดไปคำนวณเมื่อ {round.summary}
+          {waiting.length > 0
+            ? `ระบบจัดงานให้คุณแล้ว ${waiting.length} งาน กำลังรอหัวหน้ากะยืนยัน`
+            : `ตอนนี้ยังไม่มีงานที่ถูกจัดให้คุณ รอบถัดไปคำนวณเมื่อ ${round.summary}`}
         </p>
         <p>
           <Link href="/">กลับหน้าแรก</Link>

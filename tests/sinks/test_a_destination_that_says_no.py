@@ -48,6 +48,7 @@ from pdm.sinks import repo as delivery
 from pdm.work import WorkOrders
 from pdm.work import repo as work
 from pdm.workers.runtime.handlers import dispatch_handler
+from tests.modes import automatic
 
 pytestmark = pytest.mark.db
 
@@ -61,6 +62,11 @@ ALL_SKILLS = frozenset(
     SkillId(name) for name in ("robot_mechanical", "robot_controls", "electrical", "hydraulics")
 )
 
+# These tests are about layer 4 and about a round meeting a database that moved
+# under it, neither of which is what ADR-071's confirmation step is for. They run
+# the plant in `automatic`, which is a supported mode rather than a convenience:
+# the supervisor path is asserted end to end in
+# `tests/dispatch/test_the_confirmation_gate.py`, where it is the subject.
 CONFIG = load_config(Path("config"))
 FALLBACK = {str(model): dict(rows) for model, rows in CONFIG.policy.fallback_minutes.items()}
 TIMING = ClassTiming(heartbeat_seconds=10, dead_after_seconds=60)
@@ -115,7 +121,7 @@ def clock() -> SimulatedClock:
 
 @pytest.fixture
 def rounds(clock: SimulatedClock) -> DispatchRounds:
-    return DispatchRounds(clock, CONFIG)
+    return DispatchRounds(clock, automatic(CONFIG))
 
 
 @pytest.fixture

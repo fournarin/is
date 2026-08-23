@@ -41,6 +41,7 @@ from pdm.sinks import repo as delivery
 from pdm.sinks.domain import DeliveryFailed, Ticket
 from pdm.sinks.registry import NAMES, TicketDirectoryNotSet, UnknownDestination, build
 from pdm.work import WorkOrders
+from tests.modes import automatic
 
 NOW = datetime(2026, 3, 3, 8, 0, tzinfo=UTC)  # 15:00 in Bangkok: the afternoon shift
 AFTERNOON = ShiftId("afternoon")
@@ -52,6 +53,11 @@ ALL_SKILLS = frozenset(
     SkillId(name) for name in ("robot_mechanical", "robot_controls", "electrical", "hydraulics")
 )
 
+# These tests are about layer 4 and about a round meeting a database that moved
+# under it, neither of which is what ADR-071's confirmation step is for. They run
+# the plant in `automatic`, which is a supported mode rather than a convenience:
+# the supervisor path is asserted end to end in
+# `tests/dispatch/test_the_confirmation_gate.py`, where it is the subject.
 CONFIG = load_config(Path("config"))
 FALLBACK = {str(model): dict(rows) for model, rows in CONFIG.policy.fallback_minutes.items()}
 
@@ -190,7 +196,7 @@ def _placed(conn: Connection[Any], clock: SimulatedClock) -> tuple[WorkOrderRef,
         )
         .ref
     )
-    report = DispatchRounds(clock, CONFIG).run(conn)
+    report = DispatchRounds(clock, automatic(CONFIG)).run(conn)
     assert report.placed == (ref,)
     return WorkOrderRef(ref), report
 

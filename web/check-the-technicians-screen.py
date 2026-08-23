@@ -57,6 +57,7 @@ from pdm.contracts import (
     UserId,
 )
 from pdm.dispatch import repo as dispatch_repo
+from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
@@ -73,8 +74,13 @@ from pdm.work import WorkOrders
 WEB = os.environ.get("PDM_WEB_URL", "http://localhost:3000")
 TECHNICIAN = UserId("tech-1")
 ENGINEER = UserId("eng-1")
+# The shipped configuration is `confirmation: supervisor` (ADR-071), so a
+# technician has nothing at all until somebody with this role presses confirm.
+# The check signs in as both, in that order, because that is the plant's order.
+SUPERVISOR = UserId("sup-1")
 PASSWORD = "demo-technician"
 ENGINEER_PASSWORD = "demo-engineer"
+SUPERVISOR_PASSWORD = "demo-supervisor"
 BOTTLENECK = MachineId("MC-012")
 R2000 = MachineModel("R-2000iC")
 SYM = SymptomCode("SYM-014")
@@ -119,7 +125,17 @@ def shift_now(config: object, now: datetime) -> tuple[ShiftId, datetime]:
     raise AssertionError("the shifts in plant.yaml do not cover the whole day")
 
 
-def seed() -> None:
+def seed() -> list[str]:
+    """The world the screen needs, **including a round that has actually run**.
+
+    This is the line the defect ADR-071 §7 records hid behind. The screen used
+    to filter what a fresh round *would* place, and `dispatch()` places only work
+    that is still `queued` - so the job was on the screen exactly as long as no
+    round had committed. Every check here passed because `scripts/rehearse.py`
+    scales `worker-runtime` to zero while they run, and nothing else ever ran one.
+
+    Returns what the round decided, so the supervisor below can answer it.
+    """
     url = os.environ["DATABASE_URL"]
     clock = SystemClock()
     now = clock.now()
@@ -138,6 +154,7 @@ def seed() -> None:
         for user, name, role, password in [
             (TECHNICIAN, "Somchai (technician)", Role.TECHNICIAN, PASSWORD),
             (ENGINEER, "Pranee (engineer)", Role.ENGINEER, ENGINEER_PASSWORD),
+            (SUPERVISOR, "Anan (supervisor)", Role.SUPERVISOR, SUPERVISOR_PASSWORD),
         ]:
             auth.create_account(conn, user=user, display_name=name, role=role, password=password)
 
@@ -216,8 +233,15 @@ def seed() -> None:
             reported_by=ENGINEER,
             description="weeping seal on the gearbox",
         )
+        report = DispatchRounds(clock, config).run(conn)
         conn.commit()
-    print(f"seeded: {shift_id} on {local.date()}, {len(STEPS)} steps")
+
+    print(
+        f"seeded: {shift_id} on {local.date()}, {len(STEPS)} steps; "
+        f"the round proposed {len(report.proposed)}"
+    )
+    assert report.proposed, "a round that proposed nothing leaves the screen with nothing to show"
+    return list(report.proposed)
 
 
 # ── driving the screen ────────────────────────────────────────────────────
@@ -290,13 +314,37 @@ def submit(
         return str(response.read().decode())
 
 
-def sign_in() -> None:
+def sign_in(user: UserId = TECHNICIAN, password: str = PASSWORD) -> None:
+    """Sign in as somebody, from nobody.
+
+    The jar is emptied first because `/sign-in` does not render a form to
+    somebody who already has a session - it sends them to their own screen - and
+    the hidden `$ACTION_*` field scraped from that page belongs to a different
+    form. Switching account is what a person does with a second browser or after
+    signing out, and this is the script's version of both.
+    """
+    jar.clear()
     page = get("/sign-in")
-    submit("/sign-in", hidden_fields(page), [("user", str(TECHNICIAN)), ("password", PASSWORD)])
+    submit("/sign-in", hidden_fields(page), [("user", str(user)), ("password", password)])
 
 
 def main() -> None:
-    seed()
+    proposed = seed()
+
+    print("\n0. before the shift lead answers, the technician has nothing - and is told why")
+    sign_in()
+    waiting = readable(get("/work"))
+    expect("รอหัวหน้ากะยืนยัน" in waiting, "the screen says the work is waiting on an approval")
+    expect("MC-012" not in waiting, "and no unconfirmed job is on it (ADR-071 §7)")
+
+    print("\n0b. the shift lead confirms, through their own screen")
+    sign_in(SUPERVISOR, SUPERVISOR_PASSWORD)
+    panel = readable(get("/overview"))
+    expect("งานที่รอคุณยืนยัน" in panel, "the supervisor is asked, by name, about each one")
+    for ref in proposed:
+        submit("/overview/confirm", [("ref", ref)])
+    expect("ไม่มีงานรอยืนยัน" in readable(get("/overview")), "and the list empties as they answer")
+
     sign_in()
 
     print("\n1. the queue shows one job, and says why it is that one")

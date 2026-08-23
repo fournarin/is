@@ -299,6 +299,101 @@ whoever installs this, and the error message is the whole mitigation.
 `config/policy.yaml::sinks`, `src/pdm/sinks/registry.py`,
 `tests/sinks/test_a_second_destination.py::TestAnUnknownDestinationStopsTheProcess`.
 
+## 15. The technician's screen was reading an opinion, not a fact
+
+**Decided.** `GET /work-orders/mine` reads the orders a person actually holds.
+The screen used to filter `round.placed` from `/dispatch/round`, which computes
+what a round *would* decide - and `dispatch()` places only work that is still
+`queued`, so a job left that list at the instant a round wrote it.
+
+**Why.** Work somebody has to act on must be read from what was written down. A
+recomputed round is the right answer to "what is the gate holding" (ADR-050) and
+the wrong one to "what is mine", and the two agreed only while no round had
+committed.
+
+**If it is wrong.** The ranking a technician sees is now a snapshot, frozen at
+placement, so a shift that changes underneath them does not re-order their
+queue. That is design.md 6.2 and it is deliberate, but it means a job whose
+urgency has moved keeps the rank it was given - the next round cannot fix it,
+because a round does not touch work somebody holds (ADR-045 §4).
+
+**Look at.** [ADR-071 §7](adr/0071-a-round-proposes-and-a-person-decides.md),
+`src/pdm/work/repo.py::assigned_to`,
+`tests/dispatch/test_the_confirmation_gate.py::TestTheJobStaysOnTheScreenAfterARound`.
+The defect survived three screen checks because `scripts/rehearse.py` stops
+`worker-runtime` while they run.
+
+## 16. A supervisor confirms every placement, and the switch off it has no threshold
+
+**Decided.** `dispatch.confirmation: supervisor` is the shipped default. A round
+writes `proposed`, a shift lead confirms or rejects with a reason, and an
+unanswered proposal returns to the queue after `proposal_expires_minutes`.
+`automatic` is the other supported mode and writes `assigned` as before.
+
+**Why.** The advisor was asked on 2026-08-23 who presses the button and answered
+that a person should at first, with automatic approval as something to consider
+later "once there is a record to judge it by". The record is
+`dispatch_proposal`: what the scheduler said, what the shift lead said, how long
+they took, and how much nobody answered.
+
+**If it is wrong.** The confirmation step is a person in the path of every
+ticket, and a shift lead who does not reach the screen is a queue that stops
+moving - the expiry sweep bounds the damage but does not remove it. The
+mitigation is that the mode is one line of configuration and the code path is
+shared, so a plant that finds it intolerable changes a word.
+
+**No threshold is written down for when to switch**, and that is the decision
+rather than an omission: a number deciding when a plant may stop reviewing its
+own work orders is not one this project may invent before it has measured
+anything.
+
+**Look at.** [ADR-071](adr/0071-a-round-proposes-and-a-person-decides.md),
+`config/policy.yaml::dispatch`, `src/pdm/dispatch/service.py::Confirmations`,
+`tests/dispatch/test_the_confirmation_gate.py`.
+
+## 17. A rejected proposal is proposed again, on purpose
+
+**Decided.** Rejecting returns the order to `queued` immediately. Nothing is
+suppressed, no cooling window is applied, and the next round may propose the
+same pairing to the same person.
+
+**Why.** "Not this person, not now" is a fact about a world that changes every
+five minutes. If the round proposes it again, nothing has changed and the answer
+is still the right one; a second rejection with a second reason is evidence
+about the score that Loop 6 can replay. Any cooling window would be a constant
+with no measurement behind it, which `policy.yaml` refuses everywhere else.
+
+**If it is wrong.** A shift lead can be asked the same question repeatedly on a
+shift where the world genuinely is not moving, which is annoying in exactly the
+place annoyance costs most. The signal is visible in the record - repeated
+rejections of one pairing - and the fix would be a scoring change rather than a
+suppression rule.
+
+**Look at.** [ADR-071 §4](adr/0071-a-round-proposes-and-a-person-decides.md),
+`tests/dispatch/test_the_confirmation_gate.py::TestRejecting::test_the_next_round_proposes_it_again_and_that_is_the_decision`.
+
+## 18. The CMMS question is closed, and our own system is what gets finished
+
+**Decided.** The plant has a work-order system. The intended destination is
+therefore that system; our own screens are the guaranteed floor, and a CMMS
+adapter is written against a contract we define and test against a fake.
+
+**Why.** The advisor's answer carried a fallback clause - integrate, *or at
+least have somewhere this ticket is displayed* - and the second half is a
+requirement this project can meet with no access to anybody's system. Writing an
+adapter against a guess at somebody's SAP PM interface would produce code that
+looks finished and cannot be discovered to be wrong until the slice that would
+have built the real one is gone.
+
+**If it is wrong.** If access is granted early and easily, a term was spent
+building screens the plant would not have needed. That is the trade taken
+deliberately: the screens are also what the technician trial (ADR-014) runs on,
+and they are the only part of layer 4 whose completion does not depend on
+somebody outside this project.
+
+**Look at.** [ADR-070](adr/0070-the-plant-has-a-cmms-and-what-that-changes.md),
+[ADR-012](adr/0012-tickets-leave-through-an-adapter.md), `src/pdm/sinks/`.
+
 ---
 
 # What still stops and waits for a person

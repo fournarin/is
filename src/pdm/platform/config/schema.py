@@ -300,6 +300,31 @@ class DispatchPolicy(BaseModel):
     # feasible schedule it found, and a round that has not found one falls back
     # to the ranked queue rather than returning nothing.
     solver_seconds: float = Field(gt=0)
+    # Who makes a round's decision real (ADR-071). `supervisor` writes proposals
+    # a shift lead confirms; `automatic` writes assignments, which is what every
+    # record before ADR-071 assumed. Not a boolean: the two are named because
+    # they are read by an operator in a file they are expected to understand,
+    # and `confirmation: false` says nothing about who is then deciding.
+    confirmation: Literal["supervisor", "automatic"] = "supervisor"
+    # How long a proposal may wait for an answer before it goes back into the
+    # queue (ADR-071 section 6). Swept at the start of each round: a supervisor
+    # who goes home must not leave a shift committed to work nobody agreed to,
+    # because the gate reads that shift as full and holds back everything behind
+    # it - ADR-023's argument about Findings, one layer up.
+    proposal_expires_minutes: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _a_proposal_outlives_the_round_that_made_it(self) -> DispatchPolicy:
+        """A window shorter than a round sweeps proposals a supervisor has not
+        had one refresh of the screen to see, and would look from the outside
+        like a scheduler that keeps changing its mind."""
+        if self.proposal_expires_minutes * 60 <= self.round_seconds:
+            raise ValueError(
+                f"proposal_expires_minutes ({self.proposal_expires_minutes}) must be longer "
+                f"than one round ({self.round_seconds}s), or proposals expire before anybody "
+                f"has seen them"
+            )
+        return self
 
 
 class EstimatePolicy(BaseModel):

@@ -14,7 +14,7 @@ from fastapi import Cookie, Depends, HTTPException, Request, status
 from psycopg import Connection
 
 from pdm.contracts import Role
-from pdm.dispatch.service import DispatchRounds
+from pdm.dispatch.service import Confirmations, DispatchRounds
 from pdm.platform.auth.domain import Account, NotAuthenticated, NotAuthorised
 from pdm.platform.auth.service import Authentication
 from pdm.platform.clock import Clock
@@ -101,6 +101,18 @@ def dispatch_rounds(request: Request) -> DispatchRounds:
     return rounds
 
 
+def confirmations(request: Request) -> Confirmations:
+    """The half of layer 3 that is a person (ADR-071).
+
+    The exception to the sentence above `dispatch_rounds`: the API writes no
+    *placement*, and a supervisor confirming one is not the API deciding
+    anything - it is the API recording a decision somebody made, in the request
+    that made it. Rounds still run only in worker-runtime.
+    """
+    confirming: Confirmations = request.app.state.confirmations
+    return confirming
+
+
 def current_account(
     conn: Annotated[Connection[Any], Depends(connection)],
     auth: Annotated[Authentication, Depends(authentication)],
@@ -119,6 +131,7 @@ Auth = Annotated[Authentication, Depends(authentication)]
 Time = Annotated[Clock, Depends(clock)]
 Plant = Annotated[Config, Depends(plant)]
 Rounds = Annotated[DispatchRounds, Depends(dispatch_rounds)]
+Confirming = Annotated[Confirmations, Depends(confirmations)]
 
 
 def requires(*roles: Role, action: str):  # type: ignore[no-untyped-def]

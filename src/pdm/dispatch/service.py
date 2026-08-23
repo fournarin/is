@@ -18,15 +18,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from psycopg import Connection
 
-from pdm.contracts import ShiftDefinition, shift_at
+from pdm.contracts import Role, ShiftDefinition, UserId, WorkOrderStatus, shift_at
 from pdm.dispatch import repo
 from pdm.dispatch.domain import Queued, Round, dispatch
+from pdm.dispatch.proposals import Proposal, ProposalState
 from pdm.platform.clock import Clock
 from pdm.platform.config.loader import Config
 from pdm.work import repo as work_repo
@@ -49,12 +50,27 @@ class RoundReport:
     round: Round
     placed: tuple[str, ...] = ()
     moved_on: tuple[str, ...] = field(default=())
+    # Decided and waiting for a supervisor (ADR-071). Kept apart from `placed`
+    # because layer 4 is handed the second one and must not be handed this one:
+    # a ticket nobody has approved must not reach a CMMS, and the difference
+    # between the two lists is the whole of that guarantee at this seam.
+    proposed: tuple[str, ...] = field(default=())
+    # Proposals this round swept because nobody answered them, and whose orders
+    # are back in the queue it then ranked.
+    expired: tuple[str, ...] = field(default=())
 
     @property
     def worth_reporting(self) -> bool:
         """A quiet round is the normal case - one every five minutes, for ever -
         and a line each would bury the rounds that did something."""
-        return bool(self.placed or self.moved_on or self.round.held or self.round.unassigned)
+        return bool(
+            self.placed
+            or self.proposed
+            or self.expired
+            or self.moved_on
+            or self.round.held
+            or self.round.unassigned
+        )
 
 
 class DispatchRounds:
@@ -77,21 +93,81 @@ class DispatchRounds:
         )
 
     def run(self, conn: Connection[Any]) -> RoundReport:
-        """Decide and write, in the caller's transaction."""
+        """Sweep, decide and write, in the caller's transaction."""
+        expired = self._sweep(conn)
         decided = self.decide(conn)
 
+        # The one line where the two confirmation modes differ (ADR-071 §2).
+        # Everything above it - the sweep, the queue, the gate, the score, the
+        # crewing - has already happened identically.
+        holds_for_a_person = self.config.policy.dispatch.confirmation == "supervisor"
+        status = WorkOrderStatus.PROPOSED if holds_for_a_person else WorkOrderStatus.ASSIGNED
+
         placed: list[str] = []
+        proposed: list[str] = []
         moved_on: list[str] = []
         for placement in decided.placed:
             # Only an order still queued is written. Work somebody accepted
             # between this round's read and its write keeps its assignee
             # (ADR-045 §4), and the round says how many it let go rather than
             # reporting a placement that did not happen.
-            (placed if repo.place(conn, placement) else moved_on).append(placement.ref)
+            if not repo.place(conn, placement, status=status):
+                moved_on.append(placement.ref)
+                continue
+            if not holds_for_a_person:
+                placed.append(placement.ref)
+                continue
+            repo.propose(
+                conn,
+                Proposal(
+                    work_order_ref=placement.ref,
+                    proposed_at=decided.at,
+                    assignees=placement.assignees,
+                    priority_score=placement.priority_score,
+                    priority_reason=placement.priority_reason,
+                    # The round it was decided against, copied on because a round
+                    # is never stored (ADR-050) and six weeks later there is
+                    # nothing else to read the decision back against.
+                    band=decided.band,
+                    load_ratio=decided.load_ratio,
+                    shift_id=decided.shift_id,
+                    on_date=decided.on_date,
+                ),
+            )
+            proposed.append(placement.ref)
 
         return RoundReport(
-            at=decided.at, round=decided, placed=tuple(placed), moved_on=tuple(moved_on)
+            at=decided.at,
+            round=decided,
+            placed=tuple(placed),
+            moved_on=tuple(moved_on),
+            proposed=tuple(proposed),
+            expired=expired,
         )
+
+    def _sweep(self, conn: Connection[Any]) -> tuple[str, ...]:
+        """Return the orders nobody answered for to the queue (ADR-071 §6).
+
+        Before `decide`, and in the round's transaction, so the queue the round
+        is handed already contains what the sweep let go rather than seeing it
+        one cadence later.
+
+        **It runs in `automatic` too**, where no round writes a proposal. A plant
+        that switches the mode mid-shift would otherwise strand every open
+        proposal in a status only a confirmation can leave, holding its
+        technicians' minutes against a screen that has stopped asking about them -
+        a shift that reads full for work nobody will ever be sent to do. Sweeping
+        unconditionally costs one indexed query against an empty partial index.
+        """
+        now = self.clock.now()
+        cutoff = now - timedelta(minutes=self.config.policy.dispatch.proposal_expires_minutes)
+        refs = repo.expire_proposals(conn, proposed_before=cutoff, at=now)
+        # Only what was actually returned. `return_to_queue` writes nothing to an
+        # order that is no longer `proposed`, which is the narrow case of a
+        # supervisor confirming one in the instant this sweep ran: the work stays
+        # theirs, and the round does not report having released it. One process
+        # runs rounds (ADR-026), so this is the only writer the sweep races with.
+        return tuple(ref for ref in refs if repo.return_to_queue(conn, ref))
 
     def decide(self, conn: Connection[Any]) -> Round:
         """What a round would do, without doing any of it (ADR-050).
@@ -137,6 +213,98 @@ def describe(report: RoundReport) -> str:
     """The sentence ADR-011 kept the gate separate in order to be able to write,
     plus what became of the decision once it met the database."""
     parts = [report.round.summary]
+    if report.proposed:
+        parts.append(f"{len(report.proposed)} waiting for a supervisor to confirm")
+    if report.expired:
+        parts.append(f"{len(report.expired)} proposal(s) expired unanswered and are queued again")
     if report.moved_on:
         parts.append(f"{len(report.moved_on)} were accepted while the round was deciding")
     return "; ".join(parts)
+
+
+class NoProposal(LookupError):
+    """Nothing is waiting for an answer about this order."""
+
+
+class AlreadyAnswered(Exception):
+    """Somebody got there first.
+
+    Two supervisors on the same screen is the ordinary case rather than a race
+    worth locking against, and the honest answer names what happened instead of
+    overwriting the first decision with the second.
+    """
+
+
+class Confirmations:
+    """The half of layer 3 that is a person (ADR-071).
+
+    Separate from `DispatchRounds` because the two run in different processes on
+    different clocks: a round is a job in worker-runtime every five minutes, and
+    this is somebody pressing a button in a request. What they share is the
+    repository and the rule that both write in the caller's transaction.
+
+    Neither method sends anything anywhere. Queueing the delivery of a confirmed
+    ticket belongs to the composition root, which is what lets `.importlinter`
+    keep `pdm.dispatch` from importing `pdm.sinks` at all (ADR-068, ADR-071 §5).
+
+    **Both methods write the order before they write the record, and that order
+    is load-bearing.** An `HTTPException` commits the request's transaction
+    rather than rolling it back (`api/deps.py::connection`, ADR-019), so a
+    refusal raised after a write would commit the write. The conditional UPDATE
+    on the order is therefore attempted first: when it matches nothing, nothing
+    has been written and the refusal costs nothing; when it matches, the answer
+    is ours and the record follows in the same transaction.
+    """
+
+    def __init__(self, clock: Clock) -> None:
+        self.clock = clock
+
+    def confirm(self, conn: Connection[Any], ref: str, *, by: UserId, role: Role) -> Proposal:
+        """A supervisor agrees, and the job becomes the technician's."""
+        proposal = self._pending(conn, ref)
+        if not repo.confirm_placement(conn, ref):
+            # The proposal was open and the order is not `proposed` any more.
+            # Reachable through a sweep committed between the two reads, and
+            # refused rather than forced: confirming an order that has gone back
+            # to the queue would assign somebody to a decision that no longer
+            # has a crew on it.
+            raise AlreadyAnswered(
+                f"{ref} is no longer waiting to be confirmed; the next round will rank it again"
+            )
+        repo.settle_proposal(
+            conn, ref, state=ProposalState.CONFIRMED, at=self.clock.now(), by=by, role=role
+        )
+        return proposal
+
+    def reject(
+        self, conn: Connection[Any], ref: str, *, by: UserId, role: Role, reason: str
+    ) -> Proposal:
+        """A supervisor does not, and the order goes back into the queue now.
+
+        Not held, not cooled off, not marked so that it is proposed differently
+        next time (ADR-071 §4). If the round proposes the same pairing again that
+        is information rather than a defect: nothing about the shift has changed,
+        and a second rejection with a second reason is evidence about the score
+        rather than noise.
+        """
+        proposal = self._pending(conn, ref)
+        if not repo.return_to_queue(conn, ref):
+            raise AlreadyAnswered(
+                f"{ref} is no longer waiting to be confirmed; the next round will rank it again"
+            )
+        repo.settle_proposal(
+            conn,
+            ref,
+            state=ProposalState.REJECTED,
+            at=self.clock.now(),
+            by=by,
+            role=role,
+            reason=reason,
+        )
+        return proposal
+
+    def _pending(self, conn: Connection[Any], ref: str) -> Proposal:
+        proposal = repo.pending_proposal(conn, ref)
+        if proposal is None:
+            raise NoProposal(f"nothing is waiting for an answer about {ref}")
+        return proposal

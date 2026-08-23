@@ -49,10 +49,18 @@ from pdm.platform.config.loader import Config
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
-# Statuses that mean somebody has this job. They consume their assignees'
+# Statuses that mean this job is spoken for. They consume their assignees'
 # capacity and count as committed work, and a round never touches them
 # (ADR-045 §4).
+#
+# PROPOSED is on the list although nobody has agreed to it yet (ADR-071 §3). A
+# proposal that did not consume capacity would make the shift read emptier than
+# it is, and ADR-011's gate answers an empty-looking shift by releasing *more*
+# work - so every unconfirmed proposal would be proposed again, to somebody who
+# is already spoken for, until the supervisor's screen filled with duplicates of
+# the same decision.
 TAKEN = (
+    WorkOrderStatus.PROPOSED,
     WorkOrderStatus.ASSIGNED,
     WorkOrderStatus.IN_PROGRESS,
     WorkOrderStatus.HANDED_OVER,

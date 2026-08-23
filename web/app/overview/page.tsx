@@ -4,7 +4,7 @@ import { LineDiagram, LineFaults } from "@/app/overview/line-diagram";
 import { plantTime } from "@/lib/display";
 import { gaps, lineOverview } from "@/lib/overview";
 import { ROLE_NAMES, requireAccount } from "@/lib/session";
-import { currentRound } from "@/lib/work";
+import { currentRound, proposals } from "@/lib/work";
 
 /**
  * Where "monitor and predict" becomes something a person can point at.
@@ -22,10 +22,15 @@ import { currentRound } from "@/lib/work";
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ released?: string; error?: string }>;
+  searchParams: Promise<{
+    released?: string;
+    confirmed?: string;
+    rejected?: string;
+    error?: string;
+  }>;
 }) {
   const account = await requireAccount();
-  const { released, error } = await searchParams;
+  const { released, confirmed, rejected, error } = await searchParams;
   if (account.role !== "supervisor" && account.role !== "engineer") {
     return (
       <>
@@ -40,7 +45,12 @@ export default async function OverviewPage({
     );
   }
 
-  const [overview, unanswered, round] = await Promise.all([lineOverview(), gaps(), currentRound()]);
+  const [overview, unanswered, round, waiting] = await Promise.all([
+    lineOverview(),
+    gaps(),
+    currentRound(),
+    proposals(),
+  ]);
   const shift = overview.shift;
   const load = shift.load_ratio === null ? null : Math.round(shift.load_ratio * 100);
 
@@ -76,6 +86,62 @@ export default async function OverviewPage({
           {shift.technicians_on_shift} ช่างในกะ · งานเปิดอยู่ {shift.open_orders} ใบ ·{" "}
           {shift.committed_minutes} จาก {shift.capacity_minutes} นาที
         </p>
+      </section>
+
+      <section>
+        <h2>งานที่รอคุณยืนยัน ({waiting.length})</h2>
+
+        {confirmed !== undefined && (
+          <p className="recorded">ยืนยัน {confirmed} แล้ว — ส่งถึงช่างและออกไปยังปลายทางแล้ว</p>
+        )}
+        {rejected !== undefined && (
+          <p className="recorded">ปฏิเสธ {rejected} แล้ว — กลับเข้าคิว รอบถัดไปจะจัดใหม่</p>
+        )}
+        {waiting.length === 0 ? (
+          <p className="card">ไม่มีงานรอยืนยัน</p>
+        ) : (
+          // The list a shift lead works through, oldest first - the one nearest
+          // expiry is the one nearest being decided by nobody (ADR-071 §6).
+          <ul className="held-list">
+            {waiting.map((one) => (
+              <li className="held" key={one.ref}>
+                <div>
+                  <strong>{one.ref}</strong> → {one.assignees.join(", ")}
+                  <br />
+                  <span className="muted">{one.priority_reason}</span>
+                  <br />
+                  <span className="muted">
+                    กลับเข้าคิวเองถ้าไม่ตอบภายใน {plantTime(one.expires_at, overview.timezone)}
+                  </span>
+                </div>
+                <div className="answer">
+                  <form method="post" action="/overview/confirm">
+                    <input type="hidden" name="ref" value={one.ref} />
+                    <button type="submit">ยืนยัน</button>
+                  </form>
+                  <details>
+                    <summary>ไม่ใช่งานนี้</summary>
+                    <form method="post" action="/overview/reject">
+                      <input type="hidden" name="ref" value={one.ref} />
+                      <label className="field">
+                        <span>ทำไมถึงยังไม่ควรส่ง</span>
+                        <textarea
+                          name="reason"
+                          rows={2}
+                          required
+                          placeholder="เช่น ช่างคนนี้ติดงานที่สาย B อยู่"
+                        />
+                      </label>
+                      <button type="submit" className="quiet">
+                        ปฏิเสธพร้อมเหตุผลนี้
+                      </button>
+                    </form>
+                  </details>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section>

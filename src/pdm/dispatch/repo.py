@@ -16,7 +16,7 @@ prevent, and it would look like a successful round.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from psycopg import Connection
@@ -25,6 +25,7 @@ from psycopg.types.json import Jsonb
 
 from pdm.contracts import (
     Assignee,
+    Role,
     ShiftAssignment,
     ShiftId,
     SkillId,
@@ -34,6 +35,7 @@ from pdm.contracts import (
 )
 from pdm.dispatch.domain import Placement
 from pdm.dispatch.overrides import Override, OverrideKind
+from pdm.dispatch.proposals import Proposal, ProposalState
 
 
 def technicians(conn: Connection[Any]) -> list[Technician]:
@@ -80,7 +82,7 @@ def roster(conn: Connection[Any], *, shift_id: ShiftId, on_date: date) -> list[S
     return [ShiftAssignment.model_validate(dict(row)) for row in rows]
 
 
-def place(conn: Connection[Any], placement: Placement) -> bool:
+def place(conn: Connection[Any], placement: Placement, *, status: WorkOrderStatus) -> bool:
     """Write one placement onto its order, if it is still queued.
 
     The `status = 'queued'` in the WHERE clause is the idempotence: a round that
@@ -93,6 +95,14 @@ def place(conn: Connection[Any], placement: Placement) -> bool:
     `priority_score` and `priority_reason` are written beside the assignment
     because they are the answer to "why is this job here, now" and ADR-005 wants
     it on the screen where the job is, not recomputed by whoever asks.
+
+    The status to write is the caller's, and it is the only difference between
+    the two confirmation modes (ADR-071 section 2): `assigned` hands the job
+    straight to a technician, `proposed` holds the same decision still until a
+    supervisor agrees to it. Everything else about the round - what it decided,
+    how it scored it, who it crewed it with - is identical in both, which is
+    what stops the mode the plant eventually runs in from being the one least
+    tested.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -105,7 +115,7 @@ def place(conn: Connection[Any], placement: Placement) -> bool:
              WHERE work_order_ref = %s AND status = 'queued'
             """,
             (
-                WorkOrderStatus.ASSIGNED.value,
+                status.value,
                 Jsonb([_assignee(one) for one in placement.assignees]),
                 placement.priority_score,
                 placement.priority_reason,
@@ -164,6 +174,187 @@ def released(conn: Connection[Any]) -> set[str]:
             (OverrideKind.RELEASE_HELD.value,),
         )
         return {str(row[0]) for row in cur.fetchall()}
+
+
+def propose(conn: Connection[Any], proposal: Proposal) -> None:
+    """Ask a supervisor about one placement (ADR-071).
+
+    In the round's transaction, beside the `place` that put the order into
+    `proposed`. The two commit together or not at all: an order held in a state
+    only a confirmation can leave, with nothing asking anybody to confirm it,
+    would be work that has quietly stopped existing.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO dispatch_proposal
+                   (work_order_ref, proposed_at, assignees, priority_score,
+                    priority_reason, band, load_ratio, shift_id, on_date, state)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+            """,
+            (
+                proposal.work_order_ref,
+                proposal.proposed_at,
+                Jsonb([_assignee(one) for one in proposal.assignees]),
+                proposal.priority_score,
+                proposal.priority_reason,
+                proposal.band.value if proposal.band is not None else None,
+                proposal.load_ratio,
+                str(proposal.shift_id) if proposal.shift_id is not None else None,
+                proposal.on_date,
+            ),
+        )
+
+
+def pending_proposals(conn: Connection[Any]) -> list[Proposal]:
+    """Everything waiting for an answer, oldest first.
+
+    Oldest first because that is the order a supervisor should work through and
+    the order the sweep will take them in: the one nearest expiry is the one
+    nearest being decided by nobody.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT {_PROPOSAL_COLUMNS} FROM dispatch_proposal
+             WHERE state = 'pending' ORDER BY proposed_at, proposal_id
+            """
+        )
+        return [_to_proposal(dict(row)) for row in cur.fetchall()]
+
+
+def pending_proposal(conn: Connection[Any], work_order_ref: str) -> Proposal | None:
+    """The open question about one order, or None.
+
+    None covers both "there never was one" and "somebody has already answered
+    it", which the caller reports differently: the second is two supervisors on
+    the same screen, and it deserves a sentence rather than a 404.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT {_PROPOSAL_COLUMNS} FROM dispatch_proposal
+             WHERE work_order_ref = %s AND state = 'pending'
+            """,
+            (work_order_ref,),
+        )
+        row = cur.fetchone()
+    return _to_proposal(dict(row)) if row is not None else None
+
+
+def settle_proposal(
+    conn: Connection[Any],
+    work_order_ref: str,
+    *,
+    state: ProposalState,
+    at: datetime,
+    by: UserId | None = None,
+    role: Role | None = None,
+    reason: str | None = None,
+) -> bool:
+    """Write down how a proposal ended. False if somebody got there first.
+
+    The `state = 'pending'` in the WHERE clause is what makes two supervisors
+    pressing at once safe: the second UPDATE matches nothing, and the caller
+    reports that rather than overwriting the first answer with the second.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE dispatch_proposal
+               SET state = %s, decided_at = %s, decided_by = %s,
+                   decided_role = %s, reason = %s
+             WHERE work_order_ref = %s AND state = 'pending'
+            """,
+            (
+                state.value,
+                at,
+                str(by) if by is not None else None,
+                role.value if role is not None else None,
+                reason,
+                work_order_ref,
+            ),
+        )
+        return cur.rowcount == 1
+
+
+def expire_proposals(
+    conn: Connection[Any], *, proposed_before: datetime, at: datetime
+) -> list[str]:
+    """Sweep the proposals nobody answered, and return the orders they held.
+
+    Called at the start of a round, in the round's transaction, before it decides
+    (ADR-071 §6) - so the queue the round is handed already contains what the
+    sweep let go, and a supervisor who went home does not leave a shift committed
+    to work nobody agreed to.
+
+    The orders are returned to the queue by the caller rather than here, because
+    the two writes are different sentences: this one says the question went
+    unanswered, and that one says the work is available again.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE dispatch_proposal
+               SET state = %s, decided_at = %s
+             WHERE state = 'pending' AND proposed_at < %s
+         RETURNING work_order_ref
+            """,
+            (ProposalState.EXPIRED.value, at, proposed_before),
+        )
+        return [str(row[0]) for row in cur.fetchall()]
+
+
+def return_to_queue(conn: Connection[Any], work_order_ref: str) -> bool:
+    """Undo a placement nobody agreed to, and take the crew off it with it.
+
+    The assignees go because they are the present tense of who holds the job
+    (ADR-056), and an order sitting in the queue with somebody's name on it would
+    be counted against their capacity by the next round and offered to them by
+    `accept`. The score and its sentence are left: the next round overwrites both,
+    and clearing them would make an order that has been proposed once read as one
+    that has never been ranked.
+
+    `status = 'proposed'` in the WHERE clause for the same reason `place` names
+    `queued`: whatever else has happened to this order since, this write is only
+    ever allowed to undo a proposal.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET status = %s, assignees = '[]'::jsonb
+             WHERE work_order_ref = %s AND status = %s
+            """,
+            (WorkOrderStatus.QUEUED.value, work_order_ref, WorkOrderStatus.PROPOSED.value),
+        )
+        return cur.rowcount == 1
+
+
+def confirm_placement(conn: Connection[Any], work_order_ref: str) -> bool:
+    """A proposal becomes a technician's job. False if it is no longer proposed."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE work_order SET status = %s WHERE work_order_ref = %s AND status = %s",
+            (
+                WorkOrderStatus.ASSIGNED.value,
+                work_order_ref,
+                WorkOrderStatus.PROPOSED.value,
+            ),
+        )
+        return cur.rowcount == 1
+
+
+_PROPOSAL_COLUMNS = """
+    work_order_ref, proposed_at, assignees, priority_score, priority_reason,
+    band, load_ratio, shift_id, on_date, state, decided_at, decided_by,
+    decided_role, reason
+"""
+
+
+def _to_proposal(row: dict[str, Any]) -> Proposal:
+    row["assignees"] = tuple(Assignee.model_validate(one) for one in row["assignees"])
+    return Proposal.model_validate(row)
 
 
 def _assignee(one: Assignee) -> dict[str, str]:

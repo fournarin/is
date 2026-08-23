@@ -20,7 +20,7 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from pdm.api import deps, dispatch, documents, overview, playbooks, sessions, work_orders
-from pdm.dispatch.service import DispatchRounds
+from pdm.dispatch.service import Confirmations, DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
 from pdm.platform.config import load_config
@@ -82,6 +82,10 @@ def create_app(
         # decides anything itself: rounds run in worker-runtime, which is the
         # only process that writes a placement (ADR-026, ADR-050).
         app.state.dispatch_rounds = DispatchRounds(the_clock, config)
+        # The one write into layer 3 the API does make (ADR-071). A supervisor
+        # confirming or rejecting a proposal is a person's decision recorded in
+        # the request that made it, not this process scheduling anything.
+        app.state.confirmations = Confirmations(the_clock)
         # Creation and the four transitions in one service. The API drives the
         # second half only - a ticket is created by the trigger loop, the PM
         # schedule or a report, and what happens here is what a person did with

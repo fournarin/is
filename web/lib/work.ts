@@ -1,12 +1,19 @@
 /**
  * What the technician's screen reads, and where each figure comes from.
  *
- * Two sources, deliberately: the round says which jobs are this person's and in
- * what order (layer 3 decided that, and this app does not re-sort it), and the
- * ticket says everything about one job. Nothing here computes a priority, a
- * duration or a reason - every sentence on the screen was written by the
- * backend, because a screen that phrases its own explanation is a second
- * opinion nobody approved (ADR-005).
+ * Two sources, deliberately: `/work-orders/mine` says which jobs are this
+ * person's and in what order (layer 3 decided that, and this app does not
+ * re-sort it), and the ticket says everything about one job. Nothing here
+ * computes a priority, a duration or a reason - every sentence on the screen was
+ * written by the backend, because a screen that phrases its own explanation is a
+ * second opinion nobody approved (ADR-005).
+ *
+ * `myWork` used to filter `round.placed`, and that was wrong in a way only the
+ * shipped stack could show (ADR-071 §7): `/dispatch/round` computes what a round
+ * *would* decide, and `dispatch()` places only work that is still queued - so a
+ * job left the list at the instant a round wrote it. The rehearsal stops
+ * `worker-runtime` while the screen checks run, so every check saw a queue no
+ * round had touched.
  */
 import { callApi } from "@/lib/api";
 
@@ -81,15 +88,43 @@ export async function ticket(ref: string): Promise<Ticket> {
   return read<Ticket>(`/work-orders/${encodeURIComponent(ref)}`);
 }
 
+export type Mine = {
+  ref: string;
+  status: Ticket["status"];
+  priority_score: number;
+  priority_reason: string;
+};
+
+export type Proposal = {
+  ref: string;
+  proposed_at: string;
+  assignees: string[];
+  priority_score: number;
+  priority_reason: string;
+  band: string | null;
+  load_ratio: number | null;
+  shift_id: string | null;
+  expires_at: string;
+};
+
 /**
  * This person's jobs, in the order the scheduler put them in.
  *
- * `placed` arrives ranked and is passed through untouched. Re-sorting it here -
- * by severity, by machine, by anything - would quietly replace layer 3's answer
+ * The list arrives ranked by the `priority_score` layer 3 froze onto each order
+ * when it placed it, and is passed through untouched. Re-sorting it here - by
+ * severity, by machine, by anything - would quietly replace layer 3's answer
  * with this file's opinion, and the whole argument for a load gate is that the
  * order is not negotiable at the edges (ADR-011).
+ *
+ * The endpoint always answers about the caller, so there is no user to pass and
+ * nothing a wrong argument here could reveal.
  */
-export async function myWork(round: Round, user: string): Promise<Ticket[]> {
-  const mine = round.placed.filter((one) => one.assignees.includes(user));
+export async function myWork(): Promise<Ticket[]> {
+  const mine = await read<Mine[]>("/work-orders/mine");
   return Promise.all(mine.map((one) => ticket(one.ref)));
+}
+
+/** What the scheduler is waiting to be told about (ADR-071). */
+export async function proposals(): Promise<Proposal[]> {
+  return read<Proposal[]>("/dispatch/proposals");
 }

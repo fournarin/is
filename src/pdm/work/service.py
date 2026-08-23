@@ -202,6 +202,14 @@ class WorkOrders:
                 f"{ref} is {order.status.value} and nothing moves after that; "
                 f"a new problem on this machine is a new ticket"
             )
+        if order.status is WorkOrderStatus.PROPOSED:
+            # Refused here rather than by the order being invisible (ADR-071 §7).
+            # It should not be reachable - `GET /work-orders/mine` does not serve
+            # proposals - and a technician who got to it through a link they kept
+            # is owed the reason rather than a job that does nothing when pressed.
+            raise TransitionRefused(
+                f"{ref} is waiting for a supervisor to confirm it and is not yours yet"
+            )
         return order
 
     def _reread(self, conn: Connection[Any], ref: str) -> WorkOrder:
@@ -341,6 +349,16 @@ class WorkOrders:
     def open_orders(self, conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
         """What the dispatch tick will be given (design.md 6.2)."""
         return repo.open_orders(conn)
+
+    def assigned_to(self, conn: Connection[Any], user: UserId) -> list[tuple[str, WorkOrder]]:
+        """This person's own live work, ranked as layer 3 ranked it (ADR-071 §7).
+
+        The technician's screen reads this rather than recomputing a round, for
+        the reason `repo.assigned_to` sets out: a job placed by a round is no
+        longer `queued`, and a screen filtering what a fresh round *would* place
+        loses it at the moment the system decides to give it to somebody.
+        """
+        return repo.assigned_to(conn, user)
 
     def open_finding_refs(self, conn: Connection[Any]) -> set[FindingRef]:
         """Findings that still have an open ticket against them (ADR-044 §6)."""
