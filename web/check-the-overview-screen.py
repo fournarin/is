@@ -53,8 +53,12 @@ from pdm.platform.config import load_config
 from pdm.triggers import repo as findings
 from pdm.work import WorkOrders
 
-WEB = "http://localhost:3000"
-API = "http://localhost:8000"
+# Where the screens are. The defaults are the ports docker-compose.yml publishes
+# on the host, which is what a person running this check by hand has. The
+# rehearsal runs it from inside the compose network instead, where the addresses
+# are service names (ADR-067).
+WEB = os.environ.get("PDM_WEB_URL", "http://localhost:3000")
+API = os.environ.get("PDM_API_URL", "http://localhost:8000")
 SUPERVISOR = UserId("sup-1")
 TECHNICIAN = UserId("tech-1")
 PASSWORDS = {SUPERVISOR: "demo-supervisor", TECHNICIAN: "demo-technician"}

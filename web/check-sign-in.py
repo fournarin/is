@@ -35,13 +35,18 @@ from __future__ import annotations
 
 import html as htmllib
 import http.cookiejar
+import os
 import re
 import sys
 import urllib.error
 import urllib.request
 
-WEB = "http://localhost:3000"
-API = "http://localhost:8000"
+# Where the screens are. The defaults are the ports docker-compose.yml publishes
+# on the host, which is what a person running this check by hand has. The
+# rehearsal runs it from inside the compose network instead, where the addresses
+# are service names (ADR-067).
+WEB = os.environ.get("PDM_WEB_URL", "http://localhost:3000")
+API = os.environ.get("PDM_API_URL", "http://localhost:8000")
 
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
