@@ -66,7 +66,11 @@ from pdm.playbooks import repo as playbooks
 from pdm.triggers import repo as findings
 from pdm.work import WorkOrders
 
-WEB = "http://localhost:3000"
+# Where the screens are. The defaults are the ports docker-compose.yml publishes
+# on the host, which is what a person running this check by hand has. The
+# rehearsal runs it from inside the compose network instead, where the addresses
+# are service names (ADR-067).
+WEB = os.environ.get("PDM_WEB_URL", "http://localhost:3000")
 TECHNICIAN = UserId("tech-1")
 ENGINEER = UserId("eng-1")
 PASSWORD = "demo-technician"

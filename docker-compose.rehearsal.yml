@@ -1,0 +1,38 @@
+# One extra container, used only by `scripts/rehearse.py` (ADR-067).
+#
+# The four `web/check-*.py` scripts drive the screens over HTTP and read the
+# database directly, so they need to reach three things at once: the web server,
+# the API and PostgreSQL. Running them on the host would mean publishing the
+# database port, and the stack that gets rehearsed would then not be the stack
+# that ships. Running them here instead - one container on the `app` network,
+# with the repository mounted and the document volume attached - rehearses the
+# deployed topology exactly, and the only thing the host needs is Docker.
+#
+# It is behind a profile, so `docker compose up` never starts it. The rehearsal
+# script reaches it with `docker compose run --rm --no-deps rehearsal <command>`.
+
+services:
+  rehearsal:
+    build: .
+    profiles: [rehearsal]
+    # The repository, read-only: the image copies `src/` and nothing else
+    # (see Dockerfile), while `scripts/seed_demo.py` needs `fixtures/corpus`
+    # and the checks need `config/`. Read-only because a check that can write
+    # to the checkout is a check that can hide a failure by editing itself.
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # The same volume the API reads from. A seed written anywhere else
+      # produces a library the screens cannot open (ADR-019).
+      STORAGE_DIR: /app/storage
+      QDRANT_URL: http://qdrant:6333
+      # `pdm` comes from the image's virtualenv; this is here for `fixtures`,
+      # which lives outside `src/` on purpose (ADR-033).
+      PYTHONPATH: /repo
+      PDM_WEB_URL: http://web:3000
+      PDM_API_URL: http://api:8000
+    volumes:
+      - .:/repo:ro
+      - storage:/app/storage
+    networks: [app]                                 # deliberately not [llm]
+    restart: "no"
