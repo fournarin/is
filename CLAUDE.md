@@ -6,7 +6,7 @@ An Individual Study project: one student, one term, one person building it. The
 problem comes from a vehicle assembly plant moving towards full automation, with
 some lines already automated.
 
-**The design rationale lives in [`docs/adr/`](docs/adr/README.md)** - 31 decision
+**The design rationale lives in [`docs/adr/`](docs/adr/README.md)** - 72 decision
 records, append-only. Start with
 [003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md),
 [020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)
@@ -48,6 +48,7 @@ layer 2 · Content — assemble the ticket with steps from a playbook
 layer 3 · Dispatch — queue by priority against the shift's load
         │                    ▲
         │                    └── technician data (skills, shifts, open work)
+        │      a round proposes; the shift lead confirms (ADR-071)
         ▼
 layer 4 · Destination — where the ticket appears
         │      an existing CMMS, our own system, or a chat client
@@ -58,16 +59,27 @@ layer 4 · Destination — where the ticket appears
 **Layers 2 and 3 must never block on layer 1.** Every layer is separately
 buildable.
 
+**Nothing reaches a technician that a person has not released.** A round writes
+`proposed`; the shift lead confirms it into `assigned`, rejects it back to the
+queue with a reason, or it expires back on its own. `dispatch.confirmation` in
+`policy.yaml` switches this off once there is evidence to justify it, and the
+evidence is the proposal record itself
+([ADR-071](docs/adr/0071-a-round-proposes-and-a-person-decides.md)).
+
 **Layer 1 is not waiting for real data.** The advisor opened with "monitor
 **and predict**", so both have to be delivered. `SyntheticSource` models
 degradation while knowing the true failure time, which gives prediction a
 measurable ground truth without the plant
 ([ADR-020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)).
 
-**Layer 4 carries the most risk**, because whether a CMMS already exists changes
-the whole outbound design. Until that is known, tickets leave through a swappable
-adapter
-([ADR-012](docs/adr/0012-tickets-leave-through-an-adapter.md)).
+**Layer 4 carries the most risk**, because it is the only layer whose completion
+depends on somebody outside this project. The advisor confirmed on 2026-08-23
+that the plant already runs a work-order system, and asked for integration with
+it *or at least somewhere the ticket is displayed*. So our own screens are the
+floor that gets finished, the CMMS is the destination that gets prepared, and
+tickets leave through a swappable adapter either way
+([ADR-012](docs/adr/0012-tickets-leave-through-an-adapter.md),
+[ADR-070](docs/adr/0070-the-plant-has-a-cmms-and-what-that-changes.md)).
 
 ## Principles that are not negotiable
 

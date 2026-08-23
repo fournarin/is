@@ -1,4 +1,4 @@
-# ADR-067: What a false alarm may propose about a threshold, and what it may not
+# ADR-073: What a false alarm may propose about a threshold, and what it may not
 
 ## Context
 

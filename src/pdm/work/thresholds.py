@@ -1,4 +1,4 @@
-"""Loop 2: what the false alarms say a rule's threshold should have been (ADR-067).
+"""Loop 2: what the false alarms say a rule's threshold should have been (ADR-073).
 
 `no_problem_found` is the only false-alarm signal this system will ever receive
 (ADR-022), and ADR-066 started counting it. This module is what the count is for:
@@ -16,12 +16,12 @@ one: the tightest value that would still have fired on every order where a
 technician found something, chosen to exclude as many false alarms as the
 evidence allows. Its property is that it cannot silence a confirmed fault, and
 the proposal lists by reference the orders it still fires on so that property can
-be checked rather than believed (ADR-067 section 3).
+be checked rather than believed (ADR-073 section 3).
 
 What it cannot see is written on every proposal it makes. Nothing in this system
 counts the fault a higher threshold would have missed, so this evidence can only
 say "too tight" and never "too loose" - which is why the person approving is the
-only part of this loop that knows what the loop does not (ADR-067 section 6).
+only part of this loop that knows what the loop does not (ADR-073 section 6).
 
 Pure by construction: no connection reaches this file, so the whole of it is
 tested against readings written out by hand (invariant 10, ADR-030).
@@ -40,11 +40,11 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
 # Carried on every proposal rather than left in the ADR. It is read by somebody
 # looking at a number, not by somebody reading records, and a caveat that lives
-# only in a document is one that is absent at the moment it matters (ADR-067 §6).
+# only in a document is one that is absent at the moment it matters (ADR-073 §6).
 ONE_SIDED_EVIDENCE = (
     "This rests only on orders the rule did fire on. Nothing in this system records "
     "the fault a higher threshold would have missed, so this evidence can say a "
-    "threshold is too tight and can never say it is too loose (ADR-022, ADR-067). "
+    "threshold is too tight and can never say it is too loose (ADR-022, ADR-073). "
     "The reading kept is the one the rule fired on rather than the peak of the "
     "excursion, so a signal still climbing might have crossed the proposed threshold "
     "a minute later instead of not at all."
@@ -58,7 +58,7 @@ class NoProposalCause(StrEnum):
     because its refusals are the interesting half: "the evidence says this
     threshold is fine" and "there is no evidence" are not the same sentence, and
     a screen that rendered both as an empty row would hide the difference
-    (ADR-067 section 5, principle 5).
+    (ADR-073 section 5, principle 5).
     """
 
     # ADR-022, and no count changes it.
@@ -83,7 +83,7 @@ class RuleFiring(BaseModel):
     ADR-023's suppression key makes one Finding stand for an unbroken run of
     breaching samples, so weighting by occurrences would let a single flapping
     sensor supply a whole evidence set on its own while reading as though dozens
-    of jobs supported it (ADR-067 section 2).
+    of jobs supported it (ADR-073 section 2).
     """
 
     model_config = _FROZEN
@@ -95,7 +95,7 @@ class RuleFiring(BaseModel):
     value: float
     # Predicted Findings are excluded rather than dropped. A forecast that came to
     # nothing is evidence about the trend fit, not about the threshold - what it
-    # carries is a slope, not a reading (ADR-043, ADR-067 section 2).
+    # carries is a slope, not a reading (ADR-043, ADR-073 section 2).
     finding_kind: FindingKind = FindingKind.DETECTED
 
 
@@ -164,12 +164,12 @@ def propose(
 
     The rule's own facts are arguments rather than a `RuleConfig`: the arithmetic
     is then tested against rules written out by hand, and `work/` keeps its
-    distance from the file layer 1 boots from (ADR-067 section 7).
+    distance from the file layer 1 boots from (ADR-073 section 7).
 
     `min_observations` and `max_change_ratio` have no defaults, for ADR-066's
     reason: both come from `policy.yaml`, where the provenance of every constant
     is written down, and a default here would answer even when the file does not.
-    They are **not** the estimate loop's two numbers, and ADR-067 section 4 says
+    They are **not** the estimate loop's two numbers, and ADR-073 section 4 says
     why a floor that is enough to reprice a job is not enough to loosen a
     threshold.
     """
@@ -207,7 +207,7 @@ def propose(
             NoProposalCause.BELOW_FLOOR,
             f"{len(usable)} closed orders behind {rule_id}, and {min_observations} is the "
             f"floor. A separating threshold rests on the two observations either side of it, "
-            f"and this set is not yet large enough to say where they are (ADR-067).",
+            f"and this set is not yet large enough to say where they are (ADR-073).",
         )
 
     if not alarms:
@@ -224,7 +224,7 @@ def propose(
             f"All {len(usable)} closed orders behind {rule_id} closed no_problem_found, so "
             f"there is no reading this rule must keep firing on. A threshold past all of them "
             f"silences the rule, and a loop may not propose that a machine stop being "
-            f"watched (ADR-067).",
+            f"watched (ADR-073).",
         )
 
     # The boundary the proposal may not cross: the mildest reading behind an order
@@ -273,7 +273,7 @@ def propose(
             f"The evidence behind {rule_id} separates at {separating}, and one cycle may move "
             f"a threshold by at most {round(max_change_ratio * 100)}% of {current_threshold}. "
             f"The move that allows would still have fired on every false alarm, so there is "
-            f"nothing to propose this cycle (ADR-067).",
+            f"nothing to propose this cycle (ADR-073).",
         )
 
     reason = (
@@ -285,7 +285,7 @@ def propose(
     if capped:
         reason += (
             f". The evidence separates at {separating}, and one cycle may move a threshold by "
-            f"at most {round(max_change_ratio * 100)}% of it (ADR-067)"
+            f"at most {round(max_change_ratio * 100)}% of it (ADR-073)"
         )
     reason += "."
 

@@ -185,7 +185,7 @@ source_modules =
     # version of it that could open a connection could also be a version that
     # writes the estimate it just proposed.
     pdm.work.estimates
-    # Loop 2's arithmetic (ADR-067), and on the list for a sharper version of the
+    # Loop 2's arithmetic (ADR-073), and on the list for a sharper version of the
     # same reason: the number it proposes is one layer 1 fires on, so a version of
     # it that could open a connection could also be a version that writes a
     # threshold nobody approved.
@@ -196,6 +196,10 @@ source_modules =
     # could reach a connection would be the second place layer 3 talks to the
     # database (ADR-059).
     pdm.dispatch.overrides
+    # Same again for the proposal record (ADR-071). It is the evidence about how
+    # often a shift lead agreed with the scheduler, and a module that could open
+    # a connection could be one that decides what it says by asking again.
+    pdm.dispatch.proposals
     pdm.triggers.domain
     pdm.triggers.trend
     pdm.retrieval.domain

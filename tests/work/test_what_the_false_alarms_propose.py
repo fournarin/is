@@ -1,4 +1,4 @@
-"""Loop 2 against rules of known outcome history (ADR-022, ADR-067).
+"""Loop 2 against rules of known outcome history (ADR-022, ADR-073).
 
 The refusals are the point here even more than they were for Loop 1. This loop
 proposes a number layer 1 then fires on, and every one of its six ways of saying
@@ -32,7 +32,7 @@ from pdm.work.thresholds import (
 RULE = RuleId("R-motor-temp-high")
 FAN = RuleId("R-fan-rpm-low")
 
-# The two constants of ADR-067, repeated here rather than read from policy.yaml:
+# The two constants of ADR-073, repeated here rather than read from policy.yaml:
 # a test that takes its expectations from the file it is checking moves whenever
 # that file does, and stops being able to say the file changed.
 FLOOR = 10
@@ -211,7 +211,7 @@ class TestWhenNothingIsProposed:
         assert result.observations == FLOOR - 1
 
     def test_the_floor_is_not_the_estimate_loops_floor(self) -> None:
-        """ADR-066's five is not enough here, and ADR-067 says why.
+        """ADR-066's five is not enough here, and ADR-073 says why.
 
         Written as a test rather than left to the ADR because the two numbers
         live in the same file and the tempting edit is to make them one.
@@ -237,7 +237,7 @@ class TestWhenNothingIsProposed:
 
         A threshold past all twelve would silence the rule, and the honest answer
         is that nothing has ever shown this rule catching a fault, which is a
-        better question for an engineer than a number (ADR-067).
+        better question for an engineer than a number (ADR-073).
         """
         result = _propose(_alarms([86.0, 87.0, 88.0, 89.0, 90.0, 91.0] * 2))
 
@@ -284,7 +284,7 @@ class TestWhatIsNotEvidence:
 
         Six predicted false alarms are dropped from the set, which puts the rule
         below the floor - the proposal they would otherwise have carried is one
-        made about the wrong number entirely (ADR-043, ADR-067 section 2).
+        made about the wrong number entirely (ADR-043, ADR-073 section 2).
         """
         firings = (
             _alarms([85.4, 85.9, 86.2, 86.6, 87.0])
@@ -328,7 +328,7 @@ class TestWhatIsNotEvidence:
 
 class TestWhatTheProposalCarries:
     def test_every_proposal_states_that_its_evidence_is_one_sided(self) -> None:
-        """The caveat is on the record, not only in the ADR (ADR-067 section 6).
+        """The caveat is on the record, not only in the ADR (ADR-073 section 6).
 
         It is read by somebody looking at a number rather than by somebody reading
         decision records, and this is the assertion that keeps it there.

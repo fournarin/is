@@ -54,6 +54,21 @@ def test_the_package_is_there_to_be_imported_at_all(package: str) -> None:
     assert _files(package), f"{package}/ has no source files"
 
 
+# The concrete sinks, by name. The ban above is on the package and is stronger,
+# but #74 asks for this one specifically - and a class name can reach a module
+# through a string, a factory or a comment that later becomes code, none of
+# which an import linter sees.
+CONCRETE = ("OwnSystemSink", "FileSink")
+
+
+@pytest.mark.parametrize("package", BLIND)
+def test_no_concrete_sink_is_named_there_either(package: str) -> None:
+    for path in _files(package):
+        body = path.read_text(encoding="utf-8")
+        for name in CONCRETE:
+            assert name not in body, f"{path} names {name}"
+
+
 def test_the_import_contract_that_enforces_this_still_names_both_layers() -> None:
     """The linter's own configuration, checked for the thing a rename breaks."""
     config = Path(".importlinter").read_text(encoding="utf-8")

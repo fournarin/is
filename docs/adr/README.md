@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Sixty-seven decisions, in the order they were made. Each records the context that
+Seventy-three decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -22,8 +22,8 @@ entries replace parts of earlier ones, and both are kept.
 | [008](0008-technology-stack.md) | Technology stack, and the boundary around Redis | 017, 035 |
 | [009](0009-component-comes-from-the-rule-not-from-inference.md) | Component comes from the rule, never from inference | 016 |
 | [010](0010-work-orders-have-an-origin.md) | Work does not only come from a Finding | |
-| [011](0011-load-ratio-switches-dispatch-behaviour.md) | Dispatch switches behaviour on load, not on score alone | 059 |
-| [012](0012-tickets-leave-through-an-adapter.md) | Tickets leave through an adapter interface | |
+| [011](0011-load-ratio-switches-dispatch-behaviour.md) | Dispatch switches behaviour on load, not on score alone | 059, 071 |
+| [012](0012-tickets-leave-through-an-adapter.md) | Tickets leave through an adapter interface | 070 |
 | [013](0013-playbooks-are-immutable-versions.md) | A playbook version cannot be edited in place | 018 |
 | [014](0014-report-and-technician-trial-are-reserved-unconditionally.md) | Reserve time for the report and the technician trial | |
 | [015](0015-recall-at-authoring-precision-at-runtime.md) | Recall at authoring, precision at runtime | |
@@ -77,7 +77,13 @@ entries replace parts of earlier ones, and both are kept.
 | [064](0064-what-a-reviewer-may-change-and-what-the-review-screen-records.md) | What a reviewer may change, and what the review screen records | |
 | [065](0065-how-this-web-layer-submits-things.md) | How this web layer submits things | |
 | [066](0066-what-the-finished-jobs-may-change-and-what-stops-them.md) | What the finished jobs may change, and what stops them | |
-| [067](0067-what-a-false-alarm-may-propose-about-a-threshold.md) | What a false alarm may propose about a threshold, and what it may not | |
+| [067](0067-the-rehearsal-runs-inside-the-stack-it-rehearses.md) | The rehearsal runs inside the stack it rehearses | |
+| [068](0068-a-ticket-that-was-dispatched-and-a-ticket-that-arrived.md) | A ticket that was dispatched and a ticket that arrived are two facts | 071 |
+| [069](0069-the-destination-is-a-name-in-policy-and-a-path-in-the-environment.md) | The destination is a name in policy and a path in the environment | |
+| [070](0070-the-plant-has-a-cmms-and-what-that-changes.md) | The plant has a CMMS, and our own system is the floor rather than the plan | |
+| [071](0071-a-round-proposes-and-a-person-decides.md) | **A round proposes, and a person decides** | |
+| [072](0072-machine-health-is-read-not-a-source-of-work.md) | Machine health is something read, and never a source of work | |
+| [073](0073-what-a-false-alarm-may-propose-about-a-threshold.md) | What a false alarm may propose about a threshold, and what it may not | |
 
 ## Where to start
 

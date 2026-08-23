@@ -52,6 +52,22 @@ dispatch:
   # scenarios measured here, an order of magnitude more than the model needs.
   # It is a ceiling, not a duration: an optimal answer stops the search.
   solver_seconds: 5.0
+  # Who makes a round's decision real (ADR-071). Provenance: recorded decision -
+  # the advisor was asked on 2026-08-23 who presses the button and answered that
+  # a person should at first, and that automatic approval is something to
+  # consider later once there is a record to judge it by.
+  #
+  # `supervisor` is the default because it is the mode that cannot lose work: a
+  # plant that meant to review and got automatic dispatch finds out from a
+  # technician who was sent somewhere nobody approved. `automatic` is the other
+  # value, and it is the behaviour every record before ADR-071 assumed.
+  confirmation: supervisor
+  # How long a proposal waits for an answer before it returns to the queue.
+  # Provenance: recorded decision, bounded by the round above and by the shift.
+  # Longer than one round, so nothing is swept before a supervisor has had a
+  # screen refresh to see it; far shorter than a shift, so nothing is confirmed
+  # against a world eight hours old. Thirty minutes is six rounds.
+  proposal_expires_minutes: 30
 
 # ── triggers (ADR-020, ADR-023) ────────────────────────────────────────────
 triggers:
@@ -93,8 +109,8 @@ estimates:
   # rather than an edit here.
   max_change_ratio: 0.20
 
-# ── what the false alarms say a threshold should be (ADR-022, ADR-067) ─────
-# Provenance: recorded decision, both of them, and ADR-067 is the record. They
+# ── what the false alarms say a threshold should be (ADR-022, ADR-073) ─────
+# Provenance: recorded decision, both of them, and ADR-073 is the record. They
 # are deliberately not the two above, and section 4 of that record is the
 # argument: a count that is enough to reprice a job is not enough to loosen a
 # threshold layer 1 fires on.
@@ -191,3 +207,17 @@ jobs:
     # Fifteen minutes: the upper end of the 5-20 minute range ADR-017 gives for
     # ingest and drafting work, plus room for a slow model server.
     dead_after_seconds: 900
+
+# ── where a placed ticket goes (ADR-012, ADR-069) ──────────────────────────
+# Provenance: recorded decision. A name, and only a name. `own-system` puts the
+# ticket where the technician's screen already reads it; `file` writes one JSON
+# file per ticket into TICKET_DIR, which is set in the environment because a
+# host path is a deployment fact rather than a plant policy (ADR-019's argument
+# for STORAGE_DIR).
+#
+# A name this build does not have is a startup failure that says so, never a
+# quiet fall back to own-system: a plant that configured `cmms` and got our own
+# system would look like it was working, and the tickets nobody was reading
+# would be the first anybody heard of it.
+sinks:
+  destination: own-system

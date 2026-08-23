@@ -53,6 +53,11 @@ class NoEstimateAvailable(Exception):
 # is already evidence (ADR-018).
 STILL_LIVE = (
     WorkOrderStatus.QUEUED,
+    # Decided by a round and not yet confirmed (ADR-071). Live, because the work
+    # still has to happen - but none of the four buttons apply to it, which
+    # `WorkOrders._live` says in its own sentence rather than by leaving it out
+    # of this tuple and calling an unconfirmed job "closed".
+    WorkOrderStatus.PROPOSED,
     WorkOrderStatus.ASSIGNED,
     WorkOrderStatus.IN_PROGRESS,
     WorkOrderStatus.HANDED_OVER,

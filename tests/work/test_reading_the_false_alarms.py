@@ -1,11 +1,11 @@
-"""Loop 2's evidence, read out of a real PostgreSQL (ADR-031, ADR-067).
+"""Loop 2's evidence, read out of a real PostgreSQL (ADR-031, ADR-073).
 
 Three things are checked here that the pure tests cannot. That the reading a
 proposal is built from is the one layer 1 wrote into `evidence`, reached through
 the join rather than through anything the work order stores - a work order
 deliberately carries no rule_id (ADR-030). That a Finding which flapped forty
 times is **one** observation and not forty, which is the difference between an
-evidence set and one sensor's morning (ADR-023, ADR-067 section 2). And that a
+evidence set and one sensor's morning (ADR-023, ADR-073 section 2). And that a
 Finding whose evidence recorded no reading is counted rather than quietly
 shrinking the set it was part of.
 """
@@ -209,7 +209,7 @@ class TestWhatTheReaderGathers:
         """Carried by the reader, set aside by the arithmetic.
 
         The reader does not filter, so the count of what was set aside can be
-        reported; the decision belongs in one place (ADR-067 section 2).
+        reported; the decision belongs in one place (ADR-073 section 2).
         """
         finding = _finding(conn, machine="MC-001", value=86.5, kind=FindingKind.PREDICTED)
         _closed(conn, finding_ref=finding, machine="MC-001", outcome=ALARM)

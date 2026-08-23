@@ -12,6 +12,11 @@ reached the markup.
 
 Run it the same way as `check-the-technicians-screen.py` - see that file's
 docstring for the environment it needs.
+
+The confirmation panel this screen also carries (ADR-071) is driven end to end
+by `check-the-technicians-screen.py`, which has to confirm before it has a job to
+assert on - so the supervisor's half is exercised there rather than asserted twice
+against a seeded world tuned for the load gate.
 """
 
 from __future__ import annotations

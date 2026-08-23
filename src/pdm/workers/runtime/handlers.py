@@ -312,6 +312,13 @@ def dispatch_handler(
     round that fails takes the queued deliveries with it, which is the direction
     that has to hold.
 
+    **Layer 4 is handed `placed` and never `proposed`.** In `supervisor` mode a
+    round decides and writes nothing anybody has agreed to, and `placed` is empty
+    (ADR-071 §5); what leaves the system is queued by the confirmation instead,
+    in the request a supervisor made. A ticket reaching a CMMS before anybody
+    approved it is the one failure the confirmation step exists to prevent, and
+    at this seam it would be one argument in one call.
+
     `deliveries` is optional so that a test asserting on scheduling alone need
     not stand up a destination. `None` means the tickets stay where the round
     put them, which is exactly the behaviour before layer 4 existed.

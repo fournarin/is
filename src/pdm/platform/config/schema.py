@@ -14,6 +14,7 @@ behaving as though it says 0.8.
 from __future__ import annotations
 
 from datetime import time
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -299,6 +300,31 @@ class DispatchPolicy(BaseModel):
     # feasible schedule it found, and a round that has not found one falls back
     # to the ranked queue rather than returning nothing.
     solver_seconds: float = Field(gt=0)
+    # Who makes a round's decision real (ADR-071). `supervisor` writes proposals
+    # a shift lead confirms; `automatic` writes assignments, which is what every
+    # record before ADR-071 assumed. Not a boolean: the two are named because
+    # they are read by an operator in a file they are expected to understand,
+    # and `confirmation: false` says nothing about who is then deciding.
+    confirmation: Literal["supervisor", "automatic"] = "supervisor"
+    # How long a proposal may wait for an answer before it goes back into the
+    # queue (ADR-071 section 6). Swept at the start of each round: a supervisor
+    # who goes home must not leave a shift committed to work nobody agreed to,
+    # because the gate reads that shift as full and holds back everything behind
+    # it - ADR-023's argument about Findings, one layer up.
+    proposal_expires_minutes: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _a_proposal_outlives_the_round_that_made_it(self) -> DispatchPolicy:
+        """A window shorter than a round sweeps proposals a supervisor has not
+        had one refresh of the screen to see, and would look from the outside
+        like a scheduler that keeps changing its mind."""
+        if self.proposal_expires_minutes * 60 <= self.round_seconds:
+            raise ValueError(
+                f"proposal_expires_minutes ({self.proposal_expires_minutes}) must be longer "
+                f"than one round ({self.round_seconds}s), or proposals expire before anybody "
+                f"has seen them"
+            )
+        return self
 
 
 class EstimatePolicy(BaseModel):
@@ -328,9 +354,9 @@ class EstimatePolicy(BaseModel):
 
 
 class ThresholdPolicy(BaseModel):
-    """The two numbers Loop 2 needs before it may say anything (ADR-067).
+    """The two numbers Loop 2 needs before it may say anything (ADR-073).
 
-    Deliberately not Loop 1's two. ADR-067 section 4 states why a count that is
+    Deliberately not Loop 1's two. ADR-073 section 4 states why a count that is
     enough to reprice a job is not enough to loosen a threshold: one loop's error
     announces itself in the next batch of durations, and this one's error is a
     fault that no longer fires, which nothing in this system will ever report.
@@ -344,15 +370,37 @@ class ThresholdPolicy(BaseModel):
     max_change_ratio: float = Field(gt=0)
 
     @model_validator(mode="after")
-    def _one_cycle_may_not_move_further_than_adr_067_allows(self) -> ThresholdPolicy:
+    def _one_cycle_may_not_move_further_than_adr_073_allows(self) -> ThresholdPolicy:
         if self.max_change_ratio > 0.10:
             raise ValueError(
-                f"ADR-067 bounds a threshold proposal at ten percent of the threshold's "
+                f"ADR-073 bounds a threshold proposal at ten percent of the threshold's "
                 f"magnitude - half of what ADR-022 allows a duration, because a threshold "
                 f"comes from a machine manual and this loop's mistakes are silent - "
                 f"got {self.max_change_ratio}. Raising it is a new record, not a config edit"
             )
         return self
+
+
+class SinkPolicy(BaseModel):
+    """Where a placed ticket goes (ADR-012, ADR-069).
+
+    A name, and only a name. Where the `file` destination writes comes from the
+    environment instead, because a host path is a deployment fact rather than a
+    plant policy - the argument ADR-019 makes for `STORAGE_DIR`, and the reason
+    this file has no paths in it anywhere.
+
+    The `Literal` repeats `NAMES` in `pdm/sinks/registry.py`, and cannot import
+    it: `pdm.platform` sits underneath everything and reaching up to `pdm.sinks`
+    would invert the package layout (ADR-030). The duplication is what lets
+    `python -m pdm.platform.config config` reject an unknown destination before
+    anything starts, and
+    `tests/sinks/test_a_second_destination.py::TestTheConfigAndTheRegistryAgree`
+    is what keeps the two lists in step.
+    """
+
+    model_config = _STRICT
+
+    destination: Literal["own-system", "file"]
 
 
 class PolicyConfig(BaseModel):
@@ -366,6 +414,7 @@ class PolicyConfig(BaseModel):
     estimates: EstimatePolicy
     thresholds: ThresholdPolicy
     retrieval: RetrievalPolicy
+    sinks: SinkPolicy
     # Rough estimates used when no playbook exists, so long-tail work still gets
     # a duration and stays in the queue instead of vanishing (design.md 3.2).
     fallback_minutes: dict[MachineModel, dict[Severity, int]]

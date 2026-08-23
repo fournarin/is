@@ -79,7 +79,12 @@ POLICY: dict[str, Any] = {
         "eta_urgency": 0.7,
     },
     "load": {"light_below": 0.5, "heavy_at_or_above": 0.8},
-    "dispatch": {"round_seconds": 300, "solver_seconds": 5.0},
+    "dispatch": {
+        "round_seconds": 300,
+        "solver_seconds": 5.0,
+        "confirmation": "supervisor",
+        "proposal_expires_minutes": 30,
+    },
     "triggers": {
         "cooldown_minutes": 30,
         "eta_grace_minutes": 60,
@@ -101,6 +106,10 @@ POLICY: dict[str, Any] = {
         "runtime": {"heartbeat_seconds": 10, "dead_after_seconds": 60},
         "authoring": {"heartbeat_seconds": 30, "dead_after_seconds": 900},
     },
+    # Required, and deliberately so: a policy file that named no destination
+    # would leave the choice to whatever the composition root defaulted to
+    # (ADR-069 section 2).
+    "sinks": {"destination": "own-system"},
 }
 
 
@@ -237,10 +246,10 @@ class TestPolicyRelationships:
         with pytest.raises(ConfigError, match="twenty percent per cycle"):
             load_config(_write(tmp_path, **{"policy.yaml": policy}))
 
-    def test_a_threshold_may_not_move_further_in_one_cycle_than_adr_067_allows(
+    def test_a_threshold_may_not_move_further_in_one_cycle_than_adr_073_allows(
         self, tmp_path: Path
     ) -> None:
-        """Half of what a duration may move, and refused at boot (ADR-067).
+        """Half of what a duration may move, and refused at boot (ADR-073).
 
         The tempting edit is to make Loop 2's bound Loop 1's, because they sit
         beside each other in the same file. What that edit buys is a threshold
@@ -250,6 +259,17 @@ class TestPolicyRelationships:
         policy = _deep(POLICY)
         policy["thresholds"]["max_change_ratio"] = 0.20
         with pytest.raises(ConfigError, match="ten percent of the threshold"):
+            load_config(_write(tmp_path, **{"policy.yaml": policy}))
+
+    def test_a_destination_this_build_does_not_have_stops_the_boot(self, tmp_path: Path) -> None:
+        """ADR-069 section 2. Never a quiet fall back to own-system: a plant that
+        configured `cmms` and got our own system would look like it was working,
+        and the tickets nobody was reading would be the first anybody heard of
+        it. Rejected here, before anything starts, because `config` is the
+        command a deployment runs first."""
+        policy = _deep(POLICY)
+        policy["sinks"]["destination"] = "cmms"
+        with pytest.raises(ConfigError, match="own-system"):
             load_config(_write(tmp_path, **{"policy.yaml": policy}))
 
     def test_a_model_without_a_fallback_estimate_stops_the_boot(self, tmp_path: Path) -> None:
