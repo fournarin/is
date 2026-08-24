@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Seventy-five decisions, in the order they were made. Each records the context that
+Seventy-six decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -86,6 +86,7 @@ entries replace parts of earlier ones, and both are kept.
 | [073](0073-what-a-false-alarm-may-propose-about-a-threshold.md) | What a false alarm may propose about a threshold, and what it may not | |
 | [074](0074-the-cmms-contract-is-ours-and-what-the-third-destination-may-promise.md) | The CMMS contract is ours, and what the third destination may promise | |
 | [075](0075-what-the-confirmation-record-may-be-read-to-say.md) | What the confirmation record may be read to say, and what it may not | |
+| [076](0076-what-machine-health-is-computed-from-and-what-it-may-not-be-ranked-by.md) | What machine health is computed from, and what it may not be ranked by | |
 
 ## Where to start
 

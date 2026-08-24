@@ -38,6 +38,13 @@ EXPECTED_MODULES = frozenset(
         # that record is the change request, because `docs-md/` is outside this
         # checkout on purpose.
         "baselines",
+        # ADR-072 and ADR-076. Health ranks machines for a person deciding what
+        # to look at; the score ranks work orders for a round deciding who goes
+        # where. A package of its own is what makes "health is not a sixth term"
+        # statable in .importlinter rather than remembered. design.md §2's table
+        # needs this row too, and ADR-076 is the change request for the same
+        # reason `baselines` above carries one.
+        "health",
         "api",
         "workers",
     }
