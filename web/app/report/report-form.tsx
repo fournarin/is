@@ -8,7 +8,12 @@ import type { Machine } from "@/lib/report";
 
 // Here rather than in `actions.ts`: a `"use server"` file may only export async
 // functions, and a constant beside the action is the mistake that shape invites.
-const NOTHING_REPORTED: ReportState = { error: null, openOrders: [], created: null };
+const NOTHING_REPORTED: ReportState = {
+  error: null,
+  openOrders: [],
+  created: null,
+  values: { machineId: "", severity: "medium", description: "" },
+};
 
 // ADR-077 §2. `critical` is not offered, and the screen says why rather than
 // leaving somebody looking for the strongest word and not finding it.
@@ -29,6 +34,11 @@ const LEVELS = [
 export function ReportForm({ machines }: { machines: Machine[] }) {
   const [state, action, pending] = useActionState(reportFault, NOTHING_REPORTED);
 
+  // `key` on the form is what makes the echoed values above take effect without
+  // JavaScript: React reuses the DOM it already rendered otherwise, and the
+  // fresh page from a refusal would come back with the fields it started with.
+  const attempt = `${state.error ?? ""}${state.openOrders.join(",")}`;
+
   if (state.created !== null) {
     return (
       <div className="card">
@@ -46,7 +56,7 @@ export function ReportForm({ machines }: { machines: Machine[] }) {
   }
 
   return (
-    <form action={action}>
+    <form action={action} key={attempt}>
       {state.error !== null && (
         <p className="error" role="alert">
           {state.error}
@@ -61,7 +71,7 @@ export function ReportForm({ machines }: { machines: Machine[] }) {
 
       <label className="field">
         <span>เครื่องไหน</span>
-        <select name="machine_id" required defaultValue="">
+        <select name="machine_id" required defaultValue={state.values.machineId}>
           <option value="" disabled>
             เลือกเครื่อง
           </option>
@@ -81,7 +91,9 @@ export function ReportForm({ machines }: { machines: Machine[] }) {
               type="radio"
               name="severity"
               value={level.value}
-              defaultChecked={index === 1}
+              defaultChecked={
+                state.values.severity === "" ? index === 1 : state.values.severity === level.value
+              }
               required
             />
             <span>
@@ -101,6 +113,7 @@ export function ReportForm({ machines }: { machines: Machine[] }) {
           name="description"
           rows={4}
           required
+          defaultValue={state.values.description}
           placeholder="เช่น มีน้ำมันไหลใต้ฐาน ประมาณฝ่ามือ ตั้งแต่ต้นกะ"
         />
       </label>

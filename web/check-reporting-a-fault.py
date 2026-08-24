@@ -187,9 +187,14 @@ def main() -> None:
     expect("หัวหน้ากะยืนยัน" in created, "and says a person still releases it (ADR-071)")
 
     print("\n3. the same machine again is refused, naming what is already open")
-    again = report(readable(get("/report")), "เหมือนเดิม")
+    again = report(readable(get("/report")), SOMETHING_ELSE)
     expect(first.group(0) in again, "the refusal names the open ticket (ADR-077 §3)")
     expect("มีงานค้างอยู่แล้ว" in again, "and says why it is refused")
+    # Without JavaScript the page comes back rendered from scratch, so a refusal
+    # that dropped the fields would ask somebody standing at a machine to type it
+    # all again before they could say it is something else.
+    expect(SOMETHING_ELSE in again, "and what was typed is still in the form")
+    expect(f'value="{MACHINE}" selected' in again, "with the machine still chosen")
 
     print("\n4. saying it is something else gets through, and the ticket says so")
     different = report(again, SOMETHING_ELSE)
