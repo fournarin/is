@@ -91,9 +91,20 @@ having been sent there for nothing before.
 
 ### 4. A rate over the observed span, not a window from policy
 
-Failures are counted over the span the caller's records actually cover -
-earliest to latest closed order handed in - and reported as a rate per hundred
-days beside the raw count and the span.
+Failures are counted over the span the caller's records actually cover - from
+the earliest closed order handed in, or an `observed_from` the caller names, to
+**the moment the reading is taken** - and reported as a rate per hundred days
+beside the raw count and the span.
+
+The far end is `now` and not the last closed order, which is the sharper half of
+the choice. The weeks since a machine's last job closed are weeks it did not
+fail, and ending the span at the last record would drop them out of the
+denominator: a machine that has been quiet for three months would carry the same
+rate it had on the day its last order closed, and a machine that failed once
+last week would outrank it on a span of days. One span is used for every machine
+in an assessment, so the rates compare - a machine whose first record is late did
+not fail earlier, and that is a fact about the machine rather than about the
+evidence.
 
 The alternative was `health.window_days` in `policy.yaml`. It is refused because
 it would be a number with none of the three provenances that file requires, and
