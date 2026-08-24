@@ -1,4 +1,5 @@
-"""The four buttons a technician has: accept, start, hand over, close.
+"""Reporting a fault, and the four buttons a technician has: accept, start, hand
+over, close.
 
 Until this router existed a work order could be created, priced, ranked and
 released, and then nothing: `actual_minutes` was zero on every order in the
@@ -13,6 +14,13 @@ approval endpoint enforces from the other side.
 Nothing here decides anything about the *queue*. Which job comes first is layer
 3's answer and this router does not touch it; what it writes is what a person did
 with the job they were given.
+
+**Reporting is the one route here that any role may call** (ADR-077). The four
+buttons are a technician's alone; telling the system about a fault is not, and
+the person standing next to the machine when it starts making a noise is as
+likely to be an operator. What the reporting route refuses is a severity a
+report may not carry, a machine this plant does not have, and a second ticket
+for work already open.
 """
 
 from __future__ import annotations
@@ -22,16 +30,32 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, requires
-from pdm.contracts import BlockedReason, Role, WorkOrder, WorkOrderStatus, WorkOutcome
+from pdm.api.deps import Db, Plant, requires
+from pdm.contracts import (
+    BlockedReason,
+    MachineId,
+    Role,
+    Severity,
+    SymptomCode,
+    WorkOrder,
+    WorkOrderStatus,
+    WorkOutcome,
+)
 from pdm.platform.auth.domain import Account
-from pdm.work import NoSuchOrder, TransitionRefused, WorkOrders
+from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders
 
 router = APIRouter(tags=["work orders"])
 
 # ADR-024. An engineer approves the playbook and does not take the job; a
 # supervisor releases what the gate is holding and does not take it either.
 _MAY_WORK = (Role.TECHNICIAN,)
+
+# ADR-077 section 1. Every role, because a fault is seen by whoever is standing
+# there, and because nothing is dispatched on a report alone: a round proposes it
+# and a shift lead confirms it (ADR-071). Authentication is still required - the
+# reason names the reporter, and a report nobody can be asked about is one
+# nobody can settle.
+_MAY_REPORT = (Role.TECHNICIAN, Role.ENGINEER, Role.SUPERVISOR, Role.OPERATOR)
 
 
 def _orders(request: Request) -> WorkOrders:
@@ -78,6 +102,83 @@ class Closing(BaseModel):
     blocked_minutes: int = Field(default=0, ge=0)
     blocked_reason: tuple[BlockedReason, ...] = ()
     technician_feedback: str | None = None
+
+
+class Report(BaseModel):
+    """A fault somebody saw, in the words they saw it in.
+
+    Three of the four fields are refused here rather than in the service, for the
+    reason `Handover` refuses an empty note: a request that cannot become a
+    sensible order should not reach the code that would have to decide what it
+    meant.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    machine_id: MachineId
+    severity: Severity
+    description: str = Field(min_length=1)
+    # Optional, and never inferred from the description. A person may not know
+    # which code it is, and a system that requires a diagnosis before it accepts
+    # a problem gets one invented for it. No code means no playbook, a duration
+    # from `fallback_minutes`, and `required_skill` left empty rather than
+    # guessed (ADR-009, ADR-041, ADR-077 section 4).
+    symptom_code: SymptomCode | None = None
+    # The tickets the reporter was shown and is saying this is not. Named rather
+    # than a plain "yes I am sure", so that a ticket raised between the refusal
+    # and the retry refuses the retry too (ADR-077 section 3).
+    distinct_from: tuple[str, ...] = ()
+
+    @field_validator("description")
+    @classmethod
+    def _not_only_whitespace(cls, value: str) -> str:
+        """`min_length` admits "   ", and a description of spaces leaves a
+        technician arriving at a machine knowing only that somebody thought
+        something was wrong with it (ADR-077 section 5)."""
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("say what you saw - a report with no description cannot be worked")
+        return stripped
+
+    @field_validator("severity")
+    @classmethod
+    def _not_critical(cls, value: Severity) -> Severity:
+        """ADR-077 section 2. `high` already passes the load gate on the busiest
+        shift there is, so the ceiling costs a reporter no urgency; what it stops
+        is one person's account outranking a measured threshold crossing in the
+        queue. A fault that cannot wait for the next round is a phone call, and
+        the ticket records it afterwards."""
+        if value is Severity.CRITICAL:
+            raise ValueError(
+                "a report may be low, medium or high, and not critical: high is already "
+                "released on a heavy shift, and critical is reserved for a rule that "
+                "measured it. If it cannot wait for the next round, call the shift lead "
+                "and report it afterwards (ADR-077)"
+            )
+        return value
+
+
+class ReportedOrder(BaseModel):
+    """The ticket a report became, and what it did or did not come with.
+
+    `estimate_is_fallback` and `playbook_ref` are returned because a reporter who
+    gave no symptom code has produced an order that nothing priced and nothing
+    can instruct, and the screen says so rather than showing a duration that
+    looks measured (ADR-041).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    machine_id: str
+    severity: Severity
+    status: WorkOrderStatus
+    reason: str
+    estimated_minutes: int
+    estimate_is_fallback: bool
+    required_skill: str | None = None
+    playbook_ref: str | None = None
+    playbook_warning: str | None = None
 
 
 class WorkOrderState(BaseModel):
@@ -128,7 +229,74 @@ def _translate(error: Exception) -> HTTPException:
         return HTTPException(status.HTTP_404_NOT_FOUND, str(error))
     if isinstance(error, TransitionRefused):
         return HTTPException(status.HTTP_409_CONFLICT, str(error))
+    if isinstance(error, AlreadyOpen):
+        # The one refusal in this router whose detail is not a sentence. The
+        # screen has to offer "this is something else" and that button carries
+        # the references, so they are returned as data rather than left for a
+        # regular expression over a message (ADR-077 section 3).
+        return HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"message": str(error), "open_orders": list(error.open_refs)},
+        )
     return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error))
+
+
+@router.post("/work-orders", response_model=ReportedOrder, status_code=status.HTTP_201_CREATED)
+def report(
+    reported: Report,
+    conn: Db,
+    orders: Orders,
+    plant: Plant,
+    account: Annotated[Account, Depends(requires(*_MAY_REPORT, action="report_fault"))],
+) -> ReportedOrder:
+    """The third origin: a person saw something (ADR-010, ADR-077).
+
+    The machine is resolved against `plant.yaml` rather than trusted, because the
+    model decides which playbook the order binds and which fallback prices it: a
+    machine id nobody recognises would produce a ticket for a machine that does
+    not exist, priced from a table it does not appear in.
+
+    Everything else about the order is written by the work module. This handler
+    does not phrase the reason, does not choose a priority and does not touch the
+    queue - a report is proposed by a round and confirmed by a shift lead like
+    any other work (ADR-005, ADR-071).
+    """
+    try:
+        machine_model = plant.model_of(reported.machine_id)
+    except KeyError as error:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"{reported.machine_id} is not a machine in this plant - check the number on "
+            f"the machine itself, or ask the shift lead to add it to the configuration",
+        ) from error
+
+    try:
+        issued = orders.from_report(
+            conn,
+            machine_id=reported.machine_id,
+            machine_model=machine_model,
+            severity=reported.severity,
+            reported_by=account.user,
+            description=reported.description,
+            symptom_code=reported.symptom_code,
+            distinct_from=reported.distinct_from,
+        )
+    except (AlreadyOpen, TransitionRefused, ValueError) as error:
+        raise _translate(error) from error
+
+    order = issued.order
+    return ReportedOrder(
+        ref=issued.ref,
+        machine_id=str(order.machine_id),
+        severity=order.severity,
+        status=order.status,
+        reason=order.reason,
+        estimated_minutes=order.estimated_minutes,
+        estimate_is_fallback=order.estimate_is_fallback,
+        required_skill=str(order.required_skill) if order.required_skill else None,
+        playbook_ref=str(order.playbook_ref) if order.playbook_ref else None,
+        playbook_warning=order.playbook_warning,
+    )
 
 
 @router.post("/work-orders/{work_order_ref}/accept", response_model=WorkOrderState)

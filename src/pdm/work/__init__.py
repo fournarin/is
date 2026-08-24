@@ -8,9 +8,10 @@ invariant 10).
 """
 
 from pdm.work.domain import NoEstimateAvailable, playbook_ref_for, reason_for
-from pdm.work.service import Issued, NoSuchOrder, TransitionRefused, WorkOrders
+from pdm.work.service import AlreadyOpen, Issued, NoSuchOrder, TransitionRefused, WorkOrders
 
 __all__ = [
+    "AlreadyOpen",
     "Issued",
     "NoEstimateAvailable",
     "NoSuchOrder",

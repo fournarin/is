@@ -13,6 +13,7 @@ no error anywhere.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from pdm.contracts import (
@@ -276,12 +277,19 @@ def from_report(
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
     now: datetime,
+    alongside: Sequence[str] = (),
 ) -> WorkOrder:
     """A manual order: a person saw something.
 
     The description is the reason, in their words, with who and when around it.
     Rewriting it into the system's phrasing would lose the only account of the
     machine that came from somebody standing next to it.
+
+    `alongside` names the tickets that were already open on this machine when the
+    reporter said this was something else. It goes in the reason because that is
+    the sentence read by whoever picks the job up, and the question they will
+    have - "isn't somebody already on this machine?" - is one the ticket should
+    answer before they ask it (ADR-077 section 3).
     """
     minutes, is_fallback, playbook_ref = _priced(
         playbook,
@@ -305,5 +313,6 @@ def from_report(
         reason=(
             f"{machine_id}: reported by {reported_by} at "
             f"{now.astimezone(UTC):%Y-%m-%d %H:%M} UTC - {description}"
+            + (f" (reported alongside {', '.join(alongside)})" if alongside else "")
         ),
     )

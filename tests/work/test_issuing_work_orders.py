@@ -56,7 +56,7 @@ from pdm.platform.config import load_config
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore
 from pdm.playbooks import repo as playbooks
-from pdm.work import NoEstimateAvailable, WorkOrders
+from pdm.work import AlreadyOpen, NoEstimateAvailable, WorkOrders
 from pdm.work import repo as work
 
 pytestmark = pytest.mark.db
@@ -438,6 +438,132 @@ class TestScheduledAndManualOrders:
         assert work.get(conn, issued.ref) is not None
 
 
+class TestASecondReportOnAMachineAlreadyBeingWorked:
+    """ADR-077 §3, where the rule lives: in the service, not in the endpoint.
+
+    ADR-023 exists because one overheating motor raising a Finding on every
+    reading becomes a hundred work orders. The same arithmetic arrives at the
+    manual origin with people instead of readings, and a rule that only the HTTP
+    handler enforced would be a rule the next caller does not have.
+    """
+
+    def test_a_report_is_refused_while_that_machine_has_work_open(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        first = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="oil under the base plate",
+        )
+
+        with pytest.raises(AlreadyOpen) as refused:
+            orders.from_report(
+                conn,
+                machine_id=MOTOR,
+                machine_model=R2000IC,
+                severity=Severity.MEDIUM,
+                reported_by=TECHNICIAN,
+                description="oil under the base plate",
+            )
+        assert refused.value.open_refs == (first.ref,)
+        assert first.ref in str(refused.value)
+
+    def test_the_refusal_is_about_the_machine_that_was_reported(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="oil under the base plate",
+        )
+        assert orders.from_report(
+            conn,
+            machine_id=MachineId("MC-012"),
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="different machine, different fault",
+        ).ref
+
+    def test_work_of_any_origin_holds_the_machine_and_not_only_another_report(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        """The duplicate most worth preventing is the one where a rule already
+        raised it and somebody is on the way, so the check is not limited to
+        work of the same origin."""
+        issued = orders.from_finding(
+            conn, _finding(), finding_ref=FindingRef("F-1"), machine_model=R2000IC
+        )
+
+        with pytest.raises(AlreadyOpen) as refused:
+            orders.from_report(
+                conn,
+                machine_id=MOTOR,
+                machine_model=R2000IC,
+                severity=Severity.MEDIUM,
+                reported_by=TECHNICIAN,
+                description="something else entirely",
+            )
+        assert refused.value.open_refs == (issued.ref,)
+
+    def test_naming_the_open_tickets_writes_the_order_and_says_so_in_the_reason(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        first = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="oil under the base plate",
+        )
+        second = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="separate: the guard interlock is not latching",
+            distinct_from=[first.ref],
+        )
+
+        assert f"reported alongside {first.ref}" in second.order.reason
+
+    def test_a_reference_that_has_closed_since_is_not_named_on_the_new_order(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        """A reason is written once (ADR-005), so it may only carry what was true
+        when it was written - not a ticket the reporter saw ten minutes ago."""
+        first = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="oil under the base plate",
+        )
+        orders.accept(conn, first.ref, user=TECHNICIAN)
+        orders.start(conn, first.ref, user=TECHNICIAN)
+        orders.close(conn, first.ref, user=TECHNICIAN, outcome=WorkOutcome.FIXED)
+
+        second = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="the guard interlock is not latching",
+            distinct_from=[first.ref],
+        )
+        assert "reported alongside" not in second.order.reason
+
+
 class TestWhatTheDispatchTickWillRead:
     def test_open_orders_come_back_oldest_first(
         self, conn: Connection[Any], orders: WorkOrders, clock: SimulatedClock
@@ -460,6 +586,10 @@ class TestWhatTheDispatchTickWillRead:
             severity=Severity.CRITICAL,
             reported_by=TECHNICIAN,
             description="second",
+            # Two jobs on one machine on purpose: the queue this reads back has
+            # to hold more than one, and a report on a machine with work open is
+            # refused unless somebody says it is a different fault (ADR-077 §3).
+            distinct_from=[first.ref],
         )
 
         assert [ref for ref, _, _ in orders.open_orders(conn)] == [first.ref, second.ref]
@@ -537,15 +667,22 @@ class TestWhatTheCodeReviewFound:
         """load_ratio is a sum over the queue (design.md 13.2), so a page of it
         is not a smaller answer - it is a shift that reads emptier than it is,
         and the gate then releases more work."""
+        raised: list[str] = []
         for index in range(60):
             clock.advance(timedelta(minutes=1))
-            orders.from_report(
-                conn,
-                machine_id=MOTOR,
-                machine_model=R2000IC,
-                severity=Severity.LOW,
-                reported_by=TECHNICIAN,
-                description=f"report {index}",
+            raised.append(
+                orders.from_report(
+                    conn,
+                    machine_id=MOTOR,
+                    machine_model=R2000IC,
+                    severity=Severity.LOW,
+                    reported_by=TECHNICIAN,
+                    description=f"report {index}",
+                    # Sixty separate faults on one machine, which nobody would
+                    # report and every one of which this queue has to hold
+                    # (ADR-077 §3 is why the fixture has to say so).
+                    distinct_from=list(raised),
+                ).ref
             )
 
         assert len(orders.open_orders(conn)) == 60

@@ -249,8 +249,14 @@ def open_for_machine(conn: Connection[Any], machine_id: MachineId) -> list[str]:
     "is there one" rather than "what does it say"."""
     with conn.cursor() as cur:
         cur.execute(
+            # Ordered by the reference as well as the moment, so the list is
+            # total. Two orders written in the same instant - which a simulated
+            # clock does routinely, and a busy minute does occasionally - would
+            # otherwise come back in whatever order the scan found them, and this
+            # list is read by a person deciding whether their fault is already
+            # known (ADR-077 section 3).
             "SELECT work_order_ref FROM work_order "
-            "WHERE machine_id = %s AND status = ANY(%s) ORDER BY created_at",
+            "WHERE machine_id = %s AND status = ANY(%s) ORDER BY created_at, work_order_ref",
             (machine_id, list(OPEN_STATUSES)),
         )
         return [str(row[0]) for row in cur.fetchall()]
