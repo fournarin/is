@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from pdm.api import deps, dispatch, documents, overview, playbooks, sessions, work_orders
+from pdm.api import deps, dispatch, documents, overview, plant, playbooks, sessions, work_orders
 from pdm.dispatch.service import Confirmations, DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import Clock, SystemClock
@@ -147,6 +147,7 @@ def create_app(
     app.include_router(dispatch.router)
     app.include_router(work_orders.router)
     app.include_router(overview.router)
+    app.include_router(plant.router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:

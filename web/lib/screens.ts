@@ -38,6 +38,16 @@ export const SCREENS: readonly Screen[] = [
     roles: ["technician"],
   },
   {
+    title: "แจ้งงานเสีย",
+    purpose: "บอกระบบเรื่องที่กฎยังจับไม่ได้ จากคนที่ยืนอยู่หน้าเครื่อง",
+    slice: "16.2",
+    href: "/report",
+    // Every role, and the only screen an operator is offered at all: whoever is
+    // standing there is who sees it, and nothing is dispatched on a report alone
+    // (ADR-077 §1, ADR-071).
+    roles: ["technician", "engineer", "supervisor", "operator"],
+  },
+  {
     title: "ภาพรวมสายการผลิต",
     purpose: "สถานีไหนกำลังจะถึงเกณฑ์ กะนี้รับไหวแค่ไหน และใบงานที่ประตูโหลดกั้นไว้",
     slice: "10.5",

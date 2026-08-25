@@ -11,6 +11,7 @@ pure function of its inputs (invariant 10).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -40,6 +41,27 @@ from pdm.work import domain, repo
 
 class NoSuchOrder(LookupError):
     """There is no order with that reference."""
+
+
+class AlreadyOpen(Exception):
+    """This machine already has work open, and nobody has said this is different.
+
+    ADR-023's argument at the manual origin. One line stops, four people see it,
+    and without this the system dispatches four technicians to one fault. Carries
+    the references rather than only a sentence, because the answer the reporter
+    actually wants - *does anybody know about this yet?* - is those tickets, and
+    the screen offering "this is something else" has to name them (ADR-077
+    section 3).
+    """
+
+    def __init__(self, machine_id: MachineId, open_refs: Sequence[str]) -> None:
+        self.machine_id = machine_id
+        self.open_refs = tuple(open_refs)
+        joined = ", ".join(self.open_refs)
+        super().__init__(
+            f"{machine_id} already has work open: {joined}. If what you are reporting is "
+            f"something else, send it again naming those tickets."
+        )
 
 
 class TransitionRefused(Exception):
@@ -157,6 +179,7 @@ class WorkOrders:
         reported_by: UserId,
         description: str,
         symptom_code: SymptomCode | None = None,
+        distinct_from: Sequence[str] = (),
     ) -> Issued:
         """Somebody saw something.
 
@@ -164,7 +187,22 @@ class WorkOrders:
         which one it is - and a report with no code still has to become a ticket,
         or the system quietly requires a diagnosis before it will accept a
         problem.
+
+        Refused while the machine has work open, unless the reporter names those
+        tickets in `distinct_from` - which is how they say "I have seen them and
+        this is something else". The check reads the queue on the caller's
+        connection, so a second report arriving in the same moment either sees
+        the first row or is written after it, and never both (ADR-077 section 3).
+
+        The refusal is deliberately about the machine rather than the symptom:
+        `symptom_code` is not stored on an order at all, because the scheduler
+        does not need it (ADR-041), so there is nothing finer to key on yet.
         """
+        already_open = repo.open_for_machine(conn, machine_id)
+        unaccounted = [ref for ref in already_open if ref not in set(distinct_from)]
+        if unaccounted:
+            raise AlreadyOpen(machine_id, already_open)
+
         playbook, warning = (
             self._playbook(conn, symptom_code, machine_model)
             if symptom_code is not None
@@ -181,6 +219,10 @@ class WorkOrders:
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
             now=now,
+            # Only the tickets that were still open when this was written. A
+            # reference the reporter named that has since closed is not a fact
+            # about this order, and a reason is written once (ADR-005).
+            alongside=already_open,
         )
         return Issued(repo.issue(conn, order, now=now), order)
 

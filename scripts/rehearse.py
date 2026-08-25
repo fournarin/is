@@ -86,6 +86,7 @@ CHECKS = (
     "web/check-the-technicians-screen.py",
     "web/check-the-review-screen.py",
     "web/check-the-overview-screen.py",
+    "web/check-reporting-a-fault.py",
 )
 
 
@@ -213,7 +214,8 @@ def main() -> int:
         print(result.output or "  (no output)")
         results.append(result)
 
-    # The three screen checks truncated `account` on their way through. Without
+    # The four screen checks after the first truncated `account` on their way
+    # through. Without
     # this, a rehearsal that reported four passes would leave behind a stack
     # nobody can sign in to - which is the opposite of what it is for.
     say("Seeding the demo world again, over what the checks truncated")

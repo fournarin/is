@@ -167,6 +167,11 @@ def world(database_url: str, clock: SimulatedClock, tmp_path: Path) -> Iterator[
             severity=Severity.MEDIUM,
             reported_by=ENGINEER,
             description="grinding noise on start-up",
+            # The machine already carries the predicted job above, and a report
+            # on a machine with work open is refused unless somebody says it is
+            # a different fault (ADR-077 §3). This one is: a noise on start-up
+            # is not the motor temperature trend.
+            distinct_from=[refs["predicted"]],
         ).ref
         conn.commit()
 

@@ -116,6 +116,11 @@ def world(database_url: str, clock: SimulatedClock) -> Iterator[dict[str, Any]]:
                 severity=Severity.HIGH,
                 reported_by=SUP,
                 description=f"grinding noise ({name})",
+                # Five separate jobs on one machine, which is what this fixture
+                # is for. A report is refused while that machine has work open
+                # unless the reporter says it is something else (ADR-077 §3), and
+                # here it is: five proposals with five different ends.
+                distinct_from=list(refs.values()),
             ).ref
 
         def ask(ref: str, *, at: datetime, band: Band = Band.NORMAL) -> None:

@@ -52,17 +52,30 @@ They are for a demo on a machine inside the plant network and are not secrets.
 | `tech-1` | `demo-technician` | Somchai, technician | งานของคุณ |
 | `eng-1` | `demo-engineer` | Pranee, engineer | คิวรีวิว playbook · ภาพรวมสายการผลิต |
 | `sup-1` | `demo-supervisor` | Anan, supervisor | คิวรีวิว playbook · ภาพรวมสายการผลิต |
-| `op-1` | `demo-operator` | Malee, operator | — |
+| `op-1` | `demo-operator` | Malee, operator | แจ้งงานเสีย |
 
 The web app is at **http://localhost:3000**, the API at
 **http://localhost:8000** (its `/docs` is the interactive one).
 
 ## The order to click in
 
-1. **Sign in as `op-1`** and stop there. An operator is offered no screens at
-   all, and the page says which slice builds each one it is not offering. This is
-   the shortest demonstration that ADR-024's table is enforced rather than
-   described - it takes ten seconds and it is the thing people ask about last.
+1. **Sign in as `op-1`** → **แจ้งงานเสีย** (`/report`). An operator is offered
+   exactly one screen and it is this one: pick a machine, say how bad it is, say
+   what you saw. Send it and the answer is a ticket number and the sentence that
+   a shift lead still releases it (ADR-071, ADR-077).
+
+   Two things are worth saying while it is on screen. **`critical` is not on it**
+   - a report may be low, medium or high, because `high` already clears the load
+   gate on a heavy shift and the level above it is reserved for a rule that
+   measured something. And **the operator is offered nothing else**: no review
+   queue, no line overview. Try `/review` in the address bar and the API refuses
+   it and records the refusal, which is ADR-024's table enforced rather than
+   described.
+
+   Report the same machine twice to see the third refusal: the second is turned
+   back naming the ticket already open, with one button to say it is a different
+   fault. That is what stops four people seeing one stopped line from producing
+   four tickets.
 2. **Sign in as `eng-1`** → **ภาพรวมสายการผลิต** (`/overview`). The line drawn in
    station order with its buffers to scale, a marker per station, what the shift
    can absorb, and - at the bottom - the symptoms the system has nothing to serve
@@ -74,7 +87,9 @@ The web app is at **http://localhost:3000**, the API at
    technician that a person did not approve. **See the note below about what the
    queue contains.**
 4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
-   **งานที่รอคุณยืนยัน**. Every placement a round decides waits here for the
+   **งานที่รอคุณยืนยัน**. The report from step 1 is in the queue behind this
+   panel: the job the operator raised reaches a technician only once somebody
+   here has released it, which is the whole of the sentence above. Every placement a round decides waits here for the
    shift lead, which is what the advisor asked for on 2026-08-23 - a person
    presses first, and automatic approval is a switch to be thrown later on
    evidence (ADR-071). Confirm one and it becomes the technician's; reject it

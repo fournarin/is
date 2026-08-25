@@ -47,7 +47,7 @@ export default async function WorkPage() {
             : `ตอนนี้ยังไม่มีงานที่ถูกจัดให้คุณ รอบถัดไปคำนวณเมื่อ ${round.summary}`}
         </p>
         <p>
-          <Link href="/">กลับหน้าแรก</Link>
+          <Link href="/report">แจ้งงานเสียที่เจอเอง</Link> · <Link href="/">กลับหน้าแรก</Link>
         </p>
       </>
     );
@@ -65,7 +65,11 @@ export default async function WorkPage() {
           งานของคุณ
           <span className="muted"> · งานที่ 1 จาก {mine.length}</span>
         </span>
-        <Link href="/">หน้าแรก</Link>
+        {/* Beside the job rather than on the home screen: a technician who finds
+            a second fault is standing at a machine with this page open, and
+            three taps back to a menu is how it gets reported by radio instead
+            (ADR-077). */}
+        <Link href="/report">แจ้งงานเสีย</Link>
       </div>
 
       <section className={`card job ${band.tone}`}>
