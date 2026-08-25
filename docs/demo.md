@@ -14,7 +14,7 @@ uv run python scripts/rehearse.py --fresh
 ```
 
 That is `scripts/rehearse.py` (ADR-067): it destroys this stack's volumes, brings
-all seven containers up, seeds the accounts and the manuals, runs the four
+all seven containers up, seeds the accounts and the manuals, runs the five
 `web/check-*.py` screen checks in the order the seeding allows, seeds again over
 what those checks truncated, and leaves the stack running.
 
@@ -24,8 +24,8 @@ pulls three, and between the layers, the build cache and the volumes it wants
 than a `docker system df` beforehand does - a Docker daemon that hits a full disk
 mid-pull stops answering and has to be restarted.
 
-It ends with four lines saying `ok` or `FAIL` and the output of each check above
-them.
+It ends with one line per check saying `ok` or `FAIL`, and the output of each
+check above them.
 
 Without `--fresh` it reuses whatever volumes are already there, which is faster
 and proves less. The report says which of the two happened.
