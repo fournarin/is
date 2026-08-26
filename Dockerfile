@@ -32,6 +32,27 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ ./src/
 RUN uv sync --frozen --no-dev
 
+# The embedding model, downloaded at build time and shipped inside the image
+# (ADR-079).
+#
+# fastembed fetches a missing model on first use, which is exactly what must not
+# happen here: the plant's machine has no route to the internet, and ADR-029
+# keeps it that way on purpose. Without this line the first document uploaded on
+# site fails with a TLS error rather than with anything about a model, and the
+# only place the failure appears is a worker's log.
+#
+# The name comes from the module that loads it, so a change to `DEFAULT_MODEL`
+# cannot leave the image shipping the old weights: the build fails instead of
+# quietly baking one model while the code asks for another.
+# `tests/test_the_model_ships_in_the_image.py` holds that agreement from the
+# other side.
+ENV FASTEMBED_CACHE_PATH=/opt/models
+RUN mkdir -p /opt/models \
+    && python -c "\
+from pdm.retrieval.embedding import DEFAULT_MODEL, OnnxEmbedder; \
+print('baking', DEFAULT_MODEL); \
+print('dimensions', OnnxEmbedder().dimensions)"
+
 # The migrations ship inside the image, and `config/` deliberately does not.
 # They are two different kinds of thing: a migration is code, and the host that
 # runs `alembic upgrade head` must not need a checkout of this repository to do
@@ -55,7 +76,7 @@ RUN mkdir -p /app/storage
 
 # Nothing runs as root. The factory host is shared and long-lived.
 RUN useradd --system --create-home --uid 10001 pdm \
-    && chown -R pdm:pdm /app /opt/venv
+    && chown -R pdm:pdm /app /opt/venv /opt/models
 USER pdm
 
 # No default CMD on purpose. Every role must state which one it is in compose,

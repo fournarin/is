@@ -26,11 +26,13 @@ export default async function OverviewPage({
     released?: string;
     confirmed?: string;
     rejected?: string;
+    drafting?: string;
+    already?: string;
     error?: string;
   }>;
 }) {
   const account = await requireAccount();
-  const { released, confirmed, rejected, error } = await searchParams;
+  const { released, confirmed, rejected, drafting, already, error } = await searchParams;
   if (account.role !== "supervisor" && account.role !== "engineer") {
     return (
       <>
@@ -201,6 +203,13 @@ export default async function OverviewPage({
 
         <div className="card">
           <h3>อาการที่ยังไม่มี playbook ({unanswered.no_playbook.count})</h3>
+          {drafting !== undefined && (
+            <p className="recorded">
+              {already === undefined
+                ? `ขอร่าง ${drafting} แล้ว — worker-authoring จะดึงไปทำ แล้วไปโผล่ที่คิวรีวิว`
+                : `${drafting} อยู่ในคิวร่างอยู่แล้ว — ใบเดิม ไม่ได้ขอซ้ำ`}
+            </p>
+          )}
           {unanswered.no_playbook.rows.length === 0 ? (
             <p className="muted">ไม่มี</p>
           ) : (
@@ -211,6 +220,32 @@ export default async function OverviewPage({
                   ครั้ง ({row.occurrences} เหตุการณ์)
                   {row.proposals_waiting > 0 && (
                     <span className="muted"> · มีร่างรออนุมัติ {row.proposals_waiting}</span>
+                  )}
+                  {/* Engineers only, because the endpoint admits nobody else:
+                      the worker behind it holds the one GPU (ADR-029), and a
+                      queue anybody can fill is one its owner does not control.
+                      Hidden here as well as refused there - a button that
+                      always answers 403 is a screen lying about what it does. */}
+                  {account.role === "engineer" && row.proposals_waiting === 0 && (
+                    <details>
+                      <summary>ขอร่างจากคู่มือ</summary>
+                      <form method="post" action="/overview/draft">
+                        <input type="hidden" name="symptom_code" value={row.symptom_code} />
+                        <input type="hidden" name="machine_model" value={row.machine_model} />
+                        <label className="field">
+                          <span>ถามคู่มือว่าอะไร</span>
+                          <input
+                            type="text"
+                            name="question"
+                            required
+                            placeholder="เช่น มอเตอร์สายพานร้อนเกิน 85 องศา"
+                          />
+                        </label>
+                        <button type="submit" className="quiet">
+                          ขอร่าง
+                        </button>
+                      </form>
+                    </details>
                   )}
                 </li>
               ))}

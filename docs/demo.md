@@ -81,11 +81,28 @@ The web app is at **http://localhost:3000**, the API at
    can absorb, and - at the bottom - the symptoms the system has nothing to serve
    (ADR-060, ADR-063). That last panel is the one to point at: a system that says
    what it cannot answer is the argument for principle 5 in one screen.
-3. **Still as `eng-1`** → **คิวรีวิว playbook** (`/review`). The draft beside the
-   page it was drafted from, per-step provenance, and approve / edit / send back
-   (ADR-064). This is where ADR-003 stops being a claim: nothing reaches a
-   technician that a person did not approve. **See the note below about what the
-   queue contains.**
+3. **Still as `eng-1`**, ask for a draft and then approve it. This is the walk
+   that makes ADR-003 something a person watches rather than a claim they are
+   asked to accept.
+
+   On `/overview`, the panel from step 2 lists the symptoms nothing serves. Open
+   **ขอร่างจากคู่มือ** under one of them and type what to ask the manual - the
+   field is there because `SYM-014` retrieves nothing and "belt motor running
+   above 85 degrees" retrieves the page (ADR-040). The button is an engineer's
+   only: the worker behind it holds the one GPU (ADR-029).
+
+   Then **คิวรีวิว playbook** (`/review`): the draft beside the page it was
+   drafted from, provenance per step, and approve / edit / send back (ADR-064).
+   Approve it, and the next ticket for that symptom carries those steps with
+   their page numbers instead of a fallback estimate - which is principle 2 in
+   one screen.
+
+   Two things worth saying while it is open. The drafter has **no model in it**:
+   `worker-authoring` builds `ExtractiveDrafter`, which picks the highest-scoring
+   page and quotes it, so what is on screen is text from the manual rather than
+   text about it (ADR-037 §9). And the queue fills only after `worker-authoring`
+   has indexed the manuals - `seed_demo.py` queues them as it stores them, and
+   the first pass takes a minute.
 4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
    **งานที่รอคุณยืนยัน**. The report from step 1 is in the queue behind this
    panel: the job the operator raised reaches a technician only once somebody
@@ -103,11 +120,23 @@ The web app is at **http://localhost:3000**, the API at
 
 Say these rather than letting somebody find them.
 
-- **The review queue is empty after a plain seed.** `seed_demo.py` puts the
-  manuals in the library; the ingest job that drafts playbooks from them is
-  enqueued by the API's upload endpoint, not by the script, and drafting needs a
-  model pulled into `llm-server`. Until both happen, `/review` is an empty queue
-  rather than a broken screen.
+- **The review queue starts empty, and fills when somebody asks.** `seed_demo.py`
+  queues each manual for indexing as it stores it, so retrieval has something to
+  find - but a draft is written only when an engineer asks for one, from the gaps
+  panel in step 3. Nothing drafts speculatively: every draft costs a pass on the
+  one GPU-bound worker (ADR-029), and a queue that fills itself is a queue its
+  owner does not control.
+
+  It is **not** waiting on a model server. `worker-authoring` builds its drafter
+  as `ExtractiveDrafter()` - the backend with no model in it (ADR-037 §9) - and
+  nothing in this repository constructs the `llm-server` one. That container runs
+  and currently serves nothing, which is worth saying out loud rather than
+  implying a capability the stack does not have.
+
+  The **embedding** model is a different thing and does ship: it is baked into
+  the image at build time (ADR-079), so a machine with no route to the internet
+  indexes a manual rather than failing at the first one with a TLS error that
+  says nothing about a model.
 - **The technician's screen has nothing to place work on.** Dispatch needs a
   roster - a technician record with skills, and a shift assignment - and
   `seed_demo.py` deliberately creates neither. It is the script an operator
