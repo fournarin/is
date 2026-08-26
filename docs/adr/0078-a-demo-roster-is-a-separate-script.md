@@ -54,45 +54,58 @@ declare themselves.
 So the roster gets its own script, which says what it is every time it runs, in
 the tone `worker-runtime` uses about `SIGNAL_SOURCE=synthetic`.
 
-### 2. Three technicians, not one
+### 2. The simulator's roster, copied rather than invented
 
-One technician makes the load gate a straight line: every job fits or does not,
-and `load_ratio` moves in one step per job. Three is the smallest roster where
-ADR-011's three bands are reachable inside one shift at the synthetic scenario's
-arrival rate, so the behaviour the advisor described most concretely - hold the
-non-urgent work when the shift is heavy, release it when it is light - is
-something a demo can actually make happen rather than describe.
+`pdm.sim.scenarios.LINE_A_ONE_SHIFT` already puts three technicians on a shift -
+`tech-1`, `tech-2`, `tech-3` - and every figure in `docs/results/comparison.md`
+comes from runs of it. The demo takes the same three, by the same names.
 
-It is also the roster `docs/results/comparison.md` measured against. A demo and a
-measurement that disagree about the shape of a shift are two claims about
-different plants.
+That is the whole argument. A demo and a measurement that disagree about how many
+people are on a shift are two claims about different plants, and the one on the
+screen is the one an advisor will remember. Copying also inherits the scenario's
+own honesty about the number: its comment says the provenance of "three" is
+*none*, because the plant has not said how many are on a shift, and that it is a
+parameter to vary rather than a fact.
 
-Each one gets an account, because work placed on somebody nobody can sign in as
-is work the demo cannot open.
+One technician would additionally make the load gate a straight line - every job
+fits or does not, and `load_ratio` moves in one step per job - so three is also
+the smaller roster in which ADR-011's bands are worth showing.
 
-### 3. Between the three of them they hold every skill in `plant.yaml`
+Each gets an account, because work placed on somebody nobody can sign in as is
+work the demo cannot open.
 
-Not "the skill the demo needs", because that is not knowable in advance: a
-playbook's `required_skill` is chosen when the draft is assembled, from the same
-config list, and the demo's path through the corpus can change with a manual.
+### 3. Every skill to each of them, with what that costs said out loud
 
-So the roster covers all four, and the script refuses to write anything if it
-names a skill `plant.yaml` does not have - checked before the first insert,
-because a roster that is half right is worse than none. A round that finds
-nobody with a required skill correctly leaves the job unassigned with a reason,
-and that correct answer is indistinguishable, on a demo screen, from a bug.
+The simulator's roster again, and for the reason it gives: a ticket priced from
+`fallback_minutes` carries no required skill at all (ADR-041), so guessing who
+holds what changes nothing it can measure. A playbook's `required_skill` is
+chosen when the draft is assembled and is not knowable when the roster is
+written, and a round that finds nobody holding it correctly leaves the job
+unassigned with a reason - an answer indistinguishable, on a demo screen, from a
+defect.
 
-### 4. Half a shift is available for repair work, and that is an assumption
+The cost is that **nothing in this demo exercises skill matching**, and the w3
+term of the score says nothing during it. The simulator's own comment says the
+same about its runs. Better stated here than discovered by somebody asking what
+would happen if the only hydraulics technician were on leave.
 
-`available_minutes` is **240 of a 480-minute shift**. Provenance: this record - a
-decision, not a measurement. The argument is that a technician also walks the
-line, runs PM rounds, hands over and eats, and that treating the whole shift as
-repair capacity would make `load_ratio` read low and the gate release more work
-than there are hours for.
+### 4. The whole shift is available, because that is what the measurement assumed
 
-The script prints it as an assumption every time it runs, and this record is
-where it changes. `docs/results/comparison.md` used the same 240, so the demo
-does not quietly contradict the measurement standing beside it.
+`available_minutes` is **480, the length of the shift**, taken from
+`src/pdm/sim/scenarios.py` rather than chosen here.
+
+A first draft of this record put 240 - half a shift - on the argument that a
+technician also walks the line, runs PM rounds, hands over and eats. That is
+probably closer to true, and it is the wrong number to use anyway: it would put a
+different capacity under the same load gate the comparison measured, so a demo
+showing the gate holding work would be showing a gate no published figure
+describes. Two assumptions, both unmeasured, is one more than this project can
+defend.
+
+So the demo inherits the simulator's, and the honest thing to say when somebody
+asks is that eight hours of repair capacity is optimistic and that the number
+changes in one place when the plant says what is true. The script prints it every
+run.
 
 ### 5. The shift is resolved at the moment the script runs
 

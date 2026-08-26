@@ -33,41 +33,31 @@ from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
 
-# Three, not one: one technician makes the load gate a straight line, and three
-# is the smallest roster where ADR-011's three bands are reachable in a single
-# shift - which is the behaviour the advisor described most concretely. It is
-# also the roster `docs/results/comparison.md` measured against (ADR-078 §2).
+# The same three people `pdm.sim.scenarios.LINE_A_ONE_SHIFT` puts on a shift -
+# same names, same count, same capacity - so that the demo and the measurement in
+# `docs/results/comparison.md` describe one plant rather than two (ADR-078 §2).
 #
-# Between them they hold **all four** skills in `plant.yaml`. A playbook's
-# `required_skill` is chosen at drafting time and is not knowable here, and a
-# round that finds nobody with the skill correctly leaves the job unassigned -
-# which on a demo screen is indistinguishable from a bug (ADR-078 §3).
+# tech-1 is `seed_demo.py`'s account; the other two are created here.
 TECHNICIANS = [
-    (
-        UserId("tech-1"),
-        "Somchai (technician)",
-        "demo-technician",
-        ("robot_mechanical", "electrical"),
-    ),
-    (
-        UserId("tech-2"),
-        "Wichai (technician)",
-        "demo-technician-2",
-        ("robot_controls", "electrical"),
-    ),
-    (
-        UserId("tech-3"),
-        "Pimchanok (technician)",
-        "demo-technician-3",
-        ("hydraulics", "robot_mechanical"),
-    ),
+    (UserId("tech-1"), "Somchai (technician)", "demo-technician"),
+    (UserId("tech-2"), "Wichai (technician)", "demo-technician-2"),
+    (UserId("tech-3"), "Pimchanok (technician)", "demo-technician-3"),
 ]
 
-# Half of an eight-hour shift. Provenance: ADR-078 §4 - a recorded decision and
-# not a measurement. A technician also walks the line, runs PM rounds, hands over
-# and eats; counting the whole shift as repair capacity makes `load_ratio` read
-# low and the gate release more work than there are hours for.
-AVAILABLE_MINUTES = 240
+# Every skill in plant.yaml, to each of them, which is what the simulator's
+# roster does and for the reason it gives: a ticket priced from
+# `fallback_minutes` carries no required skill at all, and a round that finds
+# nobody holding a skill correctly leaves the job unassigned - an answer that
+# reads on a demo screen as a bug. The cost is stated rather than discovered:
+# nothing in this demo exercises skill matching (ADR-078 §3).
+
+# The whole shift. Provenance: `src/pdm/sim/scenarios.py`, which assigns
+# `available_minutes` the full length of the shift, and whose runs are every
+# figure in `docs/results/comparison.md`. A technician is not really available
+# for eight hours of repair work - but a demo that assumed otherwise would put a
+# different capacity under the same load gate the measurement used, and the two
+# would stop describing the same plant (ADR-078 §4).
+AVAILABLE_MINUTES = 480
 
 # The world this script extends. Their absence is the one fact available that
 # says "this is not the demo database", and it is what §6 refuses on.
@@ -85,16 +75,11 @@ def main() -> int:
     now = clock.now()
     auth = Authentication(LocalAccounts(), clock)
 
-    # Every skill named here has to exist in plant.yaml, or the round quietly
-    # matches nobody. Checked before anything is written, because a roster that
-    # is half correct is worse than none: the missing half looks like a
-    # scheduling bug.
-    unknown = sorted(
-        {skill for _, _, _, skills in TECHNICIANS for skill in skills}
-        - {str(skill) for skill in config.skills}
-    )
-    if unknown:
-        print(f"skills not in plant.yaml: {', '.join(unknown)}")
+    # A plant with no skills configured would produce three technicians who can
+    # do nothing, and a round that leaves every job unassigned for a reason that
+    # sounds like a scheduling defect. Refused before anything is written.
+    if not config.skills:
+        print("plant.yaml lists no skills, so a roster from it can perform nothing")
         return 1
 
     window = shift_at(config.shifts.values(), now, config.timezone)
@@ -114,8 +99,9 @@ def main() -> int:
             print("run `uv run python scripts/seed_demo.py` first (ADR-078 section 6)")
             return 1
 
+        skills = frozenset(SkillId(str(skill)) for skill in config.skills)
         written: list[str] = []
-        for user, name, password, skills in TECHNICIANS:
+        for user, name, password in TECHNICIANS:
             if auth_repo.account(conn, user) is None:
                 auth.create_account(
                     conn, user=user, display_name=name, role=Role.TECHNICIAN, password=password
@@ -124,11 +110,7 @@ def main() -> int:
             else:
                 note = "account already there"
 
-            dispatch_repo.add_technician(
-                conn,
-                Technician(user=user, skills=frozenset(SkillId(skill) for skill in skills)),
-                now=now,
-            )
+            dispatch_repo.add_technician(conn, Technician(user=user, skills=skills), now=now)
             dispatch_repo.assign_to_shift(
                 conn,
                 ShiftAssignment(
@@ -138,7 +120,7 @@ def main() -> int:
                     available_minutes=AVAILABLE_MINUTES,
                 ),
             )
-            written.append(f"  {user:8} {', '.join(skills):32} {note}")
+            written.append(f"  {user:8} {note}")
 
         conn.commit()
 
@@ -150,8 +132,12 @@ def main() -> int:
     for line in written:
         print(line)
     shift_minutes = int(config.shifts[window.shift_id].length.total_seconds() // 60)
-    print(f"\n{AVAILABLE_MINUTES} minutes each, of a {shift_minutes}-minute shift.")
-    print("That split is an assumption recorded in ADR-078, not a measurement.")
+    whole = " (the whole of it)" if AVAILABLE_MINUTES == shift_minutes else ""
+    print(f"\n{AVAILABLE_MINUTES} available minutes each of a {shift_minutes}-minute shift{whole},")
+    print("holding", end=" ")
+    print(f"every skill in plant.yaml: {', '.join(sorted(str(s) for s in config.skills))}")
+    print("Those are the simulator's assumptions, so this demo and the comparison in")
+    print("docs/results/ describe the same shift (ADR-078).")
     print("\nThese three people do not exist. This script is for a demo; the plant's")
     print("own roster replaces every row it writes.")
     return 0
