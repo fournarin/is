@@ -57,6 +57,7 @@ from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
 from pdm.triggers import repo as findings
 from pdm.work import WorkOrders
+from pdm.work import repo as work_repo
 
 # Where the screens are. The defaults are the ports docker-compose.yml publishes
 # on the host, which is what a person running this check by hand has. The
@@ -184,6 +185,11 @@ def seed() -> None:
 
         # Low-severity work the heavy band will hold back, so the panel has
         # something to name and something to release (ADR-011).
+        #
+        # `distinct_from` carries what is already open on that machine, because a
+        # report is refused while a machine has work open unless somebody says
+        # this is a different fault (ADR-077 §3). Three separate faults on one
+        # machine is what this fixture is for, and it now has to say so.
         for description in ("weeping seal", "loose guard", "worn belt"):
             orders.from_report(
                 conn,
@@ -192,6 +198,9 @@ def seed() -> None:
                 severity=Severity.LOW,
                 reported_by=SUPERVISOR,
                 description=description,
+                # Read again each time round, so the third report names the two
+                # before it as well as the Finding's own order.
+                distinct_from=work_repo.open_for_machine(conn, predicted_at),
             )
         conn.commit()
 

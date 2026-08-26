@@ -141,7 +141,10 @@ PEOPLE = [
         "demo-operator",
         "Malee",
         "ผู้ดูแลเอกสาร",
-        ["ยังไม่มีหน้าจอในระบบ"],
+        # One screen, and the first this shell has ever offered an operator: the
+        # person standing next to a machine when it starts making a noise is as
+        # likely to be one of them (slice 16.2, ADR-077 §1).
+        ["แจ้งงานเสีย"],
         ["งานของคุณ", "คิวรีวิว playbook", "ภาพรวมสายการผลิต"],
     ),
 ]
