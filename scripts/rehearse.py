@@ -1,4 +1,4 @@
-"""The rehearsal: the whole stack from nothing, then the four screen checks (ADR-067).
+"""The rehearsal: the whole stack from nothing, then the screen checks (ADR-067).
 
     uv run python scripts/rehearse.py            # reuse whatever is already up
     uv run python scripts/rehearse.py --fresh    # destroy the volumes first, then start cold
@@ -95,7 +95,7 @@ class Result:
     """What one check did. The output is kept even when it passed.
 
     A check that passes while printing a warning is the case this script exists
-    to catch, and a summary of four ticks would hide it.
+    to catch, and a summary of ticks alone would hide it.
     """
 
     name: str
@@ -206,7 +206,7 @@ def main() -> int:
         print("\nThe seed failed, so the checks below would only report its absence.")
         return 1
 
-    say("The four checks, in the order the seeding allows")
+    say(f"The {len(CHECKS)} checks, in the order the seeding allows")
     results: list[Result] = []
     for check in CHECKS:
         print(f"\n--- {check}")
@@ -214,10 +214,9 @@ def main() -> int:
         print(result.output or "  (no output)")
         results.append(result)
 
-    # The four screen checks after the first truncated `account` on their way
-    # through. Without
-    # this, a rehearsal that reported four passes would leave behind a stack
-    # nobody can sign in to - which is the opposite of what it is for.
+    # Every screen check after the first truncated `account` on its way through.
+    # Without this, a rehearsal that reported nothing but passes would leave
+    # behind a stack nobody can sign in to - the opposite of what it is for.
     say("Seeding the demo world again, over what the checks truncated")
     reseeded = in_the_stack(SEED)
     if not reseeded.ok:
@@ -233,7 +232,7 @@ def main() -> int:
 
     say("What the rehearsal found")
     # Said before the results rather than after. A warm run reuses a database
-    # somebody may have hand-fixed, and reading its four ticks as proof that the
+    # somebody may have hand-fixed, and reading its ticks as proof that the
     # stack starts from nothing is the one wrong conclusion available here.
     print(
         "  started from nothing (--fresh)"
@@ -247,7 +246,7 @@ def main() -> int:
         print(f"\n{len(failed)} of {len(results)} failed. The output of each is above.")
         return 1
 
-    print("\nAll four screens answered. `docs/demo.md` says what to click and as whom.")
+    print(f"\nAll {len(results)} screens answered. `docs/demo.md` says what to click and as whom.")
     if not args.down:
         print("The stack is still up; SIGNAL_SOURCE is synthetic, so work orders will")
         print("appear on their own. Every one of them is about a machine that is not")
