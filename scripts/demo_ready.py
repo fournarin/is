@@ -67,7 +67,9 @@ def main() -> int:
         proposed = 0
         if confirmation == "supervisor":
             row = conn.execute(
-                "SELECT count(*) AS n FROM dispatch_proposal WHERE status = 'proposed'"
+                # `state`, and `pending` - the column and the value the
+                # confirmation gate actually uses (migration 0012).
+                "SELECT count(*) AS n FROM dispatch_proposal WHERE state = 'pending'"
             ).fetchone()
             proposed = int(row["n"]) if row else 0
 
