@@ -132,7 +132,7 @@ def main() -> int:
     for line in written:
         print(line)
     shift_minutes = int(config.shifts[window.shift_id].length.total_seconds() // 60)
-    whole = " (the whole of it)" if AVAILABLE_MINUTES == shift_minutes else ""
+    whole = " (the whole of it)" if shift_minutes == AVAILABLE_MINUTES else ""
     print(f"\n{AVAILABLE_MINUTES} available minutes each of a {shift_minutes}-minute shift{whole},")
     print("holding", end=" ")
     print(f"every skill in plant.yaml: {', '.join(sorted(str(s) for s in config.skills))}")

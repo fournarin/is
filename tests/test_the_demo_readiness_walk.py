@@ -28,6 +28,7 @@ from pdm.contracts import (
     ComponentLabel,
     Finding,
     MachineId,
+    MachineModel,
     Role,
     RuleId,
     Severity,
@@ -53,6 +54,7 @@ pytestmark = pytest.mark.db
 CONFIG = load_config(Path("config"))
 FALLBACK = {str(model): dict(rows) for model, rows in CONFIG.policy.fallback_minutes.items()}
 MACHINE = MachineId("MC-001")
+R2000 = MachineModel("R-2000iC")
 DEMO_ACCOUNTS = [
     (UserId("tech-1"), Role.TECHNICIAN),
     (UserId("eng-1"), Role.ENGINEER),
@@ -196,7 +198,7 @@ class TestItNamesTheFirstBrokenLink:
         orders.from_report(
             conn,
             machine_id=MACHINE,
-            machine_model="R-2000iC",
+            machine_model=R2000,
             severity=Severity.MEDIUM,
             reported_by=UserId("op-1"),
             description="oil under the base plate",
@@ -218,7 +220,7 @@ class TestItSaysReadyWhenSomebodyCanBeShownSomething:
         issued = orders.from_report(
             conn,
             machine_id=MACHINE,
-            machine_model="R-2000iC",
+            machine_model=R2000,
             severity=Severity.MEDIUM,
             reported_by=UserId("op-1"),
             description="oil under the base plate",
@@ -240,7 +242,7 @@ class TestItSaysReadyWhenSomebodyCanBeShownSomething:
         issued = orders.from_report(
             conn,
             machine_id=MACHINE,
-            machine_model="R-2000iC",
+            machine_model=R2000,
             severity=Severity.MEDIUM,
             reported_by=UserId("op-1"),
             description="oil under the base plate",
