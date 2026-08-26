@@ -27,6 +27,25 @@ mid-pull stops answering and has to be restarted.
 It ends with one line per check saying `ok` or `FAIL`, and the output of each
 check above them.
 
+**What it leaves behind**, measured on a run of 2026-08-26 that took 4m16s from
+`down -v` to the last line (the first build on a machine that has never built
+this is nearer twenty minutes, most of it downloading):
+
+| | |
+|---|---|
+| accounts | 6 - the four demo people, plus the two extra technicians the roster invents |
+| technicians rostered | 3, on the shift that was running |
+| manuals | 2, **19 chunks indexed** |
+| approved playbooks | **1 - SYM-047 on the M-710iC** |
+| work orders | 2, with **2 proposals waiting for the shift lead** |
+
+That single playbook is not seeded: `web/check-the-content-path.py` drafts and
+approves it while proving ADR-003 works, and leaves it there. Two consequences
+worth knowing before the room fills. A ticket for an M-710iC cooling-fan fault
+**will** carry steps and page numbers, which is the best thing on any of these
+screens - and `SYM-047` will no longer be on the gaps panel, so step 3 below
+should ask for a draft of something else.
+
 Without `--fresh` it reuses whatever volumes are already there, which is faster
 and proves less. The report says which of the two happened.
 
@@ -91,10 +110,14 @@ The web app is at **http://localhost:3000**, the API at
    above 85 degrees" retrieves the page (ADR-040). The button is an engineer's
    only: the worker behind it holds the one GPU (ADR-029).
 
-   **Use `SYM-047` on the M-710iC if there is a choice**, and ask in Thai. That
-   is the symptom `docs/drafting-baseline.md` measured the drafter getting right,
-   and asking a Thai question of an English manual is the cross-lingual case the
-   embedding model was chosen for (ADR-029, ADR-035).
+   Ask **in Thai**: a Thai question of an English manual is the cross-lingual case
+   the embedding model was chosen for (ADR-029, ADR-035), and it is the case the
+   plant will actually use.
+
+   `SYM-047` is the symptom `docs/drafting-baseline.md` measured the drafter
+   getting right - but after a rehearsal it is already approved, so what is left
+   on the panel is one of the two it gets wrong. That is worth showing rather
+   than working around; see the third note below.
 
    Then **คิวรีวิว playbook** (`/review`): the draft beside the page it was
    drafted from, provenance per step, and approve / edit / send back (ADR-064).
