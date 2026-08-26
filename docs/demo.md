@@ -91,18 +91,31 @@ The web app is at **http://localhost:3000**, the API at
    above 85 degrees" retrieves the page (ADR-040). The button is an engineer's
    only: the worker behind it holds the one GPU (ADR-029).
 
+   **Use `SYM-047` on the M-710iC if there is a choice**, and ask in Thai. That
+   is the symptom `docs/drafting-baseline.md` measured the drafter getting right,
+   and asking a Thai question of an English manual is the cross-lingual case the
+   embedding model was chosen for (ADR-029, ADR-035).
+
    Then **คิวรีวิว playbook** (`/review`): the draft beside the page it was
    drafted from, provenance per step, and approve / edit / send back (ADR-064).
    Approve it, and the next ticket for that symptom carries those steps with
    their page numbers instead of a fallback estimate - which is principle 2 in
    one screen.
 
-   Two things worth saying while it is open. The drafter has **no model in it**:
+   Three things worth saying while it is open. The drafter has **no model in it**:
    `worker-authoring` builds `ExtractiveDrafter`, which picks the highest-scoring
    page and quotes it, so what is on screen is text from the manual rather than
-   text about it (ADR-037 §9). And the queue fills only after `worker-authoring`
-   has indexed the manuals - `seed_demo.py` queues them as it stores them, and
-   the first pass takes a minute.
+   text about it (ADR-037 §9). The queue fills only after `worker-authoring` has
+   indexed the manuals - `seed_demo.py` queues them as it stores them, and the
+   first pass takes a minute.
+
+   And the drafter is **wrong about two of the three repair symptoms in the
+   corpus**, which is worth saying before somebody finds it. `SYM-014` and
+   `SYM-021` are handed an overview page that repeats the question's words rather
+   than the procedure a page later; `docs/drafting-baseline.md` has the table and
+   names what fixes it - a reranker, which is not built. Showing that on purpose
+   is a better answer than hoping nobody asks: it is the same page a reviewer
+   would reject, and rejecting it is what the screen is for.
 4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
    **งานที่รอคุณยืนยัน**. The report from step 1 is in the queue behind this
    panel: the job the operator raised reaches a technician only once somebody
