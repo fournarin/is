@@ -2,7 +2,7 @@
 
 Run by hand, never by CI:
 
-    DATABASE_URL=... uv run python scripts/measure_retrieval.py
+    DATABASE_URL=... FASTEMBED_CACHE_PATH=... uv run python scripts/measure_retrieval.py
 
 CI does not run this and must not. It needs the embedding model, which is a
 download of hundreds of megabytes, and lessons_carried.md 3.6 is explicit that
