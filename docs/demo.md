@@ -16,7 +16,15 @@ uv run python scripts/rehearse.py --fresh
 That is `scripts/rehearse.py` (ADR-067): it destroys this stack's volumes, brings
 all seven containers up, seeds the accounts and the manuals, runs the five
 `web/check-*.py` screen checks in the order the seeding allows, seeds again over
-what those checks truncated, and leaves the stack running.
+what those checks truncated, **seeds the demo roster**, starts `worker-runtime`
+and then waits for the first round to place work.
+
+That last wait is the difference between a stack whose screens answer and a stack
+with something on them. The checks each seed their own world and truncate it
+again, so passing them proves the screens work and says nothing about what a
+person will see; the wait ends when `scripts/demo_ready.py` finds work waiting
+for the shift lead, and fails naming the link that is missing if it never
+arrives.
 
 Expect the first run to take a while, and to need room: it builds two images and
 pulls three, and between the layers, the build cache and the volumes it wants
@@ -26,6 +34,19 @@ mid-pull stops answering and has to be restarted.
 
 It ends with one line per check saying `ok` or `FAIL`, and the output of each
 check above them.
+
+Before showing the stack to anybody - especially one that has been up for a
+while - ask it whether it still has anything to show:
+
+```
+docker compose --env-file .env.example run --rm --no-deps rehearsal \
+  python scripts/demo_ready.py
+```
+
+It walks the chain in order - accounts, roster, Findings, tickets, a round's
+proposals - and names the first link that is missing rather than reporting a
+total, because "no proposals" has five causes and they are fixed five different
+ways.
 
 Without `--fresh` it reuses whatever volumes are already there, which is faster
 and proves less. The report says which of the two happened.
@@ -104,18 +125,30 @@ The web app is at **http://localhost:3000**, the API at
 Say these rather than letting somebody find them.
 
 - **The review queue is empty after a plain seed.** `seed_demo.py` puts the
-  manuals in the library; the ingest job that drafts playbooks from them is
-  enqueued by the API's upload endpoint, not by the script, and drafting needs a
-  model pulled into `llm-server`. Until both happen, `/review` is an empty queue
-  rather than a broken screen.
-- **The technician's screen has nothing to place work on.** Dispatch needs a
-  roster - a technician record with skills, and a shift assignment - and
-  `seed_demo.py` deliberately creates neither. It is the script an operator
-  reruns on the plant's machine, and inventing technicians there would be the
-  same defect as inventing signals (ADR-032, ADR-044 §5). A demo roster is a
-  separate thing that does not exist yet. With one, step 4 above comes first:
-  `policy.yaml` ships `confirmation: supervisor`, so a technician's screen says
-  the work is waiting on their shift lead until somebody confirms it.
+  manuals in the library, but the ingest job that indexes them is enqueued by the
+  API's upload endpoint and not by the script, so nothing is chunked, embedded or
+  searchable - and a draft is assembled out of retrieved pages. Until a manual
+  goes in through the API, `/review` is an empty queue rather than a broken
+  screen.
+
+  It is **not** waiting on a model. `worker-authoring` builds its drafter as
+  `ExtractiveDrafter()` - the backend with no model in it (ADR-037 §9) - and
+  nothing in this repository constructs the `llm-server` one. That container is
+  running and currently serves nothing, which is worth saying out loud rather
+  than implying a capability the stack does not have.
+- **The three technicians in this demo do not exist.** Dispatch needs a roster -
+  a technician record with skills, and a shift assignment - and `seed_demo.py`
+  deliberately creates neither, because it is the script an operator reruns on
+  the plant's own machine and inventing people there is the same defect as
+  inventing signals (ADR-032, ADR-044 §5). `scripts/seed_demo_roster.py` is the
+  separate script that does invent them, says so every time it runs, and refuses
+  to run anywhere the demo accounts are not already present (ADR-078). The plant's
+  own roster replaces every row it writes, and it is on the same request as the
+  machine register and the maintenance history.
+
+  Note the order this puts step 4 in: `policy.yaml` ships `confirmation:
+  supervisor`, so a technician's screen says the work is waiting on their shift
+  lead until somebody confirms it.
 - **Every work order in this demo is about a machine that is not there.**
   `SIGNAL_SOURCE=synthetic` in `.env.example`, and `worker-runtime` says so in a
   warning at boot. On screen a synthetic ticket is indistinguishable from a real
