@@ -114,7 +114,7 @@ forbidden_modules =
 # design.md section 7 - the simulator must run hundreds of scenarios in CI
 # ─────────────────────────────────────────────────────────────
 [importlinter:contract:sim-touches-domain-only]
-name = sim/ may touch only contracts, dispatch, work and platform (ADR-030)
+name = sim/ may touch only contracts, dispatch, work and platform (ADR-030, ADR-051)
 type = forbidden
 source_modules =
     pdm.sim
@@ -183,7 +183,7 @@ forbidden_modules =
 
 
 [importlinter:contract:baselines-know-nothing-of-dispatch]
-name = baselines/ must not import dispatch/ (ADR-046 section 5)
+name = baselines/ must not import dispatch/ (ADR-051, ADR-046 section 5)
 type = forbidden
 source_modules =
     pdm.baselines
