@@ -3,7 +3,8 @@
 Run by hand, never by CI, for the reason `measure_retrieval.py` gives: it needs
 the embedding model, which is hundreds of megabytes.
 
-    DATABASE_URL=postgresql://.../pdm_test uv run python scripts/measure_drafting.py
+    DATABASE_URL=postgresql://.../pdm_test FASTEMBED_CACHE_PATH=... \
+        uv run python scripts/measure_drafting.py
 
 What is measured, per symptom in the answer key:
 

@@ -453,12 +453,36 @@ class TestAskingForADraft:
             "/playbooks/drafts",
             json={"symptom_code": "SYM-021", "machine_model": "R-2000iC", "question": "one"},
         )
+        # Not SYM-014: the queue already holds a draft of that one, which is the
+        # test below rather than this one.
         client.post(
             "/playbooks/drafts",
-            json={"symptom_code": "SYM-014", "machine_model": "R-2000iC", "question": "two"},
+            json={"symptom_code": "SYM-047", "machine_model": "R-2000iC", "question": "two"},
         )
 
         assert conn.execute("SELECT count(*) FROM job WHERE kind = 'draft'").fetchone() == (2,)
+
+    def test_a_draft_already_waiting_for_review_answers_the_ask(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        """The screen hides the button once a draft is waiting; this is the same
+        rule at the endpoint, which `/docs` and curl also reach. A second draft
+        would sit beside the first in a queue that merges nothing."""
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(
+            "/playbooks/drafts",
+            json={
+                "symptom_code": str(SYM),
+                "machine_model": str(R2000IC),
+                "question": "asked while one is already waiting",
+            },
+        )
+
+        assert response.status_code == 202
+        assert response.json()["awaiting_review"] is True
+        assert response.json()["proposal"] == setup["proposal_id"]
+        assert conn.execute("SELECT count(*) FROM job WHERE kind = 'draft'").fetchone() == (0,)
 
     def test_a_question_of_only_spaces_is_refused(self, client: TestClient) -> None:
         _log_in(client, Role.ENGINEER)

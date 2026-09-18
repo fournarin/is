@@ -161,10 +161,15 @@ def wait_for(sql: str, *, seconds: int, what: str) -> None:
     the check going red rather than hanging.
     """
     deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        if counted(sql) > 0:
-            return
-        time.sleep(3)
+    # One connection for the whole wait rather than one per tick, which is up to
+    # a hundred of them. Autocommit because the alternative is a transaction
+    # held open for five minutes to ask a question every three seconds.
+    with connect(os.environ["DATABASE_URL"], autocommit=True) as conn:
+        while time.monotonic() < deadline:
+            row = conn.execute(sql).fetchone()
+            if row is not None and int(row[0]) > 0:
+                return
+            time.sleep(3)
     expect(False, f"{what} within {seconds}s - is worker-authoring running?")
 
 
@@ -179,11 +184,17 @@ def hidden_fields(page: str) -> list[tuple[str, str]]:
     return fields
 
 
-def form_with(page: str, marker: str) -> list[tuple[str, str]]:
+def form_with(page: str, *markers: str) -> list[tuple[str, str]]:
+    """The hidden fields of the first form matching every marker.
+
+    Every row of the gaps panel renders the same draft-request form, so a marker
+    naming the field picks whichever row happens to render first. Identifying a
+    row takes its own value as well, which is why this takes more than one.
+    """
     for form in re.findall(r"<form\b.*?</form>", page, re.DOTALL):
-        if marker in form:
+        if all(marker in form for marker in markers):
             return hidden_fields(form)
-    raise AssertionError(f"no form containing {marker!r}")
+    raise AssertionError(f"no form containing all of {markers!r}")
 
 
 def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
@@ -240,14 +251,27 @@ def main() -> None:
     expect("ขอร่างจากคู่มือ" in overview, "and an engineer is offered a draft from that row")
 
     print("\n3. asking in Thai, of manuals written in English (ADR-029)")
-    submit(
-        "/overview/draft",
-        [
-            *form_with(overview, 'name="question"'),
-            ("symptom_code", str(SYM)),
-            ("machine_model", str(ANSWER.machine_model)),
-            ("question", ANSWER.queries.th),
-        ],
+    # The row's own hidden fields rather than values typed here: what the check
+    # proves is that the screen carries the right pair, and a value supplied
+    # twice is the first of the two, not the one written last.
+    asked = readable(
+        submit(
+            "/overview/draft",
+            [
+                *form_with(overview, 'name="question"', f'value="{SYM}"'),
+                ("question", ANSWER.queries.th),
+            ],
+        )
+    )
+    # Every answer from that route is a redirect the opener follows, so a refusal
+    # arrives as a page rather than as an error. Unread, it becomes a five-minute
+    # wait blamed on worker-authoring.
+    refused = re.search(r'role="alert">([^<]*)', asked)
+    expect(
+        refused is None,
+        "the screen accepted the request"
+        if refused is None
+        else f"the screen refused it: {refused.group(1).strip()}",
     )
     wait_for(
         "SELECT count(*) FROM playbook_proposal",
@@ -291,7 +315,10 @@ def main() -> None:
             ],
         )
     )
-    expect("อนุมัติ" in approved or "คิวรีวิว" in approved, "the queue answers the approval")
+    # Not "the page mentions the queue": "คิวรีวิว" is in the nav of every screen
+    # behind sign-in, so it answers whether the approval happened or not. What a
+    # successful one removes is the row itself.
+    expect(str(SYM) not in approved, "the queue no longer lists what was just approved")
 
     with connect(os.environ["DATABASE_URL"]) as conn:
         book = conn.execute(

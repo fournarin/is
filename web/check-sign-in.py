@@ -113,14 +113,26 @@ def expect(condition: bool, message: str) -> None:
 
 
 # user, password, display name, role on screen, offered, not offered
+#
+# "แจ้งงานเสีย" is on every line of this table because slice 16.2 offers it to
+# every role: whoever is standing at the machine is who reports what the rules
+# did not catch (ADR-077 §1). It is the one screen with no role behind it, so a
+# list that omitted it would be a list nobody would notice going wrong.
 PEOPLE = [
-    ("tech-1", "demo-technician", "Somchai", "ช่าง", ["งานของคุณ"], ["คิวรีวิว playbook"]),
+    (
+        "tech-1",
+        "demo-technician",
+        "Somchai",
+        "ช่าง",
+        ["งานของคุณ", "แจ้งงานเสีย"],
+        ["คิวรีวิว playbook"],
+    ),
     (
         "eng-1",
         "demo-engineer",
         "Pranee",
         "วิศวกร",
-        ["คิวรีวิว playbook", "ภาพรวมสายการผลิต"],
+        ["คิวรีวิว playbook", "ภาพรวมสายการผลิต", "แจ้งงานเสีย"],
         ["งานของคุณ"],
     ),
     (
@@ -131,21 +143,24 @@ PEOPLE = [
         # The review queue is offered from slice 10.2 on: a supervisor may read
         # it and may not decide it, and the refusal is at the endpoint rather
         # than by hiding the door (ADR-064, invariant 6).
-        ["ภาพรวมสายการผลิต", "คิวรีวิว playbook"],
+        ["ภาพรวมสายการผลิต", "คิวรีวิว playbook", "แจ้งงานเสีย"],
         ["งานของคุณ"],
     ),
-    # An operator has no screen, and ADR-058 says the shell admits that rather
-    # than offering a door onto nothing.
+    # One screen, and only that one. Until slice 16.2 an operator had none at
+    # all and the shell said so rather than offering a door onto nothing
+    # (ADR-058), which is what this line used to assert; reporting a fault is
+    # the first thing the role is given. Nothing else: an operator neither
+    # reviews a playbook nor is dispatched to a job (ADR-024).
     (
         "op-1",
         "demo-operator",
         "Malee",
         "ผู้ดูแลเอกสาร",
-        # One screen, and the first this shell has ever offered an operator: the
-        # person standing next to a machine when it starts making a noise is as
-        # likely to be one of them (slice 16.2, ADR-077 §1).
         ["แจ้งงานเสีย"],
-        ["งานของคุณ", "คิวรีวิว playbook", "ภาพรวมสายการผลิต"],
+        # "ยังไม่มีหน้าจอในระบบ" is in this list rather than gone from the file: it is
+        # what the shell said to an operator until 16.2, and the sentence a
+        # regression here would bring back.
+        ["งานของคุณ", "คิวรีวิว playbook", "ภาพรวมสายการผลิต", "ยังไม่มีหน้าจอในระบบ"],
     ),
 ]
 

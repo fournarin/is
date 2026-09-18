@@ -86,7 +86,9 @@ class OnnxEmbedder:
 
     `cache_dir` is passed explicitly rather than left to fastembed's own
     environment handling, so that what this reads is visible in this file and
-    testable from outside it.
+    testable from outside it - and **an unset variable raises here rather than
+    falling back to it**, which is ADR-019's rule about a guessed `STORAGE_DIR`
+    applied to the same kind of value.
     """
 
     def __init__(self, model_name: str = DEFAULT_MODEL, cache_dir: str | None = None) -> None:
@@ -96,7 +98,15 @@ class OnnxEmbedder:
         from fastembed import TextEmbedding
 
         self.model_name = model_name
-        self.cache_dir = cache_dir or os.environ.get(MODEL_CACHE_VARIABLE) or None
+        self.cache_dir = cache_dir or os.environ.get(MODEL_CACHE_VARIABLE)
+        if not self.cache_dir:
+            raise RuntimeError(
+                f"{MODEL_CACHE_VARIABLE} is not set. There is no default: fastembed "
+                f"downloads a model it cannot find, so the guess costs nothing on a "
+                f"machine with a network and fails at the first document on the one "
+                f"ADR-029 describes - in a worker's log, with a TLS error that says "
+                f"nothing about a model (ADR-079)."
+            )
         self._model = TextEmbedding(model_name=model_name, cache_dir=self.cache_dir)
         self._query_prefix, self._passage_prefix = _PREFIXES.get(model_name, _NO_PREFIX)
         self._dimensions = len(next(iter(self._model.embed(["dimension probe"]))))

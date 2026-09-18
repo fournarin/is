@@ -19,7 +19,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from pdm.retrieval.embedding import DEFAULT_MODEL, MODEL_CACHE_VARIABLE
+import pytest
+
+from pdm.retrieval.embedding import DEFAULT_MODEL, MODEL_CACHE_VARIABLE, OnnxEmbedder
 
 DOCKERFILE = Path("Dockerfile").read_text(encoding="utf-8")
 COMPOSE = Path("docker-compose.yml").read_text(encoding="utf-8")
@@ -53,7 +55,27 @@ class TestTheImageCarriesTheWeights:
         assert declared is not None
         chown = re.search(r"chown -R pdm:pdm ([^\n]+)", DOCKERFILE)
         assert chown is not None
-        assert declared.group(1) in chown.group(1)
+        # The whole path or nothing: `in` would accept /opt/models as covering a
+        # declared /opt/model, which is a directory nobody chowns.
+        assert declared.group(1) in chown.group(1).split(), (
+            f"{declared.group(1)} is not one of the directories chowned to pdm"
+        )
+
+
+class TestAWorkerWithNoCachePathDoesNotStart:
+    def test_an_unset_variable_is_refused_rather_than_guessed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The failure has to happen here, where the name of the missing thing is.
+
+        Falling through to fastembed's own lookup is the behaviour ADR-079 was
+        written against: it downloads where there is a network and raises about
+        TLS where there is not, and neither answer mentions a model.
+        """
+        monkeypatch.delenv(MODEL_CACHE_VARIABLE, raising=False)
+
+        with pytest.raises(RuntimeError, match=MODEL_CACHE_VARIABLE):
+            OnnxEmbedder()
 
 
 class TestNothingPointsTheWorkersSomewhereElse:
@@ -62,8 +84,12 @@ class TestNothingPointsTheWorkersSomewhereElse:
         different path is a worker looking in an empty directory."""
         declared = re.search(rf"ENV {MODEL_CACHE_VARIABLE}=(\S+)", DOCKERFILE)
         assert declared is not None
+        # The assignment rather than the mention: matching the bare name catches
+        # a comment and a FASTEMBED_CACHE_PATH_TTL alike, and comparing with `in`
+        # would read /opt/models-old as the path the image baked.
         for line in COMPOSE.splitlines():
-            if MODEL_CACHE_VARIABLE in line:
-                assert declared.group(1) in line, (
+            setting = re.search(rf"\b{MODEL_CACHE_VARIABLE}\s*[:=]\s*(\S+)", line)
+            if setting is not None:
+                assert setting.group(1) == declared.group(1), (
                     f"{line.strip()!r} points somewhere the image did not bake"
                 )
