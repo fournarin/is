@@ -10,7 +10,7 @@ listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
-The last section is different: three questions with no answer yet, kept here for
+The last section is different: four questions with no answer yet, kept here for
 the same reason as the rest.
 
 ---
@@ -609,7 +609,7 @@ looked enforced because a screen enforced it.
 
 # Not decided, and still going to be asked about
 
-The three below are not choices this project made and defends. They are places
+The four below are not choices this project made and defends. They are places
 where an examiner's question has no answer yet, found by a read of the whole
 repository on 2026-09-18. They are here because arriving at a viva having
 already named them is a different position from being shown them.
@@ -698,6 +698,36 @@ those words rather than leaving it to be found.
 **Look at.** `src/pdm/platform/auth/repo.py`,
 [ADR-036](adr/0036-sessions-in-the-database-behind-an-identity-adapter.md),
 [ADR-024](adr/0024-roles-and-approval-authority.md).
+
+---
+
+## 30. ADR-028 says every stored time is timezone-aware, and no contract checks
+
+**Decided.** Nothing. ADR-028's decision includes "Store UTC, timezone-aware,
+everywhere; convert to local time only for display", and `Signal.timestamp` is a
+plain `datetime`, which pydantic accepts naive. So does every other datetime
+field in `contracts/`.
+
+**Why it matters.** Mixing a naive datetime with an aware one raises
+`TypeError`, and `handlers.py` runs a whole trigger tick in one transaction, so
+one naive timestamp would roll back every Finding the batch raised - the same
+shape as the `nan` reading fixed in `triggers/trend.py`, arriving through a
+different field of the same contract.
+
+**Why it is not urgent.** The rule holds everywhere in practice and was measured
+rather than assumed: every datetime column in `migrations/` is `timestamptz`,
+`Scenario` refuses a naive `starts_at` by name, and of thirty naive `datetime(...)`
+constructions in the repository, twenty-five are in one test file that is
+deliberately testing naive handling and the rest are deliberate in the same way.
+**Nothing has drifted. Nothing is checking that it has not.**
+
+**What the answer looks like, and why it is not taken here.** `AwareDatetime` on
+the contract fields would enforce it in one place. That rejects inputs the system
+currently accepts, which is a change to a contract rather than a bug fix, and
+ADR-027 makes the contracts deliberately expensive to change. It needs a record.
+
+**Look at.** [ADR-028](adr/0028-clock-is-the-single-time-port.md),
+`src/pdm/contracts/work.py`, `src/pdm/signals/domain.py`.
 
 ---
 
