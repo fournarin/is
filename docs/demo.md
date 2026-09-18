@@ -16,7 +16,15 @@ uv run python scripts/rehearse.py --fresh
 That is `scripts/rehearse.py` (ADR-067): it destroys this stack's volumes, brings
 all seven containers up, seeds the accounts and the manuals, runs the five
 `web/check-*.py` screen checks in the order the seeding allows, seeds again over
-what those checks truncated, and leaves the stack running.
+what those checks truncated, **seeds the demo roster**, starts `worker-runtime`
+and then waits for the first round to place work.
+
+That last wait is the difference between a stack whose screens answer and a stack
+with something on them. The checks each seed their own world and truncate it
+again, so passing them proves the screens work and says nothing about what a
+person will see; the wait ends when `scripts/demo_ready.py` finds work waiting
+for the shift lead, and fails naming the link that is missing if it never
+arrives.
 
 Expect the first run to take a while, and to need room: it builds two images and
 pulls three, and between the layers, the build cache and the volumes it wants

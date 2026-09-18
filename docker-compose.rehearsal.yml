@@ -1,6 +1,6 @@
 # One extra container, used only by `scripts/rehearse.py` (ADR-067).
 #
-# The four `web/check-*.py` scripts drive the screens over HTTP and read the
+# The `web/check-*.py` scripts drive the screens over HTTP and read the
 # database directly, so they need to reach three things at once: the web server,
 # the API and PostgreSQL. Running them on the host would mean publishing the
 # database port, and the stack that gets rehearsed would then not be the stack

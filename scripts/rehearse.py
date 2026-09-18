@@ -75,6 +75,23 @@ START_TIMEOUT_SECONDS = 180
 
 SEED = ["python", "scripts/seed_demo.py"]
 
+# Run after the checks, never before: every check after the first truncates
+# `account` and `technician` on its way through, so a roster seeded earlier is a
+# roster the next check deletes (ADR-078).
+ROSTER = ["python", "scripts/seed_demo_roster.py"]
+
+# The other claim. The checks prove the screens answer; this proves there is
+# something on them (`scripts/demo_ready.py`).
+READY = ["python", "scripts/demo_ready.py"]
+
+# How long to wait for the first round after worker-runtime comes back. A round
+# runs every `dispatch.round_seconds` - 300 in the shipped policy - and the wait
+# is a little over two of them, so a single missed tick does not read as a
+# broken stack. Polled rather than slept: on a warm run the answer is usually
+# immediate, because a round has already run.
+READY_TIMEOUT_SECONDS = 660
+READY_POLL_SECONDS = 15
+
 # Order matters, and it is not the order the files were written in.
 #
 # `check-sign-in.py` signs in as the accounts `seed_demo.py` creates, so it has
@@ -121,6 +138,29 @@ def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     when its output is swallowed.
     """
     return subprocess.run([*COMPOSE, *args], cwd=REPO, text=True, check=check)
+
+
+def wait_until_ready() -> Result:
+    """Poll `demo_ready.py` until the chain reaches the shift lead, or give up.
+
+    The checks that ran above each seeded their own world and truncated it
+    again, so passing them says the screens answer - not that anything is on
+    them. What a person opening this stack sees is decided by a round that has
+    not run yet at this point, and the wait is the difference between handing
+    somebody a demo and handing them an empty queue.
+
+    Failure here is a real failure and not a slow one: `demo_ready.py` names the
+    link that is missing, and every one of its answers is something a person has
+    to fix before showing this to anybody.
+    """
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+    attempt = in_the_stack(READY)
+    while not attempt.ok and time.monotonic() < deadline:
+        remaining = int(deadline - time.monotonic())
+        print(f"  not yet; {remaining}s left before this is a failure", flush=True)
+        time.sleep(READY_POLL_SECONDS)
+        attempt = in_the_stack(READY)
+    return Result(name="the demo has something to show", ok=attempt.ok, output=attempt.output)
 
 
 def in_the_stack(command: list[str]) -> Result:
@@ -229,12 +269,26 @@ def main() -> int:
         print(reseeded.output)
         results.append(Result(name="the demo world survives the checks", ok=False, output=""))
 
+    # The roster the checks do not leave behind, and `seed_demo.py` will not
+    # write: three technicians who do not exist, so that the round has somebody
+    # to place work on and the demo can show layers 3 and 4 at all (ADR-078).
+    say("Seeding the demo roster: three technicians who do not exist")
+    rostered = in_the_stack(ROSTER)
+    print(rostered.output or "  (no output)")
+    if not rostered.ok:
+        results.append(Result(name="the demo has a roster", ok=False, output=""))
+
     if args.down:
         say("Stopping the stack")
         compose("down", check=False)
     else:
         say("Starting worker-runtime, which the checks needed stopped")
         compose("up", "-d", "--no-deps", "worker-runtime", check=False)
+
+        say("Waiting for the first round to place work, so the demo has something on it")
+        ready = wait_until_ready()
+        print(ready.output or "  (no output)")
+        results.append(ready)
 
     say("What the rehearsal found")
     # Said before the results rather than after. A warm run reuses a database
@@ -252,7 +306,9 @@ def main() -> int:
         print(f"\n{len(failed)} of {len(results)} failed. The output of each is above.")
         return 1
 
-    print(f"\nAll {len(results)} screens answered. `docs/demo.md` says what to click and as whom.")
+    # "checks" rather than "screens": the last entry in `results` is the wait for
+    # a round to place work, which is not a screen and is the point of the run.
+    print(f"\nAll {len(results)} checks passed. `docs/demo.md` says what to click and as whom.")
     if not args.down:
         print("The stack is still up; SIGNAL_SOURCE is synthetic, so work orders will")
         print("appear on their own. Every one of them is about a machine that is not")
