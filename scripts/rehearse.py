@@ -104,6 +104,12 @@ CHECKS = (
     "web/check-the-review-screen.py",
     "web/check-the-overview-screen.py",
     "web/check-reporting-a-fault.py",
+    # Last, and the slowest by a distance: it waits on `worker-authoring` to
+    # index two manuals and then to draft, which is a minute of real work rather
+    # than a page fetch. It is also the only check that walks ADR-003 from one
+    # end to the other, so a rehearsal that skipped it would prove every screen
+    # except the one the whole system is arranged around.
+    "web/check-the-content-path.py",
 )
 
 

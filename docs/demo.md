@@ -35,18 +35,24 @@ mid-pull stops answering and has to be restarted.
 It ends with one line per check saying `ok` or `FAIL`, and the output of each
 check above them.
 
-Before showing the stack to anybody - especially one that has been up for a
-while - ask it whether it still has anything to show:
+**What it leaves behind**, measured on a run of 2026-08-26 that took 4m16s from
+`down -v` to the last line (the first build on a machine that has never built
+this is nearer twenty minutes, most of it downloading):
 
-```
-docker compose --env-file .env.example run --rm --no-deps rehearsal \
-  python scripts/demo_ready.py
-```
+| | |
+|---|---|
+| accounts | 6 - the four demo people, plus the two extra technicians the roster invents |
+| technicians rostered | 3, on the shift that was running |
+| manuals | 2, **19 chunks indexed** |
+| approved playbooks | **1 - SYM-047 on the M-710iC** |
+| work orders | 2, with **2 proposals waiting for the shift lead** |
 
-It walks the chain in order - accounts, roster, Findings, tickets, a round's
-proposals - and names the first link that is missing rather than reporting a
-total, because "no proposals" has five causes and they are fixed five different
-ways.
+That single playbook is not seeded: `web/check-the-content-path.py` drafts and
+approves it while proving ADR-003 works, and leaves it there. Two consequences
+worth knowing before the room fills. A ticket for an M-710iC cooling-fan fault
+**will** carry steps and page numbers, which is the best thing on any of these
+screens - and `SYM-047` will no longer be on the gaps panel, so step 3 below
+should ask for a draft of something else.
 
 Without `--fresh` it reuses whatever volumes are already there, which is faster
 and proves less. The report says which of the two happened.
@@ -102,11 +108,45 @@ The web app is at **http://localhost:3000**, the API at
    can absorb, and - at the bottom - the symptoms the system has nothing to serve
    (ADR-060, ADR-063). That last panel is the one to point at: a system that says
    what it cannot answer is the argument for principle 5 in one screen.
-3. **Still as `eng-1`** → **คิวรีวิว playbook** (`/review`). The draft beside the
-   page it was drafted from, per-step provenance, and approve / edit / send back
-   (ADR-064). This is where ADR-003 stops being a claim: nothing reaches a
-   technician that a person did not approve. **See the note below about what the
-   queue contains.**
+3. **Still as `eng-1`**, ask for a draft and then approve it. This is the walk
+   that makes ADR-003 something a person watches rather than a claim they are
+   asked to accept.
+
+   On `/overview`, the panel from step 2 lists the symptoms nothing serves. Open
+   **ขอร่างจากคู่มือ** under one of them and type what to ask the manual - the
+   field is there because `SYM-014` retrieves nothing and "belt motor running
+   above 85 degrees" retrieves the page (ADR-040). The button is an engineer's
+   only: the worker behind it holds the one GPU (ADR-029).
+
+   Ask **in Thai**: a Thai question of an English manual is the cross-lingual case
+   the embedding model was chosen for (ADR-029, ADR-035), and it is the case the
+   plant will actually use.
+
+   `SYM-047` is the symptom `docs/drafting-baseline.md` measured the drafter
+   getting right - but after a rehearsal it is already approved, so what is left
+   on the panel is one of the two it gets wrong. That is worth showing rather
+   than working around; see the third note below.
+
+   Then **คิวรีวิว playbook** (`/review`): the draft beside the page it was
+   drafted from, provenance per step, and approve / edit / send back (ADR-064).
+   Approve it, and the next ticket for that symptom carries those steps with
+   their page numbers instead of a fallback estimate - which is principle 2 in
+   one screen.
+
+   Three things worth saying while it is open. The drafter has **no model in it**:
+   `worker-authoring` builds `ExtractiveDrafter`, which picks the highest-scoring
+   page and quotes it, so what is on screen is text from the manual rather than
+   text about it (ADR-037 §9). The queue fills only after `worker-authoring` has
+   indexed the manuals - `seed_demo.py` queues them as it stores them, and the
+   first pass takes a minute.
+
+   And the drafter is **wrong about two of the three repair symptoms in the
+   corpus**, which is worth saying before somebody finds it. `SYM-014` and
+   `SYM-021` are handed an overview page that repeats the question's words rather
+   than the procedure a page later; `docs/drafting-baseline.md` has the table and
+   names what fixes it - a reranker, which is not built. Showing that on purpose
+   is a better answer than hoping nobody asks: it is the same page a reviewer
+   would reject, and rejecting it is what the screen is for.
 4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
    **งานที่รอคุณยืนยัน**. The report from step 1 is in the queue behind this
    panel: the job the operator raised reaches a technician only once somebody
@@ -124,31 +164,31 @@ The web app is at **http://localhost:3000**, the API at
 
 Say these rather than letting somebody find them.
 
-- **The review queue is empty after a plain seed.** `seed_demo.py` puts the
-  manuals in the library, but the ingest job that indexes them is enqueued by the
-  API's upload endpoint and not by the script, so nothing is chunked, embedded or
-  searchable - and a draft is assembled out of retrieved pages. Until a manual
-  goes in through the API, `/review` is an empty queue rather than a broken
-  screen.
+- **The review queue starts empty, and fills when somebody asks.** `seed_demo.py`
+  queues each manual for indexing as it stores it, so retrieval has something to
+  find - but a draft is written only when an engineer asks for one, from the gaps
+  panel in step 3. Nothing drafts speculatively: every draft costs a pass on the
+  one GPU-bound worker (ADR-029), and a queue that fills itself is a queue its
+  owner does not control.
 
-  It is **not** waiting on a model. `worker-authoring` builds its drafter as
-  `ExtractiveDrafter()` - the backend with no model in it (ADR-037 §9) - and
-  nothing in this repository constructs the `llm-server` one. That container is
-  running and currently serves nothing, which is worth saying out loud rather
-  than implying a capability the stack does not have.
-- **The three technicians in this demo do not exist.** Dispatch needs a roster -
-  a technician record with skills, and a shift assignment - and `seed_demo.py`
-  deliberately creates neither, because it is the script an operator reruns on
-  the plant's own machine and inventing people there is the same defect as
-  inventing signals (ADR-032, ADR-044 §5). `scripts/seed_demo_roster.py` is the
-  separate script that does invent them, says so every time it runs, and refuses
-  to run anywhere the demo accounts are not already present (ADR-078). The plant's
-  own roster replaces every row it writes, and it is on the same request as the
-  machine register and the maintenance history.
+  It is **not** waiting on a model server. `worker-authoring` builds its drafter
+  as `ExtractiveDrafter()` - the backend with no model in it (ADR-037 §9) - and
+  nothing in this repository constructs the `llm-server` one. That container runs
+  and currently serves nothing, which is worth saying out loud rather than
+  implying a capability the stack does not have.
 
-  Note the order this puts step 4 in: `policy.yaml` ships `confirmation:
-  supervisor`, so a technician's screen says the work is waiting on their shift
-  lead until somebody confirms it.
+  The **embedding** model is a different thing and does ship: it is baked into
+  the image at build time (ADR-079), so a machine with no route to the internet
+  indexes a manual rather than failing at the first one with a TLS error that
+  says nothing about a model.
+- **The technician's screen has nothing to place work on.** Dispatch needs a
+  roster - a technician record with skills, and a shift assignment - and
+  `seed_demo.py` deliberately creates neither. It is the script an operator
+  reruns on the plant's machine, and inventing technicians there would be the
+  same defect as inventing signals (ADR-032, ADR-044 §5). A demo roster is a
+  separate thing that does not exist yet. With one, step 4 above comes first:
+  `policy.yaml` ships `confirmation: supervisor`, so a technician's screen says
+  the work is waiting on their shift lead until somebody confirms it.
 - **Every work order in this demo is about a machine that is not there.**
   `SIGNAL_SOURCE=synthetic` in `.env.example`, and `worker-runtime` says so in a
   warning at boot. On screen a synthetic ticket is indistinguishable from a real

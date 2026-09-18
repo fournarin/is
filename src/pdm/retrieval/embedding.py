@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
@@ -27,6 +28,12 @@ from typing import Protocol, runtime_checkable
 # catalogue, and the e5 variant that is weighs 2.24 GB.
 DEFAULT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_DIMENSIONS = 384
+
+# Where the weights are, and the one name the Dockerfile, docker-compose.yml and
+# this module all have to agree on. fastembed's own variable, so that anything
+# else reaching for the library inside these containers finds the same copy
+# (ADR-079).
+MODEL_CACHE_VARIABLE = "FASTEMBED_CACHE_PATH"
 
 # Some families - e5 and its relatives - are trained with an instruction prefix
 # and lose accuracy without it, because the same sentence is embedded
@@ -70,19 +77,27 @@ class Embedder(Protocol):
 class OnnxEmbedder:
     """The real model, loaded once and reused.
 
-    The weights are downloaded on first use and cached. On the plant's machine,
-    which may have no route to the internet, they have to be baked into the
-    image or mounted - a deployment step ADR-035 records as not existing yet.
+    **The weights are read from `MODEL_CACHE_VARIABLE`, and the image ships
+    them** (ADR-079). fastembed downloads a missing model on first use, which is
+    the behaviour to design against rather than rely on: the plant's machine has
+    no route to the internet, and a worker that silently reached for one would
+    fail at the first document with a stack trace about TLS rather than about a
+    missing model.
+
+    `cache_dir` is passed explicitly rather than left to fastembed's own
+    environment handling, so that what this reads is visible in this file and
+    testable from outside it.
     """
 
-    def __init__(self, model_name: str = DEFAULT_MODEL) -> None:
+    def __init__(self, model_name: str = DEFAULT_MODEL, cache_dir: str | None = None) -> None:
         # Imported here rather than at module scope so that importing this
         # module - which the API does at boot - does not pull onnxruntime into
         # memory for a process that may never embed anything.
         from fastembed import TextEmbedding
 
         self.model_name = model_name
-        self._model = TextEmbedding(model_name=model_name)
+        self.cache_dir = cache_dir or os.environ.get(MODEL_CACHE_VARIABLE) or None
+        self._model = TextEmbedding(model_name=model_name, cache_dir=self.cache_dir)
         self._query_prefix, self._passage_prefix = _PREFIXES.get(model_name, _NO_PREFIX)
         self._dimensions = len(next(iter(self._model.embed(["dimension probe"]))))
 
