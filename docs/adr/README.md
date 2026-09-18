@@ -5,6 +5,8 @@ forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
 
+The count and the highest number differ by one: 057 was reserved for a record that was never written, and the number was left unused rather than given to something else.
+
 **These are append-only.** An ADR is never edited after the fact. Changing your
 mind means writing a new one that references the old, so the record shows what
 was believed at the time rather than only what is believed now. Several later
@@ -88,7 +90,9 @@ entries replace parts of earlier ones, and both are kept.
 | [075](0075-what-the-confirmation-record-may-be-read-to-say.md) | What the confirmation record may be read to say, and what it may not | |
 | [076](0076-what-machine-health-is-computed-from-and-what-it-may-not-be-ranked-by.md) | What machine health is computed from, and what it may not be ranked by | |
 | [077](0077-who-may-report-a-fault-and-what-a-second-report-means.md) | Who may report a fault, at what severity, and what a second report means | |
+| [078](0078-a-demo-roster-is-a-separate-script.md) | A demo roster is its own script, and what it is allowed to invent | |
 | [079](0079-the-embedding-model-ships-inside-the-image.md) | The embedding model ships inside the image | |
+| [080](0080-a-draft-already-waiting-for-review-answers-the-second-ask.md) | A draft already waiting for review answers the second ask | |
 
 ## Where to start
 
