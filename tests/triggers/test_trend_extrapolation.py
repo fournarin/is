@@ -424,3 +424,73 @@ class TestWhatTheCodeReviewFound:
 
         if found is not None:
             assert found.resolution == timedelta(minutes=10)
+
+
+class TestAReadingThatIsNotANumber:
+    """A sensor sending `nan` or a value large enough to overflow a square is
+    ordinary, and it used to take the whole trigger batch with it.
+
+    `fit` raised out of `Fit`'s own validation - `slope_error` came back as
+    `nan` and the model refuses a negative-or-nan standard error - so one bad
+    reading on one channel aborted the tick that was processing every channel.
+    The failure mode `crossing`'s own comment worries about, arriving through
+    the door beside the one that was locked.
+
+    None is the honest answer and the one the signature already carried: `fit`
+    returns None for "no line can be fitted through this", and a line whose
+    slope is not a number is exactly that.
+    """
+
+    def test_a_nan_reading_yields_no_line(self) -> None:
+        readings = [
+            (NOW, 1.0),
+            (NOW + timedelta(minutes=1), float("nan")),
+            (NOW + timedelta(minutes=2), 3.0),
+        ]
+        assert fit(readings) is None
+
+    def test_an_infinite_reading_yields_no_line(self) -> None:
+        readings = [
+            (NOW, 1.0),
+            (NOW + timedelta(minutes=1), float("inf")),
+            (NOW + timedelta(minutes=2), 3.0),
+        ]
+        assert fit(readings) is None
+
+    def test_a_value_whose_square_overflows_yields_no_line(self) -> None:
+        """1e308 is finite and its square is not. The sums inside the fit are
+        where that stops being an arithmetic curiosity."""
+        readings = [
+            (NOW, 1.0),
+            (NOW + timedelta(minutes=1), 2.0),
+            (NOW + timedelta(minutes=2), -1e308),
+        ]
+        assert fit(readings) is None
+
+    def test_crossing_returns_none_rather_than_raising(self) -> None:
+        """The property that matters to the batch: whatever arrives, the caller
+        gets an answer rather than an exception."""
+        readings = [(NOW + timedelta(minutes=i), float("nan")) for i in range(20)]
+        assert (
+            crossing(
+                readings,
+                threshold=80.0,
+                comparison="above",
+                now=NOW,
+                horizon=timedelta(hours=24),
+                min_samples=10,
+            )
+            is None
+        )
+
+    def test_one_bad_reading_does_not_hide_a_good_channel(self) -> None:
+        """The cost of the fix, stated: a window containing one `nan` yields no
+        forecast at all rather than a forecast from the rest. That is the
+        conservative direction - a missing prediction is a prediction nobody
+        acts on - but it is a choice and not a free one."""
+        clean = [(NOW + timedelta(minutes=i), 50.0 + i) for i in range(20)]
+        assert fit(clean) is not None
+
+        spoiled = list(clean)
+        spoiled[7] = (spoiled[7][0], float("nan"))
+        assert fit(spoiled) is None
