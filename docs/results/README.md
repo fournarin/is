@@ -9,6 +9,13 @@ uv run python -m scripts.diagnose_comparison    # why it says what it says
 PYTHONPATH=. uv run python scripts/measure_health.py   # the health ranking
 ```
 
+That claim was tested on 18 September 2026, on a clean checkout and a different
+machine from the one that produced the committed figures.
+[`reproducibility.md`](reproducibility.md) is the result: 1,439 of the 1,440 rows
+in `comparison.csv` came back byte for byte, `units_lost` moved nowhere at all,
+and the single cell that did move is 3D's mean response, for a reason worth
+knowing before quoting that column.
+
 The first writes `comparison.csv` - every run - and `comparison.md`, which is one
 reading of it. If you disagree with the reading, the rows are there to do your
 own.
@@ -160,3 +167,4 @@ condition a plant installs one for.
 | `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn |
 | `confirmations.md` | how far the shift lead and the scheduler agree, and how much nobody answers - the method and the endpoint, with no figures until a trial has been run |
 | `health.md` | whether the history half of a health reading ranks the machines a generator degraded above the ones it left alone, and which half of the reading it says nothing about |
+| `reproducibility.md` | whether the figures above come back on another machine, which of them are exact, and why one column of 3D's is not |
