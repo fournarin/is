@@ -4,7 +4,7 @@
     uv run python scripts/rehearse.py --fresh    # destroy the volumes first, then start cold
     uv run python scripts/rehearse.py --down     # stop the stack when the checks finish
 
-`web/check-sign-in.py` and its three siblings are the only tests in this
+The `web/check-*.py` scripts listed in `CHECKS` below are the only tests in this
 repository that drive the screens the way a technician's phone does, and no CI
 tier can run them: each needs a database, a built web app and a running API at
 the same time. That is why one of them had drifted out of date without anything

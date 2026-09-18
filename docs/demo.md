@@ -14,7 +14,7 @@ uv run python scripts/rehearse.py --fresh
 ```
 
 That is `scripts/rehearse.py` (ADR-067): it destroys this stack's volumes, brings
-all seven containers up, seeds the accounts and the manuals, runs the five
+all seven containers up, seeds the accounts and the manuals, runs the
 `web/check-*.py` screen checks in the order the seeding allows, seeds again over
 what those checks truncated, **seeds the demo roster**, starts `worker-runtime`
 and then waits for the first round to place work.
