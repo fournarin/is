@@ -15,7 +15,16 @@ most of the system's shape.
 
 Working notes - the plan, the schedule, the risk register, the conversation log
 with the advisor - are kept in Thai in `docs-md/`, which is outside version
-control on purpose. They are not needed to work on the code.
+control on purpose.
+
+**They are not quite self-contained, and the gap is worth knowing.** Records in
+`docs/adr/` cite `design.md`, `workflow.md` and `ui.md` by section around a
+hundred times, and a reader with only this checkout cannot follow those. The
+most load-bearing of them, the fifteen numbered invariants from `design.md` 12,
+now lives in the repository as [`docs/invariants.md`](docs/invariants.md). The
+rest stay outside, so a citation of the form `design.md 6.2` is a pointer into
+notes the reader does not have, and should be read as provenance rather than as
+a link.
 
 ## The one goal everything is measured against
 

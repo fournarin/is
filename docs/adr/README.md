@@ -95,6 +95,13 @@ entries replace parts of earlier ones, and both are kept.
 | [080](0080-a-draft-already-waiting-for-review-answers-the-second-ask.md) | A draft already waiting for review answers the second ask | |
 | [081](0081-what-the-health-reader-serves-and-what-a-zero-may-not-mean.md) | What the health reader serves, and what a zero from an empty table may not mean | |
 
+## The invariants these records cite
+
+These records cite fifteen numbered invariants, and so do the titles of four
+steps in CI. [`../invariants.md`](../invariants.md) is the list, with the source
+record and the enforcement point for each. It is in the repository because the
+numbers were and the list was not.
+
 ## Where to start
 
 Three decisions carry most of the system's shape, and the rest follow from them:
