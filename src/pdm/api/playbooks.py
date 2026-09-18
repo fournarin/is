@@ -22,6 +22,7 @@ from pdm.api.deps import Db, Jobs, requires
 from pdm.contracts import MachineModel, PlaybookStep, Role, SkillId, SymptomCode
 from pdm.platform.auth.domain import Account
 from pdm.platform.jobs import JobKind
+from pdm.playbooks import repo as playbooks_repo
 from pdm.playbooks.domain import Proposal
 from pdm.playbooks.repo import NothingToApply
 from pdm.playbooks.service import NotADraft, NotAnEngineer, PlaybookStore
@@ -213,6 +214,26 @@ def request_draft(
             "symptom_code": requested.symptom_code,
             "status": already.status.value,
             "queued_already": True,
+        }
+
+    # The same courtesy one stage later: a draft that has already arrived and is
+    # waiting for a decision is the answer to this ask too. A second one would
+    # sit beside the first in the review queue, which nothing there merges, and
+    # would cost another pass on the one GPU to produce the duplicate.
+    #
+    # The screen hides the button in this case (`web/app/overview/page.tsx`),
+    # which is where a person sees it and not where the rule holds: this
+    # endpoint is reachable from `/docs` and curl, and invariant 6's argument
+    # about approval - a rule enforced in one of two entry points is a rule with
+    # a way round it - is the same argument here (ADR-080).
+    waiting = playbooks_repo.awaiting_review(
+        conn, symptom_code=requested.symptom_code, machine_model=requested.machine_model
+    )
+    if waiting is not None:
+        return {
+            "proposal": waiting,
+            "symptom_code": requested.symptom_code,
+            "awaiting_review": True,
         }
 
     job = jobs.enqueue(conn, kind=JobKind.DRAFT, payload={**pair, "question": requested.question})

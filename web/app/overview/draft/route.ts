@@ -19,6 +19,28 @@ import type { NextRequest } from "next/server";
 import { callApi } from "@/lib/api";
 import { seeOther } from "@/lib/redirect";
 
+/**
+ * What the API refused, in words an engineer can act on.
+ *
+ * A refusal carries `detail` as a string, but a body FastAPI's own validation
+ * rejected carries a list of per-field errors instead - and reading only the
+ * string case turns "machine_model is required" into a bare status code.
+ */
+function refusal(detail: unknown, status: number): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const said = detail
+      .map((item) => (item as { msg?: unknown }).msg)
+      .filter((message): message is string => typeof message === "string");
+    if (said.length > 0) {
+      return said.join(", ");
+    }
+  }
+  return `ระบบตอบกลับ ${status}`;
+}
+
 export async function POST(request: NextRequest): Promise<Response> {
   const form = await request.formData();
   const symptomCode = String(form.get("symptom_code") ?? "");
@@ -49,14 +71,22 @@ export async function POST(request: NextRequest): Promise<Response> {
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
-    const detail =
-      typeof body.detail === "string" ? body.detail : `ระบบตอบกลับ ${response.status}`;
-    return back(`error=${encodeURIComponent(detail)}`);
+    return back(`error=${encodeURIComponent(refusal(body.detail, response.status))}`);
   }
 
-  // 202 either way: asking twice for something already coming is not an error,
-  // and the answer says which happened so the screen can too (ADR-040).
-  const queued = (await response.json().catch(() => ({}))) as { queued_already?: boolean };
-  const already = queued.queued_already === true ? "&already=1" : "";
+  // 202 whichever of the three happened: asking twice for something already
+  // coming is not an error, and neither is asking for one that has already
+  // arrived and is waiting for a decision. The answer says which, so the screen
+  // can too (ADR-040, ADR-080).
+  const queued = (await response.json().catch(() => ({}))) as {
+    queued_already?: boolean;
+    awaiting_review?: boolean;
+  };
+  const already =
+    queued.awaiting_review === true
+      ? "&already=review"
+      : queued.queued_already === true
+        ? "&already=queued"
+        : "";
   return back(`drafting=${encodeURIComponent(symptomCode)}${already}`);
 }

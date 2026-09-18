@@ -207,7 +207,9 @@ export default async function OverviewPage({
             <p className="recorded">
               {already === undefined
                 ? `ขอร่าง ${drafting} แล้ว — worker-authoring จะดึงไปทำ แล้วไปโผล่ที่คิวรีวิว`
-                : `${drafting} อยู่ในคิวร่างอยู่แล้ว — ใบเดิม ไม่ได้ขอซ้ำ`}
+                : already === "review"
+                  ? `${drafting} มีร่างรออนุมัติอยู่ที่คิวรีวิวแล้ว — ไม่ได้ขอซ้ำ`
+                  : `${drafting} อยู่ในคิวร่างอยู่แล้ว — ใบเดิม ไม่ได้ขอซ้ำ`}
             </p>
           )}
           {unanswered.no_playbook.rows.length === 0 ? (

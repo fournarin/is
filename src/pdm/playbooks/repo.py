@@ -307,6 +307,27 @@ def pending_by_pair(conn: Connection[Any]) -> list[PendingForPair]:
     return [PendingForPair.model_validate(row) for row in rows]
 
 
+def awaiting_review(
+    conn: Connection[Any], *, symptom_code: SymptomCode, machine_model: MachineModel
+) -> int | None:
+    """The proposal already waiting for a decision on this pair, if there is one.
+
+    `pending_by_pair` answers this for every pair at once, which is what the
+    overview needs and what the drafting endpoint would be loading the whole
+    queue to read one row of. Oldest first, so the answer is the one that has
+    been waiting longest rather than whichever the planner returned.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT proposal_id FROM playbook_proposal "
+            "WHERE status = 'pending' AND symptom_code = %s AND machine_model = %s "
+            "ORDER BY created_at, proposal_id LIMIT 1",
+            (str(symptom_code), str(machine_model)),
+        )
+        row = cur.fetchone()
+    return int(row[0]) if row is not None else None
+
+
 def proposal(conn: Connection[Any], proposal_id: int) -> Proposal | None:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
