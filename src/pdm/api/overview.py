@@ -60,12 +60,15 @@ from pdm.contracts import (
     Station,
     StationId,
     SymptomCode,
+    WorkOrderRef,
 )
+from pdm.health import ClosedRepair, MachineHealth, assess, by_history, by_now
 from pdm.platform.auth.domain import Account
 from pdm.playbooks import repo as playbooks
 from pdm.playbooks.domain import PendingForPair
 from pdm.triggers import repo as triggers
 from pdm.triggers.domain import SymptomSeen
+from pdm.work import repo as work
 
 router = APIRouter(tags=["overview"])
 
@@ -663,4 +666,116 @@ def line_overview(
             summary=decided.summary,
         ),
         unplaced_machines=tuple(unplaced),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Machine health (ADR-072, ADR-076, ADR-081)
+# ─────────────────────────────────────────────────────────────
+
+# What this reader could not ask, written where the person reading the numbers
+# is looking. `HistoryContribution.pm_overdue` is an `int` with a default of 0,
+# so a plant with no PM table reads as a plant with nothing overdue - which is a
+# claim, drawn from an empty table, shown to somebody deciding what to look at.
+#
+# The sentence goes when slice 16.1 builds `pm_task` and this reader starts
+# passing real ones (ADR-081 section 2).
+PM_STANDING_IS_ABSENT = (
+    "preventive maintenance standing: nothing in this system stores PM tasks yet, so no "
+    "reading here can say whether a machine's PM is overdue. The PM counts below are what "
+    "was asked for, which is nothing (slice 16.1, ADR-072)"
+)
+
+
+class HealthOverview(BaseModel):
+    """Two orderings of the same readings, and no third number anywhere.
+
+    There is deliberately no field here that blends the two, sorts one by the
+    other, or reduces a machine to a percentage. ADR-072 section 2 is the record
+    this response exists to obey, and a response model is where obeying it is
+    visible: adding the blended figure means adding a field to this class, which
+    means editing a file that says not to.
+
+    The span is on the response as well as on every reading. A rate is only as
+    good as the window behind it - one failure over a fortnight is "7 per 100
+    days" and over a year is "0.3" - so nothing here serves a rate that a reader
+    could meet without the span beside it (ADR-076 section 4, ADR-081 section 3).
+    """
+
+    model_config = _FROZEN
+
+    at: datetime
+
+    # The window every reading was counted over, repeated from the readings
+    # because the panel names it once rather than per row.
+    observed_from: datetime | None = None
+    observed_to: datetime | None = None
+    observed_days: float = 0.0
+
+    by_history: tuple[MachineHealth, ...]
+    by_now: tuple[MachineHealth, ...]
+
+    # What this reading cannot say, collected once rather than repeated on every
+    # row. The domain writes one of these onto each reading and keeps it there,
+    # because a reading handed to something that is not this screen has to
+    # arrive with it; here the same sentence four times would be a caveat
+    # nobody finishes reading (ADR-081 section 2).
+    absent: tuple[str, ...] = ()
+
+    # Machines the records mention and `plant.yaml` does not, reported for
+    # ADR-048's reason: the machine did not stop existing because the file is
+    # stale, and a reading that dropped it silently would hide the drift.
+    unplaced_machines: tuple[str, ...] = ()
+
+
+@router.get("/overview/health", response_model=HealthOverview)
+def machine_health(
+    conn: Db,
+    clock: Time,
+    plant: Plant,
+    account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_machine_health"))],
+) -> HealthOverview:
+    """Which machines deserve attention, and why - for a person, not for a round.
+
+    The advisor's answer to "where should I start" (ADR-072). Load, hand to
+    `assess()`, sort with the two orderings, serialise: no arithmetic happens in
+    this function, because the arithmetic is the thing somebody has to be able
+    to check against records written out by hand (invariant 10, ADR-081 §5).
+
+    **Three loads and one of them is empty on purpose.** There is no `pm_task`
+    table yet, so `assess()` is handed no tasks and every `pm_overdue` comes back
+    zero. The response says so in `absent` rather than letting the zero speak.
+    """
+    now = clock.now()
+    known = {
+        machine_id for station in plant.stations.values() for machine_id in station.machine_ids
+    }
+    repairs = [
+        ClosedRepair.from_order(WorkOrderRef(ref), order, closed_at=closed_at)
+        for ref, order, closed_at in work.closed_orders(conn)
+    ]
+    findings = list(triggers.live(conn).values())
+
+    readings = assess(sorted(known), repairs=repairs, findings=findings, now=now)
+
+    # Every reading carries the same window, so the first is the answer for all
+    # of them; an empty plant has none and the defaults stand.
+    span = readings[0].history if readings else None
+
+    mentioned = {repair.machine_id for repair in repairs} | {
+        finding.machine_id for finding in findings
+    }
+    # dict.fromkeys rather than a set: the order these were written in is the
+    # order they are read in, and a set would shuffle the caveats per request.
+    written = dict.fromkeys(sentence for reading in readings for sentence in reading.history.absent)
+
+    return HealthOverview(
+        at=now,
+        observed_from=span.observed_from if span is not None else None,
+        observed_to=span.observed_to if span is not None else None,
+        observed_days=span.observed_days if span is not None else 0.0,
+        by_history=by_history(readings),
+        by_now=by_now(readings),
+        absent=(*written, PM_STANDING_IS_ABSENT),
+        unplaced_machines=tuple(sorted(str(one) for one in mentioned - known)),
     )

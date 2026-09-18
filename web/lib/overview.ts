@@ -1,5 +1,5 @@
 /**
- * The two overview endpoints, as this screen reads them.
+ * The three overview endpoints, as this screen reads them.
  *
  * Nothing here computes a summary. ADR-063 and ADR-050 both say the same thing
  * from different sides: what is shown is what a round already decided, and a
@@ -68,7 +68,11 @@ export type SymptomGap = {
   proposals_waiting: number;
 };
 
-export type ModelQueue = { machine_model: string; waiting: number; oldest: string };
+export type ModelQueue = {
+  machine_model: string;
+  waiting: number;
+  oldest: string;
+};
 
 export type FlaggedPlaybook = {
   symptom_code: string;
@@ -98,4 +102,59 @@ export async function lineOverview(): Promise<LineOverview> {
 
 export async function gaps(): Promise<Gaps> {
   return read<Gaps>("/overview/gaps");
+}
+
+export type HistoryContribution = {
+  observed_from: string | null;
+  observed_to: string | null;
+  observed_days: number;
+  closed_orders: number;
+  failures: number;
+  failures_per_100_days: number | null;
+  last_failure_at: string | null;
+  days_since_last_failure: number | null;
+  pm_completed: number;
+  pm_overdue: number;
+  pm_overdue_days: number | null;
+  false_alarms: number;
+  absent: string[];
+  reason: string;
+};
+
+export type CurrentContribution = {
+  open_findings: number;
+  acknowledged: number;
+  detected: number;
+  predicted: number;
+  highest_severity: string | null;
+  soonest_eta: string | null;
+  hours_to_soonest_eta: number | null;
+  reason: string;
+};
+
+export type MachineHealth = {
+  machine_id: string;
+  history: HistoryContribution;
+  now: CurrentContribution;
+};
+
+/**
+ * Two orderings of the same machines, and deliberately no third figure.
+ *
+ * There is no `score` here and adding one would mean adding it to the response
+ * model first, which is a file that says not to (ADR-072 section 2, ADR-081).
+ */
+export type MachineHealthOverview = {
+  at: string;
+  observed_from: string | null;
+  observed_to: string | null;
+  observed_days: number;
+  by_history: MachineHealth[];
+  by_now: MachineHealth[];
+  absent: string[];
+  unplaced_machines: string[];
+};
+
+export async function machineHealth(): Promise<MachineHealthOverview> {
+  return read<MachineHealthOverview>("/overview/health");
 }
