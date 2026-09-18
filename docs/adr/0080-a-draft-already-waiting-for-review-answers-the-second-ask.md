@@ -1,9 +1,9 @@
 # ADR-080: A draft already waiting for review answers the second ask
 
-Extends [ADR-040](0040-the-question-is-asked-in-the-requesters-words.md), which
+Extends [ADR-040](0040-what-happens-when-somebody-asks-twice.md), which
 made `POST /playbooks/drafts` return the first job's id when the same pair is
 asked for twice, and applies invariant 6's argument -
-[ADR-038](0038-only-an-engineer-may-approve-checked-at-the-endpoint.md)'s *checked
+[ADR-038](0038-the-review-queue-is-a-table-and-the-served-table-holds-no-drafts.md)'s *checked
 at the endpoint rather than by hiding a button* - to the stage after it.
 
 ## Context

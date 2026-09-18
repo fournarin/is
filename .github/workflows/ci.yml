@@ -55,6 +55,9 @@ jobs:
       - name: every stylesheet rule is closed
         run: uv run python scripts/check_the_stylesheets_close_every_rule.py
 
+      - name: every documentation link resolves
+        run: uv run python scripts/check_doc_links.py
+
       - name: unit tests (no database needed)
         run: uv run pytest -m "not db"
 

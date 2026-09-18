@@ -2,7 +2,7 @@
 
 Builds [ADR-029](0029-where-the-models-run.md), which put the models on the
 plant's own machines and the plant's own network, and
-[ADR-035](0035-hybrid-retrieval-and-where-the-vectors-live.md), which chose this
+[ADR-035](0035-embedding-in-process-vectors-in-qdrant-and-the-fusion-between.md), which chose this
 particular model. Same rule as
 [ADR-019](0019-content-addressed-document-storage-served-through-the-api.md)'s
 refusal of a guessed `STORAGE_DIR`: a service that starts against something it
