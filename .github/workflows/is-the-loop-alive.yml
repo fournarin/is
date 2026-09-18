@@ -1,0 +1,89 @@
+# Reports silence, because the thing that went wrong did not report itself.
+#
+# Between 26 August and 18 September 2026 no work reached this repository. The
+# unattended loop had been disabled after a run hit a spending limit, and a
+# disabled schedule leaves no failed run to read: the backlog looked healthy and
+# both open pull requests were green. Twenty-three days of a fourteen-week term
+# went missing and the way it was found was somebody wondering.
+#
+# This lives here, on GitHub's scheduler, rather than inside the loop it watches.
+# A watcher on the same schedule and the same budget stops at the same moment and
+# for the same reason, which is not a watcher.
+#
+# It opens an issue rather than only failing. A red cross on a scheduled workflow
+# is seen by whoever is already looking, and the case this exists for is nobody
+# looking.
+
+name: is the loop alive
+
+on:
+  schedule:
+    # 01:00 UTC, which is 08:00 in Bangkok: a working day starts with the
+    # answer rather than arriving at it.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  silence:
+    name: has anything happened lately
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The date of the newest commit is the whole input. One commit is
+          # enough to read it; the history is not needed.
+          fetch-depth: 1
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: judge the silence
+        id: judge
+        run: |
+          set -o pipefail
+          last=$(git log -1 --format=%cI)
+          now=$(date -u +%Y-%m-%dT%H:%M:%S)
+          echo "last commit: $last"
+          if uv run python scripts/check_the_loop_is_alive.py \
+               --last-commit "$last" --now "$now" | tee /tmp/verdict.txt; then
+            echo "quiet=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "quiet=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: say so, once
+        if: steps.judge.outputs.quiet == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "The repository has gone quiet"
+        run: |
+          # One open issue at a time. A daily alarm that opens a daily issue is
+          # an alarm somebody mutes, which is the failure being prevented.
+          existing=$(gh issue list --state open --search "$TITLE in:title" \
+                       --json number --jq '.[0].number // empty')
+          body=$(cat /tmp/verdict.txt)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$TITLE" --label blocked --body "$body"
+          fi
+
+      - name: fail the run as well
+        if: steps.judge.outputs.quiet == 'yes'
+        run: exit 1
+
+      - name: close the issue if the quiet has ended
+        if: steps.judge.outputs.quiet == 'no'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "The repository has gone quiet"
+        run: |
+          existing=$(gh issue list --state open --search "$TITLE in:title" \
+                       --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" \
+              --comment "A commit has landed. Closing; the check reopens this if it stops again."
+          fi
