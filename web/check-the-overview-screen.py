@@ -218,13 +218,6 @@ def hidden_fields(page: str) -> list[tuple[str, str]]:
     return fields
 
 
-def form_with(page: str, marker: str) -> list[tuple[str, str]]:
-    for form in re.findall(r"<form\b.*?</form>", page, re.DOTALL):
-        if marker in form:
-            return hidden_fields(form)
-    raise AssertionError(f"no form containing {marker!r}")
-
-
 def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
     boundary = "----pdm-check-the-overview"
     body = b""
