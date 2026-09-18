@@ -622,6 +622,31 @@ main:has(.two-up) {
   border-top: 0;
 }
 
+/* ── machine health (slice 15.2, ADR-072, ADR-081) ───────────────────────── */
+
+/* Two columns that become two rows on a phone, and never one merged list. The
+   layout is the argument: side by side, a supervisor can see that the machine
+   which fails most often is not the machine shouting now. */
+.health {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+}
+
+.health-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.health-list li {
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.health-list li:first-child {
+  border-top: 0;
+}
+
 h3 {
   font-size: 0.95rem;
   margin: 0 0 0.35rem;

@@ -191,6 +191,38 @@ def open_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
     return [(str(row["work_order_ref"]), _to_order(dict(row)), row["created_at"]) for row in rows]
 
 
+def closed_orders(conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
+    """Every order that has ended, with when it ended, oldest first.
+
+    The history half of a machine's health is built from these (ADR-072 §2), and
+    the reduction that health reads - `ClosedRepair` - is not built here:
+    `work/` may not import `health/` at all (ADR-072 §4, `.importlinter`). So
+    this returns orders and the API composes, exactly as it does for everything
+    else it reads from two packages at once.
+
+    `cancelled` is not on the list. A cancelled order is one the world overtook -
+    a prediction superseded, a job nobody had started when the Finding resolved
+    (ADR-044 §6) - and counting it as history would report a failure the machine
+    never finished having. `ClosedRepair.from_order` refuses one anyway; this
+    query keeps it from ever being offered.
+
+    No limit, for a narrower version of the reason `open_orders` gives: the
+    observed span is computed from the earliest of these, so a page of them is
+    not a smaller version of the answer but a shorter window, and every rate
+    computed over it would be wrong in the direction that looks alarming.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT work_order_ref, closed_at, {_COLUMNS} FROM work_order
+             WHERE status = 'closed' AND closed_at IS NOT NULL
+             ORDER BY closed_at, work_order_ref
+            """
+        )
+        rows = cur.fetchall()
+    return [(str(row["work_order_ref"]), _to_order(dict(row)), row["closed_at"]) for row in rows]
+
+
 def assigned_to(conn: Connection[Any], user: UserId) -> list[tuple[str, WorkOrder]]:
     """This person's own live work, in the order layer 3 put it in (ADR-071 §7).
 

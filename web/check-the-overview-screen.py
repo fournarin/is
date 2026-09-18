@@ -381,7 +381,30 @@ def main() -> None:
     for row in unanswered["no_playbook"]["rows"]:
         expect(row["symptom_code"] in page, f"{row['symptom_code']} is named, not just counted")
 
-    print("\n7. a technician is not offered this screen")
+    print("\n7. machine health: two lists, and what the screen cannot say")
+    health = json.loads(get("/overview/health", where=API))
+    expect("สุขภาพเครื่องจักร" in page, "the panel is on the supervisor's overview")
+    expect(
+        "เสียบ่อยที่สุดในช่วงที่นับ" in page and "มีเรื่องค้างอยู่ตอนนี้" in page,
+        "two lists and never one (ADR-072 §2)",
+    )
+    for row in health["by_history"]:
+        expect(
+            row["machine_id"] in page,
+            f"{row['machine_id']} is on the panel",
+        )
+    # The reason is the backend's, quoted rather than rebuilt from the numbers
+    # beside it (ADR-081 §5).
+    quoted = health["by_history"][0]["history"]["reason"]
+    expect(quoted in page, "the sentence on screen is the one the backend wrote")
+    for sentence in health["absent"]:
+        expect(sentence in page, f"the screen says what it cannot: {sentence[:40]}...")
+    expect(
+        all("score" not in row for row in health["by_history"]),
+        "no reading carries a blended figure (ADR-072 §2)",
+    )
+
+    print("\n8. a technician is not offered this screen")
     sign_in(TECHNICIAN)
     theirs = readable(get("/overview"))
     expect("หน้านี้เป็นของหัวหน้ากะและวิศวกร" in theirs, "the page says whose it is")
