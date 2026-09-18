@@ -678,15 +678,22 @@ record still to write.
 ## 29. Account administration exists in code and cannot be reached
 
 **Decided.** Nothing, yet. `platform/auth/repo.py` has `set_password`,
-`set_role` and `deactivate`, written, documented and correct-looking. No
-endpoint, service or script calls any of the three, and no test covers them.
+`set_role` and `deactivate`, written, documented and correct-looking.
+
+`set_role` and `deactivate` have no caller anywhere and no test. `set_password`
+has exactly one caller and it is not a person changing a password: `LocalAccounts.authenticate`
+re-hashes on a successful login when the stored scrypt parameters are out of
+date, which is a good piece of work and is the only reason that function runs.
+**So the capability to set a password exists, is exercised, and is still not
+reachable by anybody who wants to change one.**
 
 **Why it matters.** ADR-036 argues for sessions in the database using the case
 of "an engineer whose approval rights were withdrawn this morning" - a role that
 keeps working until somebody logs out. The function that implements the
 withdrawal is unreachable. On a real installation the account list is whatever
-the seed script made it: a password cannot be changed, a role cannot be changed,
-and access cannot be withdrawn except by hand in the database.
+the seed script made it: a password cannot be changed by the person who owns it,
+a role cannot be changed at all, and access cannot be withdrawn except by hand in
+the database.
 
 **If it is wrong.** It is not wrong yet, because nobody has installed this
 anywhere real. It becomes wrong on the first installation that outlives one

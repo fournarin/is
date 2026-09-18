@@ -71,8 +71,15 @@ nothing to lose.
 
 ## The people
 
-`scripts/seed_demo.py` prints these, and they are in the repository on purpose.
-They are for a demo on a machine inside the plant network and are not secrets.
+`scripts/seed_demo.py --demo-passwords` prints these, and they are in the
+repository on purpose. They are for a demo on a machine that has nothing to
+lose, and they are not secrets.
+
+**The flag is not optional and the default is different.** Without it the seeder
+generates a password per account and prints it once, because the api and web
+ports are published and an account whose password is on GitHub can confirm work
+orders from anywhere on the network it is installed on. `rehearse.py` passes the
+flag; a plant machine should not.
 
 | Sign in as | Password | Role | Offered |
 |---|---|---|---|

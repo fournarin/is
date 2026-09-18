@@ -23,14 +23,28 @@ library with four manuals in it, one chunk, an empty review queue and no
 playbook anywhere - which reads, to somebody seeing the screens for the first
 time, as a content layer that was never built.
 
-The passwords here are obviously not secrets. They exist so that a demo has
-somebody to sign in as, and the script prints them precisely so nobody assumes
-otherwise.
+**Passwords are generated unless you ask for the demo ones.** The four listed
+below are printed in `docs/demo.md` and committed to this repository, which is
+correct for a demo and is a hole on a plant machine: the api and web ports are
+published, the accounts cannot be changed from inside the system, and a
+supervisor account whose password is on GitHub can confirm work orders from
+anywhere on the factory network.
+
+So the default is a fresh random password per account, printed once. Pass
+`--demo-passwords` for the published ones, which is what the rehearsal and the
+screen checks do because they sign in as those accounts by name.
+
+Write the generated passwords down when they are printed. Nothing in this system
+can show them again and nothing can change them (`platform/auth/repo.py` has
+`set_password` and no endpoint reaches it), so losing them means recreating the
+account by hand in the database.
 """
 
 from __future__ import annotations
 
+import argparse
 import os
+import secrets
 import sys
 
 from psycopg import connect
@@ -53,7 +67,15 @@ PEOPLE = [
 ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Seed accounts, manuals and the ingest jobs.")
+    parser.add_argument(
+        "--demo-passwords",
+        action="store_true",
+        help="use the passwords printed in docs/demo.md instead of generating them",
+    )
+    args = parser.parse_args(argv)
+
     url = os.environ.get("DATABASE_URL")
     if not url:
         print("DATABASE_URL is not set")
@@ -65,7 +87,10 @@ def main() -> int:
 
     with connect(url) as conn:
         created: list[str] = ["accounts:"]
-        for user, name, role, password in PEOPLE:
+        for user, name, role, demo_password in PEOPLE:
+            # A published password is a credential on a machine with published
+            # ports. Generated unless somebody asked for the demo one by name.
+            password = demo_password if args.demo_passwords else secrets.token_urlsafe(12)
             if auth_repo.account(conn, user) is not None:
                 created.append(f"  {user:8} {role.value:11} already there")
                 continue
@@ -109,8 +134,14 @@ def main() -> int:
     for line in created:
         print(line)
 
-    print("\nThese passwords are in the repository. They are for a demo on a")
-    print("machine inside the plant network and are not secrets.")
+    if args.demo_passwords:
+        print("\nThese passwords are in docs/demo.md and in this repository. They are")
+        print("for a demo on a machine that has nothing to lose, and they are not")
+        print("secrets. Do not leave these accounts on a machine anybody can reach.")
+    else:
+        print("\nThese passwords were generated now and are shown once. Write them")
+        print("down. Nothing in this system can show them again, and nothing can")
+        print("change them - see docs/install.md on account administration.")
     print("\nThe manuals are queued for indexing. worker-authoring has to be running")
     print("for the review queue to have anything in it.")
     return 0

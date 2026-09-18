@@ -73,7 +73,11 @@ WEB_SIGN_IN = "http://localhost:3000/sign-in"
 # failure, and nothing in the system reads it.
 START_TIMEOUT_SECONDS = 180
 
-SEED = ["python", "scripts/seed_demo.py"]
+# `--demo-passwords` because `check-sign-in.py` and `docs/demo.md` both sign in
+# as these accounts by name. Without it the seeder generates passwords, which is
+# the right default for a machine somebody might keep and the wrong one for a
+# rehearsal that has to be repeatable.
+SEED = ["python", "scripts/seed_demo.py", "--demo-passwords"]
 
 # Run after the checks, never before: every check after the first truncates
 # `account` and `technician` on its way through, so a roster seeded earlier is a

@@ -17,7 +17,7 @@ Run it against a built app and a running API:
     createdb pdm_web_check
     export DATABASE_URL=postgresql://$USER@localhost:5432/pdm_web_check
     export STORAGE_DIR=/tmp/pdm-storage PYTHONPATH=.
-    uv run alembic upgrade head && uv run python scripts/seed_demo.py
+    uv run alembic upgrade head && uv run python scripts/seed_demo.py --demo-passwords
 
     # the API, and the web server as the image runs it
     uv run python -m pdm.api &
@@ -27,7 +27,10 @@ Run it against a built app and a running API:
 
     python3 web/check-sign-in.py
 
-The passwords below are the ones `scripts/seed_demo.py` prints. They are in the
+The passwords below are the ones `scripts/seed_demo.py --demo-passwords` uses.
+Without that flag the seeder generates them and this check cannot sign in, which
+is the right way round: a check that knows the password is a check that needs the
+demo accounts, and a plant machine should not have them. They are in the
 repository on purpose and are not secrets.
 """
 
