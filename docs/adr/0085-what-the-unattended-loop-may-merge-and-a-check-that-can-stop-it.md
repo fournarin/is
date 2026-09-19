@@ -55,13 +55,22 @@ September. In that time:
 Entries 19 to 30 arrived together in #104, a backfill written on 18 September
 by a read of the whole repository.
 
-**All four of those merges were pressed by a person.** `.claude/autonomy.md`
-never took up ADR-052's permission, because the three edits ADR-052 listed
-"to apply by hand" were never applied. The agent never merged `human-review`
-work, and the ledger still went unwritten for four weeks. **The mechanism
-failed, not the reasoning.** The ledger depended on somebody remembering a step
-at merge time, nothing checked that they had, and nobody ran the `git log`
-ADR-052 said to watch.
+**All four of those merges were pressed by a person, and that makes both sides
+of ADR-052's bargain empty.** ADR-052 traded a permission for a practice: an
+agent could merge `human-review` work, and in return every decision in it would
+be in the ledger first.
+
+- **The permission was never used.** `.claude/autonomy.md` never took it up,
+  because the three edits ADR-052 listed "to apply by hand" were never applied.
+  No agent has merged `human-review` work in this repository.
+- **The practice was not kept.** The ledger went unwritten for four weeks, and
+  the merges that skipped it were a person's.
+
+**So this record does not withdraw a permission that was misused. It withdraws
+one that was never exercised, from a bargain whose other half was never paid.**
+That is why the mechanism failed and the reasoning did not. The ledger depended
+on somebody remembering a step at merge time, nothing checked that they had,
+and nobody ran the `git log` ADR-052 said to watch.
 
 ### What the ledger and the merge button both missed
 
@@ -119,7 +128,7 @@ written. That was the only check that worked that day.
    names that commit.** The gate list in `autonomy.md` is the list in
    `.github/workflows/ci.yml`.
 6. **ADR-052's permission to merge `human-review` work lapses, on ADR-052's own
-   condition.** The ledger stays, and a `human-review` PR has its entries before
+   condition.** It was never exercised, so nothing that was working stops. The ledger stays, and a `human-review` PR has its entries before
    a person merges it. ADR-052's two hard stops also stay. Its three edits to
    `autonomy.md` are declined.
 7. **The routine's prompt is mirrored in `.claude/routine-prompt.md`,** with the
@@ -132,7 +141,10 @@ written. That was the only check that worked that day.
 ledger being written, and said what would show that it was not. That has now
 been shown, so the condition behind the permission is not met. The reason is
 not that an agent is less trustworthy than a person; the four unrecorded merges
-were a person's. A later record can restore the permission once the ledger is
+were a person's, and the agent never merged anything under the permission. What
+ends here is an arrangement that was never in operation on either side. Saying
+so plainly is better than a record that reads as a response to misuse that did
+not happen. A later record can restore the permission once the ledger is
 written by a mechanism rather than by memory. [#112](https://github.com/fournarin/is/issues/112)
 proposes that mechanism: a CI check that a pull request adding a record also
 touches the ledger, or says why not.
