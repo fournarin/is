@@ -8,6 +8,12 @@ said "every four hours" for some weeks while the routine ran every two, which is
 the kind of number that drifts the moment it is restated in a second place. If
 you need to know the interval, read the routine.
 
+[`routine-prompt.md`](routine-prompt.md) is the one exception, made on purpose.
+It mirrors the prompt this run was started with, and names the routine, so that
+a change to the prompt leaves a diff (ADR-085 §7). It is a copy: where it and
+the routine disagree, the routine is what ran, and the disagreement is worth
+an issue.
+
 Everything here is written for an agent that starts cold. It has this checkout,
 a sandbox with the toolchain already installed, and the built-in GitHub tools -
 and nothing else: `docs-md/` - the plan, `design.md`, the schedule, the
@@ -128,9 +134,9 @@ always is.
 - **Architectural decisions become new ADRs.** Never edit an existing one, and
   reference the record being revisited. **The next free number is not simply
   the next one in `docs/adr/` on `main`.** After `git fetch`, it is one above
-  the highest number found in three places: `docs/adr/` on `main`, the branch
-  of every open pull request, and every open issue that says "Reserves ADR-NNN"
-  (ADR-085 §3). For example:
+  the highest number found in four places: `docs/adr/` on `main`, the branch of
+  every open pull request, every open issue that says "Reserves ADR-NNN", and
+  the reserved numbers `docs/adr/README.md` lists (ADR-085 §3). For example:
 
   ```
   gh pr list --state open --json headRefName --jq '.[].headRefName' \
