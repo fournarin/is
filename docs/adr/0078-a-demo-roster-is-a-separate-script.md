@@ -3,8 +3,8 @@
 Builds [ADR-024](0024-roles-and-approval-authority.md), which forbids a demo with
 authentication turned off and therefore made `scripts/seed_demo.py` an ordinary
 operation rather than a fixture. Extends the rule
-[ADR-032](0032-synthetic-signals-are-generated-from-a-named-scenario.md) and
-[ADR-044](0044-what-drives-the-trigger-loop.md) §5 apply to invented signals -
+[ADR-032](0032-what-the-synthetic-source-guarantees.md) and
+[ADR-044](0044-the-trigger-loop-what-ticks-it-and-what-feeds-it.md) §5 apply to invented signals -
 that invented data announces itself - to invented **people**. Read beside
 [ADR-011](0011-load-ratio-switches-dispatch-behaviour.md) and
 [ADR-071](0071-a-round-proposes-and-a-person-decides.md), which are the two

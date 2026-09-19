@@ -48,7 +48,9 @@ was asked, so a proposal answered after the window closed still counts against
 the shift it was asked about.
 
 The rows come from ADR-014's technician trial, and from nothing else that
-currently exists. **No plant data is required** - a supervisor pressing confirm
+currently exists. [`../trial-protocol.md`](../trial-protocol.md) is how to run
+one: two people, forty minutes, and the criteria for a bad result written down
+before anybody arrives. **No plant data is required** - a supervisor pressing confirm
 or reject on a demo world produces exactly the rows this reads (principle 4).
 
 ## What these figures will not be able to say

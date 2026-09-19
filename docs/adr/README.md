@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Eighty decisions, in the order they were made. Each records the context that
+Eighty-one decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -36,7 +36,7 @@ entries replace parts of earlier ones, and both are kept.
 | [020](0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md) | **Prediction by trend extrapolation, measured on synthetic data** | |
 | [021](0021-downtime-cost-at-station-level-with-buffers.md) | Downtime cost per station and buffer, not per line | |
 | [022](0022-every-improvement-loop-proposes-rather-than-changes.md) | Every improvement loop proposes; it does not change | |
-| [023](0023-findings-have-a-lifecycle-and-a-suppression-window.md) | Findings have a lifecycle and a suppression window | |
+| [023](0023-findings-have-a-lifecycle-and-a-suppression-window.md) | Findings have a lifecycle and a suppression window | 043 |
 | [024](0024-roles-and-approval-authority.md) | Roles and approval authority | |
 | [025](0025-work-orders-support-handover-and-multi-person-jobs.md) | Shift handover and multi-person jobs | 056 |
 | [026](0026-split-the-worker-into-two-roles.md) | Split the worker into runtime and authoring | |
@@ -58,7 +58,7 @@ entries replace parts of earlier ones, and both are kept.
 | [042](0042-what-the-rule-engine-remembers-and-what-it-is-told.md) | What the rule engine remembers, and what it is told | |
 | [043](0043-how-a-trend-becomes-a-prediction-and-what-its-interval-means.md) | How a trend becomes a prediction, and what its interval means | |
 | [044](0044-the-trigger-loop-what-ticks-it-and-what-feeds-it.md) | The trigger loop: what ticks it, what feeds it, what it cancels | |
-| [045](0045-the-load-gate-the-score-and-what-a-round-is-allowed-to-move.md) | The load gate, the score, and what a round may move | 049 |
+| [045](0045-the-load-gate-the-score-and-what-a-round-is-allowed-to-move.md) | The load gate, the score, and what a round may move | 049, 054 |
 | [046](0046-what-the-simulator-models-and-what-it-assumes.md) | What the simulator models, reads from config, and invents | 047 |
 | [047](0047-a-policy-may-not-spend-minutes-the-shift-does-not-have.md) | A policy may not spend minutes the shift does not have | |
 | [048](0048-a-work-order-outlives-the-layout-it-was-created-under.md) | A work order outlives the layout it was created under | |
@@ -94,6 +94,14 @@ entries replace parts of earlier ones, and both are kept.
 | [079](0079-the-embedding-model-ships-inside-the-image.md) | The embedding model ships inside the image | |
 | [080](0080-a-draft-already-waiting-for-review-answers-the-second-ask.md) | A draft already waiting for review answers the second ask | |
 | [081](0081-what-the-health-reader-serves-and-what-a-zero-may-not-mean.md) | What the health reader serves, and what a zero from an empty table may not mean | |
+| [082](0082-the-data-is-not-coming-this-term-and-what-that-closes.md) | **The data is not coming this term, and what that closes** | |
+
+## The invariants these records cite
+
+These records cite fifteen numbered invariants, and so do the titles of four
+steps in CI. [`../invariants.md`](../invariants.md) is the list, with the source
+record and the enforcement point for each. It is in the repository because the
+numbers were and the list was not.
 
 ## Where to start
 

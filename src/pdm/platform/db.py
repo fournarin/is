@@ -31,7 +31,32 @@ def dsn() -> str:
 
 
 def make_pool(min_size: int = 1, max_size: int = 4) -> ConnectionPool[Connection[Any]]:
-    return ConnectionPool(dsn(), min_size=min_size, max_size=max_size, open=True)
+    """A pool that hands out a connection it has just verified.
+
+    `check` is what makes a connection the server has closed somebody else's
+    problem rather than the next caller's. Without it the pool hands out what it
+    holds, and a connection killed while idle fails on use: measured here by
+    terminating the backends and then making six requests, four of them failed
+    with `AdminShutdown` - one per pooled connection - and with `check` none of
+    them did.
+
+    That is not an exotic input. An idle backend is terminated by a backup
+    script, by `idle_session_timeout`, by a firewall dropping an idle TCP
+    connection on a plant network, or by anybody restarting the database. The
+    cost of noticing is one round trip per checkout, against a request that is
+    about to do several.
+
+    `worker-runtime` is where it matters most: a failed checkout there is a
+    failed trigger tick or a failed dispatch round, and the queue retrying is
+    recovery rather than the absence of a fault.
+    """
+    return ConnectionPool(
+        dsn(),
+        min_size=min_size,
+        max_size=max_size,
+        open=True,
+        check=ConnectionPool.check_connection,
+    )
 
 
 @contextmanager

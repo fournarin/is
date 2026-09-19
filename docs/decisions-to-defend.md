@@ -10,6 +10,9 @@ listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
+The last section is different: four questions with no answer yet, kept here for
+the same reason as the rest.
+
 ---
 
 ## 1. The skill-match term asks the shift, not the clock
@@ -393,6 +396,347 @@ somebody outside this project.
 
 **Look at.** [ADR-070](adr/0070-the-plant-has-a-cmms-and-what-that-changes.md),
 [ADR-012](adr/0012-tickets-leave-through-an-adapter.md), `src/pdm/sinks/`.
+
+## 19. Machine health is two orderings, never one number
+
+**Decided.** A health reading reports its two contributions as two - what the
+history says and what is open now - and never blends them into a single score.
+Two orderings come out rather than one ranking, and no fourth origin is created:
+health is read and is not a source of work.
+
+**Why.** A blended number is the one a screen would sort by and nobody could
+take apart. The two halves answer different questions on different evidence, and
+a machine that is quiet now with a bad year reads differently from one that is
+loud today, which is exactly the distinction a blend destroys. `.importlinter`
+holds both prohibitions structurally: health cannot reach `work/`, and the score
+cannot read health.
+
+**If it is wrong.** This is the piece most likely to be redirected once the
+advisor sees a screen of it, and ADR-072 says so in as many words. A supervisor
+may want one number and may be right to. The cost of changing is low - the two
+readings are computed separately and a blend would be a third thing built on
+top - and the cost of having blended first is that nobody could have found this
+out.
+
+**One figure to quote and one to withhold.** Over 40 draws the two degraded
+machines take the top two places 39 times, and the two planted to be ignored
+finish last. Say also what it does not measure: a history generator writes
+closed work orders and not signals, so there are no open Findings to rank and
+none were invented.
+
+**Look at.** [ADR-072](adr/0072-machine-health-is-read-not-a-source-of-work.md),
+[ADR-076](adr/0076-what-machine-health-is-computed-from-and-what-it-may-not-be-ranked-by.md),
+`docs/results/health.md`, `.importlinter`.
+
+---
+
+## 20. A false alarm may argue for a narrower threshold and never a looser one
+
+**Decided.** Loop 2 proposes tightening a threshold when the evidence supports
+it, capped at 10%, and refuses outright on a rule flagged `safety_critical`
+however many false alarms it counted. Six refusals are named rather than
+returned as one failure.
+
+**Why.** ADR-022 gives every loop the same shape - propose, never change - and
+one prohibition. A loop that could argue for loosening a safety-linked rule
+would be arguing from the cheapest possible evidence: the alarms that did not
+matter. The ones that would have mattered leave no row.
+
+**If it is wrong.** A rule that genuinely over-fires on a safety-linked
+component keeps over-firing, and the alarm fatigue that follows is a real cost
+paid to avoid a worse one. The escape is a person changing the threshold with a
+record, which is the path ADR-022 leaves open on purpose.
+
+**The one-sidedness is carried on every proposal** rather than left to a
+reviewer to remember: the evidence for narrowing is always the alarms that were
+wrong, and never the faults that were caught.
+
+**Look at.** [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md),
+[ADR-022](adr/0022-every-improvement-loop-proposes-rather-than-changes.md),
+`src/pdm/work/thresholds.py`, `config/rules.yaml`.
+
+---
+
+## 21. The CMMS contract is ours, written down, and not guessed from a product
+
+**Decided.** `CmmsSink` posts to a contract this project declares - a JSON
+ticket, a bearer token, an idempotency key that is the work order's own
+reference - and expects an identifier back. A 2xx naming no identifier is a
+refusal, not a delivery.
+
+**Why.** Nobody has seen the plant's system. An adapter written against a guess
+at somebody's SAP PM interface is code that looks finished and cannot be
+discovered to be wrong until the slice that would have built the real one is
+gone. A contract that says it is ours can be handed to whoever owns that system
+as a question.
+
+**If it is wrong.** The plant's system accepts something else and the adapter is
+rewritten, which is one file and the thing ADR-012's port exists for. What does
+not have to be rewritten is everything that produced the ticket.
+
+**The timeout is derived rather than chosen** - from the batch size and the
+round length - and a test holds the derivation, so the number cannot drift away
+from its reason.
+
+**Look at.** [ADR-074](adr/0074-the-cmms-contract-is-ours-and-what-the-third-destination-may-promise.md),
+[ADR-068](adr/0068-a-ticket-that-was-dispatched-and-a-ticket-that-arrived.md),
+`src/pdm/sinks/cmms.py`.
+
+---
+
+## 22. The confirmation record says how often two parties agreed, and can never say who was right
+
+**Decided.** `GET /dispatch/confirmations` reports agreement, expiry, decision
+time, and every rejection and expiry in full, per shift and per band. It reports
+no threshold and makes no recommendation, and both limits are carried on every
+response rather than left in a document.
+
+**Why.** Nothing in this system records what a confirmed placement went on to
+cost. A supervisor who confirms everything to clear a screen is indistinguishable
+in these rows from one who read each proposal, so a high agreement rate is as
+consistent with a scheduler nobody is checking as with one that works.
+
+**If it is wrong.** Somebody quotes the agreement rate as evidence the scheduler
+is good. That is the misreading the endpoint is shaped to prevent, and the
+defence is that the limitation travels with the number.
+
+**There are no figures yet**, and that is the current state of the answer rather
+than a gap in the report. `docs/trial-protocol.md` is how to produce them.
+
+**Look at.** [ADR-075](adr/0075-what-the-confirmation-record-may-be-read-to-say.md),
+[ADR-071](adr/0071-a-round-proposes-and-a-person-decides.md),
+`docs/results/confirmations.md`.
+
+---
+
+## 23. An operator may report a fault, and may not call it critical
+
+**Decided.** All four roles may report. The severity offered is low, medium or
+high; `critical` is not on the form. A second report on a machine with work
+already open is turned back naming that ticket, with one tap to say it is a
+different fault.
+
+**Why.** The person standing next to a machine when it starts making a noise is
+as likely to be an operator as a technician, and requiring them to find somebody
+else is how a fault gets reported by radio and the system never learns of it.
+`high` already clears the load gate on a heavy shift, so the level above it is
+reserved for a rule that measured something rather than for a person who is
+alarmed. The duplicate refusal is what stops four people seeing one stopped line
+from producing four tickets.
+
+**If it is wrong.** A genuine emergency is reported one level lower than it
+deserves. The mitigation is that it still clears the gate, and that a person
+confirms every placement anyway.
+
+**The refusal lives in the service rather than the endpoint**, which is why
+several fixtures now say out loud that their several jobs on one machine are
+separate faults.
+
+**Look at.** [ADR-077](adr/0077-who-may-report-a-fault-and-what-a-second-report-means.md),
+[ADR-024](adr/0024-roles-and-approval-authority.md).
+
+---
+
+## 24. The demo roster invents people, in a script the plant does not run
+
+**Decided.** `seed_demo.py` creates accounts and manuals and no technicians.
+Inventing a roster is a second script, `seed_demo_roster.py`, kept separate.
+
+**Why.** An account is administration and a manual declares itself invented on
+every page. A technician row is a **person**: the load gate computes capacity
+from it, the score ranks against it, a delivery is addressed to it, and a real
+technician can end up seeing a job handed over by somebody who does not exist.
+It is also the one table the plant will certainly replace. Putting invented
+people in the operator's own script would seed the table that looks most
+authoritative with the rows least able to declare themselves.
+
+**If it is wrong.** Somebody runs the roster script on a plant machine and the
+system places real work on invented people. The separation is what makes that a
+deliberate act rather than a side effect.
+
+**Look at.** [ADR-078](adr/0078-a-demo-roster-is-a-separate-script.md),
+`scripts/seed_demo.py`, `scripts/seed_demo_roster.py`.
+
+---
+
+## 25. The embedding model ships inside the image, and the image is larger for it
+
+**Decided.** The model is downloaded at build time into the path the code names
+in `FASTEMBED_CACHE_PATH`, and `OnnxEmbedder` reads that variable explicitly
+rather than leaving the library to find its own. Proven with
+`docker run --network none`.
+
+**Why.** The alternative was a volume filled by a documented step, and a volume
+is only as good as the person who remembered. The failure when nobody did is the
+one that motivated the record: on a plant machine with no route to the internet,
+the library tries to fetch a model it does not have and fails at the first
+document, with a TLS error in a worker's log that says nothing about a model.
+
+**If it is wrong.** The image is about two gigabytes larger than it would be,
+and every future model compounds that. A cross-encoder would add as much again,
+which is a live question rather than a hypothetical.
+
+**Look at.** [ADR-079](adr/0079-the-embedding-model-ships-inside-the-image.md),
+`Dockerfile`, `src/pdm/retrieval/embedding.py`,
+`tests/test_the_model_ships_in_the_image.py`.
+
+---
+
+## 26. Asking twice for a draft answers with the draft already waiting
+
+**Decided.** `request_draft` checks for a proposal already awaiting a decision
+on the pair and returns it rather than queueing another. 202 with
+`awaiting_review`, not 409.
+
+**Why.** A conflict would teach people to press again to find out. The answer is
+the same shape either way and says which of three things happened: queued now,
+queued already, or waiting for you in review. The screen also hides the button,
+and the two are not redundant - hiding it stops a person pressing something with
+no effect, and the check at the endpoint makes the rule true for callers who
+never saw a screen.
+
+**If it is wrong.** Somebody who wants a genuinely fresh draft has to decide the
+waiting one first. Sending it back already enqueues a redraft, so the path
+exists.
+
+**This is the second time the same argument had to be made** about a rule that
+looked enforced because a screen enforced it.
+
+**Look at.** [ADR-080](adr/0080-a-draft-already-waiting-for-review-answers-the-second-ask.md),
+[ADR-040](adr/0040-what-happens-when-somebody-asks-twice.md).
+
+---
+
+# Not decided, and still going to be asked about
+
+The four below are not choices this project made and defends. They are places
+where an examiner's question has no answer yet, found by a read of the whole
+repository on 2026-09-18. They are here because arriving at a viva having
+already named them is a different position from being shown them.
+
+---
+
+## 27. A safety setting is configured, validated, and read by nothing
+
+**Decided.** Nothing, yet - and that is why it is here. `policy.yaml` sets
+`safety_min_score: 0.75` on the runtime retrieval profile under a comment saying
+safety questions use a stricter bar. `retrieval/service.py` builds both profiles
+passing `min_score` alone. Nothing reads the field.
+
+**Why it survived.** Deleting a safety-labelled setting quietly is the wrong way
+to close a design question, and the question is real: nothing in this system
+decides what makes a question safety-related, so the key describes an intention
+that was never designed rather than a behaviour that was lost.
+
+**If it is wrong.** An operator reading `policy.yaml` concludes the system holds
+a higher bar before answering a safety question. It does not. That is the worst
+kind of configuration entry - not unused, but actively misleading about a safety
+property.
+
+**A gate now names it.** `scripts/check_config_is_read.py` fails the build on any
+schema field nothing reads, with this one as a listed exception whose reason is
+beside it. Either build it or delete it; the exceptions list is a debt with a
+name on it, not permission.
+
+**Look at.** `config/policy.yaml`, `src/pdm/retrieval/service.py`,
+`scripts/check_config_is_read.py`.
+
+---
+
+## 28. The solver's budget is wall-clock seconds, so one published figure is machine-dependent
+
+**Decided.** `solver_seconds: 5.0`, applied as `max_time_in_seconds`. CP-SAT's
+parallel portfolio is turned off and the seed fixed, with a comment explaining
+that several workers would make the solution depend on how loaded the machine
+was, "which would make every figure in docs/results/ unreproducible, and
+quietly". The line above has the same property and was not guarded.
+
+**Why it matters.** Re-run on another machine, 1,439 of 1,440 rows come back byte
+for byte. The one that moves is CP-SAT's mean response, because 2 of 15 solver
+calls in that cell stop at the ceiling rather than proving optimality, and a
+faster machine searches further in the same five seconds. Units lost does not
+move at any budget - response time is not in the objective, so among plans
+losing the same production it is a free variable.
+
+**If it is wrong.** A reader who re-runs the sweep gets a different number in one
+column and has reason to doubt the rest. The reported response figure for that
+policy is a property of which equally-optimal plan came back, not of the policy.
+
+**The fix is known and not taken here.** `max_deterministic_time` bounds search
+work rather than seconds and is in the pinned library version. It does not buy
+optimality - the same two solves stay unproved at every budget tried - it makes
+the arbitrariness the same everywhere, which is what reproducibility needs and
+all it needs. Whether to adopt it, and at what budget, is a decision with a
+record still to write.
+
+**Look at.** `docs/results/reproducibility.md`,
+`src/pdm/dispatch/solver.py`,
+[ADR-054](adr/0054-what-cp-sat-optimises-and-what-it-may-not-touch.md).
+
+---
+
+## 29. Account administration exists in code and cannot be reached
+
+**Decided.** Nothing, yet. `platform/auth/repo.py` has `set_password`,
+`set_role` and `deactivate`, written, documented and correct-looking.
+
+`set_role` and `deactivate` have no caller anywhere and no test. `set_password`
+has exactly one caller and it is not a person changing a password: `LocalAccounts.authenticate`
+re-hashes on a successful login when the stored scrypt parameters are out of
+date, which is a good piece of work and is the only reason that function runs.
+**So the capability to set a password exists, is exercised, and is still not
+reachable by anybody who wants to change one.**
+
+**Why it matters.** ADR-036 argues for sessions in the database using the case
+of "an engineer whose approval rights were withdrawn this morning" - a role that
+keeps working until somebody logs out. The function that implements the
+withdrawal is unreachable. On a real installation the account list is whatever
+the seed script made it: a password cannot be changed by the person who owns it,
+a role cannot be changed at all, and access cannot be withdrawn except by hand in
+the database.
+
+**If it is wrong.** It is not wrong yet, because nobody has installed this
+anywhere real. It becomes wrong on the first installation that outlives one
+person's employment.
+
+**Defensible for a trial and not for a plant**, and `docs/install.md` says so in
+those words rather than leaving it to be found.
+
+**Look at.** `src/pdm/platform/auth/repo.py`,
+[ADR-036](adr/0036-sessions-in-the-database-behind-an-identity-adapter.md),
+[ADR-024](adr/0024-roles-and-approval-authority.md).
+
+---
+
+## 30. ADR-028 says every stored time is timezone-aware, and no contract checks
+
+**Decided.** Nothing. ADR-028's decision includes "Store UTC, timezone-aware,
+everywhere; convert to local time only for display", and `Signal.timestamp` is a
+plain `datetime`, which pydantic accepts naive. So does every other datetime
+field in `contracts/`.
+
+**Why it matters.** Mixing a naive datetime with an aware one raises
+`TypeError`, and `handlers.py` runs a whole trigger tick in one transaction, so
+one naive timestamp would roll back every Finding the batch raised - the same
+shape as the `nan` reading fixed in `triggers/trend.py`, arriving through a
+different field of the same contract.
+
+**Why it is not urgent.** The rule holds everywhere in practice and was measured
+rather than assumed: every datetime column in `migrations/` is `timestamptz`,
+`Scenario` refuses a naive `starts_at` by name, and of thirty naive `datetime(...)`
+constructions in the repository, twenty-five are in one test file that is
+deliberately testing naive handling and the rest are deliberate in the same way.
+**Nothing has drifted. Nothing is checking that it has not.**
+
+**What the answer looks like, and why it is not taken here.** `AwareDatetime` on
+the contract fields would enforce it in one place. That rejects inputs the system
+currently accepts, which is a change to a contract rather than a bug fix, and
+ADR-027 makes the contracts deliberately expensive to change. It needs a record.
+
+**Look at.** [ADR-028](adr/0028-clock-is-the-single-time-port.md),
+`src/pdm/contracts/work.py`, `src/pdm/signals/domain.py`.
+
+---
 
 ---
 

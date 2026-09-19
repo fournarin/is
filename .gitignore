@@ -103,3 +103,4 @@ sim_out/
 .idea/
 .vscode/
 !.vscode/settings.json
+.gh-token

@@ -1,16 +1,26 @@
 # The unattended loop
 
-A scheduled cloud session opens this repository every four hours, does **one
-slice**, and stops. Nobody is watching while it runs.
+A scheduled cloud session opens this repository, does **one slice**, and stops.
+Nobody is watching while it runs.
+
+**The schedule is a property of the routine and is not written down here.** It
+said "every four hours" for some weeks while the routine ran every two, which is
+the kind of number that drifts the moment it is restated in a second place. If
+you need to know the interval, read the routine.
 
 Everything here is written for an agent that starts cold. It has this checkout,
 a sandbox with the toolchain already installed, and the built-in GitHub tools -
-and nothing else: `docs-md/` - the plan, `design.md`, the invariant table, the
+and nothing else: `docs-md/` - the plan, `design.md`, the schedule, the
 conversation log with the advisor - **is not in this checkout and never will
 be**, because `.gitignore` excludes it on purpose. What survives that gap is
-`CLAUDE.md`, `docs/adr/`, and the issue being worked from. If a slice cannot be
-finished without something only `docs-md/` could answer, that is a reason to stop
-and say so, not a reason to guess.
+`CLAUDE.md`, `docs/adr/`, [`docs/invariants.md`](../docs/invariants.md), and the
+issue being worked from. If a slice cannot be finished without something only
+`docs-md/` could answer, that is a reason to stop and say so, not a reason to
+guess.
+
+**The invariant table is no longer one of those things.** It used to be in
+`design.md` and is now `docs/invariants.md`, so a citation of "invariant 10" is
+resolvable from inside this checkout.
 
 Issues, pull requests, labels and merges go through the built-in GitHub tools,
 which authenticate through a proxy. `gh` is not necessarily installed; `git`

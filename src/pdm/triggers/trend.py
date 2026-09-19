@@ -140,6 +140,14 @@ def fit(readings: Sequence[tuple[datetime, float]]) -> Fit | None:
     None where fewer than two samples exist, or where every sample shares a
     timestamp - a vertical line has no slope, and the caller asking "when will
     this reach the threshold" has no answer rather than an infinite one.
+
+    Also None where the arithmetic does not land on a finite line. A reading of
+    `nan` or `inf`, or one large enough to overflow a square, propagates through
+    the sums and produces a slope or a standard error that is not a number. That
+    is the same thing as having no line: the caller gets None and moves on. It
+    used to raise out of `Fit`'s own validation, which would have taken the
+    whole trigger batch with it - and a failed sensor reading as `nan` is the
+    single most ordinary way for a plant to send one.
     """
     if len(readings) < 2:
         return None
@@ -164,12 +172,20 @@ def fit(readings: Sequence[tuple[datetime, float]]) -> Fit | None:
     # two points the residuals are zero by construction and the error is zero,
     # which is honest: two points determine a line exactly, and the caller's
     # `min_samples` is what decides whether two is enough to believe.
-    residuals = sum((y - (intercept + slope * x)) ** 2 for x, y in points)
+    try:
+        residuals = sum((y - (intercept + slope * x)) ** 2 for x, y in points)
+    except OverflowError:
+        # A residual whose square leaves the range of a float. The line that
+        # produced it is not one anybody should extrapolate from.
+        return None
     degrees_of_freedom = count - 2
     if degrees_of_freedom <= 0:
         slope_error = 0.0
     else:
         slope_error = math.sqrt((residuals / degrees_of_freedom) / variance_x)
+
+    if not all(math.isfinite(number) for number in (intercept, slope, slope_error)):
+        return None
 
     return Fit(
         intercept=intercept,
