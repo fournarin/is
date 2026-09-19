@@ -151,9 +151,22 @@ class TestTheFileDestination:
         assert "มีเสียงบดที่แกน J2" in written
         assert json.loads(written)["ticket"]["machine_id"] == "MC-001"
 
+    @pytest.mark.skipif(
+        os.geteuid() == 0,
+        reason="root ignores the permission bits, so the assertion tests nothing",
+    )
     def test_a_directory_it_cannot_write_is_a_refusal_not_a_crash(self, tmp_path: Path) -> None:
         """The cheapest honest version of a CMMS that is down. ADR-068 §3 wants
-        it raised as `DeliveryFailed`, so the round records it and retries."""
+        it raised as `DeliveryFailed`, so the round records it and retries.
+
+        Skipped as root for the reason
+        `platform/test_objects.py::test_a_stored_blob_is_read_only` gives in the
+        same words: the bits are set correctly and the kernel disregards them,
+        so the assertion tests nothing. CI runs as an ordinary user and the case
+        is covered where it counts. Without this the suite fails in any root
+        sandbox, on a test that says nothing about the code - which happened
+        twice in one day before anybody noticed the sibling already had the
+        guard and this one did not."""
         blocked = tmp_path / "read-only" / "tickets"
         blocked.parent.mkdir()
         blocked.parent.chmod(0o500)
