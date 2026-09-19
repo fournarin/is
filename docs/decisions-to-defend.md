@@ -10,7 +10,7 @@ listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
-The last section is different: four questions with no answer yet, kept here for
+The last section is different: five questions with no answer yet, kept here for
 the same reason as the rest.
 
 ---
@@ -609,9 +609,10 @@ looked enforced because a screen enforced it.
 
 # Not decided, and still going to be asked about
 
-The four below are not choices this project made and defends. They are places
+The five below are not choices this project made and defends. They are places
 where an examiner's question has no answer yet, found by a read of the whole
-repository on 2026-09-18. They are here because arriving at a viva having
+repository on 2026-09-18 and a check of that read on 2026-09-19. They are here
+because arriving at a viva having
 already named them is a different position from being shown them.
 
 ---
@@ -735,6 +736,62 @@ ADR-027 makes the contracts deliberately expensive to change. It needs a record.
 
 **Look at.** [ADR-028](adr/0028-clock-is-the-single-time-port.md),
 `src/pdm/contracts/work.py`, `src/pdm/signals/domain.py`.
+
+---
+
+## 31. Two invariants were cited as enforced, and the mechanism was not there
+
+**Decided.** The text is corrected first and the code is fixed separately. Rows
+4 and 13 of `docs/invariants.md` now say what the code does, and the page has a
+**Known gaps** section listing these two and three smaller ones. The code change
+is [#105](https://github.com/fournarin/is/issues/105): its own pull request,
+with ADR-084, labelled `human-review`.
+
+**How it was found.** `docs/invariants.md` was written to bring the fifteen
+invariants into the repository, and its first version said every **Enforced
+by** entry had been checked against the code. For two rows that check had only
+confirmed that the named file existed, not that it did what the row said. On
+2026-09-19, before the page was pushed, each entry was read at the line it
+points to. What that found went into the description of #104 rather than into
+the page, and #104 merged with the page unchanged. The correction reached `main`
+in a pull request of its own, after the false rows had already landed there.
+The findings were:
+
+- **Invariant 4.** The validator is in `contracts/work.py`, not
+  `playbooks/domain.py`, and it never looks at `source_doc`. An approved
+  playbook whose step cites `""` constructs without error.
+- **Invariant 13.** The boot check for machines fills both of its dictionaries
+  in the same loop, so it can never fire. The skill half is not checked at boot
+  at all, and a technician's skills are not checked anywhere.
+
+Both invariants are cited in more than eighty records, and 13 appears in the
+title of a CI step. The same day found the same kind of mistake elsewhere:
+the `ruff` result for this batch was reported green from a branch that did not
+contain the file that failed. Both were a check that ran against something
+other than what was then claimed.
+
+**Why the text first.** The page was what was false, and it was about to be
+published. The code fix is several decisions, not one edit, and none of them
+belongs in a documentation pull request:
+
+- A stricter `PlaybookStep` meets old `playbook_snapshot` rows, which invariant
+  2 makes unchangeable.
+- Checking technicians' skills can refuse data that loads today.
+- Deleting the machine check needs somebody to say what it was meant to catch.
+
+Correcting the page without saying so would have been quicker, and it would
+have removed the only record that the page had been wrong. A record of when a
+claim was false is a better answer to "how do you know what this repository
+says is true" than a page that has always been right.
+
+**If it is wrong.** Until #105 lands, invariant 4 holds only because nothing
+produces an empty source, and the technician half of invariant 13 does not hold
+at all. A reader who trusts the CI step "configuration must be loadable
+(invariants 7 and 13)" believes it checks more than it does.
+
+**Look at.** [`invariants.md`, Known gaps](invariants.md#known-gaps),
+`src/pdm/contracts/work.py`, `src/pdm/platform/config/loader.py`,
+`src/pdm/dispatch/repo.py::add_technician`.
 
 ---
 
