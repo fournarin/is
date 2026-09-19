@@ -56,7 +56,7 @@ Nobody can answer a question while you run. Three things follow:
 
 The backlog issues carry their own definition of done. Treat it as the specification and do not widen it. `docs-md/` is gitignored and will not be in your checkout; each issue was written to be self-contained. If a slice genuinely cannot be finished without something only those notes could answer, say so on the issue, label it `blocked`, and stop rather than guessing.
 
-The backlog runs 9.1 through 11.1. The 9.x slices are independent of each other and of anything waiting on review, so there should always be something eligible. If there is not, do not invent scope: open one issue titled `backlog empty` proposing the next slices with reasons, and stop.
+The backlog is the open issues labelled `slice`, and `.claude/autonomy.md` says which of them are eligible. This prompt names no slice numbers on purpose: a list written here goes stale where nobody sees a diff, as "9.1 through 11.1" did for six weeks. If nothing is eligible, do not invent scope: open one issue titled `backlog empty` proposing the next slices with reasons, and stop.
 
 If the environment itself is broken - the clone, GitHub access, `uv`, or a toolchain an issue needs - do not improvise around it. Comment precisely what failed on the issue you would have worked on, label it `blocked` if it needs a person, and stop.
 
