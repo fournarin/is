@@ -114,6 +114,18 @@ Better said here than found later.
 - **PM work exists in code but is not scheduled at runtime.** `from_pm_task()`
   is called from tests only, so the third arrow in the diagram above is not yet
   a live path.
+- **The improvement loops decide and nothing runs them.** Loop 1 proposes a
+  duration estimate from closed jobs
+  ([ADR-066](docs/adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md))
+  and Loop 2 proposes a rule threshold from false alarms, refusing outright for
+  a safety-linked rule
+  ([ADR-073](docs/adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md)).
+  Both are tested, and no code outside `tests/` calls either `propose()`.
+  `worker-runtime` registers two handlers, dispatch and observe
+  (`src/pdm/workers/runtime/__main__.py:204`), and no screen shows a
+  proposal. So the system does not yet learn anything from the jobs it closes;
+  it contains the arithmetic it would learn with. Loop 3 is not written.
+  [#107](https://github.com/fournarin/is/issues/107) is the path they need.
 - **Backup and restore are documented but have never been run.** See the note in
   [docs/install.md](docs/install.md).
 - **Nobody outside this project has used the system.** Reserving time for a
