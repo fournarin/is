@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Eighty decisions, in the order they were made. Each records the context that
+Eighty-one decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -94,6 +94,7 @@ entries replace parts of earlier ones, and both are kept.
 | [079](0079-the-embedding-model-ships-inside-the-image.md) | The embedding model ships inside the image | |
 | [080](0080-a-draft-already-waiting-for-review-answers-the-second-ask.md) | A draft already waiting for review answers the second ask | |
 | [081](0081-what-the-health-reader-serves-and-what-a-zero-may-not-mean.md) | What the health reader serves, and what a zero from an empty table may not mean | |
+| [082](0082-the-data-is-not-coming-this-term-and-what-that-closes.md) | **The data is not coming this term, and what that closes** | |
 
 ## The invariants these records cite
 
