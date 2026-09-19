@@ -78,8 +78,9 @@ question people actually ask, this is the record to overturn.
 
 **Decided.** `dispatch.round_seconds: 300` in `policy.yaml`.
 
-**Why.** design.md 6.2 sets the cadence and the simulator's scenarios already
-run at it, so slice 7.3 measures the clock the plant would use. The trade is
+**Why.** design.md 6.2 ([in the repository](from-the-working-notes.md)) sets
+the cadence and the simulator's scenarios already run at it, so slice 7.3
+measures the clock the plant would use. The trade is
 stated in the file: longer and a critical fault waits for the next round,
 shorter and the queue re-ranks often enough that technicians stop reading it.
 
