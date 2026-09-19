@@ -38,7 +38,7 @@ time, to the last digit. The difference is between **machines**, and the cause i
 in `solver.py`:
 
 ```python
-solver.parameters.max_time_in_seconds = seconds   # config: 5.0
+solver.parameters.max_time_in_seconds = seconds  # config: 5.0
 solver.parameters.num_workers = 1
 solver.parameters.random_seed = 0
 ```
