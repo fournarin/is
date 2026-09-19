@@ -11,7 +11,7 @@ things stop a slice entirely. Both are listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
-The last section is different: five questions with no answer yet, kept here for
+The last section is different: six questions with no answer yet, kept here for
 the same reason as the rest.
 
 ---
@@ -610,11 +610,11 @@ looked enforced because a screen enforced it.
 
 # Not decided, and still going to be asked about
 
-The five below are not choices this project made and defends. They are places
+The six below are not choices this project made and defends. They are places
 where an examiner's question has no answer yet, found by a read of the whole
 repository on 2026-09-18 and a check of that read on 2026-09-19. They are here
-because arriving at a viva having
-already named them is a different position from being shown them.
+because arriving at a viva having already named them is a different position
+from being shown them.
 
 ---
 
@@ -793,6 +793,54 @@ at all. A reader who trusts the CI step "configuration must be loadable
 **Look at.** [`invariants.md`, Known gaps](invariants.md#known-gaps),
 `src/pdm/contracts/work.py`, `src/pdm/platform/config/loader.py`,
 `src/pdm/dispatch/repo.py::add_technician`.
+
+---
+
+## 32. The improvement loops were delivered as mechanisms, and the loop around them was never opened
+
+**Decided.** Nothing yet, and that is why this is here. Loop 1 (durations,
+ADR-066) and Loop 2 (thresholds, ADR-073) were built, tested and merged as slices
+11.1 and 11.2 on 22 and 23 August. Neither has a caller outside `tests/`.
+`worker-runtime` registers two handlers, dispatch and observe
+(`src/pdm/workers/runtime/__main__.py:204`), and no screen shows a proposal.
+The path they need is [#107](https://github.com/fournarin/is/issues/107).
+
+**Why it was left that way, in the records' own words.** Leaving it was
+deliberate: ADR-066 §6 says "This slice adds no endpoint, no screen and no
+cadence, and until those exist the loop is a mechanism rather than a loop that
+turns", and its consequences add "Nobody can yet act on it from a screen. That
+is the next slice, not this one." ADR-073 repeats both, and calls the mechanism
+"the cheap half".
+
+**Why it stayed that way.** Leaving it was not decided; it happened. **The next
+slice was named in two records and never opened as an issue.** The unattended
+loop works only issues that exist; `.claude/autonomy.md` forbids it to invent
+scope. The day after 11.2 merged it was switched off, and it stayed off for
+twenty-three days. `docs/loop-log.md` records both slices as "left for a person
+as the issue asks". That phrase is about the pull requests, which issues #60
+and #75 asked to be left for a person to merge. It is not about the wiring, and
+it should not be read as the reason the wiring was never done. Nothing in the
+repository gives that reason.
+
+**What the report may say.** That the loops' decision logic exists, is tested
+against inputs written out by hand, and refuses to propose loosening a
+safety-linked threshold. **Not** that the system learns from the jobs it closes.
+It contains the arithmetic it would learn with, and nothing runs it.
+
+**If it is wrong to leave it.** The claim that `estimated_minutes` and
+`actual_minutes` are separate "so the first can be fed back from the second"
+(ADR-006, `CLAUDE.md`) describes a loop that has never turned. Invariant 11
+holds only because the loop it constrains never runs (entry 31, and
+`invariants.md` Known gaps).
+
+**The lesson that generalises.** A record that says "that is the next slice"
+has made a promise. Once the slice it came from is merged, nothing keeps that
+promise unless the next slice exists somewhere work is picked from.
+
+**Look at.** [ADR-066](adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md),
+[ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md),
+`src/pdm/workers/runtime/__main__.py`, `src/pdm/work/estimates.py`,
+`src/pdm/work/thresholds.py`.
 
 ---
 
