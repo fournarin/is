@@ -32,21 +32,39 @@ always is.
    `gh pr list --state open` and `gh issue list --label slice --state open`.
 
 2. **Finish before starting.** An open PR from an earlier run comes first:
-   - CI green, no `human-review` label → squash-merge it, delete the branch.
+   - CI green, no `human-review` label, and it changes nothing under the four
+     paths below → squash-merge it, delete the branch.
    - CI red → fixing it *is* this run's slice. A red CI that nobody fixes is how
      a loop like this quietly stops being worth anything.
    - Labelled `human-review` → leave it alone. It is waiting for a person.
+   - **It changes anything under `.claude/`, `.github/workflows/` or
+     `migrations/`, or changes `docs/invariants.md`** → label it `human-review`
+     and leave it, whatever else is true of it. These are where a mistake is
+     silent or permanent (ADR-085 §2).
 
 3. **Pick one slice.** The eligible issue with the lowest slice number, skipping
    any whose stated dependency is still open. One slice per run. Never two.
+
+   **An issue labelled `human-review` or `blocked` is not eligible**, whether or
+   not it also carries `slice`. `human-review` on an issue means a person or an
+   interactive session builds it or decides it, not this loop (ADR-085 §1). If
+   an issue wants the loop to build it and a person to merge it, it says so in
+   its body, and step 7 labels the PR accordingly.
 
 4. **Write the tests first**, particularly for the invariants the issue names.
    `CLAUDE.md` and the ADRs are the specification; a test that merely agrees with
    the code proves nothing.
 
-5. **Build it**, then run every gate locally before pushing:
+5. **Build it**, commit, and then run every gate **on that commit, with a clean
+   working tree**, before pushing. A green result from another branch, or from a
+   tree with changes not yet committed, says nothing about what is pushed. On
+   2026-09-19 a batch was reported green from a branch that did not contain the
+   file that failed (ADR-085 §5). This is the list in
+   `.github/workflows/ci.yml`; if the two ever differ, CI's list is right and
+   this one is stale:
 
    ```
+   git status --porcelain            # must print nothing
    uv run ruff format --check . && uv run ruff check .
    uv run mypy
    uv run lint-imports
@@ -54,6 +72,9 @@ always is.
    uv run python scripts/check_no_wall_clock.py
    uv run python scripts/check_llm_isolation.py
    uv run python scripts/check_no_blob_deletion.py
+   uv run python scripts/check_the_stylesheets_close_every_rule.py
+   uv run python scripts/check_doc_links.py
+   uv run python scripts/check_config_is_read.py
    uv run pytest -m "not db"
    ```
 
@@ -77,12 +98,16 @@ always is.
    look green.
 
 6. **Open the PR** on a `slice/<name>` branch off `main`. English, per
-   `CLAUDE.md`: what changed, which ADRs it obeys, which gates were run here and
-   which were left to CI, and what a reviewer should look at hardest.
+   `CLAUDE.md`: what changed, which ADRs it obeys, which gates were run here
+   **and on which commit**, which were left to CI, and what a reviewer should
+   look at hardest.
 
-7. **Merge or hand over.** CI green and the issue is not labelled
-   `human-review` → squash-merge and close the issue. Otherwise label the PR
-   `human-review` and leave it open.
+7. **Merge or hand over.** Squash-merge and close the issue only when all of
+   these hold: CI is green, the issue's body does not ask for a person to merge,
+   the slice needed no constant without a source, and the PR changes nothing
+   under the four paths in step 2. Otherwise write its decisions into
+   `docs/decisions-to-defend.md`, label the PR `human-review` and leave it open.
+   A person merges it (ADR-085 §6).
 
 8. **Leave a trail.** A comment on the issue, three or four lines, Thai, so it
    can be read on a phone: what was done, what is left, what needs a decision.
@@ -100,8 +125,33 @@ always is.
   or a decision recorded in an ADR. A number that merely looks reasonable is the
   same defect as an unapproved playbook. If a slice needs a number that has none
   of the three, the PR is `human-review`.
-- **Architectural decisions become new ADRs.** Never edit an existing one.
-  Next free number in `docs/adr/`, and reference the record being revisited.
+- **Architectural decisions become new ADRs.** Never edit an existing one, and
+  reference the record being revisited. **The next free number is not simply
+  the next one in `docs/adr/` on `main`.** After `git fetch`, it is one above
+  the highest number found in three places: `docs/adr/` on `main`, the branch
+  of every open pull request, and every open issue that says "Reserves ADR-NNN"
+  (ADR-085 §3). For example:
+
+  ```
+  gh pr list --state open --json headRefName --jq '.[].headRefName' \
+    | xargs -I{} git ls-tree --name-only origin/{} docs/adr/
+  gh issue list --state open --search '"Reserves ADR" in:body'
+  ```
+
+  A number written twice becomes two records with one name, and every citation
+  of it becomes ambiguous.
+- **A check that can say stop must be able to stop you.** Write it as a
+  condition the next command depends on, never as output printed beside a
+  command that runs anyway. Before pushing to a PR's branch:
+
+  ```
+  [ "$(gh pr view N --json state --jq .state)" = OPEN ] && git push ...
+  ```
+
+  On 2026-09-19 a session read `MERGED` for #104 and pushed regardless, because
+  the read was printed rather than tested, and a correction missed `main` (ADR-085 §4).
+  The same goes for a gate, a `git status`, or anything else whose answer can
+  be "do not proceed".
 - **Nothing under `.claude/` is written by a run.** Those paths are treated as
   sensitive and every write to one - `Edit`, `Write`, or a shell redirect
   alike - stops the run dead on a permission prompt that nobody is awake to
@@ -131,12 +181,19 @@ normal and none is a reason to leave nothing behind:
 | Label | Meaning |
 |---|---|
 | `slice` | A unit of work this loop may pick up |
-| `human-review` | Merging needs a person. Build it, test it, open the PR, stop |
+| `human-review` | On an issue: not for this loop; a person or an interactive session builds or decides it. On a PR: a person merges it, and its decisions are in `docs/decisions-to-defend.md` first |
 | `blocked` | Waiting on a decision or a dependency. Skip it |
 | `loop` | Opened by the loop itself, not by a person |
 
 `human-review` is not bureaucracy. It marks the code `docs-md/workflow.md`
 identified as the kind an agent writes plausibly and wrongly at the same time:
 the score formula, the load gate's boundaries, CP-SAT constraints, the prompts
-that draft playbooks, and any constant standing in for a measurement. Those get
-built here and merged by a person who can defend them at the end of term.
+that draft playbooks, and any constant standing in for a measurement. Those are
+merged by a person who can defend them at the end of term, and when the issue is
+labelled rather than the PR, they are built by one too.
+
+ADR-052 would have let this loop merge `human-review` work once its decisions
+were written down. The three edits it asked for were never applied here, and
+ADR-085 declines them. The ledger ADR-052 created stays, and a `human-review`
+PR has its entries in `docs/decisions-to-defend.md` before a person is asked to
+merge it.
