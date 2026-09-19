@@ -93,11 +93,16 @@ The rows above now describe the code as it is. Fixing the code is
   - The loader's check that every machine a rule can fire on sits at a station
     fills `station_of` and `machine_models` in the same loop with the same key,
     so its condition is never true. Rules name a model, not a machine.
-- **Invariant 11 holds because nothing calls `propose` yet.** The refusal is
-  real and tested, but ADR-073 added no endpoint, screen or cadence. When the
-  caller is written, it has to pass `rule.safety_critical`. Until then,
-  `scripts/check_config_is_read.py` counts `safety_critical` as read only
-  because a parameter in `work/thresholds.py` has the same name.
+- **Invariant 11 holds because nothing runs the loop it constrains.** The
+  refusal is real and tested. But neither improvement loop has a runtime path:
+  `worker-runtime` registers only the dispatch and observe handlers, and no
+  code outside `tests/` calls `propose()` in `work/estimates.py` or
+  `work/thresholds.py`. When the caller is written, it has to pass
+  `rule.safety_critical`. Until then, `scripts/check_config_is_read.py` counts
+  `safety_critical` as read only because a parameter in `work/thresholds.py`
+  has the same name, a limitation its docstring now states. The loops are
+  [#107](https://github.com/fournarin/is/issues/107), and the gate is
+  [#108](https://github.com/fournarin/is/issues/108).
 - **Invariant 14's gate is a regular expression.** It misses
   `datetime.today()`, `time.time_ns()`, `time.monotonic_ns()` and aliased
   imports such as `from datetime import datetime as dt`. None of these appear
@@ -119,8 +124,12 @@ the thing it describes moves. Two habits keep it honest:
 
 - **The Enforced by column is the part to verify.** Every entry names a file, a
   contract or a test. If one of them no longer says what this table says, the
-  table is what is wrong.
+  table is what is wrong. **Reading is weaker evidence than breaking.** Of the
+  fifteen, only invariant 4 was checked on 2026-09-19 by running something; the
+  rest were read. [#108](https://github.com/fournarin/is/issues/108) asks for one
+  test per invariant that violates it on purpose, which is what would let this
+  column claim more than a reader's belief.
 - **A new invariant gets a number here and a record of its own.** The numbers are
   cited across eighty decision records and in CI step titles, so they are an
   interface rather than a list, and renumbering one would silently change what
-  forty-one citations mean.
+  every citation of it means.
