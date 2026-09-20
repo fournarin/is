@@ -1,11 +1,11 @@
 # Architecture decision records
 
-Eighty-two decisions, in the order they were made. Each records the context that
+Eighty-three decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
 
-The count and the highest number differ by one: 057 was reserved for a record that was never written, and the number was left unused rather than given to something else. 084 is reserved for the fix to invariants 4 and 13 (#105) and is not written yet.
+The count and the highest number differ by two. 057 was reserved for a record that was never written, and the number was left unused rather than given to something else. 084 is reserved for the fix to invariants 4 and 13 (#105) and is not written yet. 085 was written before 083, because slice 16.1 held 083 while it was being built; how a number is reserved is in 085.
 
 **These are append-only.** An ADR is never edited after the fact. Changing your
 mind means writing a new one that references the old, so the record shows what
@@ -65,7 +65,7 @@ entries replace parts of earlier ones, and both are kept.
 | [049](0049-three-things-adr-045-left-ambiguous.md) | Three things ADR-045 left ambiguous | |
 | [050](0050-the-gates-report-is-computed-when-asked.md) | The gate's report is computed when asked, not stored | |
 | [051](0051-baselines-are-a-module-of-their-own.md) | The baselines are a module of their own | |
-| [052](0052-what-review-was-protecting-and-what-it-was-not.md) | What review was protecting, and what it was not | |
+| [052](0052-what-review-was-protecting-and-what-it-was-not.md) | What review was protecting, and what it was not | 085 |
 | [053](0053-what-the-comparison-demonstrated-and-what-it-did-not.md) | What the comparison demonstrated, and what it did not | |
 | [054](0054-what-cp-sat-optimises-and-what-it-may-not-touch.md) | What CP-SAT optimises, and what it may not touch | |
 | [055](0055-the-counterfactual-is-a-re-solve-and-what-it-must-not-cancel.md) | The counterfactual is a re-solve, and what it must not cancel | |
@@ -96,6 +96,7 @@ entries replace parts of earlier ones, and both are kept.
 | [081](0081-what-the-health-reader-serves-and-what-a-zero-may-not-mean.md) | What the health reader serves, and what a zero from an empty table may not mean | |
 | [082](0082-the-data-is-not-coming-this-term-and-what-that-closes.md) | **The data is not coming this term, and what that closes** | |
 | [083](0083-the-pm-schedule-becomes-a-source-of-work.md) | The PM schedule becomes a source of work, and what a schedule nobody has records for costs | |
+| [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
 
 ## The invariants these records cite
 
