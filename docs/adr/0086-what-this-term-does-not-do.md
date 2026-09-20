@@ -98,10 +98,16 @@ the issue, which is the same standard the rest of this file holds.
 
 ### The backlog carries only what is being built
 
-The three issues above carry `slice`. Everything else carries `human-review` or
-nothing, so the unattended loop cannot pick up work this record has just
-declared closed. That is the mechanism behind the decision rather than a note of
-intent.
+The three issues above carry `slice` and are numbered **19.1, 19.2 and 19.3** in
+the order they are listed, because the loop takes the lowest slice number first
+(`.claude/autonomy.md` step 3). #99 and #100 lost the label, so the loop cannot
+pick up work this record has just declared closed. Each of the three says in its
+own body that a person merges it: all three carry decisions somebody has to
+defend, which is what the ledger and ADR-085 §6 are for.
+
+That is the mechanism behind the decision rather than a note of intent. A scope
+decision that lives only in a record is one the next unattended run does not
+read.
 
 ## Reasons
 
