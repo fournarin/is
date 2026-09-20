@@ -21,7 +21,10 @@ control on purpose.
 `docs/adr/` cite `design.md`, `workflow.md` and `ui.md` by section around a
 hundred times, and a reader with only this checkout cannot follow those. The
 most load-bearing of them, the fifteen numbered invariants from `design.md` 12,
-now lives in the repository as [`docs/invariants.md`](docs/invariants.md). The
+now lives in the repository as [`docs/invariants.md`](docs/invariants.md).
+Three sections that the code and configuration depend on, `design.md` 6.2 and
+13.2 and lesson 3.1, are translated in
+[`docs/from-the-working-notes.md`](docs/from-the-working-notes.md). The
 rest stay outside, so a citation of the form `design.md 6.2` is a pointer into
 notes the reader does not have, and should be read as provenance rather than as
 a link.
