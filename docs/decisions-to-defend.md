@@ -4,9 +4,10 @@ Every choice in this repository that somebody will have to justify - in the
 report, or standing in front of it. Four lines each: what was decided, why, what
 changes if it is wrong, and where to look.
 
-**This file is the review** (ADR-052). An agent may merge a `human-review` slice
-once its decisions are here; two things still stop and wait for a person, both
-listed at the bottom.
+**This file is the review** (ADR-052). A `human-review` pull request has its
+decisions written here before a person merges it. The unattended loop does not
+merge `human-review` work itself (ADR-085, which narrows ADR-052), and two
+things stop a slice entirely. Both are listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
@@ -848,8 +849,9 @@ promise unless the next slice exists somewhere work is picked from.
 
 # What still stops and waits for a person
 
-Two things, per [ADR-052](adr/0052-what-review-was-protecting-and-what-it-was-not.md).
-A slice hitting either is labelled `blocked`, with the question in the issue.
+Two things stop a slice outright, per
+[ADR-052](adr/0052-what-review-was-protecting-and-what-it-was-not.md). A slice
+hitting either is labelled `blocked`, with the question in the issue.
 
 1. **A number standing in for a measurement**, where no manual, no measurement
    made here, and no recorded decision supports it. Writing it down does not
@@ -858,5 +860,12 @@ A slice hitting either is labelled `blocked`, with the question in the issue.
 2. **A safety-linked threshold.** ADR-022 forbids any loop from proposing one be
    loosened, and an agent proposing it in a slice is the same act under a
    different name.
+
+Separately, [ADR-085](adr/0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md)
+keeps the button with a person. The unattended loop builds nothing from an issue
+labelled `human-review`, and merges no pull request labelled `human-review` or
+touching `.claude/`, `.github/workflows/`, `migrations/` or
+`docs/invariants.md`. Those wait for a person to merge them. They are not
+`blocked`, because nothing in them is a question.
 
 Currently open: none.
