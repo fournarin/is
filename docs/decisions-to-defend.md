@@ -14,7 +14,7 @@ Newest last. If you have ten minutes before writing a chapter, read this file.
 The last section is different: six questions with no answer yet, kept here for
 the same reason as the rest. **The numbers jump at that boundary**, because they
 run in the order entries were written and the two sections have filled up at
-different times: decisions run 1 to 26 and then 33 to 34, and the open questions
+different times: decisions run 1 to 26 and then 33 to 35, and the open questions
 are 27 to 32. A number is never reused, because entries are cited by it.
 
 ---
@@ -666,6 +666,59 @@ task means, and it wants an engineer rather than a default.
 `src/pdm/work/domain.py::pm_task_was_done`, `src/pdm/work/service.py::close`.
 
 ---
+---
+
+## 35. The rehearsal ran with an older image, and what that does and does not reach
+
+**Decided.** The staleness is recorded rather than quietly fixed, and the claims
+made while it was true were checked one at a time. One needed qualifying, and it
+was written the day before the bug was found, in this repository's own log.
+
+**What was actually stale.** `docker compose up --build` rebuilds the services
+it starts - `api`, `web`, both workers and `migrate` - on every rehearsal. The
+`rehearsal` service is behind a profile, so it is not one of them, and compose
+builds it only when its image is missing. So **the system under test was current
+on every run; the container the checks and the seeds run in was not.** The
+screen checks live in the mounted checkout and are current too. What was three
+weeks old was the `pdm` package they import: the seeding, the config loading,
+the repositories they write rows with.
+
+**How far back.** `rehearsal` has been behind a profile since it was created
+(`41265c2`, 23 August, #78). The first rehearsal built its image, and nothing
+rebuilt it afterwards. The runs recorded in `docs/loop-log.md` are 23 August,
+where the image was minutes old, 26 August, where it was three days old and the
+slice was about the script's own counting, and then none until 19 September -
+the routine was off from 24 August to 18 September, and the container images on
+this machine were still three weeks old when they were looked at on 19
+September, which is the same thing said twice.
+
+**The claim that needed qualifying is from 19 September, in this log.** Two
+rehearsals that day reported 7 of 7 checks passing, and one of them was `--fresh`.
+Both ran with the three-week-old harness. The screens and the API they exercised
+were built that day and the result about them stands; the seeding and the
+configuration loading inside those runs were not current, which is exactly what
+broke on 20 September the moment `plant.yaml` gained a key. So "7 of 7" that day
+meant less than it sounded: it covered the stack and not the path that sets the
+stack up.
+
+**The claim that did not need qualifying is slice 15.2's**, on 18 September:
+"verified against a running API and web server rather than only in tests", and
+the same sentence in #103's commit message. That verification did not go through
+the rehearsal. No `up --build` had run on this machine since late August, so the
+containers held an API with no `/overview/health` in it at all - a check
+asserting on that panel could not have passed against them. It passed against an
+API and a web server started from the checkout by hand, on their own ports.
+
+**If it is wrong.** If a rehearsal did run between 29 August and 19 September
+without leaving a line in the log, then a 7-of-7 from it covered less than it
+said, in the same way the 19 September runs did. The log is the only record
+either way, and the image dates that would have settled it are gone: the image
+was replaced by the fix.
+
+**Look at.** [ADR-067](adr/0067-the-rehearsal-runs-inside-the-stack-it-rehearses.md),
+`scripts/rehearse.py`, `tests/test_the_rehearsal_builds_what_it_runs.py`,
+`docs/loop-log.md` for 2026-09-19 and 2026-09-20.
+
 
 # Not decided, and still going to be asked about
 
