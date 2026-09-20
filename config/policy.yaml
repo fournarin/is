@@ -35,9 +35,10 @@ load:
   heavy_at_or_above: 0.8
 
 # ── dispatch rounds (ADR-011, ADR-045) ─────────────────────────────────────
-# Provenance: recorded decision. design.md 6.2 sets the cadence at roughly five
-# minutes, and it is the interval the simulator's scenarios already run at, so
-# a comparison in slice 7.3 measures the same clock the plant would.
+# Provenance: recorded decision, design.md 6.2, which sets the cadence at
+# roughly five minutes and is in the repository at docs/from-the-working-notes.md.
+# It is also the interval the simulator's scenarios already run at, so a
+# comparison in slice 7.3 measures the same clock the plant would.
 #
 # The number is a trade between two costs, neither of which is a measurement:
 # longer, and a critical fault waits for the next round before anybody is sent;
