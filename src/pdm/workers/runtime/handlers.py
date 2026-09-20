@@ -32,6 +32,7 @@ from pdm.sinks import Deliveries
 from pdm.sinks import describe as describe_deliveries
 from pdm.triggers import Observation, Raised, Triggers
 from pdm.work import NoEstimateAvailable, WorkOrders
+from pdm.work.repo import PmTaskDefinition
 
 log = logging.getLogger(__name__)
 
@@ -293,6 +294,76 @@ def ensure_tick_queued(conn: Connection[Any], queue: JobQueue) -> Job | None:
         return None
     log.info("no trigger tick was pending; starting the chain")
     return queue.enqueue(conn, kind=JobKind.OBSERVE)
+
+
+def pm_scan_handler(
+    orders: WorkOrders,
+    config: Config,
+    queue: JobQueue,
+    clock: Clock,
+    *,
+    period: timedelta,
+) -> Any:
+    """Mirror the PM schedule, issue what is due, and book the next scan.
+
+    All three in the job's transaction, for the reason every other chain here
+    gives: a scan that failed leaves no appointment, the whole transaction rolls
+    back, and `ensure_pm_scan_queued` is what starts it again (ADR-044 §3).
+
+    **The cadence is the dispatch round's, and that is not a new constant.** A
+    ticket issued between two rounds waits for the next one before anybody is
+    sent, so scanning more often than the round would buy nothing and scanning
+    less often would make a task's first ticket later than its interval says.
+    `policy.yaml` holds the number once (design.md 6.2, ADR-083 §3).
+
+    This is a composition root, like the trigger loop above it: it knows the
+    configuration and it knows `work/`, and neither of those knows the other.
+    """
+
+    def handle(conn: Connection[Any], job: Job) -> None:
+        orders.register_pm_tasks(
+            conn,
+            [
+                PmTaskDefinition(
+                    pm_task_ref=task.pm_task_ref,
+                    machine_id=task.machine_id,
+                    symptom_code=task.symptom_code,
+                    interval=timedelta(hours=task.interval_hours),
+                )
+                for task in config.pm_tasks
+            ],
+        )
+        scan = orders.issue_due_pm(conn, machine_model=config.model_of)
+        queue.enqueue(conn, kind=JobKind.PM_SCAN, available_at=clock.now() + period)
+
+        if scan.unpriced:
+            log.error(
+                "PM tasks fell due with no playbook and no fallback estimate, so they "
+                "are due with no ticket behind them: %s",
+                ", ".join(str(ref) for ref in scan.unpriced),
+            )
+        report = log.info if scan.worth_reporting else log.debug
+        report(
+            "pm scan: %s due -> %s issued, %s unpriced",
+            scan.due,
+            len(scan.issued),
+            len(scan.unpriced),
+        )
+
+    return handle
+
+
+def ensure_pm_scan_queued(conn: Connection[Any], queue: JobQueue) -> Job | None:
+    """Put the PM scan back if its chain is gone (ADR-044 §3).
+
+    Layer 2's copy of `ensure_round_queued`, and deliberately not shared with
+    it for the reason that one gives: the chains fail independently, and a
+    helper covering all three would have to be told which.
+    """
+    if queue.pending(conn, kind=JobKind.PM_SCAN, payload={}) is not None:
+        return None
+    log.info("no PM scan was pending; starting the chain")
+    return queue.enqueue(conn, kind=JobKind.PM_SCAN)
 
 
 def dispatch_handler(

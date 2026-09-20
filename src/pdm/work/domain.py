@@ -13,7 +13,7 @@ no error anywhere.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime, timedelta
 
 from pdm.contracts import (
@@ -25,12 +25,14 @@ from pdm.contracts import (
     Playbook,
     PlaybookRef,
     PMTask,
+    PMTaskRef,
     Severity,
     SymptomCode,
     UserId,
     WorkOrder,
     WorkOrderOrigin,
     WorkOrderStatus,
+    WorkOutcome,
 )
 
 # PM work is the low-priority work a quiet shift is meant to absorb (ADR-010,
@@ -261,9 +263,69 @@ def from_pm_task(
         estimate_is_fallback=is_fallback,
         reason=(
             f"{task.machine_id}: {task.symptom_code} scheduled maintenance, "
-            f"due {task.due_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC"
+            f"due {task.due_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC, "
+            + (
+                f"last done {task.last_done_at.astimezone(UTC):%Y-%m-%d} "
+                f"and every {_interval_in_hours(task.interval)}"
+                if task.last_done_at is not None
+                # The honest half of "due now". A task nobody has recorded as
+                # done is due from the moment it was registered, which is a
+                # fact about this system rather than about the machine, and the
+                # person holding the ticket is the one who can say otherwise
+                # (ADR-083 section 4).
+                else f"never recorded as done, so it has been due since it was registered; "
+                f"the interval is {_interval_in_hours(task.interval)}"
+            )
         ),
     )
+
+
+def _interval_in_hours(interval: timedelta) -> str:
+    """An interval as the manual states it. Manuals state hours, and a reason
+    that said "333 days" would have to be converted back by whoever checks it
+    against the page it came from."""
+    hours = interval.total_seconds() / 3600
+    return f"{hours:,.0f} hours"
+
+
+def due_pm_tasks(
+    tasks: Sequence[PMTask], *, live_refs: Collection[PMTaskRef], now: datetime
+) -> tuple[PMTask, ...]:
+    """The tasks that are due and have no live order against them.
+
+    Pure, and separate from the scan for invariant 10's reason: which tasks fall
+    due is arithmetic somebody has to be able to check against dates written out
+    by hand, and `now` is an argument because this module may not read a clock
+    (ADR-028).
+
+    **A task whose order is still live is skipped rather than stacked.** An
+    order that is queued, proposed, assigned, in progress or handed over is work
+    the shift has not finished; issuing a second one would put two tickets for
+    one job in front of two technicians, and push `load_ratio` up by a job that
+    does not exist (ADR-083 section 3). Skipping is not silent: the task stays
+    overdue, and the health screen counts it every day it stays that way.
+    """
+    held = frozenset(live_refs)
+    return tuple(task for task in tasks if task.pm_task_ref not in held and task.is_due(now))
+
+
+def pm_task_was_done(outcome: WorkOutcome) -> bool:
+    """Whether closing an order this way means the maintenance happened.
+
+    Only `fixed`. A PM order closed `not_fixed` or `temporary_fix` is a job that
+    did not get done - the part was missing, the line could not stop - and
+    advancing the interval would hide that for the length of the interval.
+    `no_problem_found` is the same answer for a different reason: on a PM task it
+    says the technician found nothing to do, not that the procedure was carried
+    out (ADR-083 section 5).
+
+    The cost is stated rather than hidden: a task closed any of those three ways
+    is still due, so the next scan issues it again. That is a ticket a person
+    closed reappearing, which is the right direction - the work is still owed -
+    and it is why the reason on the new ticket says when it was last actually
+    done.
+    """
+    return outcome is WorkOutcome.FIXED
 
 
 def from_report(

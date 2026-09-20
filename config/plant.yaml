@@ -82,3 +82,38 @@ shifts:
   - shift_id: night
     starts_at: "22:00"
     ends_at: "06:00"
+
+# ── preventive maintenance ─────────────────────────────────────────────────
+# The PM schedule: the second source of work (ADR-010), and the work a quiet
+# shift is meant to absorb (ADR-011). A due task becomes a `scheduled` order
+# through the same path every other ticket takes (ADR-083).
+#
+# **Every interval here needs a source, and the only one this project has is a
+# manual.** `fixtures/corpus/pages.py`, the R-2000iC maintenance manual, page 5:
+# "Replace the toothed belt at 8000 operating hours, or earlier if cracking is
+# visible at the tooth root."
+#
+# 8000 *operating* hours is read here as 8000 hours of calendar time. Calendar
+# hours are never fewer than operating hours, so the task falls due no later
+# than the manual asks. It can fall due earlier - a machine stopped for a week
+# still accrues calendar hours while the belt turns not at all - and ADR-083
+# section 2 says what that costs. Counting real operating hours needs a signal
+# nobody has agreed to send.
+#
+# There is nothing here for the M-710iC. Its manual states no interval, and an
+# interval nobody wrote down is the kind of number this project refuses to
+# invent. The health screen says so per machine rather than reading zero
+# overdue as "nothing is due" (ADR-081).
+pm_tasks:
+  - pm_task_ref: pm-mc-001-toothed-belt
+    machine_id: MC-001
+    symptom_code: PM-toothed-belt
+    interval_hours: 8000
+  - pm_task_ref: pm-mc-004-toothed-belt
+    machine_id: MC-004
+    symptom_code: PM-toothed-belt
+    interval_hours: 8000
+  - pm_task_ref: pm-mc-012-toothed-belt
+    machine_id: MC-012
+    symptom_code: PM-toothed-belt
+    interval_hours: 8000

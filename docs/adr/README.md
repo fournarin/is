@@ -1,11 +1,11 @@
 # Architecture decision records
 
-Eighty-one decisions, in the order they were made. Each records the context that
+Eighty-two decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
 
-The count and the highest number differ by one: 057 was reserved for a record that was never written, and the number was left unused rather than given to something else.
+The count and the highest number differ by one: 057 was reserved for a record that was never written, and the number was left unused rather than given to something else. 084 is reserved for the fix to invariants 4 and 13 (#105) and is not written yet.
 
 **These are append-only.** An ADR is never edited after the fact. Changing your
 mind means writing a new one that references the old, so the record shows what
@@ -95,6 +95,7 @@ entries replace parts of earlier ones, and both are kept.
 | [080](0080-a-draft-already-waiting-for-review-answers-the-second-ask.md) | A draft already waiting for review answers the second ask | |
 | [081](0081-what-the-health-reader-serves-and-what-a-zero-may-not-mean.md) | What the health reader serves, and what a zero from an empty table may not mean | |
 | [082](0082-the-data-is-not-coming-this-term-and-what-that-closes.md) | **The data is not coming this term, and what that closes** | |
+| [083](0083-the-pm-schedule-becomes-a-source-of-work.md) | The PM schedule becomes a source of work, and what a schedule nobody has records for costs | |
 
 ## The invariants these records cite
 

@@ -224,6 +224,47 @@ class TestPMIsCountedAndNotRankedOn:
         assert history.pm_overdue_days == pytest.approx(40.0)
         assert "work to schedule" in history.reason
 
+    def test_a_task_nobody_has_recorded_is_counted_as_dated_from_its_registration(
+        self,
+    ) -> None:
+        """An overdue count is a number a supervisor acts on. "Overdue by 40
+        days" for a task whose last completion nobody knows would tell them the
+        plant is 40 days late when the truth is that nobody knows (ADR-083 §4).
+        """
+        tasks = (
+            PMTask(
+                pm_task_ref=PMTaskRef("pm-1"),
+                machine_id=MC,
+                symptom_code=SymptomCode("PM-ROUTINE"),
+                interval=timedelta(days=30),
+                due_at=NOW - timedelta(days=40),
+                last_done_at=None,
+            ),
+        )
+
+        history = assess((MC,), pm_tasks=tasks, now=NOW)[0].history
+
+        assert history.pm_overdue == 1
+        assert "no record of ever being done" in history.reason
+        assert "counted from the day the task was registered" in history.reason
+
+    def test_a_task_with_a_history_is_not_described_that_way(self) -> None:
+        tasks = (
+            PMTask(
+                pm_task_ref=PMTaskRef("pm-1"),
+                machine_id=MC,
+                symptom_code=SymptomCode("PM-ROUTINE"),
+                interval=timedelta(days=30),
+                due_at=NOW - timedelta(days=40),
+                last_done_at=NOW - timedelta(days=70),
+            ),
+        )
+
+        history = assess((MC,), pm_tasks=tasks, now=NOW)[0].history
+
+        assert history.pm_overdue == 1
+        assert "no record of ever being done" not in history.reason
+
     def test_another_machines_task_is_not_this_machines_backlog(self) -> None:
         tasks = (
             PMTask(

@@ -54,6 +54,7 @@ from pdm.contracts import (
     Line,
     MachineId,
     MachineModel,
+    PMTask,
     Role,
     RuleId,
     Severity,
@@ -675,16 +676,40 @@ def line_overview(
 
 # What this reader could not ask, written where the person reading the numbers
 # is looking. `HistoryContribution.pm_overdue` is an `int` with a default of 0,
-# so a plant with no PM table reads as a plant with nothing overdue - which is a
-# claim, drawn from an empty table, shown to somebody deciding what to look at.
+# so a machine with no PM task reads as a machine with nothing overdue - which
+# is a claim, drawn from an empty set, shown to somebody deciding what to look
+# at (ADR-081 section 2).
 #
-# The sentence goes when slice 16.1 builds `pm_task` and this reader starts
-# passing real ones (ADR-081 section 2).
+# Since slice 16.1 the table exists and this reader passes what is in it. The
+# two sentences below are what a zero can still mean: nothing registered at all,
+# or nothing registered for that machine.
 PM_STANDING_IS_ABSENT = (
-    "preventive maintenance standing: nothing in this system stores PM tasks yet, so no "
-    "reading here can say whether a machine's PM is overdue. The PM counts below are what "
-    "was asked for, which is nothing (slice 16.1, ADR-072)"
+    "preventive maintenance standing: no PM task is registered, so no reading here can say "
+    "whether a machine's PM is overdue. The PM counts below are what was asked for, which "
+    "is nothing (ADR-083)"
 )
+
+PM_NOT_EVERY_MACHINE = (
+    "preventive maintenance standing: no PM task is registered for {machines}, so a PM "
+    "count of zero on those rows says nothing was asked rather than nothing is due. An "
+    "interval needs a source, and their manuals state none (ADR-083)"
+)
+
+
+def _pm_absences(tasks: Sequence[PMTask], machines: Iterable[MachineId]) -> tuple[str, ...]:
+    """Which sentence a zero needs, if it needs one.
+
+    Nothing registered anywhere is a different statement from nothing
+    registered here, and a screen that carried both would be telling a
+    supervisor the same thing twice in two ways.
+    """
+    if not tasks:
+        return (PM_STANDING_IS_ABSENT,)
+    scheduled = {task.machine_id for task in tasks}
+    without = sorted(str(machine) for machine in machines if machine not in scheduled)
+    if not without:
+        return ()
+    return (PM_NOT_EVERY_MACHINE.format(machines=", ".join(without)),)
 
 
 class HealthOverview(BaseModel):
@@ -742,9 +767,11 @@ def machine_health(
     this function, because the arithmetic is the thing somebody has to be able
     to check against records written out by hand (invariant 10, ADR-081 §5).
 
-    **Three loads and one of them is empty on purpose.** There is no `pm_task`
-    table yet, so `assess()` is handed no tasks and every `pm_overdue` comes back
-    zero. The response says so in `absent` rather than letting the zero speak.
+    **Four loads, and the fourth is the PM schedule.** Until slice 16.1 there was
+    no `pm_task` table, `assess()` was handed nothing, and every `pm_overdue`
+    came back zero from an empty set. It now reads the table; where a zero still
+    means "nobody asked", `_pm_absences` says so in `absent` rather than letting
+    the zero speak (ADR-081 §2, ADR-083 §6).
     """
     now = clock.now()
     known = {
@@ -755,8 +782,9 @@ def machine_health(
         for ref, order, closed_at in work.closed_orders(conn)
     ]
     findings = list(triggers.live(conn).values())
+    tasks = work.pm_tasks(conn)
 
-    readings = assess(sorted(known), repairs=repairs, findings=findings, now=now)
+    readings = assess(sorted(known), repairs=repairs, pm_tasks=tasks, findings=findings, now=now)
 
     # Every reading carries the same window, so the first is the answer for all
     # of them; an empty plant has none and the defaults stand.
@@ -776,6 +804,6 @@ def machine_health(
         observed_days=span.observed_days if span is not None else 0.0,
         by_history=by_history(readings),
         by_now=by_now(readings),
-        absent=(*written, PM_STANDING_IS_ABSENT),
+        absent=(*written, *_pm_absences(tasks, sorted(known))),
         unplaced_machines=tuple(sorted(str(one) for one in mentioned - known)),
     )

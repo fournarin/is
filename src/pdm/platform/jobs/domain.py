@@ -54,6 +54,11 @@ class JobKind(StrEnum):
     # the next one in its own transaction, so the schedule is a row anybody can
     # SELECT rather than a timer inside a process (ADR-044 §1, ADR-045).
     DISPATCH = "dispatch"
+    # The PM schedule's pulse, booked the same way and kept a chain of its own.
+    # Sharing the dispatch job would mean a scan that failed rolled back the
+    # round it travelled with, and one bad PM task would stop the plant being
+    # scheduled at all (ADR-083 section 3, ADR-044 §3).
+    PM_SCAN = "pm_scan"
 
 
 class JobStatus(StrEnum):

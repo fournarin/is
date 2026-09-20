@@ -29,7 +29,7 @@ from fastapi.testclient import TestClient
 from psycopg import connect
 from psycopg_pool import ConnectionPool
 
-from pdm.api.overview import PM_STANDING_IS_ABSENT
+from pdm.api.overview import PM_NOT_EVERY_MACHINE, PM_STANDING_IS_ABSENT
 from pdm.contracts import (
     ComponentLabel,
     Finding,
@@ -37,6 +37,7 @@ from pdm.contracts import (
     FindingStatus,
     MachineId,
     MachineModel,
+    PMTaskRef,
     Role,
     RuleId,
     Severity,
@@ -53,6 +54,7 @@ from pdm.platform.objects import FilesystemObjectStore
 from pdm.triggers import repo as triggers
 from pdm.work import WorkOrders
 from pdm.work import repo as work
+from pdm.work.repo import PmTaskDefinition
 
 NOW = datetime(2026, 3, 3, 8, 0, tzinfo=UTC)
 R2000 = MachineModel("R-2000iC")
@@ -64,6 +66,8 @@ ONCE = MachineId("MC-001")  # one, and a cancelled order that is not history
 FALSE_ALARMS = MachineId("MC-004")  # closed finding nothing
 STANDING = MachineId("MC-018")  # nothing closed, one critical Finding open
 GONE = MachineId("MC-999")  # records mention it, `plant.yaml` does not
+# The machines `plant.yaml` holds, which is what the reader asks about.
+KNOWN_MACHINES = (ONCE, FALSE_ALARMS, OFTEN, STANDING)
 
 PASSWORD = "correct horse battery staple"
 PEOPLE = {
@@ -140,8 +144,8 @@ def world(database_url: str, clock: SimulatedClock) -> Iterator[ConnectionPool]:
 
     with connect(database_url) as conn:
         conn.execute(
-            "TRUNCATE work_order, work_order_override, finding, job, shift_assignment, "
-            "technician, access_log, session, account CASCADE"
+            "TRUNCATE work_order, work_order_override, finding, job, pm_task, "
+            "shift_assignment, technician, access_log, session, account CASCADE"
         )
         for role, (user, name) in PEOPLE.items():
             auth.create_account(conn, user=user, display_name=name, role=role, password=PASSWORD)
@@ -248,9 +252,8 @@ class TestWhatTheReadingCannotSay:
     def test_the_pm_counts_arrive_with_the_sentence_saying_nothing_was_asked(
         self, client: TestClient
     ) -> None:
-        """There is no `pm_task` table. Without this sentence every machine on
-        the screen reads "0 overdue", which is a claim drawn from an empty
-        table (ADR-081 section 2)."""
+        """With no task registered, every machine reads "0 overdue", which is a
+        claim drawn from an empty set (ADR-081 section 2, ADR-083 section 6)."""
         body = _read(client)
 
         assert PM_STANDING_IS_ABSENT in body["absent"]
@@ -267,6 +270,39 @@ class TestWhatTheReadingCannotSay:
         assert all(
             AGE_AGAINST_ITS_CLASS_IS_ABSENT in row["history"]["absent"]
             for row in body["by_history"]
+        )
+
+    def test_a_registered_task_is_counted_and_the_machines_without_one_are_named(
+        self, client: TestClient, database_url: str, clock: SimulatedClock
+    ) -> None:
+        """The zero means two different things and the screen says which. A
+        machine with a schedule and nothing due reads zero; a machine with no
+        schedule reads zero because nobody asked (ADR-083 section 6)."""
+        with connect(database_url) as conn:
+            work.register_pm_tasks(
+                conn,
+                [
+                    PmTaskDefinition(
+                        pm_task_ref=PMTaskRef("pm-often-belt"),
+                        machine_id=OFTEN,
+                        symptom_code=SymptomCode("PM-toothed-belt"),
+                        interval=timedelta(hours=8000),
+                    )
+                ],
+                now=clock.now() - timedelta(days=2),
+            )
+            conn.commit()
+
+        body = _read(client)
+
+        counted = next(row for row in body["by_history"] if row["machine_id"] == str(OFTEN))
+        assert counted["history"]["pm_overdue"] == 1
+        assert PM_STANDING_IS_ABSENT not in body["absent"]
+        named = next(line for line in body["absent"] if line.startswith("preventive maintenance"))
+        assert str(ONCE) in named
+        assert str(OFTEN) not in named
+        assert named == PM_NOT_EVERY_MACHINE.format(
+            machines=", ".join(sorted(str(one) for one in KNOWN_MACHINES if one != OFTEN))
         )
 
     def test_the_absences_are_in_the_order_they_were_written(self, client: TestClient) -> None:

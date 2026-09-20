@@ -20,10 +20,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pdm.contracts import (
+    PM_SYMPTOM_PREFIX,
     ComponentLabel,
     LineId,
     MachineId,
     MachineModel,
+    PMTaskRef,
     RuleId,
     Severity,
     ShiftId,
@@ -43,6 +45,37 @@ class MachineConfig(BaseModel):
 
     machine_id: MachineId
     model: MachineModel
+
+
+class PmTaskConfig(BaseModel):
+    """One preventive-maintenance task, as the plant schedules it.
+
+    The definition lives here and the state - when it was last done - lives in
+    the `pm_task` table, because an interval is a decision somebody records and
+    a completion is something that happened (ADR-083 section 1).
+
+    `interval_hours` rather than a `timedelta`: the source of every one of these
+    is a manual, and manuals state hours.
+    """
+
+    model_config = _STRICT
+
+    pm_task_ref: PMTaskRef
+    machine_id: MachineId
+    # Carries the PM- prefix so layer 2 serves it through the ordinary lookup
+    # and never learns the word "PM" (ADR-027).
+    symptom_code: SymptomCode
+    interval_hours: int = Field(gt=0)
+
+    @field_validator("symptom_code")
+    @classmethod
+    def _uses_a_pm_symptom_code(cls, value: SymptomCode) -> SymptomCode:
+        if not value.startswith(PM_SYMPTOM_PREFIX):
+            raise ValueError(
+                f"a PM task's symptom_code must start with {PM_SYMPTOM_PREFIX!r} "
+                f"(ADR-027); got {value!r}"
+            )
+        return value
 
 
 class StationConfig(BaseModel):
@@ -89,6 +122,10 @@ class PlantConfig(BaseModel):
     # from. Two vocabularies would fail to match in silence (ADR-027).
     skills: tuple[SkillId, ...]
     shifts: tuple[ShiftConfig, ...]
+    # The PM schedule. Empty is a plant that has told this system nothing about
+    # its preventive maintenance, which reads differently from a plant with
+    # nothing due, and the health screen says which (ADR-081, ADR-083).
+    pm_tasks: tuple[PmTaskConfig, ...] = ()
 
     @field_validator("timezone")
     @classmethod

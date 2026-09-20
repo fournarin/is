@@ -293,6 +293,12 @@ def _history_of(
         if not overdue
         else max((now - task.due_at).total_seconds() / _DAYS for task in overdue)
     )
+    # Overdue since when, for a task nobody has ever recorded as done? Since it
+    # was registered, which is a fact about this system and not about the
+    # machine. The count travels into the sentence so that a supervisor reading
+    # "overdue by 3 days" is not told the belt was changed three days late when
+    # nobody knows when it was changed (ADR-083 section 4).
+    unrecorded = sum(1 for task in overdue if task.last_done_at is None)
 
     return HistoryContribution(
         observed_from=observed_from,
@@ -316,6 +322,7 @@ def _history_of(
             since_last=since_last,
             pm_overdue=len(overdue),
             worst_overdue=worst_overdue,
+            unrecorded=unrecorded,
             false_alarms=len(false_alarms),
         ),
     )
@@ -330,6 +337,7 @@ def _history_reason(
     since_last: float | None,
     pm_overdue: int,
     worst_overdue: float | None,
+    unrecorded: int,
     false_alarms: int,
 ) -> str:
     """A sentence a supervisor can act on, and one they can check.
@@ -354,11 +362,18 @@ def _history_reason(
 
     clauses = [head]
     if pm_overdue and worst_overdue is not None:
-        clauses.append(
+        clause = (
             f"{pm_overdue} PM task{'s' if pm_overdue != 1 else ''} overdue, the worst by "
             f"{worst_overdue:.0f} days - which is work to schedule rather than a reason to "
             f"send somebody now"
         )
+        if unrecorded:
+            clause += (
+                f", and {unrecorded} of them {'has' if unrecorded == 1 else 'have'} no record "
+                f"of ever being done, so {'its' if unrecorded == 1 else 'their'} lateness is "
+                f"counted from the day the task was registered here"
+            )
+        clauses.append(clause)
     if false_alarms:
         clauses.append(
             f"{false_alarms} closed order{'s' if false_alarms != 1 else ''} found nothing "

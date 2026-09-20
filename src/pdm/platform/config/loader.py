@@ -43,7 +43,7 @@ from pdm.contracts import (
     Station,
     StationId,
 )
-from pdm.platform.config.schema import PlantConfig, PolicyConfig, RulesConfig
+from pdm.platform.config.schema import PlantConfig, PmTaskConfig, PolicyConfig, RulesConfig
 
 PLANT_FILE = "plant.yaml"
 RULES_FILE = "rules.yaml"
@@ -114,6 +114,10 @@ class Config:
                 for shift in plant.shifts
             }
         )
+        # The PM schedule, read-only like everything else here. `work/` mirrors
+        # it into the `pm_task` table, which holds the half config cannot: when
+        # each task was last done (ADR-083 section 1).
+        self.pm_tasks: tuple[PmTaskConfig, ...] = plant.pm_tasks
         self._station_of: Mapping[MachineId, StationId] = MappingProxyType(station_of)
         self._model_of: Mapping[MachineId, MachineModel] = MappingProxyType(model_of)
 
@@ -210,6 +214,21 @@ def _cross_file_problems(plant: PlantConfig, rules: RulesConfig, policy: PolicyC
             problems.append(
                 f"machine {machine_id} can raise Findings but sits at no station, "
                 f"so its downtime cost cannot be computed (invariant 13, ADR-027)"
+            )
+
+    # The PM schedule names machines, and a task on a machine that is not in the
+    # layout would fall due for ever with nothing able to price it or place it
+    # (ADR-083 section 1). The same shape of check as invariant 7's, and at the
+    # same moment: a plant that boots is a plant whose schedule can run.
+    pm_refs = Counter(task.pm_task_ref for task in plant.pm_tasks)
+    for pm_task_ref, count in pm_refs.items():
+        if count > 1:
+            problems.append(f"PM task ref {pm_task_ref} is used {count} times")
+    for task in plant.pm_tasks:
+        if task.machine_id not in machine_models:
+            problems.append(
+                f"PM task {task.pm_task_ref} is scheduled on machine {task.machine_id}, "
+                f"which no station in {PLANT_FILE} holds"
             )
 
     for model in rules.components:
