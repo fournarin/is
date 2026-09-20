@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from psycopg import connect
@@ -32,6 +33,8 @@ from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
+from pdm.work import repo as work_repo
+from pdm.work.repo import PmTaskDefinition
 
 # The same three people `pdm.sim.scenarios.LINE_A_ONE_SHIFT` puts on a shift -
 # same names, same count, same capacity - so that the demo and the measurement in
@@ -62,6 +65,20 @@ AVAILABLE_MINUTES = 480
 # The world this script extends. Their absence is the one fact available that
 # says "this is not the demo database", and it is what §6 refuses on.
 SEEDED_BY_SEED_DEMO = (UserId("tech-1"), UserId("eng-1"), UserId("sup-1"), UserId("op-1"))
+
+# When the PM tasks in plant.yaml were last done. **Invented, like the people
+# above, and here for the same reason** (ADR-078 §1): a plant install knows none
+# of these dates, so every task is due from the day it is registered and the
+# demo would open with the whole schedule overdue at once. That is the honest
+# state for a real installation (ADR-083 §4) and a poor first screen.
+#
+# One task is left a day past due, so that the quiet-shift release ADR-011
+# describes has something to release and the health screen has a PM figure that
+# is not zero. The rest are set halfway through their interval, which is a plant
+# whose maintenance is up to date. Neither date is a measurement and neither is
+# written by `seed_demo.py`, which is the script an operator reruns on the
+# plant's own machine.
+DEMO_OVERDUE_BY = timedelta(days=1)
 
 
 def main() -> int:
@@ -122,6 +139,33 @@ def main() -> int:
             )
             written.append(f"  {user:8} {note}")
 
+        # The PM schedule, registered from plant.yaml and then given a past this
+        # plant does not have. Registering is what `worker-runtime` does on
+        # every scan anyway (ADR-083 §1); the dates below are the demo's.
+        definitions = [
+            PmTaskDefinition(
+                pm_task_ref=task.pm_task_ref,
+                machine_id=task.machine_id,
+                symptom_code=task.symptom_code,
+                interval=timedelta(hours=task.interval_hours),
+            )
+            for task in config.pm_tasks
+        ]
+        work_repo.register_pm_tasks(conn, definitions, now=now)
+        pm_written: list[str] = []
+        for index, definition in enumerate(definitions):
+            last_done = (
+                now - definition.interval - DEMO_OVERDUE_BY
+                if index == 0
+                else now - definition.interval / 2
+            )
+            work_repo.record_pm_done(conn, definition.pm_task_ref, at=last_done)
+            due = last_done + definition.interval
+            state = "overdue" if due <= now else f"due {due:%Y-%m-%d}"
+            pm_written.append(
+                f"  {definition.pm_task_ref:24} last done {last_done:%Y-%m-%d}, {state}"
+            )
+
         conn.commit()
 
     # After the commit, never before: a failure halfway through rolls the whole
@@ -138,6 +182,13 @@ def main() -> int:
     print(f"every skill in plant.yaml: {', '.join(sorted(str(s) for s in config.skills))}")
     print("Those are the simulator's assumptions, so this demo and the comparison in")
     print("docs/results/ describe the same shift (ADR-078).")
+    if pm_written:
+        print(f"\n{len(pm_written)} PM task(s) from plant.yaml, with a past invented here:")
+        for line in pm_written:
+            print(line)
+        print("A plant install knows none of these dates, so there every task is due at once")
+        print("and says so on the ticket and on the health screen (ADR-083).")
+
     print("\nThese three people do not exist. This script is for a demo; the plant's")
     print("own roster replaces every row it writes.")
     return 0

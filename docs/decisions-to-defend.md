@@ -12,7 +12,10 @@ things stop a slice entirely. Both are listed at the bottom.
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
 The last section is different: six questions with no answer yet, kept here for
-the same reason as the rest.
+the same reason as the rest. **The numbers jump at that boundary**, because they
+run in the order entries were written and the two sections have filled up at
+different times: decisions run 1 to 26 and then 33 to 34, and the open questions
+are 27 to 32. A number is never reused, because entries are cited by it.
 
 ---
 
@@ -606,6 +609,61 @@ looked enforced because a screen enforced it.
 
 **Look at.** [ADR-080](adr/0080-a-draft-already-waiting-for-review-answers-the-second-ask.md),
 [ADR-040](adr/0040-what-happens-when-somebody-asks-twice.md).
+
+---
+
+---
+
+## 33. Operating hours are read as calendar hours, and a plant starts wholly overdue
+
+**Decided.** The one PM interval this project has a source for is the R-2000iC
+manual's "replace the toothed belt at 8000 operating hours", and `plant.yaml`
+schedules it as 8000 hours of calendar time. A task nobody has recorded as done
+is due from the day it was registered, so an installation starts with its whole
+schedule overdue.
+
+**Why.** Calendar hours are never fewer than operating hours, so the task falls
+due no later than the manual asks, and early is the safe direction for a belt.
+Counting real operating hours needs a signal nobody has agreed to send. The
+alternative to "due from registration" is inventing a last-done date, which is
+the one thing a maintenance system may not do about maintenance.
+
+**If it is wrong.** A machine that spends a week stopped still accrues calendar
+hours, so after a long outage the belt task falls due before the manual means
+it. The ticket is then work that may not be needed, and a technician closing it
+`no_problem_found` does not advance the clock, so it returns at the next scan.
+On day one, a plant sees its entire schedule as overdue at once; the load gate
+holds that work for a quiet shift, so it queues rather than crowding anything
+out, but it is the wrong first impression and the fix is importing the plant's
+own dates ([#118](https://github.com/fournarin/is/issues/118)).
+
+**Look at.** [ADR-083 §2 and §4](adr/0083-the-pm-schedule-becomes-a-source-of-work.md),
+`config/plant.yaml`, `src/pdm/work/domain.py::due_pm_tasks`,
+`tests/work/test_the_pm_schedule.py`.
+
+---
+
+## 34. Only `fixed` means a PM task was done
+
+**Decided.** Closing a scheduled order `fixed` sets `last_done_at` and the next
+occurrence falls out of the interval. `not_fixed`, `temporary_fix` and
+`no_problem_found` leave the task due, so the next scan issues it again.
+
+**Why.** Advancing the interval on a job that did not happen hides it for the
+length of the interval - 333 days, for the belt. `no_problem_found` is the
+subtle one: on a condition order it is the false-alarm signal Loop 2 needs
+(ADR-073), and on a PM order it says the technician found nothing to do, which
+is not the same as the procedure having been carried out.
+
+**If it is wrong.** A technician who closes a PM order `no_problem_found`
+because the belt genuinely did not need changing gets the same ticket again at
+the next scan, and the only way to stop it is to close one `fixed`. The
+counter-argument is that an inspection is itself the maintenance, in which case
+`no_problem_found` should advance the clock; that is a decision about what a PM
+task means, and it wants an engineer rather than a default.
+
+**Look at.** [ADR-083 §5](adr/0083-the-pm-schedule-becomes-a-source-of-work.md),
+`src/pdm/work/domain.py::pm_task_was_done`, `src/pdm/work/service.py::close`.
 
 ---
 

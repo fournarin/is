@@ -12,8 +12,9 @@ ever exist (invariant 2, ADR-018).
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from collections.abc import Sequence
+from datetime import datetime, timedelta
+from typing import Any, NamedTuple
 
 from psycopg import Connection
 from psycopg.rows import dict_row
@@ -26,6 +27,8 @@ from pdm.contracts import (
     FindingRef,
     MachineId,
     PlaybookStep,
+    PMTask,
+    PMTaskRef,
     RuleId,
     SymptomCode,
     UserId,
@@ -493,6 +496,135 @@ def cancel_untouched_for_finding(
             (now, finding_ref),
         )
         return [str(row[0]) for row in cur.fetchall()]
+
+
+# ── the PM schedule (ADR-083) ──────────────────────────────────────────────
+#
+# The definitions come from `plant.yaml` and the state lives here. These four
+# functions are the whole of the table's surface: mirror the definitions, read
+# them back with their state, ask which tasks already have work in flight, and
+# record a completion.
+
+
+class PmTaskDefinition(NamedTuple):
+    """One task as configuration states it, with no state attached.
+
+    A tuple rather than `PmTaskConfig` itself, because `work/` reading the
+    configuration schema would put layer 2 on the other side of a module that
+    exists to be read by layer 3 (ADR-030). The caller converts; there is one
+    caller.
+    """
+
+    pm_task_ref: PMTaskRef
+    machine_id: MachineId
+    symptom_code: SymptomCode
+    interval: timedelta
+
+
+def register_pm_tasks(
+    conn: Connection[Any], tasks: Sequence[PmTaskDefinition], *, now: datetime
+) -> None:
+    """Make the table say what `plant.yaml` says, and keep what only it knows.
+
+    Definitions are overwritten and `last_done_at` is never touched: an operator
+    correcting an interval has not undone the maintenance. A task that has left
+    the configuration is deleted, so that a schedule somebody removed stops
+    producing work; the orders it produced stay where they are, which is why
+    there is no foreign key onto this table (migration 0013).
+    """
+    with conn.cursor() as cur:
+        for task in tasks:
+            cur.execute(
+                """
+                INSERT INTO pm_task (pm_task_ref, machine_id, symptom_code,
+                                     interval_seconds, last_done_at, registered_at)
+                     VALUES (%s, %s, %s, %s, NULL, %s)
+                ON CONFLICT (pm_task_ref) DO UPDATE
+                        SET machine_id = EXCLUDED.machine_id,
+                            symptom_code = EXCLUDED.symptom_code,
+                            interval_seconds = EXCLUDED.interval_seconds
+                """,
+                (
+                    str(task.pm_task_ref),
+                    str(task.machine_id),
+                    str(task.symptom_code),
+                    int(task.interval.total_seconds()),
+                    now,
+                ),
+            )
+        cur.execute(
+            "DELETE FROM pm_task WHERE NOT (pm_task_ref = ANY(%s))",
+            ([str(task.pm_task_ref) for task in tasks],),
+        )
+
+
+def pm_tasks(conn: Connection[Any]) -> list[PMTask]:
+    """Every registered task, with the date it is due computed rather than stored.
+
+    `due_at` is `last_done_at + interval`, or `registered_at` when nothing has
+    ever been recorded. #90 asked for the next occurrence to fall out of the
+    interval rather than out of a second column, because two columns that have
+    to agree are two columns that will not.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT pm_task_ref, machine_id, symptom_code, interval_seconds,
+                   last_done_at, registered_at
+              FROM pm_task
+          ORDER BY pm_task_ref
+            """
+        )
+        rows = cur.fetchall()
+    return [
+        PMTask(
+            pm_task_ref=PMTaskRef(str(row["pm_task_ref"])),
+            machine_id=MachineId(str(row["machine_id"])),
+            symptom_code=SymptomCode(str(row["symptom_code"])),
+            interval=timedelta(seconds=int(row["interval_seconds"])),
+            due_at=(
+                row["last_done_at"] + timedelta(seconds=int(row["interval_seconds"]))
+                if row["last_done_at"] is not None
+                else row["registered_at"]
+            ),
+            last_done_at=row["last_done_at"],
+        )
+        for row in rows
+    ]
+
+
+def pm_refs_with_live_order(conn: Connection[Any]) -> set[PMTaskRef]:
+    """The tasks that already have work in flight (ADR-083 section 3).
+
+    The same statuses the unique index in migration 0013 names, read here so the
+    scan can skip a task rather than attempt an insert the index would refuse -
+    an exception would roll back the whole scan, and one task in flight would
+    stop every other task falling due.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT pm_task_ref FROM work_order "
+            "WHERE pm_task_ref IS NOT NULL AND status = ANY(%s)",
+            (list(OPEN_STATUSES),),
+        )
+        return {PMTaskRef(str(row[0])) for row in cur.fetchall()}
+
+
+def record_pm_done(conn: Connection[Any], pm_task_ref: PMTaskRef, *, at: datetime) -> bool:
+    """Move the task's clock forward. The next occurrence follows from it.
+
+    Never backwards: a closure being recorded late, or a demo seeding a date, may
+    not undo a completion already written. Returns whether anything moved, which
+    is how the caller can tell a task it knows about from one that has left the
+    configuration since the order was issued.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE pm_task SET last_done_at = %s "
+            "WHERE pm_task_ref = %s AND (last_done_at IS NULL OR last_done_at < %s)",
+            (at, str(pm_task_ref), at),
+        )
+        return cur.rowcount > 0
 
 
 def close(

@@ -46,9 +46,11 @@ from pdm.workers.loop import Worker
 from pdm.workers.runtime.handlers import (
     TriggerLoop,
     dispatch_handler,
+    ensure_pm_scan_queued,
     ensure_round_queued,
     ensure_tick_queued,
     observe_handler,
+    pm_scan_handler,
 )
 
 log = logging.getLogger(__name__)
@@ -190,11 +192,12 @@ def main() -> None:
     running = loop.feed is not None
 
     def seed_the_chain() -> None:
-        """Both chains, seeded together and independent afterwards."""
+        """All three chains, seeded together and independent afterwards."""
         with pool.connection() as conn:
             if running:
                 ensure_tick_queued(conn, queue)
             ensure_round_queued(conn, queue)
+            ensure_pm_scan_queued(conn, queue)
             conn.commit()
 
     worker = Worker(
@@ -204,6 +207,12 @@ def main() -> None:
         handlers={
             JobKind.DISPATCH.value: dispatch_handler(
                 rounds, queue, clock, period=round_period, deliveries=deliveries
+            ),
+            # The PM schedule, on the round's cadence and its own chain
+            # (ADR-083). Unconditional: a plant with no sensors still has
+            # preventive maintenance, which is half the point of ADR-010.
+            JobKind.PM_SCAN.value: pm_scan_handler(
+                loop.orders, config, queue, clock, period=round_period
             ),
             **(
                 {
@@ -225,6 +234,12 @@ def main() -> None:
     log.info(
         "worker-runtime %s: dispatch round every %ss of clock time",
         WORKER,
+        config.policy.dispatch.round_seconds,
+    )
+    log.info(
+        "worker-runtime %s: %s PM task(s) in plant.yaml, scanned every %ss of clock time",
+        WORKER,
+        len(config.pm_tasks),
         config.policy.dispatch.round_seconds,
     )
     if running:

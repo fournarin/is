@@ -209,6 +209,71 @@ class TestInvariant13MachinesAndStations:
             load_config(_write(tmp_path, **{"plant.yaml": plant}))
 
 
+class TestThePmSchedule:
+    """ADR-083: an interval is a decision with a source, so it is configuration.
+    A task the layout cannot place is the same failure invariant 13 exists for."""
+
+    def test_the_repository_schedule_loads_with_its_intervals(self) -> None:
+        tasks = load_config(REPO_CONFIG).pm_tasks
+        assert tasks, "plant.yaml carries no PM task, so the second source of work is empty"
+        assert all(task.interval_hours > 0 for task in tasks)
+
+    def test_a_task_on_a_machine_no_station_holds_stops_the_boot(self, tmp_path: Path) -> None:
+        plant = _deep(PLANT)
+        plant["pm_tasks"] = [
+            {
+                "pm_task_ref": "pm-ghost",
+                "machine_id": "MC-404",
+                "symptom_code": "PM-toothed-belt",
+                "interval_hours": 8000,
+            }
+        ]
+        with pytest.raises(ConfigError, match="which no station"):
+            load_config(_write(tmp_path, **{"plant.yaml": plant}))
+
+    def test_two_tasks_with_one_ref_stop_the_boot(self, tmp_path: Path) -> None:
+        """The ref is what an order points back at. Two tasks sharing one would
+        make a completion ambiguous for as long as both existed."""
+        plant = _deep(PLANT)
+        task = {
+            "pm_task_ref": "pm-mc-001-belt",
+            "machine_id": "MC-001",
+            "symptom_code": "PM-toothed-belt",
+            "interval_hours": 8000,
+        }
+        plant["pm_tasks"] = [task, dict(task)]
+        with pytest.raises(ConfigError, match="is used 2 times"):
+            load_config(_write(tmp_path, **{"plant.yaml": plant}))
+
+    def test_a_symptom_code_without_the_pm_prefix_is_refused(self, tmp_path: Path) -> None:
+        """Layer 2 finds a PM playbook through the ordinary lookup and never
+        learns the word "PM" (ADR-027). The prefix is what makes that true."""
+        plant = _deep(PLANT)
+        plant["pm_tasks"] = [
+            {
+                "pm_task_ref": "pm-mc-001-belt",
+                "machine_id": "MC-001",
+                "symptom_code": "SYM-014",
+                "interval_hours": 8000,
+            }
+        ]
+        with pytest.raises((ConfigError, ValidationError)):
+            load_config(_write(tmp_path, **{"plant.yaml": plant}))
+
+    def test_an_interval_of_zero_is_refused(self, tmp_path: Path) -> None:
+        plant = _deep(PLANT)
+        plant["pm_tasks"] = [
+            {
+                "pm_task_ref": "pm-mc-001-belt",
+                "machine_id": "MC-001",
+                "symptom_code": "PM-toothed-belt",
+                "interval_hours": 0,
+            }
+        ]
+        with pytest.raises((ConfigError, ValidationError)):
+            load_config(_write(tmp_path, **{"plant.yaml": plant}))
+
+
 class TestPolicyRelationships:
     def test_load_thresholds_must_be_ordered(self, tmp_path: Path) -> None:
         policy = _deep(POLICY)

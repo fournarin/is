@@ -111,9 +111,20 @@ Better said here than found later.
   `ExtractiveDrafter`, which picks the highest-scoring page and quotes it, so
   what a reviewer sees is text *from* the manual rather than text *about* it. No
   code in this repository constructs the model-server-backed drafter.
-- **PM work exists in code but is not scheduled at runtime.** `from_pm_task()`
-  is called from tests only, so the third arrow in the diagram above is not yet
-  a live path.
+- **Every PM task starts overdue, because nobody knows when it was last done.**
+  The schedule is live: `plant.yaml` holds the tasks and their intervals,
+  `worker-runtime` issues a ticket when one falls due, and closing it `fixed`
+  moves the clock on ([ADR-083](docs/adr/0083-the-pm-schedule-becomes-a-source-of-work.md)).
+  What an installation cannot know is the history before it, so on day one the
+  whole schedule is due at once. The ticket and the health screen both say
+  "never recorded as done" rather than implying a date. Importing those dates
+  from the plant's own records is
+  [#118](https://github.com/fournarin/is/issues/118).
+- **Only one machine model has a PM interval.** The R-2000iC manual states one -
+  the toothed belt at 8000 operating hours - and the M-710iC's states none, so
+  the M-710iC has no task. Operating hours are read as calendar hours, which is
+  never later than the manual asks and can be earlier after a long outage
+  (ADR-083 §2).
 - **The improvement loops decide and nothing runs them.** Loop 1 proposes a
   duration estimate from closed jobs
   ([ADR-066](docs/adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md))

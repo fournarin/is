@@ -11,7 +11,7 @@ pure function of its inputs (invariant 10).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -27,6 +27,7 @@ from pdm.contracts import (
     Playbook,
     PlaybookStatus,
     PMTask,
+    PMTaskRef,
     Severity,
     SymptomCode,
     UserId,
@@ -72,6 +73,32 @@ class TransitionRefused(Exception):
     has it, they never accepted it, it ended an hour ago. The message says which,
     because a technician standing at a machine cannot read a stack trace.
     """
+
+
+class PmScan:
+    """What one pass over the PM schedule did.
+
+    Counted rather than logged, so a test can read it: a scan that found four
+    tasks due and issued none is the unique index doing its job, and a return
+    value carrying only the tickets would make it look like a scan where
+    nothing was due (the argument `Tick` makes in the trigger loop).
+    """
+
+    __slots__ = ("due", "issued", "unpriced")
+
+    def __init__(
+        self, *, due: int, issued: tuple[str, ...], unpriced: tuple[PMTaskRef, ...]
+    ) -> None:
+        self.due = due
+        self.issued = issued
+        self.unpriced = unpriced
+
+    @property
+    def worth_reporting(self) -> bool:
+        return bool(self.issued or self.unpriced)
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return f"PmScan(due={self.due}, issued={len(self.issued)}, unpriced={len(self.unpriced)})"
 
 
 class Issued:
@@ -168,6 +195,45 @@ class WorkOrders:
             severity=severity,
         )
         return Issued(repo.issue(conn, order, now=self.clock.now()), order)
+
+    def register_pm_tasks(
+        self, conn: Connection[Any], tasks: Sequence[repo.PmTaskDefinition]
+    ) -> None:
+        """Mirror the configured schedule into the table (ADR-083 section 1)."""
+        repo.register_pm_tasks(conn, tasks, now=self.clock.now())
+
+    def issue_due_pm(
+        self, conn: Connection[Any], *, machine_model: Callable[[MachineId], MachineModel]
+    ) -> PmScan:
+        """Every task that is due and has nothing in flight becomes one ticket.
+
+        The scan and the tickets share the caller's transaction, so a task and
+        the order it produced commit together or not at all (ADR-017). Which
+        tasks are due is decided by `domain.due_pm_tasks`, which reads no
+        database and no clock, because that is the arithmetic somebody has to be
+        able to check (invariant 10).
+
+        **A task that cannot be priced is skipped, not raised.** The whole scan
+        is one transaction: letting `NoEstimateAvailable` out would roll back the
+        tickets the scan had already written, and one machine model missing from
+        `fallback_minutes` would stop the PM schedule for the whole plant, for
+        ever. It is the argument `TriggerLoop._issue` makes at the other origin,
+        and the failure it prevents is the same one.
+        """
+        now = self.clock.now()
+        due = domain.due_pm_tasks(
+            repo.pm_tasks(conn), live_refs=repo.pm_refs_with_live_order(conn), now=now
+        )
+        issued: list[str] = []
+        unpriced: list[PMTaskRef] = []
+        for task in due:
+            try:
+                order = self.from_pm_task(conn, task, machine_model=machine_model(task.machine_id))
+            except domain.NoEstimateAvailable:
+                unpriced.append(task.pm_task_ref)
+                continue
+            issued.append(order.ref)
+        return PmScan(due=len(due), issued=tuple(issued), unpriced=tuple(unpriced))
 
     def from_report(
         self,
@@ -386,6 +452,14 @@ class WorkOrders:
             blocked_reason=blocked_reason,
             technician_feedback=technician_feedback,
         )
+        # A PM order closing is the only event that moves a task's clock, and it
+        # moves it here, in the transaction that closed the order. Recorded
+        # anywhere else, a crash between the two would leave a task the plant has
+        # maintained still reading as overdue, or one it has not reading as done
+        # (ADR-083 section 5). `pm_task_was_done` is why the outcome decides:
+        # `not_fixed` is a job that did not happen.
+        if order.pm_task_ref is not None and domain.pm_task_was_done(outcome):
+            repo.record_pm_done(conn, order.pm_task_ref, at=now)
         return self._reread(conn, ref)
 
     def open_orders(self, conn: Connection[Any]) -> list[tuple[str, WorkOrder, datetime]]:
