@@ -42,6 +42,50 @@ against the code rather than trusting this page for.
 | 14 | No domain module reads the operating system clock | [ADR-028](adr/0028-clock-is-the-single-time-port.md) | `scripts/check_no_wall_clock.py` in CI, which matches call patterns with a regular expression and so misses some forms; see [Known gaps](#known-gaps) |
 | 15 | `api` cannot reach `llm-server` | [ADR-029](adr/0029-where-the-models-run.md) | `scripts/check_llm_isolation.py` reads the compose networks; the split itself is the enforcement |
 
+## What breaks each one on purpose
+
+**Reading a mechanism is weaker evidence than watching it refuse.** A contract
+whose `source_modules` list was emptied by a rename passes as loudly as one that
+works; a CI script whose glob stopped matching prints success over nothing. Both
+look exactly like a system with no violations in it, which is why the column
+above was worth as much as whoever last read it.
+
+So each row below names a test that **commits the violation** and requires the
+mechanism to catch it. Where there is none yet, the row says so and which issue
+brings it, rather than leaving the gap to be inferred from silence. This is
+[#108](https://github.com/fournarin/is/issues/108).
+
+| # | The test that violates it | What it plants |
+|---|---|---|
+| 1 | `tests/test_the_import_contracts_catch_a_violation.py::test_a_runtime_module_importing_llm_is_refused` | a tree where `work/`, `api/` and `dispatch/` import the drafter - directly, and through an intermediate module - which `lint-imports` must exit 1 on |
+| 2 | `tests/work/test_issuing_work_orders.py::TestInvariantTwo::test_raw_sql_cannot_change_a_snapshot` | an `UPDATE` aimed straight at the column, which the trigger refuses |
+| 3 | `tests/playbooks/test_store_and_review_queue.py::TestNothingUnapprovedIsEverServed` | both halves: `save_approved` handed a draft, and an `INSERT` of `status = 'draft'` at the table itself. The same `INSERT` at `'approved'` is the control, so the refusal is known to be about the status and not a typo |
+| 4 | **none yet** | an approved step citing `source_doc=""` constructs today, so the test would fail rather than pass. [#105](https://github.com/fournarin/is/issues/105) fixes the contract and brings the test with it |
+| 5 | `tests/authoring/test_drafting_gate.py::TestFiguresMustBeASubsetOfTheEvidence::test_a_fabricated_torque_value_is_caught` | a torque value the cited page does not contain; the whole draft is withheld, not only that step |
+| 6 | `tests/api/test_review_queue.py::TestOnlyAnEngineerMayApprove` | the approve endpoint called as a technician, with the proposal still pending afterwards and the refusal in the access log |
+| 7 | `tests/platform/test_config.py::TestInvariant7ComponentLabels::test_an_undeclared_component_stops_the_boot` | a rule naming a component its machine model does not declare; the configuration refuses to load |
+| 8 | `tests/triggers/test_finding_lifecycle.py::TestInvariantEight::test_a_hundred_more_readings_update_the_one_record` | a hundred further firings of the same rule, and a second live Finding written past the service straight at the table |
+| 9 | `tests/triggers/test_rule_evaluation.py::TestSuppressionDuringRepair::test_a_higher_severity_rule_fires_anyway` | the interlock firing while that motor is already under repair |
+| 10 | `tests/test_the_import_contracts_catch_a_violation.py::test_a_domain_module_importing_the_database_is_refused`, with `tests/dispatch/test_gate_and_score.py::TestInvariantTen::test_the_same_inputs_give_the_same_round` | a `platform.db` import, a repo import and a bare `import psycopg` planted in three domain modules. The determinism half is the existing test. `test_schedule_is_outside_the_invariant_10_contract` asserts the other direction: the CP-SAT planner is **not** covered, which is what the gap below says in prose |
+| 11 | `tests/work/test_what_the_false_alarms_propose.py::TestWhenNothingIsProposed::test_a_safety_linked_rule_is_refused_whatever_the_count` | a safety-critical rule with any number of false alarms behind it - **at the function only.** There is no call site to break until [#107](https://github.com/fournarin/is/issues/107) writes one |
+| 12 | `tests/platform/test_jobs.py::TestInvariant12::test_a_runtime_worker_never_sees_an_authoring_job` | an authoring job in the queue and a runtime worker claiming; nothing comes back |
+| 13 | **partly.** `tests/api/test_review_queue.py::TestWhatTheCodeReviewFound::test_a_skill_outside_the_plant_vocabulary_is_refused` | a playbook approved with a skill the plant does not declare. The technician half has nothing to break, because nothing checks it; the machine half **cannot be written**, because the loader's condition can never be true. Both are [#105](https://github.com/fournarin/is/issues/105) |
+| 14 | **none yet** | the script has no test of any kind. A fixture calling `datetime.today()` would fail against it until the script itself is fixed, which is [#105](https://github.com/fournarin/is/issues/105) |
+| 15 | `tests/test_llm_isolation_check.py::test_a_runtime_service_joining_the_llm_network_is_caught` | a compose file in `tmp_path` putting `api` on the model network, and an override file doing the same thing behind the base file's back |
+
+**Two gates that guard no invariant are tested the same way**, because a gate
+that passes on a coincidence is worse than no gate: it is believed.
+`tests/test_the_doc_link_check.py` plants a citation pointing at a file that was
+never written - the failure that produced `check_doc_links.py` in the first
+place - and also requires the real run to resolve more than a hundred links, so
+that a glob which stops matching cannot pass as clean documentation.
+`tests/test_the_config_is_read_check.py` does the same for
+`check_config_is_read.py`, and then plants the **false pass** that check admits
+to: a field whose only occurrence outside the schema is a function parameter of
+the same name. That test is written to pass. It records what the gate does
+rather than what it should do, so that the limitation is a failing assertion the
+day somebody tightens it, instead of a paragraph beside a green tick.
+
 ## Four notes that are part of the design
 
 **1 and 10 pay for themselves more than the rest.** Invariant 1 turns the most
@@ -101,15 +145,23 @@ The rows above now describe the code as it is. Fixing the code is
   `rule.safety_critical`. Until then, `scripts/check_config_is_read.py` counts
   `safety_critical` as read only because a parameter in `work/thresholds.py`
   has the same name, a limitation its docstring now states. The loops are
-  [#107](https://github.com/fournarin/is/issues/107), and the gate is
-  [#108](https://github.com/fournarin/is/issues/108).
+  [#107](https://github.com/fournarin/is/issues/107). The gate was
+  [#108](https://github.com/fournarin/is/issues/108), which planted that false
+  pass as a test rather than closing it: whether to require an attribute read
+  on a config object is a decision somebody has to defend, and it is entry 39 of
+  [decisions-to-defend](decisions-to-defend.md).
 - **Invariant 14's gate is a regular expression.** It misses
   `datetime.today()`, `time.time_ns()`, `time.monotonic_ns()` and aliased
   imports such as `from datetime import datetime as dt`. None of these appear
   in `src/` today.
 - **Invariant 10 covers `dispatch()`, not `schedule()`.** The runtime round
   calls `dispatch()` only. The CP-SAT planner in `dispatch/solver.py`, which the
-  explainer and `scripts/compare_policies.py` call, is outside the invariant.
+  explainer and `scripts/compare_policies.py` call, is outside the invariant -
+  now asserted rather than described, by
+  `test_schedule_is_outside_the_invariant_10_contract`, which plants
+  `import psycopg` in a mirrored `dispatch/solver.py` and requires the contract
+  to stay green. The day somebody widens the contract, that test fails and this
+  paragraph is what has to change.
   Its time budget is wall-clock seconds, which is why one row of the comparison
   changed between machines
   ([reproducibility](results/reproducibility.md), entry 28 of
@@ -124,11 +176,11 @@ the thing it describes moves. Two habits keep it honest:
 
 - **The Enforced by column is the part to verify.** Every entry names a file, a
   contract or a test. If one of them no longer says what this table says, the
-  table is what is wrong. **Reading is weaker evidence than breaking.** Of the
-  fifteen, only invariant 4 was checked on 2026-09-19 by running something; the
-  rest were read. [#108](https://github.com/fournarin/is/issues/108) asks for one
-  test per invariant that violates it on purpose, which is what would let this
-  column claim more than a reader's belief.
+  table is what is wrong. **Reading is weaker evidence than breaking**, which is
+  what the second table is for. Eleven of the fifteen have a test that commits
+  the violation; 11 and 13 have one for part of what they say; 4 and 14 have
+  none, and name the issue that brings one. Verifying a row means running the
+  test named beside it, not opening the file named above it.
 - **A new invariant gets a number here and a record of its own.** The numbers are
   cited across eighty decision records and in CI step titles, so they are an
   interface rather than a list, and renumbering one would silently change what

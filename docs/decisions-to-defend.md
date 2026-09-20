@@ -956,6 +956,106 @@ promise unless the next slice exists somewhere work is picked from.
 
 ---
 
+## 38. Eleven invariants now have a test that breaks them, two have none, and one half cannot be written
+
+**Decided.** `docs/invariants.md` gains a second table naming, per invariant,
+the test that commits the violation and what it plants. Invariants 1, 3 and 10
+gained such a test in this slice; 4, 13 and 14 did not, and the table says which
+issue brings theirs rather than leaving the reader to infer it from an empty
+cell.
+
+**Why it was needed.** The **Enforced by** column could say only that somebody
+read the code and believed it matched, and on 2026-09-19 that belief was wrong
+twice (entry 31). The re-check was itself partial: of the fifteen, only invariant
+4 was confirmed by running anything. A contract whose `source_modules` list is
+emptied by a rename passes exactly as loudly as one that works, and a CI script
+whose glob stops matching prints success over nothing - so a green gate and a
+dead gate are the same observation until something violates the rule on purpose.
+
+**What was built.**
+
+- **Invariant 1 and invariant 10** are `.importlinter` contracts, so the test
+  builds a package tree that breaks them and requires `lint-imports` to exit 1.
+  The contract under test is read out of the real `.importlinter`; only the root
+  package name is changed, from `pdm` to `probe`, so that a tree can be stood up
+  in `tmp_path` without shadowing the installed package. If a contract is
+  deleted or the modules it names are renamed, the mirror raises rather than
+  passing over nothing.
+- **Invariant 3** had the `save_approved` half only. The other half - the table
+  refusing `status = 'draft'` whoever writes it - is now an `INSERT` in raw SQL,
+  with the same `INSERT` at `'approved'` beside it as a control, so the refusal
+  is known to be about the status rather than a typo in a column name.
+- **Invariant 10's boundary** is asserted in the other direction as well:
+  `dispatch/solver.py` is planted with `import psycopg` and the contract must
+  stay green, because the invariant covers `dispatch()` and not `schedule()`.
+  The day somebody widens the contract, that test fails and the page's Known
+  gaps section is what has to change.
+
+**What was deliberately not built.** Invariants 4, 13 and 14 have tests in
+[#105](https://github.com/fournarin/is/issues/105), which is open and waiting
+for a person. Writing a second copy of them here would have produced two files
+for one purpose and a merge conflict between two open pull requests, so this
+slice leaves those three rows naming the issue instead. **The consequence is
+that #105 has to land for the table to be complete**, and if it does not, three
+rows keep pointing at an issue rather than at a test. The machine half of
+invariant 13 cannot be tested at all while the loader's condition can never be
+true, which is a code fix and not a test.
+
+**If it is wrong.** The mirrored tree is not `src/pdm`. It exercises the real
+contract text against a tree with the same module names under a different root,
+which proves the contract refuses the import but not that every module in `src/`
+is inside the contract's `source_modules` list. The three parametrised cases
+assert their own module is on that list, so a package silently dropped from the
+contract fails the test - but only for the packages named. A twelfth runtime
+package added to `src/` and forgotten in `.importlinter` would still pass
+everything here.
+
+**Look at.** `tests/test_the_import_contracts_catch_a_violation.py`,
+[`invariants.md`](invariants.md), `.importlinter`,
+`tests/playbooks/test_store_and_review_queue.py::TestNothingUnapprovedIsEverServed`.
+
+---
+
+## 39. The unread-configuration gate counts a name, not a read, and was left that way
+
+**Decided.** `scripts/check_config_is_read.py` keeps its regular-expression
+search. The false pass it admits to is now planted as a test that is **written
+to pass**, and tightening it to an AST-level read is left open.
+
+**What the gate does.** A schema field counts as read if its name appears
+anywhere in `src/`, `scripts/` or `web/` outside the schema module. That accepts
+an attribute access, a keyword argument carrying the value on, and a string key.
+It also accepts a function parameter that no configured value ever reaches, and
+a mention in a comment. `safety_critical` passed on exactly that coincidence for
+as long as nothing outside `tests/` called `work/thresholds.propose`.
+
+**Why it was not tightened.** The obvious tightening - the field's name must
+appear as an attribute read on a config object - is a data-flow claim, and it
+would be wrong in the other direction: a value read once in a composition root
+and passed down three layers as a keyword argument is read, and an AST rule
+looking for `config.x` would refuse it. That is the argument the loose version
+was chosen on, and reversing it is a decision with a cost on both sides rather
+than an obvious improvement. What was wrong was not the looseness but that
+nothing demonstrated it.
+
+**What is there instead.** `test_a_parameter_of_the_same_name_is_counted_as_a_read`
+and `test_a_field_named_only_in_a_comment_is_counted_as_a_read` plant the false
+pass and assert the gate is green on it. They record what the gate does rather
+than what it should do, which means the limitation is a failing assertion the
+day somebody tightens the gate, instead of a paragraph beside a green tick that
+people stop reading.
+
+**If it is wrong.** A reader who sees "69 configuration fields, all read" and
+concludes that every key in `policy.yaml` changes something is wrong, and the
+gate's own output does not say so - only its docstring and these two tests do.
+The honest reading of a green result is "every field's name occurs somewhere".
+
+**Look at.** `scripts/check_config_is_read.py`,
+`tests/test_the_config_is_read_check.py`,
+[`invariants.md`, Known gaps](invariants.md#known-gaps).
+
+---
+
 ---
 
 # What still stops and waits for a person
