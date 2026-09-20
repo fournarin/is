@@ -244,6 +244,15 @@ def main() -> int:
         print("  no terminal here, so Compose is quiet; this is the slow step", flush=True)
     compose("up", "-d", "--build", "--scale", "worker-runtime=0")
 
+    # The rehearsal container is behind a profile, and `up --build` does not
+    # build a service it is not starting. So it kept whatever image the last
+    # build left, and every check and every seed ran against that code while the
+    # stack ran against this one. It went unnoticed while the two happened to
+    # agree; slice 16.1 added a key to `plant.yaml` and the older image refused
+    # the file it was handed - `pm_tasks: Extra inputs are not permitted` - from
+    # inside a container that looked like part of this stack (ADR-083).
+    compose("build", "rehearsal")
+
     say("Waiting for the two addresses a person types")
     up = wait_for(API_HEALTH, "the API") and wait_for(WEB_SIGN_IN, "the web app")
     if not up:
@@ -289,10 +298,19 @@ def main() -> int:
         say("Starting worker-runtime, which the checks needed stopped")
         compose("up", "-d", "--no-deps", "worker-runtime", check=False)
 
-        say("Waiting for the first round to place work, so the demo has something on it")
-        ready = wait_until_ready()
-        print(ready.output or "  (no output)")
-        results.append(ready)
+        if rostered.ok:
+            say("Waiting for the first round to place work, so the demo has something on it")
+            ready = wait_until_ready()
+            print(ready.output or "  (no output)")
+            results.append(ready)
+        else:
+            # Without a roster there is nobody to place work on, so the wait
+            # below could only ever time out. It spent eleven minutes doing
+            # exactly that on 2026-09-20, after the roster had already failed
+            # and said so, which reads as the stack being slow rather than as
+            # the seed being broken.
+            say("Skipping the wait for placed work: the roster failed, so there is nobody")
+            print("  to place it on. The roster failure above is the thing to read.")
 
     say("What the rehearsal found")
     # Said before the results rather than after. A warm run reuses a database
