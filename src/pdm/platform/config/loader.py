@@ -206,15 +206,18 @@ def _cross_file_problems(plant: PlantConfig, rules: RulesConfig, policy: PolicyC
         if count > 1:
             problems.append(f"rule id {rule_id} is used {count} times")
 
-    # Invariant 13 (ADR-027): every machine a rule can fire on must sit at a
-    # station, or the w2 term has nothing to compute against.
-    rule_models = {rule.machine_model for rule in rules.rules}
-    for machine_id, model in machine_models.items():
-        if model in rule_models and machine_id not in station_of:
-            problems.append(
-                f"machine {machine_id} can raise Findings but sits at no station, "
-                f"so its downtime cost cannot be computed (invariant 13, ADR-027)"
-            )
+    # Invariant 13 (ADR-027) asked that every machine a rule can fire on sit at
+    # a station, or the w2 term has nothing to compute against. A check for it
+    # stood here and could never fire: `station_of` and `machine_models` are
+    # filled in the same loop, from the same key, so a machine in one is in the
+    # other. It was removed by ADR-084 section 4 rather than left as a line that
+    # reads like enforcement.
+    #
+    # What holds the property is the shape of plant.yaml: a machine is declared
+    # inside a station and cannot be declared anywhere else, so there is no
+    # loadable configuration in which a machine has no station. The half that
+    # can go wrong is a rule naming a model no machine uses, and that is refused
+    # above. Both are tested in tests/platform/test_config.py.
 
     # The PM schedule names machines, and a task on a machine that is not in the
     # layout would fall due for ever with nothing able to price it or place it

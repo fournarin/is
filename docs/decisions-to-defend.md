@@ -14,7 +14,7 @@ Newest last. If you have ten minutes before writing a chapter, read this file.
 The last section is different: six questions with no answer yet, kept here for
 the same reason as the rest. **The numbers jump at that boundary**, because they
 run in the order entries were written and the two sections have filled up at
-different times: decisions run 1 to 26 and then 33 to 35, and the open questions
+different times: decisions run 1 to 26 and then 33 to 36, and the open questions
 are 27 to 32. A number is never reused, because entries are cited by it.
 
 ---
@@ -719,6 +719,50 @@ was replaced by the fix.
 `scripts/rehearse.py`, `tests/test_the_rehearsal_builds_what_it_runs.py`,
 `docs/loop-log.md` for 2026-09-19 and 2026-09-20.
 
+---
+
+## 36. An upgrade may now stop, a roster write may now be refused, and one invariant was made smaller instead of made true
+
+**Decided.** Four things, in
+[ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md),
+which is the code fix entry 31 said was coming.
+
+1. **`source_doc` is refused when empty, on the field.** A step cites a page of
+   a document or it does not construct - in a draft as much as in an approval.
+   Existing rows are proved rather than excused: migration 0014 reads
+   `work_order.playbook_snapshot` and `playbook.steps` and **stops the upgrade**,
+   naming the rows, if any step has no source. It rewrites nothing, because
+   invariant 2 makes a snapshot unchangeable.
+2. **`add_technician` takes the vocabulary and refuses a label outside it**, with
+   no default, so a caller cannot skip the check by forgetting.
+3. **The loader's machine check is deleted rather than replaced.** It could
+   never fire; what holds the property is that `plant.yaml` declares a machine
+   inside a station and nowhere else. Two tests replace it.
+4. **Invariant 10's wording now says `dispatch()` and not `schedule()`.**
+
+**Why.** Three of these make a claim true that was being made anyway. The fourth
+does the opposite, and it is the one to defend: the planner's wall-clock budget
+is a known defect with a known fix (entry 28), and taking the fix needs a budget
+in deterministic units that nobody has measured. Between a page that overstates
+and a page that says where the guarantee ends, the second is what lets a reader
+trust the rest of it - and `docs/results/reproducibility.md` already says which
+cell moves.
+
+**If it is wrong.** The stopping upgrade is the sharpest edge: a plant that has
+a bad row cannot deploy until somebody decides what that row should be. That is
+intended - the alternative is a work order that silently fails to load a year
+later - but it is a deployment step that can fail, and nobody has seen it fail
+because no such row exists in any database this project has built. The refused
+roster write can reject data that loads today; only `seed_demo_roster.py` writes
+technicians, and it draws from the same vocabulary. Narrowing invariant 10 is a
+decision to publish a comparison that is reproducible in 1,439 of 1,440 cells
+and to say so, rather than to make it 1,440 this term.
+
+**Look at.** [ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md),
+`migrations/versions/0014_every_stored_step_names_its_document.py`,
+`src/pdm/contracts/work.py`, `src/pdm/dispatch/repo.py::add_technician`,
+`scripts/check_no_wall_clock.py`, [`invariants.md`](invariants.md).
+
 
 # Not decided, and still going to be asked about
 
@@ -901,6 +945,11 @@ says is true" than a page that has always been right.
 produces an empty source, and the technician half of invariant 13 does not hold
 at all. A reader who trusts the CI step "configuration must be loadable
 (invariants 7 and 13)" believes it checks more than it does.
+
+**Answered.** ADR-084 and entry 36. Both invariants now have a mechanism, both
+are broken on purpose by a test, and the CI step names invariant 7 alone. What
+is written above stays as it was: it is the record of a period when the page was
+wrong, which is the point of it.
 
 **Look at.** [`invariants.md`, Known gaps](invariants.md#known-gaps),
 `src/pdm/contracts/work.py`, `src/pdm/platform/config/loader.py`,

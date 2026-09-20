@@ -10,8 +10,9 @@ visible at the call site.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from pdm.contracts.enums import (
     AssigneeRole,
@@ -40,6 +41,32 @@ from pdm.contracts.ids import (
 )
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
+
+
+def _names_a_document(value: DocumentId) -> DocumentId:
+    """Invariant 4's other half, which `Playbook`'s validator never looked at.
+
+    `page` was enforced by `Field(ge=1)` and `source_doc` by nothing at all, so
+    `source_doc=""` constructed without error and produced a step that cites a
+    page of no document. Nothing in the system can reach that state today -
+    provenance comes from the drafter, and a reviewer can neither add a step nor
+    edit its source (ADR-064) - which is the difference between an invariant
+    that holds and one that is enforced (ADR-084).
+    """
+    if not value.strip():
+        raise ValueError(
+            "a step citing a page of no document cannot be checked against the manual "
+            "it came from, and after an accident nobody can say what was instructed "
+            "(invariant 4, ADR-015)"
+        )
+    return value
+
+
+# Where invariant 4 is enforced: on the field, so that it holds on every path
+# into a playbook rather than only on approval. A draft step with no source is
+# also wrong, and the drafter is the only thing that can still fix it - by the
+# time a reviewer sees it, the provenance is not theirs to supply (ADR-084 §1).
+AttributedDocument = Annotated[DocumentId, AfterValidator(_names_a_document)]
 
 
 class Signal(BaseModel):
@@ -125,7 +152,7 @@ class PlaybookStep(BaseModel):
     model_config = _FROZEN
 
     text: str = Field(min_length=1)
-    source_doc: DocumentId
+    source_doc: AttributedDocument
     page: int = Field(ge=1)
     confidence: float = Field(ge=0.0, le=1.0)
 
@@ -156,7 +183,7 @@ class Playbook(BaseModel):
 
     # The playbook's primary document. Individual steps may cite others, and
     # when they do, the review screen flags it.
-    source_doc: DocumentId
+    source_doc: AttributedDocument
     page: int = Field(ge=1)
 
     revision: int = Field(default=1, ge=1)

@@ -183,7 +183,39 @@ class TestInvariant7ComponentLabels:
 
 
 class TestInvariant13MachinesAndStations:
-    """ADR-027: a machine that can raise Findings must sit somewhere."""
+    """ADR-027: a machine that can raise Findings must sit somewhere.
+
+    The loader's own check for that could never fire and was removed in ADR-084
+    section 4. What holds the property is below: a machine is declared inside a
+    station and there is nowhere else to declare one, so the two tests here are
+    the enforcement rather than a description of it.
+    """
+
+    def test_a_machine_can_only_be_declared_inside_a_station(self, tmp_path: Path) -> None:
+        """The structural half of invariant 13, stated as a test because it is
+        now the whole mechanism. A `machines:` list on a line rather than a
+        station is refused as an unknown key (the loader forbids extras), so
+        there is no loadable plant in which a machine sits at no station."""
+        plant = _deep(PLANT)
+        plant["lines"][0]["machines"] = [{"machine_id": "MC-099", "model": "R-2000iC"}]
+        with pytest.raises((ConfigError, ValidationError)):
+            load_config(_write(tmp_path, **{"plant.yaml": plant}))
+
+    def test_every_machine_in_the_repository_layout_resolves_to_a_station(self) -> None:
+        """The same property read off the configuration this repository ships,
+        rather than off a fixture written to pass."""
+        config = load_config(REPO_CONFIG)
+        machines = [
+            machine.machine_id
+            for line in config.plant.lines
+            for station in line.stations
+            for machine in station.machines
+        ]
+
+        assert machines
+        for machine in machines:
+            station = config.station_of(machine)
+            assert machine in station.machine_ids
 
     def test_a_rule_for_a_model_no_machine_uses_stops_the_boot(self, tmp_path: Path) -> None:
         rules = _deep(RULES)

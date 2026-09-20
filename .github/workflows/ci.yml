@@ -35,7 +35,7 @@ jobs:
       - name: dependency rules (invariant 1, ADR-003)
         run: uv run lint-imports
 
-      - name: configuration must be loadable (invariants 7 and 13)
+      - name: configuration must be loadable (invariant 7, ADR-016)
         run: uv run python -m pdm.platform.config config
 
       - name: only the Clock port reads real time (invariant 14, ADR-028)

@@ -1,11 +1,11 @@
 # Architecture decision records
 
-Eighty-four decisions, in the order they were made. Each records the context that
+Eighty-five decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
 
-The count and the highest number differ by two. 057 was reserved for a record that was never written, and the number was left unused rather than given to something else. 084 is reserved for the fix to invariants 4 and 13 (#105) and is not written yet. 085 was written before 083, because slice 16.1 held 083 while it was being built; how a number is reserved is in 085.
+The count and the highest number differ by one. 057 was reserved for a record that was never written, and the number was left unused rather than given to something else. 084 was reserved for the fix to invariants 4 and 13 (#105) while 085 and 086 were written, and now holds it. 085 was written before 083, because slice 16.1 held 083 while it was being built; how a number is reserved is in 085.
 
 **These are append-only.** An ADR is never edited after the fact. Changing your
 mind means writing a new one that references the old, so the record shows what
@@ -96,6 +96,7 @@ entries replace parts of earlier ones, and both are kept.
 | [081](0081-what-the-health-reader-serves-and-what-a-zero-may-not-mean.md) | What the health reader serves, and what a zero from an empty table may not mean | |
 | [082](0082-the-data-is-not-coming-this-term-and-what-that-closes.md) | **The data is not coming this term, and what that closes** | |
 | [083](0083-the-pm-schedule-becomes-a-source-of-work.md) | The PM schedule becomes a source of work, and what a schedule nobody has records for costs | |
+| [084](0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) | Two invariants get a mechanism, and two get wording that matches what holds them | |
 | [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
 
