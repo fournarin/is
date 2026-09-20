@@ -8,7 +8,7 @@ without the playbook it approved would be a queue that lies.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from psycopg import Connection
 from psycopg.rows import dict_row
@@ -112,6 +112,45 @@ def served_pairs(conn: Connection[Any]) -> set[tuple[SymptomCode, MachineModel]]
     with conn.cursor() as cur:
         cur.execute("SELECT symptom_code, machine_model FROM playbook")
         return {(SymptomCode(row[0]), MachineModel(row[1])) for row in cur.fetchall()}
+
+
+class PricedPair(NamedTuple):
+    """One served playbook, reduced to what Loop 1 needs to say anything.
+
+    The steps are left in the table on purpose. Loop 1 proposes a duration and
+    reads nothing else, and a reader that returned whole playbooks would hand the
+    caller the text as well - which is how a screen about minutes grows a panel
+    of procedures nobody opened it to review (ADR-087 section 1).
+    """
+
+    symptom_code: SymptomCode
+    machine_model: MachineModel
+    estimated_minutes: int
+    status: PlaybookStatus
+
+
+def priced_pairs(conn: Connection[Any]) -> list[PricedPair]:
+    """Every pair with a price, in the order the loop screen reads them.
+
+    Both statuses, for `served_pairs`' reason: a `needs_review` playbook is still
+    served to a technician (ADR-018), so the estimate it prices work with is
+    still the one `load_ratio` is computed from, and a proposal about it is no
+    less relevant for the manual having changed.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT symptom_code, machine_model, estimated_minutes, status "
+            "FROM playbook ORDER BY machine_model, symptom_code"
+        )
+        return [
+            PricedPair(
+                symptom_code=SymptomCode(row[0]),
+                machine_model=MachineModel(row[1]),
+                estimated_minutes=int(row[2]),
+                status=PlaybookStatus(row[3]),
+            )
+            for row in cur.fetchall()
+        ]
 
 
 def save_approved(

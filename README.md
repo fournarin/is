@@ -125,18 +125,21 @@ Better said here than found later.
   the M-710iC has no task. Operating hours are read as calendar hours, which is
   never later than the manual asks and can be earlier after a long outage
   (ADR-083 §2).
-- **The improvement loops decide and nothing runs them.** Loop 1 proposes a
-  duration estimate from closed jobs
+- **The improvement loops propose, and nothing applies a proposal but a person.**
+  Loop 1 proposes a duration estimate from closed jobs
   ([ADR-066](docs/adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md))
   and Loop 2 proposes a rule threshold from false alarms, refusing outright for
   a safety-linked rule
   ([ADR-073](docs/adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md)).
-  Both are tested, and no code outside `tests/` calls either `propose()`.
-  `worker-runtime` registers two handlers, dispatch and observe
-  (`src/pdm/workers/runtime/__main__.py:204`), and no screen shows a
-  proposal. So the system does not yet learn anything from the jobs it closes;
-  it contains the arithmetic it would learn with. Loop 3 is not written.
-  [#107](https://github.com/fournarin/is/issues/107) is the path they need.
+  Both are now computed on request and shown on a screen an engineer can open
+  ([ADR-087](docs/adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md)),
+  and **neither has a write path, on purpose**: a duration is changed where an
+  approval is recorded, and a threshold is an edit to `config/rules.yaml` that
+  somebody makes by hand. Nothing is stored and nothing is scheduled, so no
+  proposal is kept from one week to the next and nothing measures whether the
+  estimates are converging. The system does not learn by itself; it now shows
+  what it would learn. Loop 3 is not written and is closed for this term
+  ([ADR-086](docs/adr/0086-what-this-term-does-not-do.md)).
 - **Backup and restore are documented but have never been run.** See the note in
   [docs/install.md](docs/install.md).
 - **Nobody outside this project has used the system.** Reserving time for a
