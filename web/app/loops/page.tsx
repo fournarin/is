@@ -163,11 +163,11 @@ export default async function LoopsPage() {
               )}
               <p className="warning">{one.limitation}</p>
               <p className="muted">
-                จะใช้ค่านี้: แก้ <code>config/rules.yaml</code> ด้วยมือ — ที่ <code>{line.rule_id}</code>{" "}
-                เปลี่ยน <code>threshold: {one.current_threshold}</code> เป็น{" "}
-                <code>threshold: {one.proposed_threshold}</code> แล้ว restart
-                ระบบไม่มีทางแก้ไฟล์นี้ให้เอง และไม่ควรมี: ไฟล์นี้คือสิ่งที่ layer 1 บูตขึ้นมาอ่าน
-                และการแก้ต้องผ่านรีวิวเหมือนโค้ด (ADR-087)
+                จะใช้ค่านี้: แก้ <code>config/rules.yaml</code> ด้วยมือ — ที่กฎ{" "}
+                <code>{line.rule_id}</code> ตั้ง <code>threshold</code> เป็น{" "}
+                <strong>{one.proposed_threshold}</strong> (ตอนนี้อ่านได้เป็น {one.current_threshold})
+                แล้ว restart ระบบไม่มีทางแก้ไฟล์นี้ให้เอง และไม่ควรมี: ไฟล์นี้คือสิ่งที่ layer 1
+                บูตขึ้นมาอ่าน และการแก้ต้องผ่านรีวิวเหมือนโค้ด (ADR-087)
               </p>
             </article>
           );
