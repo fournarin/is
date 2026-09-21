@@ -14,7 +14,7 @@ Newest last. If you have ten minutes before writing a chapter, read this file.
 The last section is different: six questions with no answer yet, kept here for
 the same reason as the rest. **The numbers jump at that boundary**, because they
 run in the order entries were written and the two sections have filled up at
-different times: decisions run 1 to 26 and then 33 to 36, and the open questions
+different times: decisions run 1 to 26 and then 33 to 40, and the open questions
 are 27 to 32. A number is never reused, because entries are cited by it.
 
 ---
@@ -721,7 +721,7 @@ was replaced by the fix.
 
 ---
 
-## 36. An upgrade may now stop, a roster write may now be refused, and one invariant was made smaller instead of made true
+## 40. An upgrade may now stop, a roster write may now be refused, and one invariant was made smaller instead of made true
 
 **Decided.** Four things, in
 [ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md),
@@ -946,7 +946,7 @@ produces an empty source, and the technician half of invariant 13 does not hold
 at all. A reader who trusts the CI step "configuration must be loadable
 (invariants 7 and 13)" believes it checks more than it does.
 
-**Answered.** ADR-084 and entry 36. Both invariants now have a mechanism, both
+**Answered.** ADR-084 and entry 40. Both invariants now have a mechanism, both
 are broken on purpose by a test, and the CI step names invariant 7 alone. What
 is written above stays as it was: it is the record of a period when the page was
 wrong, which is the point of it.
