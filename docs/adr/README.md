@@ -99,6 +99,7 @@ entries replace parts of earlier ones, and both are kept.
 | [084](0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) | Two invariants get a mechanism, and two get wording that matches what holds them | |
 | [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
+| [087](0087-the-improvement-loops-get-a-screen-and-no-write-path.md) | The improvement loops get a screen, and deliberately no way to write | |
 
 ## The invariants these records cite
 

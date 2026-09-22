@@ -998,9 +998,20 @@ holds only because the loop it constrains never runs (entry 31, and
 has made a promise. Once the slice it came from is merged, nothing keeps that
 promise unless the next slice exists somewhere work is picked from.
 
+**Answered on 2026-09-20, in part.** Slice 19.1 gave both loops a caller:
+`GET /loops/estimates`, `GET /loops/thresholds` and a screen an engineer opens
+([ADR-087](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md)).
+What is still true of the paragraph above is the sentence about the report:
+**the system does not learn from the jobs it closes.** It computes what it would
+learn and shows it to somebody, who applies it or does not. What is no longer
+true is that invariant 11 holds only because nothing runs the loop - the refusal
+is now reached through the endpoint, with the flag coming from `rules.yaml`. The
+two decisions that came with the wiring are entries 36 and 37.
+
 **Look at.** [ADR-066](adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md),
 [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md),
-`src/pdm/workers/runtime/__main__.py`, `src/pdm/work/estimates.py`,
+[ADR-087](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md),
+`src/pdm/api/loops.py`, `src/pdm/work/estimates.py`,
 `src/pdm/work/thresholds.py`.
 
 ---
