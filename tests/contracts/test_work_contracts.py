@@ -119,6 +119,41 @@ class TestPredictionsCarryTheirUncertainty:
             _finding(kind=FindingKind.DETECTED, eta=NOW + timedelta(hours=6))
 
 
+class TestEveryStepSaysWhereItCameFrom:
+    """Invariant 4's other half, unenforced until ADR-084.
+
+    `page` was checked by `Field(ge=1)` and `source_doc` by nothing, so a step
+    citing page 142 of no document constructed without error. #105 found it by
+    running the case rather than by reading the validator. The check is on the
+    field, so a draft is refused as well as an approval: provenance comes from
+    the drafter, and by the time a reviewer sees the step it is not theirs to
+    supply (ADR-064).
+    """
+
+    @pytest.mark.parametrize("nothing", ["", " ", "\t\n"])
+    def test_a_step_citing_no_document_is_refused(self, nothing: str) -> None:
+        with pytest.raises(ValidationError, match="page of no document"):
+            PlaybookStep(
+                text="Isolate the drive",
+                source_doc=DocumentId(nothing),
+                page=1,
+                confidence=0.9,
+            )
+
+    def test_a_step_that_names_its_document_is_accepted(self) -> None:
+        assert _step().source_doc == DocumentId("a" * 64)
+
+    def test_an_unattributed_step_cannot_be_read_back_off_a_stored_row(self) -> None:
+        """The read path for `playbook_snapshot` and for `playbook.steps` is
+        `model_validate` (`work/repo.py`, `playbooks/repo.py`), so the migration
+        that proves no stored row is unattributed is what keeps this from
+        stopping an old work order from loading (ADR-084 section 2)."""
+        with pytest.raises(ValidationError, match="page of no document"):
+            PlaybookStep.model_validate(
+                {"text": "Isolate the drive", "source_doc": "", "page": 1, "confidence": 0.9}
+            )
+
+
 class TestApprovedPlaybooksAreAccountable:
     """Invariant 4 and ADR-024, enforced where they cannot be forgotten."""
 
@@ -156,6 +191,10 @@ class TestApprovedPlaybooksAreAccountable:
     def test_an_approved_playbook_with_no_steps_is_rejected(self) -> None:
         with pytest.raises(ValidationError, match="nothing to approve"):
             self._approved(steps=())
+
+    def test_a_playbook_citing_no_document_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="page of no document"):
+            self._approved(source_doc=DocumentId(""))
 
     def test_a_draft_may_be_incomplete(self) -> None:
         """Drafts are what the review queue is for, and they never reach a

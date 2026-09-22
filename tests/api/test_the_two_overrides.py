@@ -106,6 +106,7 @@ def world(database_url: str, clock: SimulatedClock) -> Iterator[dict[str, Any]]:
         dispatch_repo.add_technician(
             conn,
             Technician(user=UserId("tech-1"), skills=frozenset({SkillId("robot_mechanical")})),
+            known_skills={SkillId("robot_mechanical")},
             now=NOW,
         )
         dispatch_repo.assign_to_shift(

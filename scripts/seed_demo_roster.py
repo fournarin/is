@@ -127,7 +127,12 @@ def main() -> int:
             else:
                 note = "account already there"
 
-            dispatch_repo.add_technician(conn, Technician(user=user, skills=skills), now=now)
+            dispatch_repo.add_technician(
+                conn,
+                Technician(user=user, skills=skills),
+                known_skills=skills,
+                now=now,
+            )
             dispatch_repo.assign_to_shift(
                 conn,
                 ShiftAssignment(

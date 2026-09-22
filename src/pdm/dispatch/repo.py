@@ -16,6 +16,7 @@ prevent, and it would look like a successful round.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import date, datetime
 from typing import Any
 
@@ -396,9 +397,36 @@ def _assignee(one: Assignee) -> dict[str, str]:
     return {"user": str(one.user), "role": one.role.value}
 
 
-def add_technician(conn: Connection[Any], technician: Technician, *, now: Any) -> None:
+class SkillNotInTheVocabulary(ValueError):
+    """A technician holding a label `plant.yaml` does not declare (invariant 13)."""
+
+
+def add_technician(
+    conn: Connection[Any],
+    technician: Technician,
+    *,
+    known_skills: Collection[SkillId],
+    now: Any,
+) -> None:
     """Upsert one technician. The roster is maintained elsewhere; this exists so
-    that something can put people in the table before an API does."""
+    that something can put people in the table before an API does.
+
+    `known_skills` is the vocabulary from `plant.yaml` and has no default on
+    purpose (invariant 13, ADR-084 §3). Until ADR-084 this function wrote
+    whatever it was given, and a label outside the vocabulary fails in the
+    quietest way this system has: `can_perform` never matches, so the person is
+    simply never assigned anything, and no round, screen or log says why. A
+    default of `()` would have made the check skippable by forgetting, which is
+    how it came to be missing in the first place.
+    """
+    unknown = sorted(str(skill) for skill in technician.skills if skill not in known_skills)
+    if unknown:
+        raise SkillNotInTheVocabulary(
+            f"{technician.user} holds {', '.join(unknown)}, which plant.yaml does not declare "
+            f"({', '.join(sorted(str(skill) for skill in known_skills)) or 'no skills at all'}). "
+            "A skill no playbook can ask for is a technician dispatch will never match to any "
+            "work, and nothing would say so (invariant 13, ADR-027)"
+        )
     with conn.cursor() as cur:
         cur.execute(
             """

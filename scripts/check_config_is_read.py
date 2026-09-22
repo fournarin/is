@@ -29,13 +29,16 @@ is the only case this refuses.
 
 **What that looseness costs: a name is not a read.** Any identifier that happens
 to share the field's name counts as a consumer, including a function parameter
-that the configured value never reaches. `safety_critical` passes this gate
-today for exactly that reason. It is a parameter of `work/thresholds.propose`,
-and nothing outside the tests calls `propose`, so nothing carries the value from
-`rules.yaml` into it (#107). A green result here therefore means "every field's
-name occurs somewhere", not "every field is used". The false pass is the same
-kind as counting this file, which is why this file excludes itself. Tightening
-it is part of #108.
+that the configured value never reaches. A green result here therefore means
+"every field's name occurs somewhere", not "every field is used", and the false
+pass is the same kind as counting this file, which is why this file excludes
+itself. Tightening it is part of #108.
+
+`safety_critical` was the standing example of that gap and is no longer one.
+Until ADR-087 it passed only because `work/thresholds.propose` has a parameter of
+that name and nothing outside the tests called it; `api/loops.py` now carries the
+configured value into the refusal, and a test asks the endpoint for it
+(invariant 11). The example is gone; the limitation above is not.
 
 This file excludes itself from the search. It names every allowed field twice,
 in the list and in the reason beside it, so counting itself would make every

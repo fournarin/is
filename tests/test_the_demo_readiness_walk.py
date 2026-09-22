@@ -102,6 +102,7 @@ def _roster(conn: Connection[Any]) -> None:
         dispatch_repo.add_technician(
             conn,
             Technician(user=user, skills=frozenset(SkillId(str(s)) for s in CONFIG.skills)),
+            known_skills=frozenset(SkillId(str(s)) for s in CONFIG.skills),
             now=now,
         )
         dispatch_repo.assign_to_shift(
