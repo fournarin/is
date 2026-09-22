@@ -11,11 +11,14 @@ things stop a slice entirely. Both are listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
-The last section is different: six questions with no answer yet, kept here for
-the same reason as the rest. **The numbers jump at that boundary**, because they
-run in the order entries were written and the two sections have filled up at
-different times: decisions run 1 to 26 and then 33 to 35, and the open questions
-are 27 to 32. A number is never reused, because entries are cited by it.
+The last section is different: six questions that had no answer when they were
+written - one of them, 32, has since been answered and says so at its end - kept
+here for the same reason as the rest. **The numbers jump at that boundary**,
+because they run in the order entries were written and the two sections fill at
+different times: decisions run 1 to 26 and then 33 to 37, and the open questions
+are 27 to 32. A number is never reused, because entries are cited by it. An
+entry in the second section that has since been answered keeps its number and
+says so at the end rather than moving, because the citations point at it.
 
 ---
 
@@ -719,6 +722,57 @@ was replaced by the fix.
 `scripts/rehearse.py`, `tests/test_the_rehearsal_builds_what_it_runs.py`,
 `docs/loop-log.md` for 2026-09-19 and 2026-09-20.
 
+---
+
+## 36. The improvement loops were wired up with no way to write anything
+
+**Decided.** Both loops are computed when an engineer opens a screen, and
+neither has a write route. A proposed duration is applied by an engineer
+entering it when they approve that playbook; a proposed threshold is applied by
+editing `config/rules.yaml` by hand and restarting. `tests/api/
+test_the_improvement_loops.py::TestThereIsNoWayToWriteEither` holds the router
+to GET so this cannot drift.
+
+**Why.** Loop 1's number sits on the one table whose point is provenance - who
+approved it, when, in what role (ADR-024) - so a button that wrote it would be
+an approval with no approver. Loop 2's number is in a file that layer 1 boots
+from, reviewed like code; a threshold that changed because somebody clicked
+would be a change with no diff, and #107 asked for exactly that not to exist.
+
+**If it is wrong.** The friction is real: an engineer who agrees with a proposal
+has to retype it somewhere else, and a proposal nobody carries across is a
+proposal that did nothing. If the term ends with a pile of proposals and no
+applied change, this is the decision that caused it, and the answer is a write
+path with an approval record behind it - not a quiet one.
+
+**Look at.** [ADR-087 §3](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md),
+`src/pdm/api/loops.py`, `web/app/loops/page.tsx`.
+
+---
+
+## 37. The loops read all the closed work, because a look-back window has no source
+
+**Decided.** No window and no schedule. Each request reads every closed order
+behind a playbook or a rule, and the cadence ADR-022 asked for - weekly rather
+than per-order - is kept by the fact that nothing changes until a person changes
+it, not by a timer.
+
+**Why.** "The last ninety days" needs one of the three provenances and has none:
+no manual states it, this project has no closed-work history to measure drift
+from, and a decision would have to know how fast durations move in this plant.
+A number that looks reasonable and means nothing is the defect the provenance
+rule exists to catch, and the alternative - reading everything - needs no
+constant at all.
+
+**If it is wrong.** A duration that genuinely changed is corrected slowly,
+because old jobs stay in the median for ever, and the 20% cap already makes
+large corrections take several cycles. The fix is the measurement, once there is
+enough closed work to make it: that measurement is what would give a window a
+source.
+
+**Look at.** [ADR-087 §2](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md),
+`config/policy.yaml` (the `estimates` and `thresholds` blocks), ADR-022.
+
 
 # Not decided, and still going to be asked about
 
@@ -949,9 +1003,20 @@ holds only because the loop it constrains never runs (entry 31, and
 has made a promise. Once the slice it came from is merged, nothing keeps that
 promise unless the next slice exists somewhere work is picked from.
 
+**Answered on 2026-09-20, in part.** Slice 19.1 gave both loops a caller:
+`GET /loops/estimates`, `GET /loops/thresholds` and a screen an engineer opens
+([ADR-087](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md)).
+What is still true of the paragraph above is the sentence about the report:
+**the system does not learn from the jobs it closes.** It computes what it would
+learn and shows it to somebody, who applies it or does not. What is no longer
+true is that invariant 11 holds only because nothing runs the loop - the refusal
+is now reached through the endpoint, with the flag coming from `rules.yaml`. The
+two decisions that came with the wiring are entries 36 and 37.
+
 **Look at.** [ADR-066](adr/0066-what-the-finished-jobs-may-change-and-what-stops-them.md),
 [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md),
-`src/pdm/workers/runtime/__main__.py`, `src/pdm/work/estimates.py`,
+[ADR-087](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md),
+`src/pdm/api/loops.py`, `src/pdm/work/estimates.py`,
 `src/pdm/work/thresholds.py`.
 
 ---

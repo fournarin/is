@@ -54,6 +54,17 @@ export const SCREENS: readonly Screen[] = [
     href: "/overview",
     roles: ["supervisor", "engineer"],
   },
+  {
+    title: "ข้อเสนอจากงานที่ปิดแล้ว",
+    purpose: "เวลามาตรฐานที่งานจริงบอก และเกณฑ์ที่การแจ้งเท็จบอก — ข้อเสนอเท่านั้น ไม่มีปุ่มแก้ค่าจริง",
+    slice: "19.1",
+    href: "/loops",
+    // The shift lead is offered it on the review queue's argument: somebody who
+    // cannot see a queue cannot ask why it is not moving. Deciding either number
+    // is an engineer's, and the endpoints refuse the other two roles rather than
+    // this list hiding the link (invariant 6, ADR-087).
+    roles: ["engineer", "supervisor"],
+  },
 ];
 
 export function screensFor(role: Role): readonly Screen[] {

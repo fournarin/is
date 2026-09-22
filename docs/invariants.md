@@ -36,7 +36,7 @@ against the code rather than trusting this page for.
 | 8 | One rule firing repeatedly does not create a second Finding: one live record per (machine, rule), updated | [ADR-023](adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md) | `triggers/domain.py`, and a partial unique index, `one_live_finding_per_machine_and_rule` in `migrations/versions/0007_findings.py`, that refuses a second live Finding whoever writes it; tested by firing a hundred times and requiring one record |
 | 9 | A rule of **higher** severity is not suppressed while a repair is open | [ADR-023](adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md) | suppression is keyed by rule rather than by machine, so a different rule was never suppressed; `tests/triggers/test_rule_evaluation.py::TestSuppressionDuringRepair` |
 | 10 | `dispatch()` returns the same answer for the same input and touches no database | design note 7 | `.importlinter`: *domain.py must not reach the database or a repo*; `contracts/` is frozen; `now` is an argument |
-| 11 | No improvement loop may propose that a safety-linked threshold be loosened, however many false alarms it counted | [ADR-022](adr/0022-every-improvement-loop-proposes-rather-than-changes.md), [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md) | `work/thresholds.py::propose` refuses a rule marked safety-critical and names `SAFETY_CRITICAL`, tested at the function. **Nothing outside `tests/` calls `propose` yet**, so no code carries `safety_critical` from `rules.yaml` to it. See [Known gaps](#known-gaps) |
+| 11 | No improvement loop may propose that a safety-linked threshold be loosened, however many false alarms it counted | [ADR-022](adr/0022-every-improvement-loop-proposes-rather-than-changes.md), [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md) | `work/thresholds.py::propose` refuses a rule marked safety-critical and names `SAFETY_CRITICAL`. `api/loops.py::thresholds` is the caller that carries `safety_critical` from `rules.yaml` into it, and `tests/api/test_the_improvement_loops.py::TestTheSafetyLinkedRuleIsRefusedThroughTheRealPath` asks the endpoint for a rule the file marks safety-linked and requires the refusal - and asks for one it marks `false` in the same test, so the pair cannot pass on a constant ([ADR-087](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md)) |
 | 12 | `worker-runtime` cannot pick up an authoring job at all | [ADR-026](adr/0026-split-the-worker-into-two-roles.md) | a `job_class` filter in the claim query, `platform/jobs/repo.py`, rather than a convention |
 | 13 | Every skill label a playbook or technician names is in the vocabulary, and every `machine_id` a rule names is in the topology | [ADR-027](adr/0027-operational-data-contracts.md) | **Not as a whole, and not at boot.** A playbook's skill is checked when it is approved (`playbooks/service.py`) and when it is drafted (`authoring/drafting.py`). A technician's skills are not checked anywhere. Rules name a `machine_model` rather than a `machine_id`, and the boot check in `platform/config/loader.py` that a machine sits at a station cannot fire; what holds that property is `plant.yaml` nesting machines under stations. See [Known gaps](#known-gaps) |
 | 14 | No domain module reads the operating system clock | [ADR-028](adr/0028-clock-is-the-single-time-port.md) | `scripts/check_no_wall_clock.py` in CI, which matches call patterns with a regular expression and so misses some forms; see [Known gaps](#known-gaps) |
@@ -93,15 +93,17 @@ The rows above now describe the code as it is. Fixing the code is
   - The loader's check that every machine a rule can fire on sits at a station
     fills `station_of` and `machine_models` in the same loop with the same key,
     so its condition is never true. Rules name a model, not a machine.
-- **Invariant 11 holds because nothing runs the loop it constrains.** The
-  refusal is real and tested. But neither improvement loop has a runtime path:
-  `worker-runtime` registers only the dispatch and observe handlers, and no
-  code outside `tests/` calls `propose()` in `work/estimates.py` or
-  `work/thresholds.py`. When the caller is written, it has to pass
-  `rule.safety_critical`. Until then, `scripts/check_config_is_read.py` counts
-  `safety_critical` as read only because a parameter in `work/thresholds.py`
-  has the same name, a limitation its docstring now states. The loops are
-  [#107](https://github.com/fournarin/is/issues/107), and the gate is
+- **Invariant 11 has a caller now, and it is a screen rather than a schedule.**
+  Both loops are computed on request by `api/loops.py` and read by an engineer
+  ([ADR-087](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md)),
+  so `safety_critical` travels from `rules.yaml` into the refusal and the
+  refusal is tested through the endpoint. What the invariant now rests on is
+  that there is no write path at all: a proposal is carried across by a person,
+  in the playbook's approval or by editing `config/rules.yaml`. The day
+  something does write one, this row is the one to re-check - a loop that could
+  apply its own proposal could apply the refusal's opposite. The remaining
+  weakness is `scripts/check_config_is_read.py`, which still counts a field as
+  read when its name merely appears; tightening it is
   [#108](https://github.com/fournarin/is/issues/108).
 - **Invariant 14's gate is a regular expression.** It misses
   `datetime.today()`, `time.time_ns()`, `time.monotonic_ns()` and aliased

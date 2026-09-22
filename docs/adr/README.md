@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Eighty-four decisions, in the order they were made. Each records the context that
+Eighty-five decisions, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
@@ -98,6 +98,7 @@ entries replace parts of earlier ones, and both are kept.
 | [083](0083-the-pm-schedule-becomes-a-source-of-work.md) | The PM schedule becomes a source of work, and what a schedule nobody has records for costs | |
 | [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
+| [087](0087-the-improvement-loops-get-a-screen-and-no-write-path.md) | The improvement loops get a screen, and deliberately no way to write | |
 
 ## The invariants these records cite
 
