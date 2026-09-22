@@ -50,6 +50,7 @@ from __future__ import annotations
 import ast
 import re
 import sys
+from collections.abc import Collection
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -70,10 +71,13 @@ ALLOWED_WITHOUT_A_READER = {
 # Names that are structure rather than configuration.
 STRUCTURAL = {"model_config", "version"}
 
+# Where a read may be found, and how deep to look for one.
+SOURCE_GLOBS = (("src", "**/*.py"), ("scripts", "*.py"), ("web", "*.py"))
 
-def _schema_fields() -> dict[str, str]:
+
+def _schema_fields(schema: Path) -> dict[str, str]:
     """Field name -> the class that declares it."""
-    tree = ast.parse(SCHEMA.read_text(encoding="utf-8"))
+    tree = ast.parse(schema.read_text(encoding="utf-8"))
     fields: dict[str, str] = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef):
@@ -90,25 +94,45 @@ def _schema_fields() -> dict[str, str]:
     return fields
 
 
-def _sources() -> list[str]:
+def _sources(root: Path, exclude: Collection[Path]) -> list[str]:
     texts: list[str] = []
-    for directory, pattern in (("src", "**/*.py"), ("scripts", "*.py"), ("web", "*.py")):
-        for path in (REPO / directory).glob(pattern):
-            if path.resolve() in (SCHEMA, SELF) or "__pycache__" in path.parts:
+    for directory, pattern in SOURCE_GLOBS:
+        for path in (root / directory).glob(pattern):
+            if path.resolve() in exclude or "__pycache__" in path.parts:
                 continue
             texts.append(path.read_text(encoding="utf-8"))
     return texts
 
 
-def main() -> int:
-    fields = _schema_fields()
-    sources = _sources()
+def unread_fields(
+    schema: Path, root: Path, *, exclude: Collection[Path] = ()
+) -> list[tuple[str, str]]:
+    """Schema fields whose name occurs nowhere under `root`, as (field, class).
 
-    unread = [
+    `schema` and `root` are parameters rather than the constants above so that
+    the gate can be run against a tree that violates it, which is the only way
+    to know it still refuses one (#108). The schema module itself is always
+    excluded: a field declared there is not read by being declared.
+
+    Note what this returns and what it does not. A name that occurs is counted
+    as a read, for the reason the docstring at the top of this file gives, so an
+    empty list means "every field's name occurs somewhere" - not "every field is
+    used". `tests/test_the_config_is_read_check.py` plants that false pass on
+    purpose rather than leaving it as a sentence.
+    """
+    fields = _schema_fields(schema)
+    sources = _sources(root, exclude={schema.resolve(), *(p.resolve() for p in exclude)})
+
+    return [
         (name, owner)
         for name, owner in sorted(fields.items())
         if not any(re.search(rf"\b{re.escape(name)}\b", text) for text in sources)
     ]
+
+
+def main() -> int:
+    fields = _schema_fields(SCHEMA)
+    unread = unread_fields(SCHEMA, REPO, exclude=(SELF,))
 
     stale = sorted(ALLOWED_WITHOUT_A_READER - {name for name, _ in unread})
     if stale:

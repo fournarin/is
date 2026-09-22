@@ -24,7 +24,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from psycopg import Connection, connect
+from psycopg import Connection, connect, errors
+from psycopg.types.json import Jsonb
 
 from pdm.contracts import (
     DocumentId,
@@ -187,6 +188,81 @@ class TestNothingUnapprovedIsEverServed:
             playbooks.save_approved(
                 conn, draft, approved_by=ENGINEER, approved_at=START, approver_role=Role.ENGINEER
             )
+
+    def test_the_table_itself_refuses_a_draft_whoever_writes_it(
+        self, conn: Connection[Any], manual: DocumentId, people: None
+    ) -> None:
+        """The third half, and the one that does not depend on a code path.
+
+        `save_approved` refusing a draft is a rule in Python, which holds for
+        callers that go through it. The seed scripts, a migration, a repair
+        session with `psql` open and a production incident in progress - none of
+        them do. This asserts what the CHECK constraint does: the `draft` status
+        is a state the served table cannot hold at all, which is what ADR-038
+        claims and what makes invariant 3 structural rather than remembered.
+
+        It is written as raw SQL on purpose. Going through the repo would test
+        the repo again; the point here is the database refusing an INSERT that
+        no Python in this repository would make.
+        """
+        with pytest.raises(errors.CheckViolation), conn.transaction():
+            conn.execute(
+                """
+                INSERT INTO playbook (
+                    symptom_code, machine_model, steps, estimated_minutes,
+                    required_skill, source_doc, page, cited_documents,
+                    status, approved_by, approved_at, approver_role
+                )
+                VALUES (%s, %s, %s, 45, %s, %s, 4, %s,
+                        'draft', %s, %s, 'engineer')
+                """,
+                (
+                    SYM,
+                    R2000IC,
+                    Jsonb([{"text": "Isolate the cell.", "source_doc": manual, "page": 4}]),
+                    SKILL,
+                    manual,
+                    [manual],
+                    ENGINEER,
+                    START,
+                ),
+            )
+
+    def test_the_same_insert_succeeds_once_the_status_is_approved(
+        self, conn: Connection[Any], manual: DocumentId, people: None
+    ) -> None:
+        """Otherwise the refusal above could be about anything.
+
+        A typo in a column name, a missing foreign key, a constraint on some
+        other field: all of them would raise, and the test above would pass
+        while proving nothing about `status`. This is the same statement with
+        one word changed.
+        """
+        conn.execute(
+            """
+            INSERT INTO playbook (
+                symptom_code, machine_model, steps, estimated_minutes,
+                required_skill, source_doc, page, cited_documents,
+                status, approved_by, approved_at, approver_role
+            )
+            VALUES (%s, %s, %s, 45, %s, %s, 4, %s,
+                    'approved', %s, %s, 'engineer')
+            """,
+            (
+                SYM,
+                R2000IC,
+                Jsonb([{"text": "Isolate the cell.", "source_doc": manual, "page": 4}]),
+                SKILL,
+                manual,
+                [manual],
+                ENGINEER,
+                START,
+            ),
+        )
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT status FROM playbook WHERE symptom_code = %s", (SYM,))
+            assert cur.fetchall() == [("approved",)]
 
     def test_a_symptom_with_no_playbook_answers_nothing_rather_than_something_close(
         self, conn: Connection[Any], store: PlaybookStore

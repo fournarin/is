@@ -43,17 +43,28 @@ LINK = re.compile(r"\[(?P<text>[^\]]*)\]\((?P<target>[^)\s]+)\)")
 SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
 
 
-def _markdown_files() -> list[Path]:
-    files = sorted((REPO / "docs").rglob("*.md"))
-    files += sorted(p for p in REPO.glob("*.md"))
+def _markdown_files(root: Path) -> list[Path]:
+    files = sorted((root / "docs").rglob("*.md"))
+    files += sorted(p for p in root.glob("*.md"))
     return files
 
 
-def main() -> int:
+def check(root: Path) -> tuple[list[str], int]:
+    """Broken links under `root`, and how many links were resolved at all.
+
+    `root` is a parameter rather than `REPO` so that the gate can be run against
+    a tree containing a violation, which is the only way to find out that it
+    still catches one (invariant-style test, #108). A checker that has only ever
+    been run against documentation it passes is a checker nobody has seen refuse.
+
+    The count comes back with the list because a green result that resolved zero
+    links is the failure this gate cannot report on its own: a glob that stops
+    matching passes exactly as loudly as documentation with no dead links in it.
+    """
     broken: list[str] = []
     checked = 0
 
-    for path in _markdown_files():
+    for path in _markdown_files(root):
         text = path.read_text(encoding="utf-8")
         for match in LINK.finditer(text):
             target = match.group("target")
@@ -64,8 +75,14 @@ def main() -> int:
             if resolved.exists():
                 continue
             line = text.count("\n", 0, match.start()) + 1
-            relative = path.relative_to(REPO)
+            relative = path.relative_to(root)
             broken.append(f"  {relative}:{line}  [{match.group('text')}] -> {target}")
+
+    return broken, checked
+
+
+def main() -> int:
+    broken, checked = check(REPO)
 
     if broken:
         print(f"Documentation links that point at nothing ({len(broken)} of {checked}):")
