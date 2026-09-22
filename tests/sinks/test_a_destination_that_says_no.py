@@ -130,7 +130,9 @@ def orders(clock: SimulatedClock) -> WorkOrders:
 
 
 def _crew(conn: Connection[Any]) -> None:
-    dispatch_repo.add_technician(conn, Technician(user=ANA, skills=ALL_SKILLS), now=NOW)
+    dispatch_repo.add_technician(
+        conn, Technician(user=ANA, skills=ALL_SKILLS), known_skills=ALL_SKILLS, now=NOW
+    )
     dispatch_repo.assign_to_shift(
         conn,
         ShiftAssignment(shift_id=AFTERNOON, on_date=TODAY, technician=ANA, available_minutes=480),

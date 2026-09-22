@@ -11,14 +11,11 @@ things stop a slice entirely. Both are listed at the bottom.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
-The last section is different: six questions that had no answer when they were
-written - one of them, 32, has since been answered and says so at its end - kept
-here for the same reason as the rest. **The numbers jump at that boundary**,
-because they run in the order entries were written and the two sections fill at
-different times: decisions run 1 to 26 and then 33 to 37, and the open questions
-are 27 to 32. A number is never reused, because entries are cited by it. An
-entry in the second section that has since been answered keeps its number and
-says so at the end rather than moving, because the citations point at it.
+The last section is different: six questions with no answer yet, kept here for
+the same reason as the rest. **The numbers jump at that boundary**, because they
+run in the order entries were written and the two sections have filled up at
+different times: decisions run 1 to 26 and then 33 to 40, and the open questions
+are 27 to 32. A number is never reused, because entries are cited by it.
 
 ---
 
@@ -724,54 +721,47 @@ was replaced by the fix.
 
 ---
 
-## 36. The improvement loops were wired up with no way to write anything
+## 40. An upgrade may now stop, a roster write may now be refused, and one invariant was made smaller instead of made true
 
-**Decided.** Both loops are computed when an engineer opens a screen, and
-neither has a write route. A proposed duration is applied by an engineer
-entering it when they approve that playbook; a proposed threshold is applied by
-editing `config/rules.yaml` by hand and restarting. `tests/api/
-test_the_improvement_loops.py::TestThereIsNoWayToWriteEither` holds the router
-to GET so this cannot drift.
+**Decided.** Four things, in
+[ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md),
+which is the code fix entry 31 said was coming.
 
-**Why.** Loop 1's number sits on the one table whose point is provenance - who
-approved it, when, in what role (ADR-024) - so a button that wrote it would be
-an approval with no approver. Loop 2's number is in a file that layer 1 boots
-from, reviewed like code; a threshold that changed because somebody clicked
-would be a change with no diff, and #107 asked for exactly that not to exist.
+1. **`source_doc` is refused when empty, on the field.** A step cites a page of
+   a document or it does not construct - in a draft as much as in an approval.
+   Existing rows are proved rather than excused: migration 0014 reads
+   `work_order.playbook_snapshot` and `playbook.steps` and **stops the upgrade**,
+   naming the rows, if any step has no source. It rewrites nothing, because
+   invariant 2 makes a snapshot unchangeable.
+2. **`add_technician` takes the vocabulary and refuses a label outside it**, with
+   no default, so a caller cannot skip the check by forgetting.
+3. **The loader's machine check is deleted rather than replaced.** It could
+   never fire; what holds the property is that `plant.yaml` declares a machine
+   inside a station and nowhere else. Two tests replace it.
+4. **Invariant 10's wording now says `dispatch()` and not `schedule()`.**
 
-**If it is wrong.** The friction is real: an engineer who agrees with a proposal
-has to retype it somewhere else, and a proposal nobody carries across is a
-proposal that did nothing. If the term ends with a pile of proposals and no
-applied change, this is the decision that caused it, and the answer is a write
-path with an approval record behind it - not a quiet one.
+**Why.** Three of these make a claim true that was being made anyway. The fourth
+does the opposite, and it is the one to defend: the planner's wall-clock budget
+is a known defect with a known fix (entry 28), and taking the fix needs a budget
+in deterministic units that nobody has measured. Between a page that overstates
+and a page that says where the guarantee ends, the second is what lets a reader
+trust the rest of it - and `docs/results/reproducibility.md` already says which
+cell moves.
 
-**Look at.** [ADR-087 §3](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md),
-`src/pdm/api/loops.py`, `web/app/loops/page.tsx`.
+**If it is wrong.** The stopping upgrade is the sharpest edge: a plant that has
+a bad row cannot deploy until somebody decides what that row should be. That is
+intended - the alternative is a work order that silently fails to load a year
+later - but it is a deployment step that can fail, and nobody has seen it fail
+because no such row exists in any database this project has built. The refused
+roster write can reject data that loads today; only `seed_demo_roster.py` writes
+technicians, and it draws from the same vocabulary. Narrowing invariant 10 is a
+decision to publish a comparison that is reproducible in 1,439 of 1,440 cells
+and to say so, rather than to make it 1,440 this term.
 
----
-
-## 37. The loops read all the closed work, because a look-back window has no source
-
-**Decided.** No window and no schedule. Each request reads every closed order
-behind a playbook or a rule, and the cadence ADR-022 asked for - weekly rather
-than per-order - is kept by the fact that nothing changes until a person changes
-it, not by a timer.
-
-**Why.** "The last ninety days" needs one of the three provenances and has none:
-no manual states it, this project has no closed-work history to measure drift
-from, and a decision would have to know how fast durations move in this plant.
-A number that looks reasonable and means nothing is the defect the provenance
-rule exists to catch, and the alternative - reading everything - needs no
-constant at all.
-
-**If it is wrong.** A duration that genuinely changed is corrected slowly,
-because old jobs stay in the median for ever, and the 20% cap already makes
-large corrections take several cycles. The fix is the measurement, once there is
-enough closed work to make it: that measurement is what would give a window a
-source.
-
-**Look at.** [ADR-087 §2](adr/0087-the-improvement-loops-get-a-screen-and-no-write-path.md),
-`config/policy.yaml` (the `estimates` and `thresholds` blocks), ADR-022.
+**Look at.** [ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md),
+`migrations/versions/0014_every_stored_step_names_its_document.py`,
+`src/pdm/contracts/work.py`, `src/pdm/dispatch/repo.py::add_technician`,
+`scripts/check_no_wall_clock.py`, [`invariants.md`](invariants.md).
 
 
 # Not decided, and still going to be asked about
@@ -955,6 +945,11 @@ says is true" than a page that has always been right.
 produces an empty source, and the technician half of invariant 13 does not hold
 at all. A reader who trusts the CI step "configuration must be loadable
 (invariants 7 and 13)" believes it checks more than it does.
+
+**Answered.** ADR-084 and entry 40. Both invariants now have a mechanism, both
+are broken on purpose by a test, and the CI step names invariant 7 alone. What
+is written above stays as it was: it is the record of a period when the page was
+wrong, which is the point of it.
 
 **Look at.** [`invariants.md`, Known gaps](invariants.md#known-gaps),
 `src/pdm/contracts/work.py`, `src/pdm/platform/config/loader.py`,

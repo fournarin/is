@@ -111,7 +111,9 @@ def orders(clock: SimulatedClock) -> WorkOrders:
 
 def _crew(conn: Connection[Any], *users: UserId, minutes: int = 480) -> None:
     for user in users:
-        dispatch_repo.add_technician(conn, Technician(user=user, skills=ALL_SKILLS), now=NOW)
+        dispatch_repo.add_technician(
+            conn, Technician(user=user, skills=ALL_SKILLS), known_skills=ALL_SKILLS, now=NOW
+        )
         dispatch_repo.assign_to_shift(
             conn,
             ShiftAssignment(
