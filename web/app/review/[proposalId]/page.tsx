@@ -1,3 +1,4 @@
+import { Shell } from "@/app/ui/shell";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -42,7 +43,7 @@ export default async function ProposalPage({
   const found = page?.text != null && step !== undefined ? locate(page.text, step.text) : null;
 
   return (
-    <>
+    <Shell account={account} current="/review">
       <div className="who">
         <span>
           <Link href={`/review?model=${encodeURIComponent(draft.machine_model)}`}>คิวรีวิว</Link>
@@ -51,7 +52,6 @@ export default async function ProposalPage({
             · {draft.machine_model} · {ROLE_NAMES[account.role]}
           </span>
         </span>
-        <Link href="/">หน้าแรก</Link>
       </div>
 
       <h1>
@@ -71,7 +71,7 @@ export default async function ProposalPage({
           <h2>ร่าง</h2>
           {steps.length === 0 ? (
             <p className="muted">
-              ร่างนี้ไม่มีขั้นตอน — ระบบกันทั้งฉบับไว้ ไม่ตัดออกทีละขั้น (ADR-037 ข้อ 4)
+              ร่างนี้ไม่มีขั้นตอน — ระบบจึงไม่ส่งร่างนี้ให้ใช้ทั้งฉบับ
             </p>
           ) : (
             <ol className="draft">
@@ -103,7 +103,7 @@ export default async function ProposalPage({
               </ul>
               <p className="muted">
                 ระบบกันไว้เพราะไม่ผ่านการตรวจตัวเลขหรือไม่ตรงกับข้อความในหน้านั้น
-                คนที่บอกได้ว่าคู่มือผิดหรือ backend ผิด คือคนที่กำลังอ่านอยู่นี่ (ADR-037)
+                คนที่บอกได้ว่าคู่มือผิดหรือ backend ผิด คือคนที่กำลังอ่านอยู่นี่
               </p>
             </details>
           )}
@@ -181,9 +181,9 @@ export default async function ProposalPage({
         <p className="muted">
           {account.role === "engineer"
             ? "ใบที่ตัดสินแล้วแก้ไม่ได้ — ประวัติคือหลักฐานว่าตอนนั้นระบบสั่งอะไร"
-            : "การอนุมัติเป็นของวิศวกรเท่านั้น (ADR-024)"}
+            : "การอนุมัติเป็นของวิศวกรเท่านั้น"}
         </p>
       )}
-    </>
+    </Shell>
   );
 }

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const ref = String(form.get("ref") ?? "");
   const reason = String(form.get("reason") ?? "").trim();
 
-  const back = (query: string): Response => seeOther(`/overview?${query}`);
+  const back = (query: string): Response => seeOther(`/board?${query}`);
 
   if (ref === "") {
     return back(`error=${encodeURIComponent("ไม่รู้ว่าจะปฏิเสธงานไหน")}`);

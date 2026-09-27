@@ -121,7 +121,8 @@ services:
       # 60x: the twelve-hour scenario is read in about twelve minutes, which is
       # one sitting (ADR-007). At 1.0 it runs at plant speed and the first
       # Finding arrives in about two hours.
-      SIGNAL_SPEED: ${SIGNAL_SPEED:-60}
+      SIGNAL_SPEED: ${SIGNAL_SPEED:-1}
+      SIGNAL_HEAD_START_HOURS: ${SIGNAL_HEAD_START_HOURS:-7}
       # Where the `file` destination writes, if `policy.yaml` asks for it
       # (ADR-069). Unset here because the configured destination is
       # `own-system`, and there is no default in the code for the reason

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const form = await request.formData();
   const ref = String(form.get("ref") ?? "");
 
-  const back = (query: string): Response => seeOther(`/overview?${query}`);
+  const back = (query: string): Response => seeOther(`/board?${query}`);
 
   if (ref === "") {
     return back(`error=${encodeURIComponent("ไม่รู้ว่าจะยืนยันงานไหน")}`);

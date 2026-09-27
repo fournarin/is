@@ -268,7 +268,7 @@ class TestTheRefusalsAreNamed:
         response = _report(client, severity="critical")
 
         assert response.status_code == 422
-        assert "call the shift lead" in response.text
+        assert "โทรหาหัวหน้ากะ" in response.text
 
     def test_high_is_not_refused(self, client: TestClient) -> None:
         _signed_in(client, Role.TECHNICIAN)

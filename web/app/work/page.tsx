@@ -2,54 +2,55 @@ import Link from "next/link";
 
 import { startWork } from "@/app/work/actions";
 import { DisagreeForm } from "@/app/work/disagree-form";
-import { bandFor, seenLine } from "@/lib/display";
-import { ROLE_NAMES, requireAccount } from "@/lib/session";
+import { NotYours, Shell } from "@/app/ui/shell";
+import { bandFor, minutesText, seenLine } from "@/lib/display";
+import { homeFor } from "@/lib/screens";
+import { requireAccount } from "@/lib/session";
 import { currentRound, myWork, proposals, type Ticket } from "@/lib/work";
 
 /**
- * One job, not a menu.
+ * One job, not a menu - the way a ride-hailing app hands a driver one trip
+ * (ADR-093).
  *
  * The scheduler has already decided the order, and offering a list would let a
- * technician take the easy one first - which is exactly what the load gate
- * exists to prevent (ADR-011, ADR-058). What is queued behind it is shown, so
- * the shift is not a black box, and it is not selectable.
+ * technician take the easy one first, which is what the load gate exists to
+ * prevent (ADR-011, ADR-058). What is queued behind it is shown and is not
+ * selectable. Every sentence on it was written by the backend (ADR-005).
  */
 export default async function WorkPage() {
   const account = await requireAccount();
   if (account.role !== "technician") {
     return (
-      <>
-        <h1>งานของช่าง</h1>
-        <p className="card">
-          หน้านี้เป็นของช่าง บัญชีนี้เป็น{ROLE_NAMES[account.role]} — งานที่ระบบจัดให้จะไม่ปรากฏที่นี่
-        </p>
-        <p>
-          <Link href="/">กลับหน้าแรก</Link>
-        </p>
-      </>
+      <Shell account={account} current="/work">
+        <NotYours home={homeFor(account.role)} what="หน้านี้เป็นหน้างานของช่าง" />
+      </Shell>
     );
   }
 
   const [round, mine] = await Promise.all([currentRound(), myWork()]);
 
   if (mine.length === 0) {
-    // "Nothing yet" and "waiting for your shift lead" are different sentences,
-    // and a screen that prints the first when it means the second tells a
-    // technician the system has no work for them when it has already decided
-    // otherwise (ADR-005, ADR-071 §7).
+    // "Nothing yet" and "waiting for your shift lead" are different sentences
+    // (ADR-005, ADR-071 §7).
     const waiting = (await proposals()).filter((one) => one.assignees.includes(account.user));
     return (
-      <>
-        <h1>งานของคุณ</h1>
-        <p className="card">
-          {waiting.length > 0
-            ? `ระบบจัดงานให้คุณแล้ว ${waiting.length} งาน กำลังรอหัวหน้ากะยืนยัน`
-            : `ตอนนี้ยังไม่มีงานที่ถูกจัดให้คุณ รอบถัดไปคำนวณเมื่อ ${round.summary}`}
-        </p>
-        <p>
-          <Link href="/report">แจ้งงานเสียที่เจอเอง</Link> · <Link href="/">กลับหน้าแรก</Link>
-        </p>
-      </>
+      <Shell account={account} current="/work">
+        <div className="card empty">
+          <span className="icon" aria-hidden="true">
+            {waiting.length > 0 ? "⏳" : "☕"}
+          </span>
+          <h1>{waiting.length > 0 ? "มีงานรอหัวหน้ากะยืนยัน" : "ตอนนี้ยังไม่มีงาน"}</h1>
+          <p>
+            {waiting.length > 0
+              ? `ระบบจัดงานให้คุณแล้ว ${waiting.length} งาน พอหัวหน้ากะยืนยัน งานจะขึ้นที่หน้านี้`
+              : "เมื่อมีงานใหม่ จะขึ้นที่หน้านี้ทันที"}
+          </p>
+          <p className="muted">{round.summary}</p>
+          <Link className="button-link quiet" href="/report">
+            📣 เจอเครื่องเสีย? แจ้งซ่อม
+          </Link>
+        </div>
+      </Shell>
     );
   }
 
@@ -57,75 +58,102 @@ export default async function WorkPage() {
   const band = bandFor(now);
   const seen = seenLine(now, round.timezone);
   const inProgress = now.status === "in_progress";
+  const hasSteps = now.steps.length > 0;
 
   return (
-    <>
-      <div className="who">
-        <span>
-          งานของคุณ
-          <span className="muted"> · งานที่ 1 จาก {mine.length}</span>
-        </span>
-        {/* Beside the job rather than on the home screen: a technician who finds
-            a second fault is standing at a machine with this page open, and
-            three taps back to a menu is how it gets reported by radio instead
-            (ADR-077). */}
-        <Link href="/report">แจ้งงานเสีย</Link>
-      </div>
+    <Shell account={account} current="/work">
+      <p className="muted">
+        งานที่ 1 จาก {mine.length} · ใบงาน {now.ref}
+      </p>
 
       <section className={`card job ${band.tone}`}>
-        <div className="screen-head">
-          <h1>
-            {band.label} · {now.machine_id}
-          </h1>
-          <span className="muted">{now.ref}</span>
+        <div className="job-head">
+          <span className={`pill ${band.tone}`}>{band.label}</span>
+          {inProgress && <span className="pill">กำลังทำ</span>}
         </div>
+        <p className="machine">
+          {now.machine_id}
+          {now.station !== null && <span className="muted"> · {now.station}</span>}
+        </p>
 
         {/* Written by the backend when the job was created, never here. */}
-        <p className="reason">{now.reason}</p>
+        <p className="symptom reason">{now.reason}</p>
         {seen !== null && <p className="muted">{seen}</p>}
+
+        <div className="facts">
+          <div className="fact">
+            <span className="label">เวลาโดยประมาณ</span>
+            <span className="value">
+              {minutesText(now.estimated_minutes)}
+              {now.estimate_is_fallback && " (ค่าประมาณคร่าว ๆ)"}
+            </span>
+          </div>
+          <div className="fact">
+            <span className="label">ทักษะที่ใช้</span>
+            <span className="value">{now.required_skill_name ?? "ทั่วไป"}</span>
+          </div>
+          <div className="fact">
+            <span className="label">จำนวนช่าง</span>
+            <span className="value">{now.required_technicians} คน</span>
+          </div>
+          <div className="fact">
+            <span className="label">ขั้นตอนซ่อม</span>
+            <span className="value">
+              {hasSteps ? `${now.steps.length} ขั้นตอน` : "ยังไม่มี · ดูคู่มือ"}
+            </span>
+          </div>
+        </div>
 
         {now.playbook_warning !== null && (
           <p className="warning">
-            คู่มือถูกเปลี่ยน ขั้นตอนชุดนี้รออนุมัติใหม่ — ตรวจกับคู่มือก่อนลงมือ
+            ⚠️ คู่มือของเครื่องนี้เพิ่งถูกเปลี่ยน ขั้นตอนชุดนี้รอวิศวกรตรวจใหม่ ให้เทียบกับคู่มือก่อนลงมือ
           </p>
         )}
 
-        <h2>ทำไมงานนี้ก่อน</h2>
-        {now.priority_reason === "" ? (
-          <p className="muted">ยังไม่มีรอบไหนจัดอันดับงานนี้</p>
+        <div className="why">
+          <span className="label">ทำไมต้องทำงานนี้ก่อน</span>
+          {now.priority_reason === "" ? (
+            <p className="reason muted">ยังไม่ได้จัดลำดับ</p>
+          ) : (
+            <p className="reason">{now.priority_reason}</p>
+          )}
+        </div>
+
+        {inProgress ? (
+          <Link className="button-link big" href={`/work/${encodeURIComponent(now.ref)}/steps`}>
+            ทำต่อ →
+          </Link>
         ) : (
-          <p>{now.priority_reason}</p>
+          <form action={startWork.bind(null, now.ref)}>
+            <button type="submit" className="big ok">
+              ▶ รับงานและเริ่มทำ
+            </button>
+          </form>
         )}
+
         <DisagreeForm workOrder={now.ref} timezone={round.timezone} />
       </section>
 
-      {inProgress ? (
-        <Link className="button-link" href={`/work/${encodeURIComponent(now.ref)}/steps`}>
-          ทำต่อ
-        </Link>
-      ) : (
-        <form action={startWork.bind(null, now.ref)}>
-          <button type="submit">เริ่มงาน</button>
-        </form>
-      )}
+      <p className="no-print">
+        <Link href={`/work/${encodeURIComponent(now.ref)}/print`}>🖨️ พิมพ์ใบงาน</Link>
+      </p>
 
       {next.length > 0 && (
-        <details className="card">
-          <summary>ถัดไป ({next.length})</summary>
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>งานถัดไปของคุณ ({next.length})</h2>
           <ul className="next">
             {next.map((one) => (
               <li key={one.ref}>
-                <strong>{one.machine_id}</strong> · {bandFor(one).label}
+                <span className={`pill ${bandFor(one).tone}`}>{bandFor(one).label}</span>{" "}
+                <strong>{one.machine_id}</strong>
                 <br />
                 <span className="muted">{one.reason}</span>
               </li>
             ))}
           </ul>
-          <p className="muted">
-            ลำดับนี้ระบบจัดไว้แล้ว เลือกเองไม่ได้ — ปิดงานปัจจุบันแล้วงานถัดไปจะขึ้นมาเอง
-          </p>
-        </details>
+          <p className="muted">ระบบเรียงลำดับไว้แล้ว ปิดงานนี้แล้วงานถัดไปจะขึ้นมาเอง</p>
+        </section>
       )}
-    </>
+    </Shell>
   );
 }

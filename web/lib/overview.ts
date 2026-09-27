@@ -59,6 +59,7 @@ export type LineOverview = {
 
 export type SymptomGap = {
   symptom_code: string;
+  title: string | null;
   machine_model: string;
   findings: number;
   occurrences: number;
@@ -75,6 +76,7 @@ export type ModelQueue = {
 };
 
 export type FlaggedPlaybook = {
+  title: string | null;
   symptom_code: string;
   machine_model: string;
   revision: number;

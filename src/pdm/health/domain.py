@@ -45,6 +45,7 @@ from pdm.contracts import (
     WorkOrderStatus,
     WorkOutcome,
 )
+from pdm.contracts.wording import SEVERITY as SEVERITY_TH
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
@@ -53,10 +54,9 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid")
 # rather than left in a document, because the person it matters to is looking at
 # a number and not at an ADR (principle 5, ADR-076 section 5).
 AGE_AGAINST_ITS_CLASS_IS_ABSENT = (
-    "age against its class: this system holds no machine register - no "
-    "commissioning date, no per-class failure rate - so nothing here can say "
-    "whether this machine fails more often than its model does. It arrives with "
-    "the CMMS export (ADR-072, ADR-076)"
+    "อายุเครื่องเทียบกับรุ่นเดียวกัน: ระบบยังไม่มีทะเบียนเครื่องจักร (วันเริ่มใช้งาน "
+    "อัตราเสียของแต่ละรุ่น) จึงบอกไม่ได้ว่าเครื่องนี้เสียบ่อยกว่าเครื่องรุ่นเดียวกันหรือไม่ "
+    "ข้อมูลนี้จะมาพร้อมข้อมูลจากระบบใบสั่งงานของโรงงาน"
 )
 
 _DAYS = 86_400.0
@@ -346,44 +346,28 @@ def _history_reason(
     poor" would be the blended number of ADR-072 section 2 written out in words.
     """
     if rate is None:
-        head = f"No closed work orders for {machine_id} in the records handed over"
+        head = f"ยังไม่มีใบงานที่ปิดแล้วของ {machine_id} ในข้อมูลที่มี"
     elif failures == 0:
-        head = (
-            f"{machine_id} has not failed in {span_days:.0f} observed days "
-            f"({rate:.1f} failures per 100 days)"
-        )
+        head = f"{machine_id} ไม่เสียเลยตลอด {span_days:.0f} วันที่นับ ({rate:.1f} ครั้งต่อ 100 วัน)"
     else:
-        head = (
-            f"{machine_id} failed {failures} time{'s' if failures != 1 else ''} in "
-            f"{span_days:.0f} observed days - {rate:.1f} per 100 days"
-        )
+        head = f"{machine_id} เสีย {failures} ครั้งใน {span_days:.0f} วันที่นับ ({rate:.1f} ครั้งต่อ 100 วัน)"
         if since_last is not None:
-            head += f", the last {since_last:.0f} days ago"
+            head += f" ครั้งล่าสุดเมื่อ {since_last:.0f} วันก่อน"
 
     clauses = [head]
     if pm_overdue and worst_overdue is not None:
         clause = (
-            f"{pm_overdue} PM task{'s' if pm_overdue != 1 else ''} overdue, the worst by "
-            f"{worst_overdue:.0f} days - which is work to schedule rather than a reason to "
-            f"send somebody now"
+            f"งานบำรุงรักษาตามแผนเลยกำหนด {pm_overdue} งาน นานสุด {worst_overdue:.0f} วัน "
+            f"ควรจัดเข้าแผน ไม่ใช่เหตุให้ส่งคนไปทันที"
         )
         if unrecorded:
-            clause += (
-                f", and {unrecorded} of them {'has' if unrecorded == 1 else 'have'} no record "
-                f"of ever being done, so {'its' if unrecorded == 1 else 'their'} lateness is "
-                f"counted from the day the task was registered here"
-            )
+            clause += f" ในนี้ {unrecorded} งานไม่เคยมีบันทึกว่าทำ จึงนับวันเลยกำหนดตั้งแต่วันที่ลงทะเบียนเข้าระบบ"
         clauses.append(clause)
     if false_alarms:
         clauses.append(
-            f"{false_alarms} closed order{'s' if false_alarms != 1 else ''} found nothing "
-            f"wrong, which is evidence about a rule and not about this machine (ADR-073)"
+            f"ปิดงานแบบไม่พบปัญหา {false_alarms} ครั้ง แปลว่าเกณฑ์แจ้งเตือนอาจไวเกินไป ไม่ได้แปลว่าเครื่องมีปัญหา"
         )
-    clauses.append(
-        "Age against this machine's class is not part of this reading: nothing here holds a "
-        "machine register"
-    )
-    return ". ".join(clauses) + "."
+    return " · ".join(clauses)
 
 
 def _current_of(
@@ -399,7 +383,7 @@ def _current_of(
     ]
     if not standing:
         return CurrentContribution(
-            reason=f"Nothing is open against {machine_id} right now.",
+            reason=f"ตอนนี้ {machine_id} ไม่มีเรื่องค้าง",
         )
 
     acknowledged = [f for f in standing if f.status is FindingStatus.ACKNOWLEDGED]
@@ -411,21 +395,14 @@ def _current_of(
     hours = None if soonest is None else (soonest - now).total_seconds() / 3600.0
 
     clauses = [
-        f"{len(standing)} Finding{'s' if len(standing) != 1 else ''} open against "
-        f"{machine_id}, the most severe {worst.value}"
+        f"{machine_id} มีสัญญาณผิดปกติค้างอยู่ {len(standing)} เรื่อง หนักสุดระดับ{SEVERITY_TH[worst.value]}"
     ]
     if detected:
-        clauses.append(f"{len(detected)} already past a threshold")
+        clauses.append(f"เกินเกณฑ์แล้ว {len(detected)} เรื่อง")
     if predicted and soonest is not None and hours is not None:
-        clauses.append(
-            f"{len(predicted)} forecast, the soonest in about {hours:.0f} hours - the "
-            f"interval on that is on the Finding, and prediction is ADR-020's answer rather "
-            f"than this one's"
-        )
+        clauses.append(f"คาดว่าจะเกินเกณฑ์ {len(predicted)} เรื่อง เร็วสุดในอีกราว {hours:.0f} ชั่วโมง")
     if acknowledged:
-        clauses.append(
-            f"{len(acknowledged)} already acknowledged, which does not make the machine well"
-        )
+        clauses.append(f"รับทราบแล้ว {len(acknowledged)} เรื่อง แต่เครื่องยังไม่ได้รับการแก้")
     return CurrentContribution(
         open_findings=len(standing),
         acknowledged=len(acknowledged),
@@ -434,7 +411,7 @@ def _current_of(
         highest_severity=worst,
         soonest_eta=soonest,
         hours_to_soonest_eta=hours,
-        reason=". ".join(clauses) + ".",
+        reason=" · ".join(clauses),
     )
 
 

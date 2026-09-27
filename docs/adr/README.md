@@ -106,6 +106,7 @@ entries replace parts of earlier ones, and both are kept.
 | [091](0091-plant-data-arrives-as-csv.md) | Plant data arrives as CSV | 002, 078, 083, 086 |
 | [092](0092-the-owner-tries-it-first.md) | The owner tries it first, and the report says who tried it | 014 |
 | [093](0093-what-a-person-reads-is-thai-and-familiar.md) | **What a person reads is Thai, and shaped like what they already use** | 005 |
+| [094](0094-a-persons-minutes-are-real-minutes-in-a-demo.md) | A person's minutes are real minutes, even in a demo | 044 |
 
 ## The invariants these records cite
 

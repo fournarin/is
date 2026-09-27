@@ -1,3 +1,4 @@
+import { Shell } from "@/app/ui/shell";
 import Link from "next/link";
 
 import { CloseForm } from "@/app/work/[ref]/close/close-form";
@@ -19,13 +20,13 @@ export default async function ClosePage({
   params: Promise<{ ref: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireAccount();
+  const account = await requireAccount();
   const { ref } = await params;
   const { error } = await searchParams;
   const job = await ticket(decodeURIComponent(ref));
 
   return (
-    <>
+    <Shell account={account} current="/work">
       <div className="who">
         <span>
           <Link href={`/work/${encodeURIComponent(job.ref)}/steps`}>‹ {job.machine_id}</Link>
@@ -33,7 +34,7 @@ export default async function ClosePage({
         <span className="muted">{job.ref}</span>
       </div>
 
-      <h1>ปิดงาน</h1>
+      <h1>✓ ปิดงาน</h1>
       <p className="muted">{job.reason}</p>
 
       {/* The path with no JavaScript comes back here with the reason in the
@@ -50,8 +51,8 @@ export default async function ClosePage({
       {/* Never asked for, and saying so is the point: a technician who thinks
           the clock is a grade stops pressing start (ADR-058, ADR-006). */}
       <p className="muted">
-        ระบบไม่ถามว่าใช้เวลาไปเท่าไร — นับจากตอนกด &ldquo;เริ่มงาน&rdquo; และ &ldquo;ส่งเวร&rdquo; ให้เอง
+        ไม่ต้องกรอกเวลาที่ใช้ ระบบนับจากตอนกด &ldquo;รับงานและเริ่มทำ&rdquo; ให้เอง
       </p>
-    </>
+    </Shell>
   );
 }

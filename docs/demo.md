@@ -83,17 +83,17 @@ flag; a plant machine should not.
 
 | Sign in as | Password | Role | Offered |
 |---|---|---|---|
-| `tech-1` | `demo-technician` | Somchai, technician | งานของคุณ |
-| `eng-1` | `demo-engineer` | Pranee, engineer | คิวรีวิว playbook · ภาพรวมสายการผลิต |
-| `sup-1` | `demo-supervisor` | Anan, supervisor | คิวรีวิว playbook · ภาพรวมสายการผลิต |
-| `op-1` | `demo-operator` | Malee, operator | แจ้งงานเสีย |
+| `tech-1` | `demo-technician` | สมชาย, technician | งานของฉัน · แจ้งซ่อม |
+| `eng-1` | `demo-engineer` | ปราณี, engineer | อนุมัติขั้นตอน · ยังไม่มีขั้นตอน · สายการผลิต · ข้อเสนอปรับค่า |
+| `sup-1` | `demo-supervisor` | อนันต์, supervisor | กระดานงาน · สายการผลิต · แจ้งซ่อม |
+| `op-1` | `demo-operator` | มาลี, operator | แจ้งซ่อม |
 
 The web app is at **http://localhost:3000**, the API at
 **http://localhost:8000** (its `/docs` is the interactive one).
 
 ## The order to click in
 
-1. **Sign in as `op-1`** → **แจ้งงานเสีย** (`/report`). An operator is offered
+1. **Sign in as `op-1`** → **แจ้งซ่อม** (`/report`). An operator is offered
    exactly one screen and it is this one: pick a machine, say how bad it is, say
    what you saw. Send it and the answer is a ticket number and the sentence that
    a shift lead still releases it (ADR-071, ADR-077).
@@ -110,17 +110,16 @@ The web app is at **http://localhost:3000**, the API at
    back naming the ticket already open, with one button to say it is a different
    fault. That is what stops four people seeing one stopped line from producing
    four tickets.
-2. **Sign in as `eng-1`** → **ภาพรวมสายการผลิต** (`/overview`). The line drawn in
+2. **Sign in as `eng-1`** → tab **สายการผลิต** (`/overview`). The line drawn in
    station order with its buffers to scale, a marker per station, what the shift
-   can absorb, and - at the bottom - the symptoms the system has nothing to serve
-   (ADR-060, ADR-063). That last panel is the one to point at: a system that says
-   what it cannot answer is the argument for principle 5 in one screen.
+   can absorb, and machine health as two lists that are never blended (ADR-063,
+   ADR-072).
 3. **Still as `eng-1`**, ask for a draft and then approve it. This is the walk
    that makes ADR-003 something a person watches rather than a claim they are
    asked to accept.
 
-   On `/overview`, the panel from step 2 lists the symptoms nothing serves. Open
-   **ขอร่างจากคู่มือ** under one of them and type what to ask the manual - the
+   Tab **ยังไม่มีขั้นตอน** (`/gaps`) lists the symptoms nothing serves. Open
+   **ให้ระบบร่างขั้นตอนจากคู่มือ** under one of them and type what to ask the manual - the
    field is there because `SYM-014` retrieves nothing and "belt motor running
    above 85 degrees" retrieves the page (ADR-040). The button is an engineer's
    only: the worker behind it holds the one GPU (ADR-029).
@@ -134,7 +133,7 @@ The web app is at **http://localhost:3000**, the API at
    ("กระแสแกน 1 เกิน 12.5 แอมป์ ทำอย่างไร"). Keep the figure in the question: it
    is what the drafter uses to choose the page (ADR-089).
 
-   Then **คิวรีวิว playbook** (`/review`): the draft beside the page it was
+   Then tab **อนุมัติขั้นตอน** (`/review`): the draft beside the page it was
    drafted from, provenance per step, and approve / edit / send back (ADR-064).
    Approve it, and the next ticket for that symptom carries those steps with
    their page numbers instead of a fallback estimate - which is principle 2 in
@@ -148,22 +147,25 @@ The web app is at **http://localhost:3000**, the API at
    indexed the manuals - `seed_demo.py` queues them as it stores them, and the
    first pass takes a minute.
 
-   And ask once for something the manuals do not cover - "cycle time ค่อย ๆ
+   The same tab is the argument for principle 5 in one screen: a system that
+   lists what it cannot answer. And ask once for something the manuals do not cover - "cycle time ค่อย ๆ
    สูงขึ้นเกิน 62 วินาที" on the M-710iC. The queue files it as **not found**
    rather than a draft, which is principle 5 on screen: a gap in the manuals is
    something a person has to see, not a guess to reject.
-4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
-   **งานที่รอคุณยืนยัน**. The report from step 1 is in the queue behind this
+4. **Sign in as `sup-1`**: the shift lead lands on **กระดานงาน** (`/board`), a
+   whiteboard of three columns - **รอคุณยืนยัน**, **ระบบกันไว้ก่อน** and
+   **ช่างกำลังทำ** (ADR-093). The report from step 1 is in the queue behind this
    panel: the job the operator raised reaches a technician only once somebody
    here has released it, which is the whole of the sentence above. Every placement a round decides waits here for the
    shift lead, which is what the advisor asked for on 2026-08-23 - a person
    presses first, and automatic approval is a switch to be thrown later on
    evidence (ADR-071). Confirm one and it becomes the technician's; reject it
    with a reason and it is back in the queue for the next round.
-5. **Sign in as `tech-1`** → **งานของคุณ** (`/work`). One job, why it exists, why
+5. **Sign in as `tech-1`**: the technician lands on **งานของฉัน** (`/work`). One job, why it exists, why
    it is ranked where it is, its steps, and closing it in two taps (ADR-061,
    ADR-062). Open this one on a phone if there is one in the room; it is built
-   for a screen at a machine, without JavaScript.
+   for a screen at a machine, without JavaScript. **🖨️ พิมพ์ใบงาน** prints the
+   same ticket on one page.
 
 ## What the demo cannot show yet, and why
 

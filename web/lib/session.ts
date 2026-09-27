@@ -53,5 +53,5 @@ export const ROLE_NAMES: Readonly<Record<Role, string>> = {
   technician: "ช่าง",
   engineer: "วิศวกร",
   supervisor: "หัวหน้ากะ",
-  operator: "ผู้ดูแลเอกสาร",
+  operator: "พนักงานประจำเครื่อง",
 };

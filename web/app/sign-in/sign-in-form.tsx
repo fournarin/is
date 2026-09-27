@@ -33,7 +33,7 @@ export function SignInForm() {
         <input name="password" type="password" autoComplete="current-password" required />
       </label>
 
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="big" disabled={pending}>
         {pending ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
       </button>
     </form>

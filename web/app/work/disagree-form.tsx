@@ -24,15 +24,15 @@ export function DisagreeForm({ workOrder, timezone }: { workOrder: string; timez
   if (state.recordedAt !== null) {
     return (
       <p className="recorded">
-        บันทึกไว้แล้วเมื่อ {plantTime(state.recordedAt, timezone)} — ลำดับงานไม่เปลี่ยน
-        ซึ่งตั้งใจให้เป็นอย่างนั้น สิ่งที่มีค่าคือบันทึกนี้
+        ส่งความเห็นแล้วเมื่อ {plantTime(state.recordedAt, timezone)} น. หัวหน้ากะจะเห็น
+        ระหว่างนี้ลำดับงานยังเหมือนเดิม
       </p>
     );
   }
 
   return (
     <details>
-      <summary>ไม่เห็นด้วยกับลำดับนี้</summary>
+      <summary>ไม่เห็นด้วยว่าควรทำงานนี้ก่อน?</summary>
       <form action={action}>
         <input type="hidden" name="ref" value={workOrder} />
         {state.error !== null && (
@@ -45,7 +45,7 @@ export function DisagreeForm({ workOrder, timezone }: { workOrder: string; timez
           <textarea name="reason" rows={3} required placeholder="เช่น MC-004 หยุดสายจริง งานนี้รอได้" />
         </label>
         <button type="submit" className="quiet" disabled={pending}>
-          {pending ? "กำลังบันทึก..." : "บันทึกความเห็น"}
+          {pending ? "กำลังบันทึก..." : "ส่งความเห็นให้หัวหน้ากะ"}
         </button>
       </form>
     </details>

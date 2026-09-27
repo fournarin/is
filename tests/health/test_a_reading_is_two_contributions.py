@@ -150,7 +150,7 @@ class TestWhatTheHistoryCounts:
         history = readings[0].history
         assert history.false_alarms == 1
         assert history.failures == 0
-        assert "ADR-073" in history.reason
+        assert "เกณฑ์แจ้งเตือนอาจไวเกินไป" in history.reason
 
     def test_the_rate_is_over_one_span_shared_by_every_machine(self) -> None:
         """A machine whose first record is late did not fail earlier (ADR-076 §4)."""
@@ -171,7 +171,7 @@ class TestWhatTheHistoryCounts:
         history = readings[0].history
         assert history.failures_per_100_days is None
         assert history.observed_from is None
-        assert "No closed work orders" in history.reason
+        assert "ยังไม่มีใบงานที่ปิดแล้ว" in history.reason
 
     def test_the_reason_names_the_counts_it_came_from(self) -> None:
         readings = assess(
@@ -181,9 +181,9 @@ class TestWhatTheHistoryCounts:
             observed_from=YEAR_AGO,
         )
         reason = readings[0].history.reason
-        assert "failed 2 times" in reason
-        assert "365 observed days" in reason
-        assert "10 days ago" in reason
+        assert "เสีย 2 ครั้ง" in reason
+        assert "365 วันที่นับ" in reason
+        assert "10 วันก่อน" in reason
 
     def test_a_window_that_starts_after_it_is_read_at_is_refused(self) -> None:
         with pytest.raises(ValueError, match="cannot start after"):
@@ -196,9 +196,12 @@ class TestWhatCannotBeComputedSaysSo:
         assert AGE_AGAINST_ITS_CLASS_IS_ABSENT in readings[0].history.absent
 
     def test_the_supervisor_reads_the_absence_as_well_as_the_figures(self) -> None:
-        """Principle 5 is only kept if it reaches the sentence somebody reads."""
+        """Principle 5 is only kept if it reaches the screen somebody reads.
+
+        The overview prints `absent` once beside the figures (ADR-093), rather
+        than repeating the caveat inside every machine's sentence."""
         readings = assess((MC,), repairs=(repair(days_ago=3),), now=NOW)
-        assert "machine register" in readings[0].history.reason
+        assert AGE_AGAINST_ITS_CLASS_IS_ABSENT in readings[0].history.absent
 
 
 class TestPMIsCountedAndNotRankedOn:
@@ -222,7 +225,7 @@ class TestPMIsCountedAndNotRankedOn:
         history = assess((MC,), pm_tasks=tasks, now=NOW)[0].history
         assert history.pm_overdue == 1
         assert history.pm_overdue_days == pytest.approx(40.0)
-        assert "work to schedule" in history.reason
+        assert "ควรจัดเข้าแผน" in history.reason
 
     def test_a_task_nobody_has_recorded_is_counted_as_dated_from_its_registration(
         self,
@@ -245,8 +248,8 @@ class TestPMIsCountedAndNotRankedOn:
         history = assess((MC,), pm_tasks=tasks, now=NOW)[0].history
 
         assert history.pm_overdue == 1
-        assert "no record of ever being done" in history.reason
-        assert "counted from the day the task was registered" in history.reason
+        assert "ไม่เคยมีบันทึกว่าทำ" in history.reason
+        assert "นับวันเลยกำหนดตั้งแต่วันที่ลงทะเบียน" in history.reason
 
     def test_a_task_with_a_history_is_not_described_that_way(self) -> None:
         tasks = (
@@ -263,7 +266,7 @@ class TestPMIsCountedAndNotRankedOn:
         history = assess((MC,), pm_tasks=tasks, now=NOW)[0].history
 
         assert history.pm_overdue == 1
-        assert "no record of ever being done" not in history.reason
+        assert "ไม่เคยมีบันทึกว่าทำ" not in history.reason
 
     def test_another_machines_task_is_not_this_machines_backlog(self) -> None:
         tasks = (
@@ -283,7 +286,7 @@ class TestWhatTheMachineIsSayingNow:
         current = assess((MC,), now=NOW)[0].now
         assert current.open_findings == 0
         assert current.highest_severity is None
-        assert "Nothing is open" in current.reason
+        assert "ไม่มีเรื่องค้าง" in current.reason
 
     def test_acknowledged_findings_still_stand(self) -> None:
         """Somebody having seen it does not make the machine well."""
@@ -332,7 +335,7 @@ class TestWhatTheMachineIsSayingNow:
         assert current.detected == 1
         assert current.soonest_eta == NOW + timedelta(hours=4)
         assert current.hours_to_soonest_eta == pytest.approx(4.0)
-        assert "ADR-020" in current.reason
+        assert "คาดว่าจะเกินเกณฑ์" in current.reason
 
     def test_another_machines_finding_is_not_this_machines_news(self) -> None:
         current = assess((MC,), findings=(finding(machine=OTHER),), now=NOW)[0].now

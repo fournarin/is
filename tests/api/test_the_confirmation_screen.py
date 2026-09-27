@@ -307,3 +307,34 @@ class TestTheTechniciansOwnQueue:
         _signed_in(client, Role.ENGINEER)
 
         assert client.get("/work-orders/mine").json() == []
+
+
+class TestTheBoard:
+    """ADR-093: the shift lead's board names people and shows what they are on."""
+
+    def test_a_proposal_names_who_it_goes_to(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        _signed_in(client, Role.SUPERVISOR)
+
+        (waiting,) = client.get("/dispatch/proposals").json()
+
+        assert waiting["assignee_names"] == ["Somchai"]
+
+    def test_confirmed_work_is_on_the_board_until_it_closes(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        _signed_in(client, Role.SUPERVISOR)
+        assert client.get("/work-orders/active").json() == []
+
+        client.post(f"/dispatch/proposals/{world['ref']}/confirm")
+
+        (active,) = client.get("/work-orders/active").json()
+        assert active["ref"] == world["ref"]
+        assert active["status"] == "assigned"
+        assert active["assignee_names"] == ["Somchai"]
+
+    def test_a_technician_is_not_shown_the_floor(self, client: TestClient) -> None:
+        _signed_in(client, Role.TECHNICIAN)
+
+        assert client.get("/work-orders/active").status_code == 403

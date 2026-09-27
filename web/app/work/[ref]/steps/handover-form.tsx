@@ -21,7 +21,7 @@ export function HandoverForm({ workOrder }: { workOrder: string }) {
 
   return (
     <details className="card">
-      <summary>ส่งเวร</summary>
+      <summary>ทำไม่เสร็จ? ส่งต่อให้คนถัดไป</summary>
       <form action={action}>
         <input type="hidden" name="ref" value={workOrder} />
         {state.error !== null && (
@@ -39,7 +39,7 @@ export function HandoverForm({ workOrder }: { workOrder: string }) {
           />
         </label>
         <button type="submit" disabled={pending}>
-          {pending ? "กำลังส่งเวร..." : "ส่งเวรพร้อมโน้ตนี้"}
+          {pending ? "กำลังส่งเวร..." : "ส่งต่องานพร้อมโน้ตนี้"}
         </button>
       </form>
     </details>

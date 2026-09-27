@@ -124,8 +124,8 @@ def seed() -> None:
             "playbook, playbook_proposal, access_log, session, account CASCADE"
         )
         for user, name, role in [
-            (SUPERVISOR, "Anan (supervisor)", Role.SUPERVISOR),
-            (TECHNICIAN, "Somchai (technician)", Role.TECHNICIAN),
+            (SUPERVISOR, "อนันต์", Role.SUPERVISOR),
+            (TECHNICIAN, "สมชาย", Role.TECHNICIAN),
         ]:
             auth.create_account(
                 conn, user=user, display_name=name, role=role, password=PASSWORDS[user]
@@ -335,11 +335,14 @@ def main() -> None:
     expect(f"{round(band['load_ratio'] * 100)}%" in page, "the load is the figure the round gave")
     expect(band["summary"] in page, "and the gate's own sentence is quoted, not paraphrased")
 
-    print("\n4. held work is named, not counted")
+    print("\n4. held work is named on the shift lead's board, not counted")
+    board = readable(get("/board"))
     held = json.loads(get("/dispatch/round", where=API))["held"]
     expect(len(held) > 0, "the heavy shift is holding something back")
+    expect("ระบบกันไว้ก่อน" in board, "the board has a column for it (ADR-093)")
     for one in held:
-        expect(one["ref"] in page, f"{one['ref']} is named on the screen (ADR-011)")
+        why = one["why"]
+        expect(why in board, f"why {one['ref']} is held is on the board, as the gate wrote it")
 
     print("\n5. releasing it without a reason is impossible from here")
     first = held[0]["ref"]
@@ -357,7 +360,7 @@ def main() -> None:
     )
     expect(f"ปล่อย {first} แล้ว" in readable(released), "with a reason the screen names what it did")
     expect(
-        "รอบถัดไปจะจัดคนให้" in readable(released),
+        "รอบถัดไปจะจัดช่างให้" in readable(released),
         "and says the next round places it, rather than pretending the queue moved",
     )
     expect(
@@ -365,15 +368,14 @@ def main() -> None:
         "and the override is on the record, once (ADR-059)",
     )
 
-    print("\n6. what the system cannot answer is on the same screen")
+    print("\n6. what the system cannot answer has its own screen (ADR-093)")
     unanswered = json.loads(get("/overview/gaps", where=API))
-    expect("ที่ระบบยังตอบไม่ได้" in page, "the section exists at all")
-    expect(
-        f"({unanswered['no_playbook']['count']})" in page,
-        "with the count of symptoms that have nothing to serve",
-    )
+    gaps_page = readable(get("/gaps"))
+    expect("อาการที่ยังไม่มีขั้นตอนซ่อม" in gaps_page, "the screen exists at all")
     for row in unanswered["no_playbook"]["rows"]:
-        expect(row["symptom_code"] in page, f"{row['symptom_code']} is named, not just counted")
+        expect(
+            row["symptom_code"] in gaps_page, f"{row['symptom_code']} is named, not just counted"
+        )
 
     print("\n7. machine health: two lists, and what the screen cannot say")
     health = json.loads(get("/overview/health", where=API))

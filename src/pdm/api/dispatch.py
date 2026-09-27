@@ -26,6 +26,7 @@ places anybody on anything; that is still the round's job, in worker-runtime.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
@@ -36,8 +37,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pdm.api.deps import Confirming, Db, Plant, Rounds, Time, requires
 from pdm.contracts import (
     FindingKind,
+    MachineId,
     Role,
     Severity,
+    UserId,
     WorkOrder,
     WorkOrderOrigin,
     WorkOrderRef,
@@ -49,6 +52,7 @@ from pdm.dispatch.agreement import AgreementReport, agreement
 from pdm.dispatch.overrides import Override, OverrideKind
 from pdm.dispatch.proposals import Proposal, ProposalState
 from pdm.dispatch.service import AlreadyAnswered, NoProposal
+from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.config import Config
 
@@ -195,6 +199,10 @@ class TicketView(BaseModel):
     estimated_minutes: int
     estimate_is_fallback: bool
     required_skill: str | None = None
+    # The skill and the station as the plant names them, for the screen to
+    # print as they are (ADR-093). Labels, not sentences.
+    required_skill_name: str | None = None
+    station: str | None = None
     required_technicians: int
     assignees: tuple[str, ...] = ()
     playbook_warning: str | None = None
@@ -238,6 +246,8 @@ class ProposalView(BaseModel):
     ref: str
     proposed_at: datetime
     assignees: tuple[str, ...]
+    # The same people by name, for the board (ADR-093).
+    assignee_names: tuple[str, ...] = ()
     priority_score: float
     priority_reason: str
     band: str | None = None
@@ -385,15 +395,67 @@ def my_work(
     ]
 
 
+class Active(BaseModel):
+    """A job somebody is on, for the shift lead's board (ADR-093)."""
+
+    ref: str
+    machine_id: str
+    status: WorkOrderStatus
+    assignees: tuple[str, ...] = ()
+    assignee_names: tuple[str, ...] = ()
+    reason: str
+
+
+_ON_SOMEBODY = frozenset(
+    {WorkOrderStatus.ASSIGNED, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.HANDED_OVER}
+)
+
+
+@router.get("/work-orders/active", response_model=list[Active])
+def active_work(
+    conn: Db,
+    account: Annotated[
+        Account, Depends(requires(*_MAY_READ_THE_RECORD, action="read_active_work"))
+    ],
+) -> list[Active]:
+    """Work released to a person and not yet closed, oldest first.
+
+    The third column of the board: what the floor is doing now. Registered
+    before `/work-orders/{work_order_ref}` for the same reason `/mine` is.
+    """
+    return [
+        Active(
+            ref=ref,
+            machine_id=str(order.machine_id),
+            status=order.status,
+            assignees=tuple(str(who.user) for who in order.assignees),
+            assignee_names=_names(conn, (who.user for who in order.assignees)),
+            reason=order.reason,
+        )
+        for ref, order, _ in work.open_orders(conn)
+        if order.status in _ON_SOMEBODY
+    ]
+
+
 def _expires_at(proposal: Proposal, config: Config) -> datetime:
     return proposal.proposed_at + timedelta(minutes=config.policy.dispatch.proposal_expires_minutes)
 
 
-def _proposed(proposal: Proposal, config: Config) -> ProposalView:
+def _names(conn: Connection[Any], users: Iterable[UserId]) -> tuple[str, ...]:
+    """Display names for user ids; an id with no account shows as itself."""
+    names = []
+    for user in users:
+        found = auth_repo.account(conn, user)
+        names.append(found.display_name if found is not None else str(user))
+    return tuple(names)
+
+
+def _proposed(proposal: Proposal, config: Config, conn: Connection[Any]) -> ProposalView:
     return ProposalView(
         ref=proposal.work_order_ref,
         proposed_at=proposal.proposed_at,
         assignees=tuple(str(one.user) for one in proposal.assignees),
+        assignee_names=_names(conn, (one.user for one in proposal.assignees)),
         priority_score=proposal.priority_score,
         priority_reason=proposal.priority_reason,
         band=proposal.band.value if proposal.band is not None else None,
@@ -420,7 +482,7 @@ def proposals(
     `decide()` again would answer a different question - what a round would do
     now, with those orders already out of the queue.
     """
-    return [_proposed(one, config) for one in dispatch_repo.pending_proposals(conn)]
+    return [_proposed(one, config, conn) for one in dispatch_repo.pending_proposals(conn)]
 
 
 @router.get("/dispatch/confirmations", response_model=AgreementReport)
@@ -547,10 +609,19 @@ def _recurrence(conn: Connection[Any], order: WorkOrder) -> Recurrence | None:
     )
 
 
+def _station(config: Config, machine_id: MachineId) -> str | None:
+    """ "สถานี 3", or None for a machine the current layout does not place (ADR-048)."""
+    try:
+        return f"สถานี {config.station_of(machine_id).seq}"
+    except KeyError:
+        return None
+
+
 @router.get("/work-orders/{work_order_ref}", response_model=TicketView)
 def ticket(
     work_order_ref: str,
     conn: Db,
+    config: Plant,
     account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_work_order"))],
 ) -> TicketView:
     """One ticket, with both of its reasons.
@@ -576,6 +647,10 @@ def ticket(
         estimated_minutes=order.estimated_minutes,
         estimate_is_fallback=order.estimate_is_fallback,
         required_skill=str(order.required_skill) if order.required_skill else None,
+        required_skill_name=(
+            config.wording().skill(order.required_skill) if order.required_skill else None
+        ),
+        station=_station(config, order.machine_id),
         required_technicians=order.required_technicians,
         assignees=tuple(str(who.user) for who in order.assignees),
         playbook_warning=order.playbook_warning,
