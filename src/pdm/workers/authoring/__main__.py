@@ -30,6 +30,7 @@ from pdm.platform.documents import DocumentLibrary
 from pdm.platform.jobs import ClassTiming, JobClass, JobKind, JobQueue
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 from pdm.retrieval.embedding import OnnxEmbedder
+from pdm.retrieval.rerank import OnnxReranker
 from pdm.retrieval.service import HybridSearch, profiles_from
 from pdm.retrieval.vectors import qdrant_from_env
 from pdm.workers.authoring.handlers import draft_handler, ingest_handler
@@ -71,6 +72,9 @@ def main() -> None:
         ExtractiveDrafter(),
         profile=authoring_profile,
         skills=config.skills,
+        # Scores each page against the question, so a symptom the manuals do
+        # not cover is "not found" rather than the nearest page (ADR-097).
+        reranker=OnnxReranker(),
     )
 
     queue = JobQueue(

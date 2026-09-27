@@ -53,6 +53,13 @@ from pdm.retrieval.embedding import DEFAULT_MODEL, OnnxEmbedder; \
 print('baking', DEFAULT_MODEL); \
 print('dimensions', OnnxEmbedder().dimensions)"
 
+# The reranker that lets drafting say "not found" (ADR-097), shipped the same
+# way and for the same reason. 571 MB, int8. Only worker-authoring loads it.
+RUN python -c "\
+from pdm.retrieval.rerank import OnnxReranker; \
+reranker = OnnxReranker(); \
+print('baking', reranker.model_name, reranker.relevance('probe', ['probe']))"
+
 # The migrations ship inside the image, and `config/` deliberately does not.
 # They are two different kinds of thing: a migration is code, and the host that
 # runs `alembic upgrade head` must not need a checkout of this repository to do

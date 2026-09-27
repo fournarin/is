@@ -79,6 +79,7 @@ reproduced from a clean checkout. All of it runs on generated data.
 | Four scheduling policies over 1,440 simulated runs | [`docs/results/README.md`](docs/results/README.md) | CP-SAT loses the least production in all eighteen cells of the sweep |
 | Why that table came out as it did | [`docs/results/diagnosis.md`](docs/results/diagnosis.md) | ranking work well does not by itself save production here, and whether it would depends on a parameter nobody has measured |
 | What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | the outcome the answer key implies for all five symptoms, in Thai and English; a symptom the manuals never mention comes back "not found" |
+| Drafting on manuals it was not tuned on | [`docs/results/rag-evaluation.md`](docs/results/rag-evaluation.md) | test split: 12/12 English, 10/12 Thai, every never-mentioned symptom "not found", no unsafe draft |
 | Retrieval quality | [`docs/retrieval-baseline.md`](docs/retrieval-baseline.md) | the answer key's page comes back in the top three every time, in Thai and in English alike |
 | Machine health ranking | [`docs/results/health.md`](docs/results/health.md) | the history half ranks the degraded machines first in 39 of 40 draws |
 | Shift lead against scheduler agreement | [`docs/results/confirmations.md`](docs/results/confirmations.md) | **no figures yet** - needs a trial with a person |
@@ -98,11 +99,14 @@ Better said here than found later.
   [ADR-091](docs/adr/0091-plant-data-arrives-as-csv.md)), which is the shortest
   path from the plant to this system. `LiveSource` (OPC UA) does not exist, and
   `SIGNAL_SOURCE=live` refuses at boot and says so.
-- **The drafter is wrong about two of the three repairable symptoms in the
-  corpus.** It is handed an overview page that repeats the question's words
-  rather than the procedure a page later.
-  [`docs/drafting-baseline.md`](docs/drafting-baseline.md) has the table and
-  names what would fix it: a cross-encoder reranker, which is not built.
+- **Drafting is measured on synthetic manuals only.** On an evaluation set
+  written for the purpose and never tuned on, it drafts the right procedure for
+  12 of 12 English and 10 of 12 Thai questions, says "not found" for every
+  symptom the manuals never mention, and produced no unsafe draft
+  ([results](docs/results/rag-evaluation.md), ADR-096, ADR-097). A procedure
+  that runs over two pages is drafted from its first page only. Plant manuals
+  will need their own small answer key before these figures mean anything
+  there.
 - **Playbook coverage is bounded by the corpus, not by the pipeline.** The
   manuals are synthetic and carry their own answer key
   ([ADR-033](docs/adr/0033-a-synthetic-manual-corpus-that-carries-its-own-answer-key.md)),

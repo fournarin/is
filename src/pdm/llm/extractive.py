@@ -166,6 +166,12 @@ def _sentences(text: str) -> list[str]:
     return sentences
 
 
+# Provenance: ADR-097, from the evaluation set's dev split, where the answer
+# page and the specification table beside it scored 0.99 and 0.87, and the
+# nearest irrelevant page under a third of the best.
+_STRONG_FRACTION = 0.5
+
+
 def _best_page(request: DraftRequest) -> Evidence | None:
     """The page to draft from, or None when no page answers the question.
 
@@ -200,8 +206,21 @@ def _best_page(request: DraftRequest) -> Evidence | None:
         evidence for evidence in request.evidence if evidence.machine_model == request.machine_model
     ]
     asked = figures(request.question)
-    if not asked:
+    if not asked and not request.relevance_scored:
         return max(ours, key=lambda evidence: (evidence.score, -evidence.page), default=None)
+    if not asked:
+        # Among the pages scored at least half as relevant as the best, one
+        # that prescribes steps comes first (ADR-097). A specification table
+        # repeats every figure of a procedure and scores nearly as high as the
+        # procedure itself; it tells a technician nothing to do.
+        best = max((evidence.score for evidence in ours), default=None)
+        if best is None:
+            return None
+        strong = [evidence for evidence in ours if evidence.score >= best * _STRONG_FRACTION]
+        return max(
+            strong,
+            key=lambda evidence: (bool(_procedure(evidence.text)), evidence.score, -evidence.page),
+        )
     stating = [evidence for evidence in ours if asked <= figures(evidence.text)]
     return max(
         stating,

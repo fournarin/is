@@ -162,6 +162,11 @@ retrieval:
     min_score: 0.20
     candidates: 40
     abstain: false
+    # The reranker's relevance a page needs to be drafted from at all (ADR-097).
+    # Chosen on the evaluation set's dev split only: the absent symptoms'
+    # best page scored 0.000 and every answered symptom but one scored 0.62 or
+    # more. Below it the draft is "not found", and an engineer is asked.
+    min_relevance: 0.10
 
   # Precision leads here, because nothing stands between the system and the
   # technician. The review already happened, at approval time.

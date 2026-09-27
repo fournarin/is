@@ -30,3 +30,25 @@ What it says:
 - **Thai questions without figures fare worst** (EV-101, EV-122), because the
   drafter chooses a page by the question's figures and the word half of
   retrieval matches Thai poorly.
+
+## With the reranker - 27 September 2026
+
+`bge-reranker-v2-m3` scoring each page, `min_relevance` 0.10 chosen on dev
+([ADR-097](../adr/0097-a-reranker-decides-whether-the-manuals-answer-at-all.md)).
+`scripts/measure_rag.py evalset --rerank`.
+
+| split | lang | outcome as the key implies | unsafe drafts |
+|---|---|---:|---:|
+| dev | en | 8/9 | 0 |
+| dev | th | 8/9 | 0 |
+| test | en | **12/12** | **0** |
+| test | th | **10/12** | **0** |
+
+- **Every question about a symptom the manuals never mention is now "not
+  found"**, in both languages and both splits.
+- **No unsafe draft anywhere.** Every remaining miss errs towards an engineer:
+  a "not found" (EV-101 and EV-105 in Thai, EV-134 in Thai), or fault-finding
+  text from the overview where the key wanted the procedure (EV-101 in English).
+- The two-page procedure is drafted from its first page in both languages
+  (EV-104). The continuation's steps 5-7 are not yet joined on.
+- The original corpus stays at 10/10 with the reranker.

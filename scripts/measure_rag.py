@@ -3,7 +3,7 @@
 Run by hand, never by CI: it needs the embedding model.
 
     DATABASE_URL=postgresql://.../pdm_test FASTEMBED_CACHE_PATH=... \\
-        uv run python scripts/measure_rag.py [corpus|evalset]
+        uv run python scripts/measure_rag.py [corpus|evalset] [--rerank]
 
 `evalset` (the default) is the corpus written for measurement (ADR-096); its
 `test` entries have never been tuned on. `corpus` is the original five-symptom
@@ -45,6 +45,7 @@ from pdm.platform.config import load_config
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore
 from pdm.retrieval.embedding import OnnxEmbedder
+from pdm.retrieval.rerank import OnnxReranker
 from pdm.retrieval.service import HybridSearch, profiles_from
 from pdm.retrieval.vectors import InMemoryVectorIndex
 
@@ -108,7 +109,9 @@ def _verdict(entry: Entry, result: DraftResult, own: str) -> tuple[bool, bool]:
 
 
 def main() -> int:
-    name = sys.argv[1] if len(sys.argv) > 1 else "evalset"
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    name = args[0] if args else "evalset"
+    rerank = "--rerank" in sys.argv
     here = CORPORA[name]
     corpus = load(here / "manifest.yaml")
     url = os.environ.get("DATABASE_URL", "")
@@ -120,9 +123,14 @@ def main() -> int:
     config = load_config(Path("config"))
     authoring, _ = profiles_from(config.policy.retrieval)
     hybrid = HybridSearch(embedder, InMemoryVectorIndex())
-    drafting = Drafting(hybrid, ExtractiveDrafter(), profile=authoring, skills=config.skills)
+    reranker = OnnxReranker() if rerank else None
+    drafting = Drafting(
+        hybrid, ExtractiveDrafter(), profile=authoring, skills=config.skills, reranker=reranker
+    )
     print(
         f"measured {datetime.now(UTC).date().isoformat()} on {name} · model {embedder.model_name}"
+        f" · reranker {reranker.model_name if reranker else 'none'}"
+        f" · min_relevance {authoring.min_relevance if reranker else '-'}"
     )
 
     conn = connect(url)

@@ -28,6 +28,7 @@ from pdm.playbooks import repo as playbooks
 from pdm.playbooks.domain import Proposal, ProposalOrigin
 from pdm.retrieval import repo as index
 from pdm.retrieval.domain import IndexedPage, PageOutcome
+from pdm.retrieval.rerank import Reranker
 from pdm.retrieval.service import HybridSearch, Profile, Retrieved
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
@@ -194,10 +195,15 @@ class Drafting:
         *,
         profile: Profile,
         skills: Iterable[str],
+        reranker: Reranker | None = None,
     ) -> None:
         self.hybrid = hybrid
         self.drafter = drafter
         self.profile = profile
+        # Scores each candidate page against the question (ADR-097). Without
+        # one, a page's score is the fused rank score, which cannot say "none of
+        # these answers it".
+        self.reranker = reranker
         # The vocabulary from plant.yaml. Held rather than read here because
         # `service.py` must not reach for configuration on its own: the caller
         # loaded it at boot, and a second reader would be a second answer to
@@ -222,12 +228,14 @@ class Drafting:
         """
         hits = self.hybrid.search(conn, question, profile=self.profile)
         ours, theirs = self._evidence(conn, hits, machine_model)
+        ours = self._relevant(question, ours)
 
         request = DraftRequest(
             symptom_code=symptom_code,
             machine_model=machine_model,
             question=question,
             evidence=ours,
+            relevance_scored=self.reranker is not None,
         )
         return assemble(
             request,
@@ -321,6 +329,26 @@ class Drafting:
             tuple(page for page in evidence if page.machine_model == machine_model),
             tuple(page for page in evidence if page.machine_model != machine_model),
         )
+
+    def _relevant(self, question: str, pages: tuple[Evidence, ...]) -> tuple[Evidence, ...]:
+        """The pages that answer the question, scored by how well (ADR-097).
+
+        Each page's score becomes the reranker's relevance, and a page below the
+        profile's `min_relevance` is dropped. When none is left, the drafter is
+        handed no evidence and the outcome is "not found": the manuals do not
+        cover this, and an engineer is asked rather than shown the nearest page.
+        """
+        if self.reranker is None or not pages:
+            return pages
+        scores = self.reranker.relevance(question, [page.text for page in pages])
+        floor = self.profile.min_relevance or 0.0
+        kept = [
+            page.model_copy(update={"score": round(score, 4)})
+            for page, score in zip(pages, scores, strict=True)
+            if score >= floor
+        ]
+        kept.sort(key=lambda page: (-page.score, page.page))
+        return tuple(kept)
 
     def _page_text(
         self, conn: Connection[Any], pages: list[tuple[DocumentId, int]]

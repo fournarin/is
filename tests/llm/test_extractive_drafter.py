@@ -272,3 +272,33 @@ class TestThePageIsChosenByWhatTheQuestionStates:
         )
 
         assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 3)}
+
+
+class TestARelevanceScoredRequest:
+    """ADR-097: when scores are reranker relevances, a procedure page scored
+    nearly as high as the best comes before a page that prescribes nothing."""
+
+    def test_the_procedure_beats_the_overview_it_nearly_ties(self) -> None:
+        overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=0.99)
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.87)
+
+        proposal = ExtractiveDrafter().propose(
+            _request(overview, procedure, question="the belt motor is overheating").model_copy(
+                update={"relevance_scored": True}
+            )
+        )
+
+        assert proposal.kind is ProposalKind.REPAIR
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 4)}
+
+    def test_a_weakly_relevant_procedure_does_not_beat_a_strong_answer(self) -> None:
+        overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=0.99)
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.2)
+
+        proposal = ExtractiveDrafter().propose(
+            _request(overview, procedure, question="the belt motor is overheating").model_copy(
+                update={"relevance_scored": True}
+            )
+        )
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 3)}
