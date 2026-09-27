@@ -11,6 +11,14 @@ reject on the demo world produces exactly the rows the confirmation record reads
 and a technician opening one job on a phone answers the question ADR-014 was
 written about. Two people, forty minutes, one laptop.
 
+## The owner's run comes first
+
+[ADR-092](adr/0092-the-owner-tries-it-first.md): the owner runs this protocol
+before any technician does, playing both roles, and without anybody coaching
+them. Findings go in [`results/owner-trial.md`](results/owner-trial.md). This is
+a usability pass by the person who built the system. It does not answer the
+first question below, and the report has to say that.
+
 ## Before anybody arrives
 
 Written down here rather than decided afterwards, because a criterion chosen

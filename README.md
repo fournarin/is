@@ -143,10 +143,12 @@ Better said here than found later.
   ([ADR-086](docs/adr/0086-what-this-term-does-not-do.md)).
 - **Backup and restore are documented but have never been run.** See the note in
   [docs/install.md](docs/install.md).
-- **Nobody outside this project has used the system.** Reserving time for a
-  technician to try it is
-  [ADR-014](docs/adr/0014-report-and-technician-trial-are-reserved-unconditionally.md),
-  and it has not happened yet.
+- **Nobody outside this project has used the system.** A technician trial is
+  reserved by
+  [ADR-014](docs/adr/0014-report-and-technician-trial-are-reserved-unconditionally.md).
+  The first run is by the owner, a usability pass by the person who built it
+  ([ADR-092](docs/adr/0092-the-owner-tries-it-first.md),
+  [results](docs/results/owner-trial.md)).
 
 ## Where to read next
 
