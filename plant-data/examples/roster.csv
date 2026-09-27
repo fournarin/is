@@ -1,0 +1,4 @@
+date,shift_id,user_id,available_minutes
+2026-10-01,morning,tech-a01,420
+2026-10-01,morning,tech-a02,420
+2026-10-01,afternoon,tech-a03,360

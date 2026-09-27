@@ -139,6 +139,10 @@ services:
       CMMS_BASE_URL: ${CMMS_BASE_URL:-}
       CMMS_TOKEN: ${CMMS_TOKEN:-}
       SIGNAL_SEED: ${SIGNAL_SEED:-0}
+      # With SIGNAL_SOURCE=replay: a CSV of plant readings, as the container
+      # sees it. `plant-data/` in the checkout is mounted below, so a file there
+      # is `/app/plant-data/<name>.csv` here (ADR-091).
+      SIGNAL_REPLAY_FILE: ${SIGNAL_REPLAY_FILE:-}
     env_file:
       - path: .env
         required: false
@@ -148,6 +152,7 @@ services:
     volumes:
       - ./config:/app/config:ro
       - storage:/app/storage
+      - ./plant-data:/app/plant-data:ro
     networks: [app]                                 # deliberately not [llm]
     restart: unless-stopped
 

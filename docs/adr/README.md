@@ -100,6 +100,7 @@ entries replace parts of earlier ones, and both are kept.
 | [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
 | [088](0088-an-invariant-is-believed-only-where-something-breaks-it.md) | An invariant is believed only where something breaks it | |
+| [091](0091-plant-data-arrives-as-csv.md) | Plant data arrives as CSV | 002, 078, 083, 086 |
 
 ## The invariants these records cite
 

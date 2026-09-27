@@ -37,7 +37,7 @@ from pdm.platform.config import load_config
 from pdm.platform.config.loader import Config
 from pdm.platform.db import make_pool
 from pdm.platform.jobs import ClassTiming, JobClass, JobKind, JobQueue
-from pdm.signals import LINE_A_TWELVE_HOURS, Feed, SyntheticSource
+from pdm.signals import LINE_A_TWELVE_HOURS, Feed, ReplaySource, SyntheticSource
 from pdm.sinks import Deliveries
 from pdm.sinks.registry import build as build_sink
 from pdm.triggers import Triggers
@@ -79,20 +79,22 @@ def build_clock() -> Clock:
 def build_feed(clock: Clock) -> Feed | None:
     """The signal source this process reads, or None if it was not asked for.
 
-    Three sources are in ADR-002 and one exists. `replay` and `live` are named
-    here so that an operator who sets one gets a sentence saying it is not built
-    yet, rather than a process that silently reads nothing.
+    Three sources are in ADR-002 and two exist. `live` is named here so that an
+    operator who sets it gets a sentence saying it is not built yet, rather than
+    a process that silently reads nothing.
     """
     source = os.environ.get("SIGNAL_SOURCE", "").strip().lower()
     if not source or source == "none":
         return None
-    if source in ("replay", "live"):
+    if source == "live":
         raise ValueError(
-            f"SIGNAL_SOURCE={source} is one of ADR-002's three sources and is not built yet; "
-            "only 'synthetic' exists"
+            "SIGNAL_SOURCE=live is one of ADR-002's three sources and is not built yet; "
+            "use 'replay' with SIGNAL_REPLAY_FILE, or 'synthetic'"
         )
+    if source == "replay":
+        return _replay_feed(clock)
     if source != "synthetic":
-        raise ValueError(f"SIGNAL_SOURCE must be 'synthetic' or unset, not {source!r}")
+        raise ValueError(f"SIGNAL_SOURCE must be 'synthetic', 'replay' or unset, not {source!r}")
 
     seed = int(os.environ.get("SIGNAL_SEED", "0"))
     speed = getattr(clock, "speed", 1.0)
@@ -114,6 +116,39 @@ def build_feed(clock: Clock) -> Feed | None:
         scenario.duration.total_seconds() / speed / 60,
     )
     return Feed(SyntheticSource(scenario, seed=seed), decision_origin=clock.now())
+
+
+def _replay_feed(clock: Clock) -> Feed:
+    """A plant export, read back against decision time (ADR-091).
+
+    The whole file is read and checked at boot, so a bad export stops the
+    process with the line numbers in the log rather than failing an hour in.
+    The feed starts at the first reading, and `SIGNAL_SPEED` compresses it
+    exactly as it compresses the synthetic scenario.
+    """
+    raw = os.environ.get("SIGNAL_REPLAY_FILE", "").strip()
+    if not raw:
+        raise ValueError("SIGNAL_SOURCE=replay needs SIGNAL_REPLAY_FILE, the path of the CSV")
+    path = Path(raw)
+    if not path.is_file():
+        raise ValueError(f"SIGNAL_REPLAY_FILE={raw} is not a file this process can read")
+    signals = list(ReplaySource(path).stream())
+    machines = sorted({str(signal.machine_id) for signal in signals})
+    speed = getattr(clock, "speed", 1.0)
+    span = signals[-1].timestamp - signals[0].timestamp
+    log.warning(
+        "REPLAYED SIGNALS: %s, %d readings from %s to %s (%s of plant time, about %.0f "
+        "minutes at %sx) for %s. Findings are about the past the file describes.",
+        path.name,
+        len(signals),
+        signals[0].timestamp.isoformat(),
+        signals[-1].timestamp.isoformat(),
+        span,
+        span.total_seconds() / speed / 60,
+        speed,
+        ", ".join(machines),
+    )
+    return Feed(ReplaySource(path), decision_origin=clock.now())
 
 
 def build_triggers(config: Config, clock: Clock) -> Triggers:

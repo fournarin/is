@@ -104,3 +104,9 @@ sim_out/
 .vscode/
 !.vscode/settings.json
 .gh-token
+
+# The plant's own data (ADR-091). Under NDA like the manuals: it stays on the
+# machine it was copied to and never enters the repository.
+plant-data/*
+!plant-data/README.md
+!plant-data/examples/

@@ -91,12 +91,13 @@ Better said here than found later.
   `SyntheticSource` generates the demo scenario and `SIGNAL_SOURCE=synthetic`
   warns at boot for that reason: on screen a generated ticket is
   indistinguishable from a real one.
-- **Only one of the three signal sources is built.**
-  [ADR-002](docs/adr/0002-signalsource-interface-with-three-implementations.md)
-  names `SyntheticSource`, `ReplaySource` and `LiveSource`, and **the second and
-  third do not exist**. The port does, which is the part that makes them cheap
-  to add; `SIGNAL_SOURCE=replay` or `=live` refuses at boot and says so. Nothing
-  here has ever spoken to an OPC UA server.
+- **Two of the three signal sources are built, and neither is the plant's live
+  feed.** `SyntheticSource` generates the demo. `ReplaySource` reads a CSV export
+  of plant readings (`SIGNAL_SOURCE=replay`, see
+  [plant-data/README.md](plant-data/README.md) and
+  [ADR-091](docs/adr/0091-plant-data-arrives-as-csv.md)), which is the shortest
+  path from the plant to this system. `LiveSource` (OPC UA) does not exist, and
+  `SIGNAL_SOURCE=live` refuses at boot and says so.
 - **The drafter is wrong about two of the three repairable symptoms in the
   corpus.** It is handed an overview page that repeats the question's words
   rather than the procedure a page later.
@@ -116,10 +117,10 @@ Better said here than found later.
   `worker-runtime` issues a ticket when one falls due, and closing it `fixed`
   moves the clock on ([ADR-083](docs/adr/0083-the-pm-schedule-becomes-a-source-of-work.md)).
   What an installation cannot know is the history before it, so on day one the
-  whole schedule is due at once. The ticket and the health screen both say
-  "never recorded as done" rather than implying a date. Importing those dates
-  from the plant's own records is
-  [#118](https://github.com/fournarin/is/issues/118).
+  whole schedule is due at once, and the ticket and the health screen both say
+  "never recorded as done" rather than implying a date. When the plant's records
+  arrive, `scripts/import_plant_data.py --pm-history` loads the last-done
+  dates, along with the real technicians and roster (ADR-091).
 - **Only one machine model has a PM interval.** The R-2000iC manual states one -
   the toothed belt at 8000 operating hours - and the M-710iC's states none, so
   the M-710iC has no task. Operating hours are read as calendar hours, which is
