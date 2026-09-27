@@ -100,6 +100,7 @@ entries replace parts of earlier ones, and both are kept.
 | [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
 | [088](0088-an-invariant-is-believed-only-where-something-breaks-it.md) | An invariant is believed only where something breaks it | |
+| [089](0089-the-drafter-chooses-the-page-the-question-describes.md) | The drafter chooses the page the question describes | 037, 086 |
 
 ## The invariants these records cite
 

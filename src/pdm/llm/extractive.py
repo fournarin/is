@@ -1,6 +1,7 @@
 """A drafting backend with no model in it (ADR-037 section 9).
 
-It reads the highest-scoring page for the machine model asked about and returns
+It reads the page for the machine model asked about that best answers
+the question (see `_best_page`) and returns
 the instructions written on it, in the order they are written. That is a poor
 drafter and an honest one: it cannot rank two plausible pages by meaning, and it
 cannot produce a sentence the manual does not contain.
@@ -30,6 +31,7 @@ from pdm.llm.domain import (
     Proposal,
     ProposalKind,
     ProposedStep,
+    figures,
 )
 
 # The marker that begins a numbered instruction: "1. " or "1) ". Found anywhere
@@ -171,21 +173,47 @@ def _sentences(text: str) -> list[str]:
 
 
 def _best_page(request: DraftRequest) -> Evidence | None:
-    """The highest-scoring page belonging to the model being drafted for.
+    """The page to draft from, or None when no page answers the question.
 
-    The service filters other models out before it gets here (ADR-037 §7). This
-    repeats the filter because the cost of the two mistakes is not symmetric: a
-    duplicated check costs nothing, and a step from the neighbouring model reads
-    perfectly well with 28 Nm where this one wants 42.
+    Only pages of the model being drafted for are considered. The service
+    filters other models out before it gets here (ADR-037 §7); this repeats the
+    filter because a step from the neighbouring model reads perfectly well with
+    28 Nm where this one wants 42.
+
+    When the question carries figures - "above 85 degrees", "axis 1 current
+    above 12.5 A" - a page is a candidate only if it states every one of them,
+    and among candidates a page with a numbered procedure comes before one
+    without (ADR-089). Two failures measured in `docs/drafting-baseline.md`
+    motivate this, and both were ranking rather than drafting:
+
+      * the belt-motor *overview* scored above the corrective procedure a page
+        later, because it repeats the question's words; both state 85 degrees,
+        and only one tells a technician what to do;
+      * the axis 2 page scored above the axis 1 page it refers to, and states
+        11 A where the question asked about 12.5 A.
+
+    When no page states the question's figures the answer is None, which the
+    caller files as "not found". A manual that says nothing about a 62-second
+    cycle time must not be answered with the nearest page about something else,
+    at whatever score (principle 5). The cost is that a question worded with a
+    figure the manual does not use - the plant's 80 degrees against the
+    manual's 85 - also finds nothing, and the reviewer asks again without it.
+
+    A question with no figures ranks by retrieval score alone, as before.
+    Ties are broken by page so that the same input always drafts the same way.
     """
     ours = [
         evidence for evidence in request.evidence if evidence.machine_model == request.machine_model
     ]
-    if not ours:
-        return None
-    # Ties broken by page so that two pages of equal score always draft the same
-    # way; `max` alone would take whichever the caller happened to list first.
-    return max(ours, key=lambda evidence: (evidence.score, -evidence.page))
+    asked = figures(request.question)
+    if not asked:
+        return max(ours, key=lambda evidence: (evidence.score, -evidence.page), default=None)
+    stating = [evidence for evidence in ours if asked <= figures(evidence.text)]
+    return max(
+        stating,
+        key=lambda evidence: (bool(_procedure(evidence.text)), evidence.score, -evidence.page),
+        default=None,
+    )
 
 
 def _first(pattern: re.Pattern[str], text: str) -> str | None:

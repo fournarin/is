@@ -12,6 +12,7 @@ the manuals shows up as a failure in the thing that reads them.
 
 from __future__ import annotations
 
+from fixtures.corpus.answers import CORPUS
 from fixtures.corpus.pages import M710IC, R2000IC, Manual
 from pdm.contracts import DocumentId, MachineModel, SymptomCode
 from pdm.llm.domain import DraftRequest, Evidence, ProposalKind
@@ -33,13 +34,31 @@ def _page(manual: Manual, number: int, *, document_id: DocumentId, score: float)
     )
 
 
+def _question(symptom: str) -> str:
+    """The question the answer key asks for this symptom, in English.
+
+    Page choice now reads the figures in the question (ADR-089), so a test that
+    offers the interlock page under a question about 85 degrees would be testing
+    a mismatch it did not mean to. A symptom the key does not know gets a
+    question with no figures, which ranks by score alone.
+    """
+    for group in (CORPUS.covered, CORPUS.documented_without_procedure, CORPUS.absent):
+        for entry in group:
+            if entry.symptom_code == symptom:
+                return entry.queries.en
+    return "what does the manual say about this"
+
+
 def _request(
-    *evidence: Evidence, symptom: str = "SYM-014", model: str = "R-2000iC"
+    *evidence: Evidence,
+    symptom: str = "SYM-014",
+    model: str = "R-2000iC",
+    question: str | None = None,
 ) -> DraftRequest:
     return DraftRequest(
         symptom_code=SymptomCode(symptom),
         machine_model=MachineModel(model),
-        question="belt motor running above 85 degrees, what do I check",
+        question=question if question is not None else _question(symptom),
         evidence=evidence,
     )
 
@@ -189,3 +208,67 @@ class TestTheSameEvidenceAlwaysDraftsTheSameWay:
         request = _request(answer)
 
         assert ExtractiveDrafter().propose(request) == ExtractiveDrafter().propose(request)
+
+
+class TestThePageIsChosenByWhatTheQuestionStates:
+    """ADR-089: the figures in the question decide which pages can answer it.
+
+    Each case is a failure `docs/drafting-baseline.md` measured on the real
+    retriever, reproduced here with the scores in the order it produced them.
+    """
+
+    def test_the_procedure_beats_the_overview_that_outscored_it(self) -> None:
+        overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=1.0)
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.9)
+
+        proposal = ExtractiveDrafter().propose(_request(overview, procedure, symptom="SYM-014"))
+
+        assert proposal.kind is ProposalKind.REPAIR
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 4)}
+
+    def test_the_axis_the_question_names_beats_its_neighbour(self) -> None:
+        axis_2 = _page(R2000IC, 8, document_id=R2000IC_DOC, score=0.99)
+        axis_1 = _page(R2000IC, 7, document_id=R2000IC_DOC, score=0.95)
+
+        proposal = ExtractiveDrafter().propose(_request(axis_2, axis_1, symptom="SYM-021"))
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 7)}
+        assert any("90 g" in step.text for step in proposal.steps)
+
+    def test_the_thai_question_chooses_the_same_page(self) -> None:
+        axis_2 = _page(R2000IC, 8, document_id=R2000IC_DOC, score=0.99)
+        axis_1 = _page(R2000IC, 7, document_id=R2000IC_DOC, score=0.95)
+
+        proposal = ExtractiveDrafter().propose(
+            _request(
+                axis_2,
+                axis_1,
+                symptom="SYM-021",
+                question=CORPUS.answer(SymptomCode("SYM-021")).queries.th,
+            )
+        )
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 7)}
+
+    def test_a_symptom_no_page_states_is_not_found_at_any_score(self) -> None:
+        """SYM-031: nothing in the corpus mentions a 62-second cycle time, and
+        the fan page scored 0.95 against it. Principle 5 wants "not found"."""
+        pages = [
+            _page(M710IC, number, document_id=M710IC_DOC, score=0.95 - number / 100)
+            for number in (3, 4, 5, 6)
+        ]
+
+        proposal = ExtractiveDrafter().propose(_request(*pages, symptom="SYM-031", model="M-710iC"))
+
+        assert proposal.kind is ProposalKind.NOTHING
+        assert proposal.steps == ()
+
+    def test_a_question_with_no_figures_still_ranks_by_score(self) -> None:
+        overview = _page(R2000IC, 3, document_id=R2000IC_DOC, score=1.0)
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.9)
+
+        proposal = ExtractiveDrafter().propose(
+            _request(overview, procedure, question="the belt motor is overheating")
+        )
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 3)}
