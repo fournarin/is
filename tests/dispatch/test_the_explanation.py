@@ -137,8 +137,8 @@ class TestTheCounterfactual:
         queue, people, roster = _the_known_shift()
         answer = _explainer(queue, technicians=people, roster=roster).why("WO-FAST")
 
-        assert "120 minutes later" in answer.sentence
-        assert "335 units of production" in answer.sentence
+        assert "ช้าลง 120 นาที" in answer.sentence
+        assert "เสียราว 335 คัน" in answer.sentence
 
     def test_a_job_already_last_costs_nothing_to_move(self) -> None:
         """The other branch, and it has to exist: an explanation that always
@@ -241,7 +241,7 @@ class TestAConstraintDecided:
 
         assert answer.reason is Reason.NOBODY_HOLDS_THE_SKILL
         assert answer.a_constraint_decided
-        assert "electrical" in answer.sentence
+        assert "ช่างไฟฟ้า" in answer.sentence
         assert answer.units_lost_if_later is None
 
     def test_everybody_who_could_do_it_is_out_of_time(self) -> None:
@@ -255,7 +255,7 @@ class TestAConstraintDecided:
         ).why("WO-1")
 
         assert answer.reason is Reason.NOBODY_HAS_THE_TIME
-        assert "60 minutes" in answer.sentence
+        assert "60 นาที" in answer.sentence
 
     def test_a_two_person_job_with_one_person_free(self) -> None:
         queue = [_queued("WO-PAIR", _order(minutes=60, people=2))]
@@ -269,7 +269,7 @@ class TestAConstraintDecided:
         ).why("WO-PAIR")
 
         assert answer.reason is Reason.NOT_ENOUGH_PEOPLE
-        assert "2 technicians" in answer.sentence
+        assert "ช่างพร้อมกัน 2 คน" in answer.sentence
 
     def test_the_gate_answers_for_what_the_gate_held(self) -> None:
         """A job the gate held never reached the model, and the gate's own
@@ -289,8 +289,8 @@ class TestAConstraintDecided:
 
         assert explainer.plan.band.value == "heavy"
         assert answer.reason is Reason.HELD_BY_THE_GATE
-        assert "load gate" in answer.sentence
-        assert "severity" in answer.sentence
+        assert "ระบบกันงานนี้ไว้ก่อน" in answer.sentence
+        assert "ความรุนแรงต่ำ" in answer.sentence
 
 
 class TestTheQuestionsItRefuses:
@@ -334,6 +334,5 @@ class TestNothingIsGenerated:
 
         for ref in ("WO-BIG", "WO-FAST", "WO-NOWHERE"):
             sentence = explainer.why(ref).sentence
-            assert sentence.endswith("."), sentence
-            assert sentence[0].isupper(), sentence
+            assert len(sentence) > 20, sentence
             assert "{" not in sentence and "None" not in sentence, sentence

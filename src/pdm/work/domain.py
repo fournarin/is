@@ -14,7 +14,7 @@ no error anywhere.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from pdm.contracts import (
     AssigneeRole,
@@ -34,6 +34,7 @@ from pdm.contracts import (
     WorkOrderStatus,
     WorkOutcome,
 )
+from pdm.contracts.wording import Wording, span
 
 # PM work is the low-priority work a quiet shift is meant to absorb (ADR-010,
 # ADR-011). `PMTask` carries no severity of its own, so this is where the
@@ -147,41 +148,34 @@ def _priced(
     return (by_severity[severity], True, None)
 
 
-def reason_for(finding: Finding) -> str:
-    """Why this job exists, in the words a technician needs.
+_PLAIN = Wording()
 
-    Every timestamp is converted before it is formatted. A Finding's `eta` is
-    source time and may arrive in the plant's own offset (ADR-028); formatted
-    without converting, its local wall clock would be stamped "UTC" into a string
-    the order can never correct, because `reason` is written once.
 
-    The two kinds read differently because a person decides differently: "over
-    threshold for twenty minutes" is a machine that is already wrong, and
-    "expected to reach it in about six hours" is one that is not yet. **The
-    interval is never dropped** - "in about 6 hours" reads as more trustworthy
-    than "in about 6 hours, give or take 2", and the second one is the truth
-    (ui.md 2.2, ADR-020).
+def reason_for(finding: Finding, wording: Wording = _PLAIN) -> str:
+    """Why this job exists, in the words a technician needs, in Thai (ADR-093).
+
+    The two kinds read differently because a person decides differently: a
+    machine already over its limit is one to run to, and one expected to reach
+    it in about six hours is one to plan for. **The interval is never dropped** -
+    "in about 6 hours" reads as more trustworthy than "in about 6 hours, give or
+    take 2", and the second one is the truth (ADR-020).
+
+    Times are on the plant's clock. `reason` is written once and never
+    corrected, so a UTC stamp here would stay wrong on the ticket for good.
     """
-    where = f"{finding.machine_id} {finding.component}"
+    where = f"{wording.symptom(finding.symptom_code)} ที่เครื่อง {finding.machine_id}"
+    unknown = " · ยังไม่ทราบว่าเป็นที่ชิ้นส่วนไหน ต้องไล่หาสาเหตุก่อน" if finding.component == "unknown" else ""
     if finding.kind is FindingKind.DETECTED:
-        seen = f", seen {finding.occurrence_count} times" if finding.occurrence_count > 1 else ""
-        return f"{where}: {finding.symptom_code} detected by {finding.rule_id}{seen}"
+        return f"{where} · ตรวจพบเมื่อ {wording.day_and_clock(finding.detected_at)}{unknown}"
 
     # A predicted Finding always carries both (the contract refuses one without
     # the other), so this cannot render half an interval.
     assert finding.eta is not None and finding.eta_confidence is not None
     return (
-        f"{where}: {finding.symptom_code} predicted by {finding.rule_id}, expected to reach "
-        f"the threshold at {finding.eta.astimezone(UTC):%Y-%m-%d %H:%M} UTC, give or take "
-        f"{_hours(finding.eta_confidence)}"
+        f"{where} · ยังไม่เกินเกณฑ์ แต่คาดว่าจะถึงเกณฑ์ราว "
+        f"{wording.day_and_clock(finding.eta)} (คลาดเคลื่อนได้ ± {span(finding.eta_confidence)})"
+        f"{unknown}"
     )
-
-
-def _hours(interval: timedelta) -> str:
-    minutes = int(interval.total_seconds() // 60)
-    if minutes < 90:
-        return f"{minutes} minutes"
-    return f"{minutes / 60:.1f} hours".replace(".0 ", " ")
 
 
 def from_finding(
@@ -192,6 +186,7 @@ def from_finding(
     playbook_warning: str | None = None,
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
+    wording: Wording = _PLAIN,
 ) -> WorkOrder:
     """A condition order: something crossed a threshold, or is about to.
 
@@ -222,7 +217,7 @@ def from_finding(
         required_skill=playbook.required_skill if playbook else None,
         required_technicians=playbook.required_technicians if playbook else 1,
         estimate_is_fallback=is_fallback,
-        reason=reason_for(finding),
+        reason=reason_for(finding, wording),
     )
 
 
@@ -234,6 +229,7 @@ def from_pm_task(
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
     severity: Severity = PM_SEVERITY,
+    wording: Wording = _PLAIN,
 ) -> WorkOrder:
     """A scheduled order: the work a quiet shift is meant to absorb.
 
@@ -262,19 +258,19 @@ def from_pm_task(
         required_technicians=playbook.required_technicians if playbook else 1,
         estimate_is_fallback=is_fallback,
         reason=(
-            f"{task.machine_id}: {task.symptom_code} scheduled maintenance, "
-            f"due {task.due_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC, "
+            f"บำรุงรักษาตามแผน: {wording.symptom(task.symptom_code)} ที่เครื่อง {task.machine_id}"
+            f" · ครบกำหนด {wording.day(task.due_at)} · "
             + (
-                f"last done {task.last_done_at.astimezone(UTC):%Y-%m-%d} "
-                f"and every {_interval_in_hours(task.interval)}"
+                f"ทำครั้งล่าสุด {wording.day(task.last_done_at)} "
+                f"ทำทุก {_interval_in_hours(task.interval)}"
                 if task.last_done_at is not None
                 # The honest half of "due now". A task nobody has recorded as
                 # done is due from the moment it was registered, which is a
                 # fact about this system rather than about the machine, and the
                 # person holding the ticket is the one who can say otherwise
                 # (ADR-083 section 4).
-                else f"never recorded as done, so it has been due since it was registered; "
-                f"the interval is {_interval_in_hours(task.interval)}"
+                else "ยังไม่มีบันทึกว่าเคยทำ จึงถือว่าครบกำหนดตั้งแต่ลงทะเบียนเข้าระบบ "
+                f"(ทำทุก {_interval_in_hours(task.interval)})"
             )
         ),
     )
@@ -285,7 +281,7 @@ def _interval_in_hours(interval: timedelta) -> str:
     that said "333 days" would have to be converted back by whoever checks it
     against the page it came from."""
     hours = interval.total_seconds() / 3600
-    return f"{hours:,.0f} hours"
+    return f"{hours:,.0f} ชั่วโมงทำงาน"
 
 
 def due_pm_tasks(
@@ -340,6 +336,7 @@ def from_report(
     fallback_minutes: dict[str, dict[Severity, int]],
     now: datetime,
     alongside: Sequence[str] = (),
+    wording: Wording = _PLAIN,
 ) -> WorkOrder:
     """A manual order: a person saw something.
 
@@ -373,8 +370,8 @@ def from_report(
         required_technicians=playbook.required_technicians if playbook else 1,
         estimate_is_fallback=is_fallback,
         reason=(
-            f"{machine_id}: reported by {reported_by} at "
-            f"{now.astimezone(UTC):%Y-%m-%d %H:%M} UTC - {description}"
-            + (f" (reported alongside {', '.join(alongside)})" if alongside else "")
+            f"แจ้งโดย {reported_by} เมื่อ {wording.day_and_clock(now)} ที่เครื่อง {machine_id}: "
+            f"{description}"
+            + (f" (เครื่องนี้มีใบงานเปิดอยู่แล้ว: {', '.join(alongside)})" if alongside else "")
         ),
     )

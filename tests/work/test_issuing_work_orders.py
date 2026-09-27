@@ -288,8 +288,7 @@ class TestAConditionOrder:
             machine_model=R2000IC,
         )
 
-        assert "detected" in issued.order.reason
-        assert "seen 4 times" in issued.order.reason
+        assert "ตรวจพบเมื่อ" in issued.order.reason
 
     def test_a_predicted_finding_keeps_its_interval(
         self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
@@ -309,8 +308,8 @@ class TestAConditionOrder:
             machine_model=R2000IC,
         )
 
-        assert "predicted" in issued.order.reason
-        assert "give or take 2 hours" in issued.order.reason
+        assert "คาดว่าจะถึงเกณฑ์" in issued.order.reason
+        assert "± 2 ชม." in issued.order.reason
         assert issued.order.eta == NOW + timedelta(hours=6)
 
 
@@ -383,7 +382,7 @@ class TestScheduledAndManualOrders:
         assert issued.order.origin is WorkOrderOrigin.SCHEDULED
         assert issued.order.severity is Severity.LOW
         assert issued.order.pm_task_ref == PMTaskRef("PM-1")
-        assert "scheduled maintenance" in issued.order.reason
+        assert "บำรุงรักษาตามแผน" in issued.order.reason
 
     def test_a_pm_task_finds_its_playbook_through_the_ordinary_lookup(
         self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
@@ -533,7 +532,7 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             distinct_from=[first.ref],
         )
 
-        assert f"reported alongside {first.ref}" in second.order.reason
+        assert f"เครื่องนี้มีใบงานเปิดอยู่แล้ว: {first.ref}" in second.order.reason
 
     def test_a_reference_that_has_closed_since_is_not_named_on_the_new_order(
         self, conn: Connection[Any], orders: WorkOrders
@@ -561,7 +560,7 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             description="the guard interlock is not latching",
             distinct_from=[first.ref],
         )
-        assert "reported alongside" not in second.order.reason
+        assert "เครื่องนี้มีใบงานเปิดอยู่แล้ว" not in second.order.reason
 
 
 class TestWhatTheDispatchTickWillRead:
@@ -732,4 +731,4 @@ class TestWhatTheCodeReviewFound:
             machine_model=R2000IC,
         )
 
-        assert "2026-03-03 15:00 UTC" in issued.order.reason
+        assert "3 มี.ค. 15:00 น." in issued.order.reason

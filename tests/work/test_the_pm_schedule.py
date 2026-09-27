@@ -355,5 +355,5 @@ class TestATaskNobodyHasRecorded:
 
         order = work.get(conn, issued)
         assert order is not None
-        assert "never recorded as done" in order.reason
-        assert "8,000 hours" in order.reason
+        assert "ยังไม่มีบันทึกว่าเคยทำ" in order.reason
+        assert "8,000 ชั่วโมงทำงาน" in order.reason

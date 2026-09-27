@@ -45,6 +45,9 @@ from pdm.contracts import (
     WorkOrderOrigin,
     WorkOrderStatus,
 )
+from pdm.contracts.wording import BAND as BAND_TH
+from pdm.contracts.wording import SEVERITY as SEVERITY_TH
+from pdm.contracts.wording import duration
 from pdm.platform.config.loader import Config
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
@@ -363,25 +366,28 @@ def _reason(
     system computed (ADR-003).
     """
     weights = config.policy.weights
+    wording = config.wording()
     contributions = [
-        (weights.severity * terms.severity, f"severity is {order.severity.value}"),
+        (
+            weights.severity * terms.severity,
+            f"ความรุนแรงระดับ{SEVERITY_TH[order.severity.value]}",
+        ),
         (
             weights.downtime * terms.downtime,
-            f"the line loses about {downtime:.0f} unit(s) while this waits",
+            f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
         ),
         (
             weights.skill_match * terms.skill_match,
-            f"somebody on this shift holds {order.required_skill}"
+            f"กะนี้มี{wording.skill(order.required_skill)}ที่รับงานนี้ได้"
             if order.required_skill is not None
-            else "this job names no skill, so anybody free can take it",
+            else "งานนี้ไม่ต้องใช้ทักษะเฉพาะ ใครว่างก็รับได้",
         ),
-        (weights.waiting * terms.waiting, f"it has been waiting {_span(waited)}"),
+        (weights.waiting * terms.waiting, f"รอมาแล้ว {_span(waited)}"),
         (
             weights.eta_urgency * terms.eta_urgency,
-            f"the predicted crossing is about {_span((order.eta - now).total_seconds() / 60.0)} "
-            f"away"
+            f"คาดว่าจะถึงเกณฑ์ในอีกราว {_span((order.eta - now).total_seconds() / 60.0)}"
             if order.eta is not None
-            else "the predicted crossing is close",
+            else "ใกล้ถึงเกณฑ์แล้ว",
         ),
     ]
     # 0.05 is presentational and its provenance is ADR-049 §2: it decides which
@@ -389,18 +395,13 @@ def _reason(
     # the weighted sum, which was computed before this function was called, so
     # no threshold here can move a score, an ordering or an assignment.
     strongest = [text for value, text in sorted(contributions, key=lambda c: -c[0]) if value > 0.05]
-    sentence = (
-        "; ".join(strongest[:3])
-        if strongest
-        else "nothing about this job is urgent; it is here because the shift has room"
-    )
+    sentence = " · ".join(strongest[:3]) if strongest else "งานนี้ไม่เร่งด่วน ได้คิวเพราะกะนี้ยังมีกำลังคนเหลือ"
     if terms.downtime_is_unknown:
         # ADR-005 wants the caveat where the job is, not in a log. A technician
         # reading this knows the ranking did not count the line stopping,
         # because nothing here could work out whether it would.
         sentence += (
-            f"; {order.machine_id} is not in the current line layout, so the cost of "
-            "leaving it down was not counted"
+            f" · เครื่อง {order.machine_id} ไม่อยู่ในผังสายการผลิตปัจจุบัน จึงไม่ได้นับความเสียหายจากการที่เครื่องหยุด"
         )
     return sentence
 
@@ -408,17 +409,11 @@ def _reason(
 def _span(minutes: float) -> str:
     """A duration a technician reads at a glance, not an ISO interval.
 
-    Rounded on purpose: "3h 20m" is a fact somebody can check against the clock
-    on the wall, and "3:19:47" claims a precision the estimate behind it does
-    not have.
+    Rounded on purpose: "3 ชม. 20 นาที" is a fact somebody can check against the
+    clock on the wall, and "3:19:47" claims a precision the estimate behind it
+    does not have.
     """
-    total = max(0, int(minutes))
-    hours, rest = divmod(total, 60)
-    if hours and rest:
-        return f"{hours}h {rest}m"
-    if hours:
-        return f"{hours}h"
-    return f"{rest}m"
+    return duration(minutes)
 
 
 def _normalised(values: Sequence[float]) -> list[float]:
@@ -468,12 +463,12 @@ def _no_capacity_cause(shift_id: ShiftId | None, assignments: Sequence[tuple[Use
     returning None, passed through by the caller.
     """
     if shift_id is None:
-        return "no shift covers this moment"
+        return "ตอนนี้ไม่มีกะทำงาน"
     if not assignments:
-        return f"nobody is rostered on the {shift_id} shift"
+        return f"ยังไม่มีช่างลงชื่อในกะ {shift_id}"
     # Rostered, but every one of them is already spent. Saying "nobody is
     # rostered" here would be false about people who are standing on the line.
-    return f"everybody on the {shift_id} shift has no minutes left to give"
+    return f"ช่างทุกคนในกะ {shift_id} มีงานเต็มเวลาแล้ว"
 
 
 def dispatch(
@@ -529,11 +524,11 @@ def dispatch(
             held=tuple(
                 Withheld(
                     ref=item.ref,
-                    why=f"{cause}, so there is no capacity to schedule against",
+                    why=f"{cause} จึงยังจัดงานให้ใครไม่ได้",
                 )
                 for item, _, _, _ in ranked
             ),
-            summary=f"no capacity: {cause}; {len(ranked)} order(s) are waiting",
+            summary=f"{cause} · มีงานรออยู่ {len(ranked)} ใบ",
         )
 
     assert ratio is not None
@@ -717,9 +712,9 @@ def _admit(
                 Withheld(
                     ref=item.ref,
                     why=(
-                        f"the shift is at {ratio:.0%} and this is {order.severity.value} "
-                        f"severity; at or above {load.heavy_at_or_above:.0%} only high and "
-                        "critical work is released"
+                        f"กะนี้ใช้กำลังคนไป {ratio:.0%} แล้ว และงานนี้ความรุนแรง"
+                        f"{SEVERITY_TH[order.severity.value]} · เมื่อภาระถึง "
+                        f"{load.heavy_at_or_above:.0%} ระบบปล่อยเฉพาะงานความรุนแรงสูงและวิกฤต"
                     ),
                 )
             )
@@ -731,8 +726,8 @@ def _admit(
                     Withheld(
                         ref=item.ref,
                         why=(
-                            f"scheduled maintenance waits for a quiet shift; this one is at "
-                            f"{ratio:.0%} and the boundary is {load.light_below:.0%}"
+                            f"งานบำรุงรักษาตามแผนรอกะที่งานเบา · กะนี้ใช้กำลังคนไป {ratio:.0%} "
+                            f"ต้องต่ำกว่า {load.light_below:.0%} จึงจะปล่อย"
                         ),
                     )
                 )
@@ -742,8 +737,8 @@ def _admit(
                     Withheld(
                         ref=item.ref,
                         why=(
-                            f"releasing this would take the shift past {load.light_below:.0%}, "
-                            f"which is as far as maintenance work is pulled forward"
+                            f"ถ้าปล่อยงานนี้ ภาระของกะจะเกิน {load.light_below:.0%} "
+                            f"ซึ่งเป็นเพดานของงานบำรุงรักษาตามแผน"
                         ),
                     )
                 )
@@ -817,13 +812,17 @@ def _assign(
         candidates.sort(key=lambda person: (-left[person.user], person.user))
 
         if len(candidates) < order.required_technicians:
-            wanted = order.required_skill or "any skill"
+            wanted = (
+                config.wording().skill(order.required_skill)
+                if order.required_skill is not None
+                else "ช่างทักษะใดก็ได้"
+            )
             unassigned.append(
                 Withheld(
                     ref=item.ref,
                     why=(
-                        f"needs {order.required_technicians} technician(s) with {wanted} and "
-                        f"{order.estimated_minutes} free minutes; {len(candidates)} available"
+                        f"ต้องการ{wanted} {order.required_technicians} คน ที่มีเวลาว่าง "
+                        f"{order.estimated_minutes} นาที · ตอนนี้มีว่าง {len(candidates)} คน"
                     ),
                 )
             )
@@ -872,14 +871,17 @@ def _summary(
     A supervisor reads this one line and knows both what the system did and what
     it is sitting on. Folded into the score, this could not be said at all.
     """
-    parts = [f"the shift is at {ratio:.0%} ({band.value} load)", f"{len(placed)} order(s) released"]
+    parts = [
+        f"กะนี้ใช้กำลังคนไป {ratio:.0%} ({BAND_TH[band.value]})",
+        f"ปล่อยงาน {len(placed)} ใบ",
+    ]
     if held:
-        parts.append(f"{len(held)} held back")
+        parts.append(f"กันไว้ก่อน {len(held)} ใบ")
     if unassigned:
-        parts.append(f"{len(unassigned)} admitted with nobody free to take it")
+        parts.append(f"{len(unassigned)} ใบรอช่างว่าง")
     if unpriced:
         # The half of ADR-048 that keeps a stale layout loud. The work flowed;
         # the file still needs somebody to look at it, and this says so every
         # round until they do.
-        parts.append(f"{unpriced} order(s) name a machine the layout does not describe")
-    return ", ".join(parts)
+        parts.append(f"{unpriced} ใบระบุเครื่องที่ไม่มีในผังสายการผลิต")
+    return " · ".join(parts)

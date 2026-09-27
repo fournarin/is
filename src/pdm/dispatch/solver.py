@@ -460,10 +460,7 @@ def _round_from(
             unassigned.append(
                 Withheld(
                     ref=ref,
-                    why=(
-                        "the shift plan has no room for this before the end of the shift; "
-                        "it is first in line for the next round"
-                    ),
+                    why=("แผนของกะนี้ไม่มีช่องว่างพอก่อนหมดกะ งานนี้จะได้คิวแรกในรอบถัดไป"),
                 )
             )
             continue

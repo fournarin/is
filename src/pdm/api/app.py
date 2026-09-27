@@ -105,6 +105,7 @@ def create_app(
             fallback_minutes={
                 str(model): dict(rows) for model, rows in config.policy.fallback_minutes.items()
             },
+            wording=config.wording(),
         )
         # The API enqueues authoring work and claims none of it. `worker` names
         # this process in `claimed_by` only if it ever claimed anything, which it

@@ -31,6 +31,7 @@ rules:
     machine_model: R-2000iC
     component: belt_motor
     symptom_code: SYM-014
+    title: มอเตอร์สายพานร้อนเกินกำหนด
     metric_name: motor_temp_c
     comparison: above
     threshold: 85.0
@@ -43,6 +44,7 @@ rules:
     machine_model: R-2000iC
     component: servo_axis_1
     symptom_code: SYM-021
+    title: กระแสมอเตอร์แกน 1 สูงเกินกำหนด
     metric_name: servo_current_a
     comparison: above
     threshold: 12.5
@@ -59,6 +61,7 @@ rules:
     machine_model: R-2000iC
     component: unknown
     symptom_code: SYM-002
+    title: ระบบล็อกนิรภัยแจ้งว่าประตูเปิดอยู่
     metric_name: interlock_closed
     comparison: below
     threshold: 1.0
@@ -74,6 +77,7 @@ rules:
     machine_model: M-710iC
     component: unknown
     symptom_code: SYM-031
+    title: รอบการทำงานช้ากว่ากำหนด
     metric_name: cycle_time_s
     comparison: above
     threshold: 62.0
@@ -85,6 +89,7 @@ rules:
     machine_model: M-710iC
     component: cooling_fan
     symptom_code: SYM-047
+    title: พัดลมระบายความร้อนตู้ควบคุมหมุนช้าเกินกำหนด
     metric_name: fan_rpm
     comparison: below
     threshold: 1200.0

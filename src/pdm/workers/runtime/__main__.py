@@ -192,7 +192,11 @@ def main() -> None:
     fallback: dict[MachineModel, dict[Severity, int]] = config.policy.fallback_minutes
     loop = TriggerLoop(
         triggers=build_triggers(config, clock),
-        orders=WorkOrders(clock, fallback_minutes={str(k): v for k, v in fallback.items()}),
+        orders=WorkOrders(
+            clock,
+            fallback_minutes={str(k): v for k, v in fallback.items()},
+            wording=config.wording(),
+        ),
         config=config,
         clock=clock,
         feed=build_feed(clock),

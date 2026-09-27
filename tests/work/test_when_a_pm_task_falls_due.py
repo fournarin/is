@@ -86,8 +86,8 @@ class TestWhatTheTicketSays:
             task, playbook=None, machine_model="R-2000iC", fallback_minutes=FALLBACK
         )
 
-        assert "last done 2025-04-04" in order.reason
-        assert "8,000 hours" in order.reason
+        assert "ทำครั้งล่าสุด 4 เม.ย. 2025" in order.reason
+        assert "8,000 ชั่วโมงทำงาน" in order.reason
 
     def test_a_task_with_none_says_that_rather_than_implying_a_date(self) -> None:
         """The honest half of "due now". Nobody knows when this was last done,
@@ -99,5 +99,5 @@ class TestWhatTheTicketSays:
             fallback_minutes=FALLBACK,
         )
 
-        assert "never recorded as done" in order.reason
-        assert "due since it was registered" in order.reason
+        assert "ยังไม่มีบันทึกว่าเคยทำ" in order.reason
+        assert "ครบกำหนดตั้งแต่ลงทะเบียน" in order.reason

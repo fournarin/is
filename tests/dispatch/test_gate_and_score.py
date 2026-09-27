@@ -196,8 +196,8 @@ class TestNoCapacitySaysWhichKind:
 
         assert result.band is Band.NO_CAPACITY
         assert result.load_ratio is None
-        assert "no shift covers this moment" in result.summary
-        assert "no shift covers this moment" in result.held[0].why
+        assert "ตอนนี้ไม่มีกะทำงาน" in result.summary
+        assert "ตอนนี้ไม่มีกะทำงาน" in result.held[0].why
         assert "rostered" not in result.held[0].why
 
     def test_a_shift_with_an_empty_roster_names_the_shift(self) -> None:
@@ -206,8 +206,8 @@ class TestNoCapacitySaysWhichKind:
         )
 
         assert result.band is Band.NO_CAPACITY
-        assert "nobody is rostered on the morning shift" in result.held[0].why
-        assert "nobody is rostered on the morning shift" in result.summary
+        assert "ยังไม่มีช่างลงชื่อในกะ morning" in result.held[0].why
+        assert "ยังไม่มีช่างลงชื่อในกะ morning" in result.summary
 
     def test_people_rostered_with_no_minutes_left_are_not_reported_as_absent(self) -> None:
         """The case the two-way wording states falsely: they are on the line, and
@@ -220,7 +220,7 @@ class TestNoCapacitySaysWhichKind:
         )
 
         assert result.band is Band.NO_CAPACITY
-        assert "no minutes left to give" in result.held[0].why
+        assert "มีงานเต็มเวลาแล้ว" in result.held[0].why
         assert "nobody is rostered" not in result.held[0].why
 
     def test_the_three_do_not_read_alike(self) -> None:
@@ -250,7 +250,7 @@ class TestNoCapacitySaysWhichKind:
 
         assert sorted(held.ref for held in result.held) == ["WO-1", "WO-2", "WO-3"]
         assert result.placed == ()
-        assert "3 order(s) are waiting" in result.summary
+        assert "มีงานรออยู่ 3 ใบ" in result.summary
 
 
 class TestTheGate:
@@ -289,7 +289,7 @@ class TestTheGate:
         assert result.band is Band.NORMAL
         assert {placed.ref for placed in result.placed} == {"WO-cond-1", "WO-cond-2"}
         assert [held.ref for held in result.held] == ["WO-pm"]
-        assert "quiet shift" in result.held[0].why
+        assert "รอกะที่งานเบา" in result.held[0].why
 
     def test_a_quiet_shift_pulls_maintenance_forward(self) -> None:
         """The advisor's own words: when the load is light, let the secondary
@@ -329,7 +329,7 @@ class TestTheGate:
         # 60 committed of 600 capacity, and the boundary is 50%: four PM jobs of
         # an hour take it to 300/600 and the fifth would cross.
         assert len(released_pm) == 4
-        assert "as far as maintenance work is pulled forward" in result.held[0].why
+        assert "เพดานของงานบำรุงรักษาตามแผน" in result.held[0].why
 
     def test_a_maintenance_backlog_does_not_make_a_shift_look_busy(self) -> None:
         """The inversion this would have caused is the reason ADR-045 §2 exists:
@@ -397,7 +397,7 @@ class TestAReleaseOverridesTheGate:
 
         assert result.placed == ()
         assert [one.ref for one in result.unassigned] == ["WO-electrical"]
-        assert "electrical" in result.unassigned[0].why
+        assert "ช่างไฟฟ้า" in result.unassigned[0].why
 
     def test_released_condition_work_is_not_counted_twice(self) -> None:
         """The failure this test exists for is silent and would look like the
@@ -602,8 +602,8 @@ class TestTheScore:
             queue, technicians=_people(ANA, BEN), roster=_roster((ANA, 300), (BEN, 300))
         )
 
-        assert "severity is critical" in result.placed[0].priority_reason
-        assert result.summary.startswith("the shift is at")
+        assert "ความรุนแรงระดับวิกฤต" in result.placed[0].priority_reason
+        assert result.summary.startswith("กะนี้ใช้กำลังคนไป")
 
 
 class TestAssignment:
@@ -627,7 +627,7 @@ class TestAssignment:
 
         assert result.placed == ()
         assert [item.ref for item in result.unassigned] == ["WO-1"]
-        assert "needs 2 technician(s)" in result.unassigned[0].why
+        assert "2 คน" in result.unassigned[0].why
 
     def test_a_two_person_job_takes_a_primary_and_a_helper(self) -> None:
         queue = [_queued("WO-1", _order(people=2, minutes=60))]
@@ -655,7 +655,7 @@ class TestAssignment:
 
         assert result.band is Band.NORMAL
         assert [item.ref for item in result.unassigned] == ["WO-new"]
-        assert "60 free minutes; 0 available" in result.unassigned[0].why
+        assert "ที่มีเวลาว่าง 60 นาที · ตอนนี้มีว่าง 0 คน" in result.unassigned[0].why
 
     def test_an_order_somebody_has_accepted_is_never_re_placed(self) -> None:
         queue = [
@@ -680,7 +680,7 @@ class TestAssignment:
         )
 
         assert result.placed == ()
-        assert "electrical" in result.unassigned[0].why
+        assert "ช่างไฟฟ้า" in result.unassigned[0].why
 
 
 class TestAnOrderThatOutlivedTheLayout:
@@ -762,7 +762,7 @@ class TestAnOrderThatOutlivedTheLayout:
 
         result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 480)))
 
-        assert "1 order(s) name a machine the layout does not describe" in result.summary
+        assert "1 ใบระบุเครื่องที่ไม่มีในผังสายการผลิต" in result.summary
 
 
 class TestWhatADR049Settles:
@@ -814,7 +814,7 @@ class TestWhatADR049Settles:
 
         assert result.band is Band.NORMAL
         assert [withheld.ref for withheld in result.unassigned] == ["WO-1"]
-        assert "robot_mechanical" in result.unassigned[0].why
+        assert "ช่างกลหุ่นยนต์" in result.unassigned[0].why
         assert result.held == ()
 
     def test_a_term_too_small_to_mention_is_still_in_the_number(self) -> None:

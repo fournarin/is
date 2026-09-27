@@ -162,7 +162,7 @@ class TestOneFaultOneTicket:
         assert order.origin is WorkOrderOrigin.CONDITION
         assert order.machine_id == MOTOR
         assert order.finding_kind is FindingKind.DETECTED
-        assert "detected by R-motor-temp-high" in order.reason
+        assert "ตรวจพบเมื่อ" in order.reason
 
     def test_a_hundred_more_hot_readings_are_still_one_ticket(
         self, conn: Connection[Any], clock: SimulatedClock
@@ -217,8 +217,8 @@ class TestPredictedWork:
         _, order, _ = _open_orders(conn)[0]
         assert order.finding_kind is FindingKind.PREDICTED
         assert order.eta is not None and order.eta_confidence is not None
-        assert "expected to reach the threshold" in order.reason
-        assert "give or take" in order.reason
+        assert "คาดว่าจะถึงเกณฑ์" in order.reason
+        assert "คลาดเคลื่อนได้ ±" in order.reason
 
     def test_prediction_is_on_in_this_process(
         self, conn: Connection[Any], clock: SimulatedClock

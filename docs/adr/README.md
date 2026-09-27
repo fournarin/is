@@ -105,6 +105,7 @@ entries replace parts of earlier ones, and both are kept.
 | [090](0090-the-owner-hands-the-work-to-an-agent-and-the-loop-machinery-goes.md) | **The owner hands the work to an agent, and the loop machinery goes** | |
 | [091](0091-plant-data-arrives-as-csv.md) | Plant data arrives as CSV | 002, 078, 083, 086 |
 | [092](0092-the-owner-tries-it-first.md) | The owner tries it first, and the report says who tried it | 014 |
+| [093](0093-what-a-person-reads-is-thai-and-familiar.md) | **What a person reads is Thai, and shaped like what they already use** | 005 |
 
 ## The invariants these records cite
 
