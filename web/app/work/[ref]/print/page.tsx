@@ -55,7 +55,11 @@ export default async function PrintPage({ params }: { params: Promise<{ ref: str
             {job.steps.map((one, index) => (
               <li key={index}>
                 <span>
-                  ☐ {one.text} <span className="muted">(คู่มือหน้า {one.page})</span>
+                  ☐ {one.text_th ?? one.text}{" "}
+                  <span className="muted">
+                    (คู่มือหน้า {one.page}
+                    {one.text_th !== null && <>: <span lang="en">{one.text}</span></>})
+                  </span>
                 </span>
               </li>
             ))}

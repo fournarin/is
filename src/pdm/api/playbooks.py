@@ -122,6 +122,9 @@ class Approval(BaseModel):
     # other path, because a step whose source a person may retype is a step that
     # says what somebody wished the manual said (ADR-064, invariant 4).
     steps: tuple[str, ...] | None = None
+    # The approver's Thai for each step, position for position; blank for none
+    # (ADR-095).
+    thai_steps: tuple[str, ...] | None = None
     required_skill: SkillId | None = None
     estimated_minutes: int | None = Field(default=None, gt=0)
     # ADR-025: a two-person job consumes twice the shift's capacity, and the
@@ -329,6 +332,7 @@ def approve(
             required_technicians=approval.required_technicians,
             note=approval.note,
             rewritten_steps=approval.steps,
+            thai_steps=approval.thai_steps,
         )
     except NothingToApply as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error

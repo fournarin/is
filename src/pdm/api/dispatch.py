@@ -158,6 +158,8 @@ class Step(BaseModel):
     """
 
     text: str
+    # The approver's Thai, when there is one (ADR-095). `text` is the manual's.
+    text_th: str | None = None
     source_doc: str
     page: int
 
@@ -662,7 +664,12 @@ def ticket(
             else round(order.eta_confidence.total_seconds() / 60)
         ),
         steps=tuple(
-            Step(text=step.text, source_doc=str(step.source_doc), page=step.page)
+            Step(
+                text=step.text,
+                text_th=step.text_th,
+                source_doc=str(step.source_doc),
+                page=step.page,
+            )
             for step in order.playbook_snapshot
         ),
         recurrence=_recurrence(conn, order),

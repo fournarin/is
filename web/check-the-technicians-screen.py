@@ -361,7 +361,10 @@ def main() -> None:
     )
     expect("ด่วน" not in above_the_fold, "and nothing above the fold calls it urgent")
     expect("คาดว่าจะถึงเกณฑ์" in above_the_fold, "the reason the backend wrote is on it")
-    expect("เกิดซ้ำแล้ว 4 ครั้ง" in above_the_fold, "how often the rule has fired (ADR-023)")
+    expect(
+        "เกิดซ้ำ" not in above_the_fold,
+        "a forecast recomputed on every reading is not shown as repeated failures (ADR-093)",
+    )
     expect(
         "ทำไมต้องทำงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)"
     )

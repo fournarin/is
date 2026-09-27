@@ -71,7 +71,7 @@ estimated_minutes, required_skill, required_technicians,
 source_doc, page, revision, approved_by, approved_at, approver_role, status
 ```
 ```
-steps[] each = { text, source_doc, page, confidence }
+steps[] each = { text, text_th?, source_doc, page, confidence }
 ```
 `status` is draft / approved / needs_review.
 
@@ -79,6 +79,9 @@ steps[] each = { text, source_doc, page, confidence }
 supersedes. Approval overwrites and increments `revision`. History lives in the
 work order's `playbook_snapshot`
 ([ADR-018](adr/0018-drop-the-version-chain-move-history-to-the-work-order.md)).
+
+`text_th` is the approving engineer's Thai for the step, with every figure
+checked against `text` ([ADR-095](adr/0095-a-step-carries-the-approvers-thai.md)).
 
 **Every step carries its own source**, not just the page as a whole. Authoring is
 tuned for recall

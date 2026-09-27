@@ -66,6 +66,12 @@ export async function approve(
   if (changed) {
     body.steps = rewritten;
   }
+  // Position for position, blanks included, so step three's Thai stays step
+  // three's (ADR-095). Sent only when somebody wrote any.
+  const thai = form.getAll("thai").map((one) => String(one).trim());
+  if (thai.some((one) => one !== "")) {
+    body.thai_steps = thai;
+  }
   if (skill !== "") {
     body.required_skill = skill;
   }

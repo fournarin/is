@@ -49,6 +49,24 @@ export function Decisions({
             </p>
           )}
 
+          {/* ADR-095: what the technician reads first. Every figure has to match
+              the step it renders; the API refuses a rendering that changed one. */}
+          <fieldset>
+            <legend>คำแปลภาษาไทยสำหรับช่าง</legend>
+            <p className="muted">
+              ช่างจะเห็นคำแปลก่อน แล้วเห็นต้นฉบับจากคู่มือด้านล่าง ตัวเลขทุกตัว (แรงบิด ขนาด เวลา) ต้องตรงกับต้นฉบับ
+              ขั้นไหนไม่แปลให้เว้นว่าง
+            </p>
+            {steps.map((text, index) => (
+              <label className="field" key={index} style={{ padding: "0 0.75rem" }}>
+                <span>
+                  ขั้นที่ {index + 1} <small className="muted">· {text}</small>
+                </span>
+                <textarea name="thai" rows={2} placeholder="พิมพ์คำแปลภาษาไทย" />
+              </label>
+            ))}
+          </fieldset>
+
           <details>
             <summary>แก้ข้อความก่อนอนุมัติ</summary>
             <p className="muted">

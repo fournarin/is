@@ -25,14 +25,8 @@ from __future__ import annotations
 
 import re
 
-from pdm.llm.domain import (
-    DraftRequest,
-    Evidence,
-    Proposal,
-    ProposalKind,
-    ProposedStep,
-    figures,
-)
+from pdm.contracts.wording import figures
+from pdm.llm.domain import DraftRequest, Evidence, Proposal, ProposalKind, ProposedStep
 
 # The marker that begins a numbered instruction: "1. " or "1) ". Found anywhere
 # in the text rather than at the start of a line, because **the line breaks are
