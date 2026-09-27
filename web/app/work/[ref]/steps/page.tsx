@@ -78,7 +78,15 @@ export default async function StepsPage({
         <span className="step-number">
           ขั้นที่ {at} จาก {total}
         </span>
-        <p className="step-text">{current.text}</p>
+        <p className="step-text">{current.text_th ?? current.text}</p>
+        {/* The manual's own words stay on screen under the Thai: the page
+            citation proves those, and a technician can check one against the
+            other (ADR-095). */}
+        {current.text_th !== null && (
+          <p className="muted">
+            ต้นฉบับจากคู่มือ: <span lang="en">{current.text}</span>
+          </p>
+        )}
         {/* Opens the manual at that page through this server, which forwards
             the range request - not a whole-volume download (ADR-019, ADR-058). */}
         <a
@@ -120,7 +128,7 @@ export default async function StepsPage({
             >
               <span>
                 <Link href={`?step=${index + 1}`} style={{ color: "inherit", textDecoration: "none" }}>
-                  {one.text}
+                  {one.text_th ?? one.text}
                 </Link>
                 <br />
                 <span className="muted">คู่มือหน้า {one.page}</span>

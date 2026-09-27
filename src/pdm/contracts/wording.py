@@ -12,9 +12,11 @@ a technician compares them with the clock on the wall.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, tzinfo
+from decimal import Decimal, InvalidOperation
 
 SEVERITY = {
     "critical": "วิกฤต",
@@ -95,3 +97,28 @@ class Wording:
         """ "27 ก.ย. 14:05 น."."""
         local = at.astimezone(self.timezone)
         return f"{local.day} {_MONTHS[local.month - 1]} {local:%H:%M} น."
+
+
+# A numeric literal: digits, optional thousands separators, optional decimal
+# part. "5-60" is two figures rather than one, because a hyphen between numbers
+# is a range in a manual and never a subtraction.
+_FIGURE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def figures(text: str) -> frozenset[Decimal]:
+    """Every numeric literal in the text, normalised for comparison.
+
+    `1,200` and `1200` are one figure; so are `42` and `42.0`. Nothing here tries
+    to tell a torque value from a part number: `TP-1` yields 1, and that is
+    deliberate. Counting more things as figures can only make a check that uses
+    this stricter, never looser. Here because both the drafting gate (ADR-037)
+    and the check on a Thai rendering (ADR-095) use it, and `contracts/` is the
+    one place both may import.
+    """
+    found: set[Decimal] = set()
+    for token in _FIGURE.findall(text):
+        try:
+            found.add(Decimal(token.replace(",", "")).normalize())
+        except InvalidOperation:  # pragma: no cover - the pattern cannot produce one
+            continue
+    return frozenset(found)

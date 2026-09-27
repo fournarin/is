@@ -155,6 +155,10 @@ class PlaybookStep(BaseModel):
     source_doc: AttributedDocument
     page: int = Field(ge=1)
     confidence: float = Field(ge=0.0, le=1.0)
+    # The step in Thai, written or checked by the engineer who approved it
+    # (ADR-095). `text` stays the manual's own words, because that is what the
+    # page citation proves; this is what a technician reads first.
+    text_th: str | None = Field(default=None, min_length=1)
 
 
 class Playbook(BaseModel):

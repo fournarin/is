@@ -1,0 +1,67 @@
+"""ADR-095: the approver's Thai for each step, checked against the manual's figures.
+
+A translation is where a torque of 42 becomes 24 and nobody notices, because
+the reader trusts the numbers in the language they read fluently. So the figures
+must match the step exactly, in both directions.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from pdm.contracts import DocumentId, PlaybookStep
+from pdm.playbooks.service import in_thai
+
+DOC = DocumentId("a" * 64)
+
+
+def _step(text: str) -> PlaybookStep:
+    return PlaybookStep(text=text, source_doc=DOC, page=5, confidence=0.9)
+
+
+STEPS = (
+    _step("Isolate the cabinet following the lockout procedure on page 2."),
+    _step("Remove the four fan mounting screws torqued to 3 Nm."),
+    _step("Restore power and confirm the fan reaches 1500 rpm within 30 seconds."),
+)
+
+
+def test_each_step_carries_its_thai_and_keeps_the_manuals_words() -> None:
+    rendered = in_thai(
+        STEPS,
+        (
+            "ตัดพลังงานตู้ควบคุมตามขั้นตอนล็อกเอาต์ในหน้า 2",
+            "ถอดสกรูยึดพัดลมทั้งสี่ตัว (แรงบิด 3 Nm)",
+            "จ่ายไฟกลับ แล้วตรวจว่าพัดลมหมุนถึง 1,500 rpm ภายใน 30 วินาที",
+        ),
+    )
+
+    assert [step.text for step in rendered] == [step.text for step in STEPS]
+    assert rendered[1].text_th == "ถอดสกรูยึดพัดลมทั้งสี่ตัว (แรงบิด 3 Nm)"
+    assert all(step.page == 5 and step.source_doc == DOC for step in rendered)
+
+
+def test_a_blank_entry_leaves_that_step_in_the_manuals_words() -> None:
+    rendered = in_thai(STEPS, ("", "  ", "จ่ายไฟกลับ แล้วตรวจว่าหมุนถึง 1500 rpm ใน 30 วินาที"))
+
+    assert rendered[0].text_th is None
+    assert rendered[1].text_th is None
+    assert rendered[2].text_th is not None
+
+
+def test_a_changed_figure_is_refused_and_named() -> None:
+    with pytest.raises(ValueError, match="ขั้นที่ 2") as refused:
+        in_thai(STEPS, ("", "ถอดสกรูยึดพัดลม แรงบิด 8 Nm", ""))
+
+    assert "ขาด 3" in str(refused.value)
+    assert "เกิน 8" in str(refused.value)
+
+
+def test_a_dropped_figure_is_refused_too() -> None:
+    with pytest.raises(ValueError, match="ขาด 30"):
+        in_thai(STEPS, ("", "", "จ่ายไฟกลับ แล้วตรวจว่าพัดลมหมุนถึง 1500 rpm"))
+
+
+def test_the_count_must_line_up_with_the_steps() -> None:
+    with pytest.raises(ValueError, match="ต้องแปลตามลำดับขั้นให้ครบ"):
+        in_thai(STEPS, ("ขั้นเดียว",))

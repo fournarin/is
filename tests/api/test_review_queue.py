@@ -13,6 +13,7 @@ approve a playbook and could not" is the one asked after an incident.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -367,6 +368,46 @@ class TestWhatTheCodeReviewFound:
         assert response.status_code == 200
         served = playbooks.get(conn, SYM, R2000IC)
         assert served is not None and served[0].required_technicians == 2
+
+    def test_the_approver_can_give_each_step_in_thai(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        """ADR-095: stored on the step, beside the manual's words it renders."""
+        _log_in(client, Role.ENGINEER)
+        pending = client.get(f"/playbooks/queue/{setup['proposal_id']}").json()
+        english = [step["text"] for step in pending["steps"]]
+        # Each rendering carries exactly the figures of the step it renders.
+        thai = [
+            "ขั้นที่แปลแล้ว " + " ".join(re.findall(r"\d[\d,]*(?:\.\d+)?", text)) for text in english
+        ]
+
+        response = client.post(
+            f"/playbooks/queue/{setup['proposal_id']}/approve",
+            json={"thai_steps": thai},
+        )
+
+        assert response.status_code == 200, response.text
+        served = playbooks.get(conn, SYM, R2000IC)
+        assert served is not None
+        assert [step.text_th for step in served[0].steps] == thai
+        assert [step.text for step in served[0].steps] == english
+
+    def test_a_thai_step_with_a_different_figure_is_refused(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        _log_in(client, Role.ENGINEER)
+        pending = client.get(f"/playbooks/queue/{setup['proposal_id']}").json()
+        thai = ["" for _ in pending["steps"]]
+        thai[0] = "ค่าที่ไม่มีในต้นฉบับ 9999"
+
+        response = client.post(
+            f"/playbooks/queue/{setup['proposal_id']}/approve",
+            json={"thai_steps": thai},
+        )
+
+        assert response.status_code == 422
+        assert "ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ" in response.json()["detail"]
+        assert playbooks.get(conn, SYM, R2000IC) is None
 
 
 class TestAskingForADraft:

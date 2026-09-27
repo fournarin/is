@@ -41,7 +41,7 @@ export type Round = {
   held: { ref: string; why: string }[];
 };
 
-export type Step = { text: string; source_doc: string; page: number };
+export type Step = { text: string; text_th: string | null; source_doc: string; page: number };
 
 export type Recurrence = {
   occurrence_count: number;

@@ -34,14 +34,8 @@ from pdm.contracts import (
     SkillId,
     SymptomCode,
 )
-from pdm.llm.domain import (
-    DraftRequest,
-    Evidence,
-    EvidenceRef,
-    Proposal,
-    ProposalKind,
-    figures,
-)
+from pdm.contracts.wording import figures
+from pdm.llm.domain import DraftRequest, Evidence, EvidenceRef, Proposal, ProposalKind
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 

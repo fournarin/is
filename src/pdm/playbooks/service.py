@@ -20,11 +20,13 @@ from pdm.contracts import (
     MachineModel,
     Playbook,
     PlaybookStatus,
+    PlaybookStep,
     Role,
     SkillId,
     SymptomCode,
     UserId,
 )
+from pdm.contracts.wording import figures
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo
 from pdm.playbooks.domain import (
@@ -122,6 +124,7 @@ class PlaybookStore:
         required_technicians: int | None = None,
         note: str | None = None,
         rewritten_steps: tuple[str, ...] | None = None,
+        thai_steps: tuple[str, ...] | None = None,
     ) -> Playbook:
         """Apply a pending proposal to the served row.
 
@@ -168,6 +171,8 @@ class PlaybookStore:
         # been marked applied would leave a decided row with no playbook.
         edits = () if rewritten_steps is None else edits_between(pending.steps, rewritten_steps)
         steps = apply_edits(pending.steps, edits)
+        if thai_steps is not None:
+            steps = in_thai(steps, thai_steps)
 
         skill = required_skill or pending.proposed_skill
         minutes = estimated_minutes or pending.proposed_minutes
@@ -316,3 +321,36 @@ class PlaybookStore:
             decided_at=self.clock.now(),
             note=note,
         )
+
+
+def in_thai(steps: tuple[PlaybookStep, ...], thai: tuple[str, ...]) -> tuple[PlaybookStep, ...]:
+    """The approver's Thai for each step, position for position (ADR-095).
+
+    A blank entry leaves that step without Thai, and the technician reads the
+    manual's words. **Every figure in the Thai must be a figure in the step it
+    renders, and the other way round.** A translation is where a 42 becomes a
+    24 with nobody noticing, because the person checking reads the language
+    they are fluent in and trusts the numbers. Unlike an edit of the English
+    (ADR-064), this has an exact answer, so it is checked.
+    """
+    if len(thai) != len(steps):
+        raise ValueError(
+            f"มีคำแปล {len(thai)} ขั้น แต่ขั้นตอนมี {len(steps)} ขั้น ต้องแปลตามลำดับขั้นให้ครบ "
+            "(ขั้นไหนไม่แปลให้เว้นว่างไว้)"
+        )
+    rendered = []
+    for number, (step, text) in enumerate(zip(steps, thai, strict=True), start=1):
+        text = text.strip()
+        if not text:
+            rendered.append(step)
+            continue
+        wanted, got = figures(step.text), figures(text)
+        if wanted != got:
+            missing = ", ".join(sorted(f"{one:f}" for one in wanted - got)) or "-"
+            extra = ", ".join(sorted(f"{one:f}" for one in got - wanted)) or "-"
+            raise ValueError(
+                f"ขั้นที่ {number}: ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ "
+                f"(ขาด {missing} · เกิน {extra}) ตรวจค่าแรงบิดและตัวเลขอีกครั้ง"
+            )
+        rendered.append(step.model_copy(update={"text_th": text}))
+    return tuple(rendered)

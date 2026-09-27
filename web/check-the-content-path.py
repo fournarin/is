@@ -69,6 +69,18 @@ ENGINEER = UserId("eng-1")
 PASSWORD = "demo-engineer"
 # The symptom the drafter gets right, on the machine that has it.
 SYM = SymptomCode("SYM-047")
+
+# The approver's Thai for the six steps page 5 prescribes, in order. Every figure
+# matches its step, which the API checks (ADR-095); the demo then shows a
+# technician Thai steps with the manual's words beneath them.
+THAI = [
+    "ตัดพลังงานตู้ควบคุมตามขั้นตอนล็อกเอาต์ในหน้า 2",
+    "รอให้ตู้เย็นลงก่อน พื้นผิวด้านในยังร้อนอยู่หลายนาทีหลังตัดไดรฟ์",
+    "ถอดขั้วต่อพัดลมที่เทอร์มินัลบล็อก X4",
+    "ถอดสกรูยึดพัดลมทั้งสี่ตัว (ขันไว้ที่แรงบิด 3 Nm) แล้วดึงชุดพัดลมออก",
+    "ใส่พัดลมตัวใหม่ ขันสกรูยึดที่แรงบิด 3 Nm แล้วต่อขั้วต่อ X4 กลับ",
+    "จ่ายไฟกลับ แล้วตรวจว่าพัดลมหมุนถึง 1500 rpm ภายใน 30 วินาที",
+]
 MACHINE = MachineId("MC-018")
 RULE = RuleId("R-fan-rpm-low")
 COMPONENT = ComponentLabel("cooling_fan")
@@ -308,7 +320,12 @@ def main() -> None:
         submit(
             f"/review/{proposal_id}",
             [
-                *form_with(detail, 'name="required_skill"'),
+                *[
+                    field
+                    for field in form_with(detail, 'name="required_skill"')
+                    if field[0] != "thai"
+                ],
+                *[("thai", text) for text in THAI],
                 ("required_skill", str(ANSWER.required_skill)),
                 ("estimated_minutes", str(ANSWER.estimated_minutes)),
                 ("required_technicians", "1"),
@@ -341,6 +358,10 @@ def main() -> None:
     expect(
         all(step.get("source_doc") and step.get("page") for step in book_steps),
         "every step carries its own document and page (principle 2)",
+    )
+    expect(
+        [step.get("text_th") for step in book_steps] == THAI,
+        "and the approver's Thai for each step, beside the manual's words (ADR-095)",
     )
 
     print("\n6. nothing here was approved by anything but a person")
