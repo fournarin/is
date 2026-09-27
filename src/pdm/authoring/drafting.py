@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,38 +34,21 @@ from pdm.contracts import (
     SkillId,
     SymptomCode,
 )
-from pdm.llm.domain import DraftRequest, Evidence, EvidenceRef, Proposal, ProposalKind
+from pdm.llm.domain import (
+    DraftRequest,
+    Evidence,
+    EvidenceRef,
+    Proposal,
+    ProposalKind,
+    figures,
+)
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
-
-# A numeric literal: digits, optional thousands separators, optional decimal
-# part. "5-60" is two figures rather than one, because a hyphen between numbers
-# is a range in a manual and never a subtraction.
-_FIGURE = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 # A step as the manual numbers it. Stripped before comparison so that a backend
 # returning "2. Remove the belt guard." and one returning "Remove the belt
 # guard." are the same step rather than one of them being a fabrication.
 _LEADING_NUMBER = re.compile(r"^\s*\d{1,2}[.)]\s+")
-
-
-def figures(text: str) -> frozenset[Decimal]:
-    """Every numeric literal in the text, normalised for comparison.
-
-    `1,200` and `1200` are one figure; so are `42` and `42.0`. Nothing here tries
-    to tell a torque value from a part number: `TP-1` yields 1, and that is
-    deliberate. The check runs in one direction only - is this figure present in
-    the evidence - so counting more things as figures can only make it stricter
-    on the step, never looser. Telling them apart would need exactly the
-    judgement the gate exists to avoid making.
-    """
-    found: set[Decimal] = set()
-    for token in _FIGURE.findall(text):
-        try:
-            found.add(Decimal(token.replace(",", "")).normalize())
-        except InvalidOperation:  # pragma: no cover - the pattern cannot produce one
-            continue
-    return frozenset(found)
 
 
 def _as_written(figure: Decimal) -> str:

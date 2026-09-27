@@ -78,7 +78,7 @@ reproduced from a clean checkout. All of it runs on generated data.
 | ETA accuracy, per forecast horizon | [`docs/prediction-baseline.md`](docs/prediction-baseline.md) | under three minutes of error inside three hours; about ten hours late at the twelve-hour horizon |
 | Four scheduling policies over 1,440 simulated runs | [`docs/results/README.md`](docs/results/README.md) | CP-SAT loses the least production in all eighteen cells of the sweep |
 | Why that table came out as it did | [`docs/results/diagnosis.md`](docs/results/diagnosis.md) | ranking work well does not by itself save production here, and whether it would depends on a parameter nobody has measured |
-| What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | correct on one of three repairable symptoms; the two failures are a ranking problem with a named fix |
+| What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | the outcome the answer key implies for all five symptoms, in Thai and English; a symptom the manuals never mention comes back "not found" |
 | Retrieval quality | [`docs/retrieval-baseline.md`](docs/retrieval-baseline.md) | the answer key's page comes back in the top three every time, in Thai and in English alike |
 | Machine health ranking | [`docs/results/health.md`](docs/results/health.md) | the history half ranks the degraded machines first in 39 of 40 draws |
 | Shift lead against scheduler agreement | [`docs/results/confirmations.md`](docs/results/confirmations.md) | **no figures yet** - needs a trial with a person |
@@ -97,11 +97,13 @@ Better said here than found later.
   third do not exist**. The port does, which is the part that makes them cheap
   to add; `SIGNAL_SOURCE=replay` or `=live` refuses at boot and says so. Nothing
   here has ever spoken to an OPC UA server.
-- **The drafter is wrong about two of the three repairable symptoms in the
-  corpus.** It is handed an overview page that repeats the question's words
-  rather than the procedure a page later.
-  [`docs/drafting-baseline.md`](docs/drafting-baseline.md) has the table and
-  names what would fix it: a cross-encoder reranker, which is not built.
+- **The drafter can only say "not found" when the question carries a
+  figure.** It drafts from a page that states every figure the question asks
+  about ([ADR-089](docs/adr/0089-the-drafter-chooses-the-page-the-question-describes.md)),
+  so "cycle time above 62 seconds" finds nothing in manuals that never mention
+  it. Asked without a figure, it still drafts from the nearest page, and a
+  reviewer has to reject that draft; telling "not covered" from "covered badly" needs
+  a relevance score, which is not built.
 - **Playbook coverage is bounded by the corpus, not by the pipeline.** The
   manuals are synthetic and carry their own answer key
   ([ADR-033](docs/adr/0033-a-synthetic-manual-corpus-that-carries-its-own-answer-key.md)),

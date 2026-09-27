@@ -20,10 +20,9 @@ from pdm.authoring.drafting import (
     DraftOutcome,
     RejectionReason,
     assemble,
-    figures,
 )
 from pdm.contracts import DocumentId, MachineModel, SkillId, SymptomCode
-from pdm.llm.domain import DraftRequest, Evidence, Proposal, ProposalKind, ProposedStep
+from pdm.llm.domain import DraftRequest, Evidence, Proposal, ProposalKind, ProposedStep, figures
 
 R2000IC = MachineModel("R-2000iC")
 M710IC = MachineModel("M-710iC")

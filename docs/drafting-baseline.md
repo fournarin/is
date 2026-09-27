@@ -5,12 +5,61 @@ Produced by `scripts/measure_drafting.py`, which CI does not run and must not
 Committed because these numbers will be quoted in the report, and a figure that
 lives only in a terminal gets quoted from memory.
 
-**Measured 12 August 2026** · extractive backend (no LLM) ·
-`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions ·
-authoring profile from `policy.yaml`: 40 candidates, floor 0.20, never abstains ·
-corpus: 2 synthetic manuals, 18 pages, 19 chunks (ADR-033)
+```bash
+PYTHONPATH=. DATABASE_URL=postgresql://.../pdm_test FASTEMBED_CACHE_PATH=... \
+    uv run python scripts/measure_drafting.py
+```
 
-## What came out, per symptom
+## Current: measured 27 September 2026, after ADR-089
+
+Extractive backend (no LLM) · `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`,
+384 dimensions · authoring profile from `policy.yaml`: 40 candidates, floor
+0.20 · corpus: 2 synthetic manuals, 18 pages, 19 chunks (ADR-033) · commit:
+the one that adds this section.
+
+| symptom | lang | wanted | got | key page | cited | fused score | word half | figures |
+|---|---|---|---|---:|---:|---:|---:|---|
+| SYM-014 | en | repair | repair | 4 | 4 | 0.98 | 1.300 | 5/6, 2 misleading |
+| SYM-014 | th | repair | repair | 4 | 4 | 0.98 | 0.100 | 5/6, 2 misleading |
+| SYM-021 | en | repair | repair | 7 | 7 | 0.98 | 1.500 | 3/4, 1 misleading |
+| SYM-021 | th | repair | repair | 7 | 7 | 0.97 | 0.600 | 3/4, 1 misleading |
+| SYM-047 | en | repair | repair | 5 | 5 | 0.99 | 1.600 | 3/4, 1 misleading |
+| SYM-047 | th | repair | repair | 5 | 5 | 0.99 | 0.500 | 3/4, 1 misleading |
+| SYM-002 | en | diagnostic | diagnostic | 11 | 11 | 1.00 | 1.000 | - |
+| SYM-002 | th | diagnostic | diagnostic | 11 | 11 | 1.00 | 0.500 | - |
+| SYM-031 | en | not found | not found | - | - | - | - | - |
+| SYM-031 | th | not found | not found | - | - | - | - | - |
+
+**10 of 10 outcomes are what the answer key implies**, against 4 of 10 on
+12 August. Nothing about retrieval changed. What changed is which of the
+retrieved pages the drafter reads
+([ADR-089](adr/0089-the-drafter-chooses-the-page-the-question-describes.md)):
+a page must state every figure the question asks about, and among those a page
+with a numbered procedure comes first. That fixes the two failures below
+without a reranker, and it gives SYM-031 a "not found", because no page
+states 62 seconds.
+
+**What it does not fix.** A question with no figure in it still ranks by fused
+score alone, and an absent symptom asked that way still gets a draft from the
+nearest page (`tests/authoring/test_drafting.py` pins this as a gap). The
+"misleading" figures are the gate's known limit, described at the end of this
+file: the step really does say 10 Nm, for the guard bolts, one line from the
+42 Nm the motor mount wants. A reviewer is still the check for that.
+
+The fused scores moved by 0.01-0.02 from August, and the word half on SYM-014
+from 1.600 to 1.300. The fastembed version installed now warns that this model
+"now uses mean pooling instead of CLS embedding", which would explain the shift.
+It did not change any ranking that matters here, but it is a reason to pin the
+model by content rather than by name (#114).
+
+---
+
+## History: measured 12 August 2026, before ADR-089
+
+Everything below is the original measurement and its analysis, kept because it
+is the reason ADR-089 exists.
+
+### What came out, per symptom
 
 `wanted` is what the answer key's category implies: a repair draft where a
 procedure exists, a fault-finding draft where the manual documents the symptom
@@ -32,7 +81,7 @@ and prescribes none, and nothing at all where the corpus is silent.
 **4 of 10 outcomes are what the answer key implies.** Every failure is one of
 two things, and neither of them is the drafter.
 
-## Failure 1: the draft is only ever as good as the page it is handed
+### Failure 1: the draft is only ever as good as the page it is handed
 
 Drafting takes the highest-scoring page for the machine model and reads it. Two
 of the three repair symptoms are handed the wrong page:
@@ -51,7 +100,7 @@ symptoms correctly, because the vectors declared there put the right page first.
 That contrast is the point: **with the right page in front of it the drafter is
 right, so what is measured here is a ranking failure and not a drafting one.**
 
-## Failure 2: no score the system produces can say "there is nothing here"
+### Failure 2: no score the system produces can say "there is nothing here"
 
 SYM-031 is the symptom ADR-033 put in the corpus with nothing written about it
 anywhere. Drafting returns a six-step repair procedure copied off the cabinet-fan
@@ -77,7 +126,7 @@ deferred until something showed it was needed. This is that something.
 pins the gap as a test, so it fails when it is closed rather than persisting
 quietly.
 
-## What did work
+### What did work
 
 - **Invariant 5 held on every draft.** Every figure in every step is on the page
   the step cites, checked by reading the page back out of the index rather than
@@ -92,7 +141,7 @@ quietly.
   interlock to continue production is prohibited under all circumstances",
   which is the one sentence on that page a draft must never drop.
 
-## The figure column, and the gate's known limit
+### The figure column, and the gate's known limit
 
 `3/4, 1 misleading` for SYM-047 is the gate's limit in one line. The draft used
 three of the four figures the answer key calls correct, and also the `3` that the

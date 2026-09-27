@@ -359,6 +359,13 @@ export default async function OverviewPage({
                               required
                               placeholder="เช่น มอเตอร์สายพานร้อนเกิน 85 องศา"
                             />
+                            {/* ADR-089: every figure typed here must appear
+                                on the page that answers it. */}
+                            <small>
+                              ใส่ตัวเลขตามที่คู่มือเขียน
+                              ระบบจะร่างจากหน้าที่มีตัวเลขครบทุกตัว
+                              ถ้าไม่มีหน้าไหนตรงจะบอกว่าไม่พบ
+                            </small>
                           </label>
                           <button type="submit" className="quiet">
                             ขอร่าง

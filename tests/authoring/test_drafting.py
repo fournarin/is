@@ -29,11 +29,10 @@ from pdm.authoring.drafting import (
     DraftResult,
     RejectionReason,
     assemble,
-    figures,
 )
 from pdm.authoring.service import Drafting, Ingest
 from pdm.contracts import DocumentId, MachineModel, SymptomCode, UserId
-from pdm.llm.domain import DraftRequest, Proposal, ProposalKind, ProposedStep
+from pdm.llm.domain import DraftRequest, Proposal, ProposalKind, ProposedStep, figures
 from pdm.llm.extractive import ExtractiveDrafter
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config
@@ -289,37 +288,43 @@ class TestTheOtherModelsManual:
 
 
 class TestTheSymptomNothingInTheCorpusDocuments:
-    """A gap, pinned as a gap. This test asserts a failure, on purpose.
+    """SYM-031: the corpus says nothing about cycle time.
 
-    `scripts/measure_drafting.py` with the real model shows the same thing: the
-    corpus says nothing about cycle time, and drafting still produces a repair
-    draft from an unrelated page at a fused score of 0.95. Reciprocal rank fusion
-    knows positions and not distances, and the vector half returns its nearest
-    neighbours however far away they are, so no threshold on that score can mean
-    "there is nothing here" (ADR-037, and `docs/drafting-baseline.md`).
-
-    Written down as a test so that the day a relevance score exists - a
-    cross-encoder is the obvious source - this fails and somebody has to come
-    back and decide, rather than the gap quietly persisting.
+    Until ADR-089 this class pinned a failure: drafting produced a repair draft
+    off the cabinet-fan page at a fused score of 0.95, because reciprocal rank
+    fusion knows positions and not distances. It was written to fail the day
+    the gap closed, and it did. What closed it is not a relevance score but
+    the question: it asks about 62 seconds and no page states 62, so no page
+    answers it.
     """
 
-    def test_an_absent_symptom_still_produces_a_draft_today(
+    def test_an_absent_symptom_asked_with_its_figure_is_not_found(
         self, drafting: Drafting, conn: Connection[Any]
     ) -> None:
         result = _draft(drafting, conn, "SYM-031")
+
+        assert result.outcome is DraftOutcome.NOT_FOUND
+        assert result.draft is None
+
+    def test_asked_without_a_figure_it_still_drafts_today(
+        self, drafting: Drafting, conn: Connection[Any]
+    ) -> None:
+        """The part of the gap that is still open, pinned as a gap.
+
+        With no figure in the question nothing can tell "the manuals do not
+        cover this" from "they cover it badly" (`docs/drafting-baseline.md`).
+        The draft is at least real text off a real page of the right model,
+        which a reviewer can reject in seconds. When a relevance magnitude
+        exists this fails, and somebody has to come back and decide.
+        """
+        result = drafting.run(
+            conn,
+            symptom_code=SymptomCode("SYM-031"),
+            machine_model=M710IC,
+            question="cycle time is drifting upwards",
+        )
 
         assert result.outcome is not DraftOutcome.NOT_FOUND
-        assert result.draft is not None
-
-    def test_and_the_draft_it_produces_is_at_least_traceable(
-        self, drafting: Drafting, conn: Connection[Any]
-    ) -> None:
-        """The consolation: what it drafts is still real text off a real page.
-
-        Which is the difference between a wrong answer a reviewer can reject in
-        seconds and one they cannot check at all.
-        """
-        result = _draft(drafting, conn, "SYM-031")
         assert result.draft is not None
         assert all(step.source_doc == CORPUS.document(M710IC).sha256 for step in result.draft.steps)
 
