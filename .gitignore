@@ -46,6 +46,11 @@ manuals/
 # all, and adding one to the corpus is a deliberate edit here.
 !fixtures/corpus/r-2000ic-maintenance.pdf
 !fixtures/corpus/m-710ic-maintenance.pdf
+# The evaluation set's manuals (ADR-096), named one by one for the same reason.
+!fixtures/evalset/sw-210-servo-gun.pdf
+!fixtures/evalset/sw-310-servo-gun.pdf
+!fixtures/evalset/cv-500-skid-conveyor.pdf
+!fixtures/evalset/sd-30-sealer-dispenser.pdf
 
 # ─────────────────────────────────────────────────────────────
 # Secrets

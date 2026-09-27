@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from pdm.retrieval.embedding import DEFAULT_MODEL, MODEL_CACHE_VARIABLE, OnnxEmbedder
+from pdm.retrieval.rerank import RERANK_MODEL
 
 DOCKERFILE = Path("Dockerfile").read_text(encoding="utf-8")
 COMPOSE = Path("docker-compose.yml").read_text(encoding="utf-8")
@@ -46,6 +47,11 @@ class TestTheImageCarriesTheWeights:
             "the model name is spelled out in the Dockerfile; import it from "
             "pdm.retrieval.embedding instead, or the two drift apart in silence"
         )
+
+    def test_the_reranker_is_baked_by_the_module_that_loads_it(self) -> None:
+        """ADR-097: the same rule for the reranker. Its name comes from code."""
+        assert "OnnxReranker()" in DOCKERFILE
+        assert RERANK_MODEL not in DOCKERFILE
 
     def test_the_weights_belong_to_the_user_that_runs_the_worker(self) -> None:
         """Nothing runs as root here, and a cache the runtime user cannot read is

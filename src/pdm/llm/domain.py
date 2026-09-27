@@ -70,6 +70,10 @@ class DraftRequest(BaseModel):
     machine_model: MachineModel
     question: str = Field(min_length=1)
     evidence: tuple[Evidence, ...] = ()
+    # True when each page's score is a reranker relevance rather than a fused
+    # rank score (ADR-097). Only a relevance is a magnitude a backend may
+    # compare across pages as "nearly as good".
+    relevance_scored: bool = False
 
     def offered(self, ref: EvidenceRef) -> Evidence | None:
         for evidence in self.evidence:

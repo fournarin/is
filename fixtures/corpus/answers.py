@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -101,6 +102,10 @@ class Answer(BaseModel):
 
     model_config = _FROZEN
 
+    # `test` entries of an evaluation set are measured and never tuned on
+    # (ADR-096). The original corpus is all `dev`: it has been looked at.
+    split: Literal["dev", "test"] = "dev"
+
     symptom_code: SymptomCode
     machine_model: MachineModel
     answer_pages: tuple[int, ...] = Field(min_length=1)
@@ -122,6 +127,10 @@ class DocumentedOnly(BaseModel):
 
     model_config = _FROZEN
 
+    # `test` entries of an evaluation set are measured and never tuned on
+    # (ADR-096). The original corpus is all `dev`: it has been looked at.
+    split: Literal["dev", "test"] = "dev"
+
     symptom_code: SymptomCode
     machine_model: MachineModel
     pages: tuple[int, ...] = Field(min_length=1)
@@ -133,6 +142,10 @@ class AbsentSymptom(BaseModel):
     """A symptom with nothing written about it anywhere in the corpus."""
 
     model_config = _FROZEN
+
+    # `test` entries of an evaluation set are measured and never tuned on
+    # (ADR-096). The original corpus is all `dev`: it has been looked at.
+    split: Literal["dev", "test"] = "dev"
 
     symptom_code: SymptomCode
     machine_model: MachineModel
@@ -186,8 +199,9 @@ class Corpus(BaseModel):
         )
 
 
-def load() -> Corpus:
-    return Corpus.model_validate(yaml.safe_load(MANIFEST.read_text(encoding="utf-8")))
+def load(manifest: Path = MANIFEST) -> Corpus:
+    """A corpus from its manifest. The PDFs are the files beside it."""
+    return Corpus.model_validate(yaml.safe_load(manifest.read_text(encoding="utf-8")))
 
 
 CORPUS = load()

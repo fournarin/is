@@ -45,6 +45,8 @@ class Profile(BaseModel):
     # even at authoring time: a lockout procedure for a neighbouring model reads
     # correctly line by line and is wrong in the order the interlocks release.
     same_model_only: bool
+    # A page the reranker scores below this is not evidence at all (ADR-097).
+    min_relevance: float | None = None
 
 
 def profiles_from(policy: RetrievalPolicy) -> tuple[Profile, Profile]:
@@ -65,6 +67,7 @@ def profiles_from(policy: RetrievalPolicy) -> tuple[Profile, Profile]:
             min_score=policy.authoring.min_score,
             abstain=policy.authoring.abstain,
             same_model_only=False,
+            min_relevance=policy.authoring.min_relevance,
         ),
         Profile(
             candidates=policy.runtime.candidates,
