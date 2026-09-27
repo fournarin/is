@@ -1,11 +1,11 @@
 # Architecture decision records
 
-Eighty-five decisions, in the order they were made. Each records the context that
+One record per decision, in the order they were made. Each records the context that
 forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
 
-The count and the highest number differ by three. 057 was reserved for a record that was never written, and the number was left unused rather than given to something else. 084 is reserved for the fix to invariants 4 and 13 (#105) and is not written yet, and 087 is reserved for the improvement loops' runtime path (#107), which is open in a pull request of its own - 088 was taken next rather than held, so that neither number is given to two records. 085 was written before 083, because slice 16.1 held 083 while it was being built; how a number is reserved is in 085.
+057 was reserved for a record that was never written and the number was left unused. No count is written here: it went stale every time a record landed (ADR-090).
 
 **These are append-only.** An ADR is never edited after the fact. Changing your
 mind means writing a new one that references the old, so the record shows what
@@ -97,8 +97,9 @@ entries replace parts of earlier ones, and both are kept.
 | [082](0082-the-data-is-not-coming-this-term-and-what-that-closes.md) | **The data is not coming this term, and what that closes** | |
 | [083](0083-the-pm-schedule-becomes-a-source-of-work.md) | The PM schedule becomes a source of work, and what a schedule nobody has records for costs | |
 | [084](0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) | Two invariants get a mechanism, and two get wording that matches what holds them | |
-| [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | |
+| [085](0085-what-the-unattended-loop-may-merge-and-a-check-that-can-stop-it.md) | What the unattended loop may merge, and a check that can stop it | 090 |
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
+| [087](0087-the-improvement-loops-get-a-screen-and-no-write-path.md) | The improvement loops get a screen, and deliberately no way to write | |
 | [088](0088-an-invariant-is-believed-only-where-something-breaks-it.md) | An invariant is believed only where something breaks it | |
 | [089](0089-the-drafter-chooses-the-page-the-question-describes.md) | The drafter chooses the page the question describes | 037, 086 |
 

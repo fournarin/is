@@ -4,10 +4,10 @@ Every choice in this repository that somebody will have to justify - in the
 report, or standing in front of it. Four lines each: what was decided, why, what
 changes if it is wrong, and where to look.
 
-**This file is the review** (ADR-052). A `human-review` pull request has its
-decisions written here before a person merges it. The unattended loop does not
-merge `human-review` work itself (ADR-085, which narrows ADR-052), and two
-things stop a slice entirely. Both are listed at the bottom.
+Written first as the review a `human-review` pull request needed before merging
+(ADR-052, ADR-085). Since ADR-090 it is no longer a merge gate. It is kept as
+preparation for the report and the viva, because the questions it answers will
+still be asked.
 
 Newest last. If you have ten minutes before writing a chapter, read this file.
 
