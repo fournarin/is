@@ -44,10 +44,13 @@ export type Band = { label: string; tone: "urgent" | "planned" | "normal" | "low
  */
 export function bandFor(one: Ticket): Band {
   if (one.finding_kind === "predicted") {
-    return { label: "วางแผนไว้", tone: "planned" };
+    return { label: "ยังไม่เสีย · วางแผนซ่อม", tone: "planned" };
   }
   if (one.severity === "critical" || one.severity === "high") {
     return { label: "ด่วน", tone: "urgent" };
+  }
+  if (one.origin === "scheduled") {
+    return { label: "บำรุงรักษาตามแผน", tone: "low" };
   }
   if (one.severity === "medium") {
     return { label: "ปกติ", tone: "normal" };
@@ -57,9 +60,31 @@ export function bandFor(one: Ticket): Band {
 
 /** "เห็นมาแล้ว 34 ครั้ง ตั้งแต่ 08:12", or null when there is nothing to count. */
 export function seenLine(one: Ticket, timezone: string): string | null {
-  if (one.recurrence === null) {
+  // A forecast is recomputed on every reading, and "repeated 387 times" would
+  // read as a machine that has failed 387 times.
+  if (one.recurrence === null || one.finding_kind === "predicted") {
     return null;
   }
   const since = plantTime(one.recurrence.detected_at, timezone);
-  return `เห็นมาแล้ว ${one.recurrence.occurrence_count} ครั้ง ตั้งแต่ ${since}`;
+  if (one.recurrence.occurrence_count <= 1) {
+    return `ตรวจพบครั้งแรก ${since} น.`;
+  }
+  return `เกิดซ้ำแล้ว ${one.recurrence.occurrence_count} ครั้ง ตั้งแต่ ${since} น.`;
 }
+
+/** "1 ชม. 30 นาที", for a duration the API gave in minutes. */
+export function minutesText(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours && rest) return `${hours} ชม. ${rest} นาที`;
+  if (hours) return `${hours} ชม.`;
+  return `${rest} นาที`;
+}
+
+/** Severity as the floor says it. A label for a fixed code, not a sentence. */
+export const SEVERITY: Readonly<Record<string, string>> = {
+  critical: "วิกฤต",
+  high: "สูง",
+  medium: "ปานกลาง",
+  low: "ต่ำ",
+};

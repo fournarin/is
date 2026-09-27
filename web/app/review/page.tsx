@@ -1,3 +1,5 @@
+import { NotYours, Shell } from "@/app/ui/shell";
+import { homeFor } from "@/lib/screens";
 import Link from "next/link";
 
 import { groupByModel } from "@/lib/drafts";
@@ -25,15 +27,9 @@ export default async function ReviewQueuePage({
   const account = await requireAccount();
   if (account.role !== "engineer" && account.role !== "supervisor") {
     return (
-      <>
-        <h1>คิวรีวิว playbook</h1>
-        <p className="card">
-          หน้านี้เป็นของวิศวกรและหัวหน้ากะ บัญชีนี้เป็น{ROLE_NAMES[account.role]}
-        </p>
-        <p>
-          <Link href="/">กลับหน้าแรก</Link>
-        </p>
-      </>
+      <Shell account={account} current="/review">
+        <NotYours home={homeFor(account.role)} what="หน้านี้เป็นของวิศวกร" />
+      </Shell>
     );
   }
 
@@ -42,13 +38,12 @@ export default async function ReviewQueuePage({
   const shown = groups.find((group) => group.machine_model === asked) ?? groups[0];
 
   return (
-    <>
+    <Shell account={account} current="/review">
       <div className="who">
         <span>
           คิวรีวิว
           <span className="muted"> · {ROLE_NAMES[account.role]}</span>
         </span>
-        <Link href="/">หน้าแรก</Link>
       </div>
 
       {groups.length === 0 ? (
@@ -100,6 +95,6 @@ export default async function ReviewQueuePage({
           และ API ปฏิเสธที่ endpoint ไม่ใช่แค่ซ่อนปุ่ม (invariant 6)
         </p>
       )}
-    </>
+    </Shell>
   );
 }

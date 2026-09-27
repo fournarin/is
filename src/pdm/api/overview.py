@@ -94,6 +94,8 @@ class SymptomGap(BaseModel):
 
     symptom_code: SymptomCode
     machine_model: MachineModel
+    # The symptom as the plant names it (ADR-093), for the screen to print.
+    title: str | None = None
 
     # Findings raised, then firings within them. Ranked on the first, for the
     # reason `SymptomSeen` records: one channel stuck over its threshold all
@@ -135,6 +137,8 @@ class FlaggedPlaybook(BaseModel):
     """
 
     model_config = _FROZEN
+
+    title: str | None = None
 
     symptom_code: SymptomCode
     machine_model: MachineModel
@@ -329,8 +333,11 @@ def gaps(
         served=playbooks.served_pairs(conn),
         pending=pending,
     )
+    wording = plant.wording()
+    ranked = [row.model_copy(update={"title": wording.symptom(row.symptom_code)}) for row in ranked]
     flagged = [
         FlaggedPlaybook(
+            title=wording.symptom(playbook.symptom_code),
             symptom_code=playbook.symptom_code,
             machine_model=playbook.machine_model,
             revision=playbook.revision,
@@ -684,15 +691,12 @@ def line_overview(
 # two sentences below are what a zero can still mean: nothing registered at all,
 # or nothing registered for that machine.
 PM_STANDING_IS_ABSENT = (
-    "preventive maintenance standing: no PM task is registered, so no reading here can say "
-    "whether a machine's PM is overdue. The PM counts below are what was asked for, which "
-    "is nothing (ADR-083)"
+    "งานบำรุงรักษาตามแผน: ยังไม่มีการลงทะเบียนงานบำรุงรักษาเลย จึงบอกไม่ได้ว่าเครื่องไหนเลยกำหนด"
 )
 
 PM_NOT_EVERY_MACHINE = (
-    "preventive maintenance standing: no PM task is registered for {machines}, so a PM "
-    "count of zero on those rows says nothing was asked rather than nothing is due. An "
-    "interval needs a source, and their manuals state none (ADR-083)"
+    "งานบำรุงรักษาตามแผน: เครื่อง {machines} ยังไม่มีงานบำรุงรักษาลงทะเบียน "
+    "เพราะคู่มือไม่ได้ระบุรอบไว้ เลขศูนย์ของเครื่องเหล่านี้จึงแปลว่ายังไม่มีใครกำหนด ไม่ใช่ไม่มีงานค้าง"
 )
 
 

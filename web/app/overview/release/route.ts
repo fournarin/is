@@ -23,7 +23,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const reason = String(form.get("reason") ?? "").trim();
 
   const back = (query: string): Response =>
-    seeOther(`/overview?${query}`);
+    seeOther(`/board?${query}`);
 
   if (ref === "") {
     return back(`error=${encodeURIComponent("ไม่รู้ว่าจะปล่อยงานไหน")}`);

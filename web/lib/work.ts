@@ -62,6 +62,8 @@ export type Ticket = {
   estimated_minutes: number;
   estimate_is_fallback: boolean;
   required_skill: string | null;
+  required_skill_name: string | null;
+  station: string | null;
   required_technicians: number;
   assignees: string[];
   playbook_warning: string | null;
@@ -99,6 +101,7 @@ export type Proposal = {
   ref: string;
   proposed_at: string;
   assignees: string[];
+  assignee_names: string[];
   priority_score: number;
   priority_reason: string;
   band: string | null;
@@ -127,4 +130,18 @@ export async function myWork(): Promise<Ticket[]> {
 /** What the scheduler is waiting to be told about (ADR-071). */
 export async function proposals(): Promise<Proposal[]> {
   return read<Proposal[]>("/dispatch/proposals");
+}
+
+export type Active = {
+  ref: string;
+  machine_id: string;
+  status: Ticket["status"];
+  assignees: string[];
+  assignee_names: string[];
+  reason: string;
+};
+
+/** What the floor is on right now, for the shift lead's board (ADR-093). */
+export async function activeWork(): Promise<Active[]> {
+  return read<Active[]>("/work-orders/active");
 }

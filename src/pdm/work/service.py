@@ -396,10 +396,7 @@ class WorkOrders:
         if not domain.holds_it(order, user):
             raise TransitionRefused(f"{user} has not accepted {ref}")
         if not note.strip():
-            raise ValueError(
-                "handing over needs a note saying how far the job got; without it the "
-                "next shift starts again from step one (ADR-025)"
-            )
+            raise ValueError("ส่งต่องานต้องเขียนว่าทำถึงไหนแล้ว ไม่อย่างนั้นคนถัดไปต้องเริ่มใหม่ตั้งแต่ขั้นแรก")
 
         repo.close_segments(conn, ref, user=user, now=self.clock.now())
         repo.remove_assignee(conn, ref, user)
@@ -445,13 +442,11 @@ class WorkOrders:
             # zero, which keeps the arithmetic safe and hides the input that was
             # wrong - and these are the numbers Loop 1 learns estimates from.
             raise ValueError(
-                f"{blocked_minutes} blocked minutes on a job of {worked} minutes: "
-                f"waiting cannot be longer than the work it interrupted (ADR-056)"
+                f"เวลารอ {blocked_minutes} นาที มากกว่าเวลาที่ทำงานนี้ทั้งหมด {worked} นาที "
+                f"เวลารอต้องไม่เกินเวลาทำงาน"
             )
         if blocked_minutes > 0 and not blocked_reason:
-            raise ValueError(
-                "blocked minutes need a reason: parts, a line stop, or waiting for help"
-            )
+            raise ValueError("ถ้ามีเวลารอ ต้องเลือกเหตุผลด้วย: รออะไหล่ รอสายหยุด หรือรอคนช่วย")
 
         repo.close_segments(conn, ref, now=now)
         repo.close(

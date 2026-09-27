@@ -31,7 +31,7 @@ function in the system that needs one (ADR-028).
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pdm.contracts import Signal
 from pdm.signals.domain import SignalSource
@@ -47,13 +47,32 @@ class Feed:
     nothing here changes.
     """
 
-    __slots__ = ("_ahead", "_decision_origin", "_done", "_iterator", "_source_origin")
+    __slots__ = (
+        "_ahead",
+        "_decision_origin",
+        "_done",
+        "_head_start",
+        "_iterator",
+        "_source_origin",
+    )
 
-    def __init__(self, source: SignalSource, *, decision_origin: datetime) -> None:
+    def __init__(
+        self,
+        source: SignalSource,
+        *,
+        decision_origin: datetime,
+        head_start: timedelta = timedelta(0),
+    ) -> None:
         if decision_origin.tzinfo is None:
             raise ValueError("a feed needs a timezone-aware origin (ADR-028)")
         self._iterator: Iterator[Signal] = iter(source.stream())
         self._decision_origin = decision_origin
+        # How far into the source the feed begins (ADR-094). The readings before
+        # it are handed over on the first call, as one batch, so the trend is
+        # there to be read; what follows arrives at the clock's own pace.
+        if head_start < timedelta(0):
+            raise ValueError("a head start cannot be negative")
+        self._head_start = head_start
         # One signal of lookahead: read to learn where the source's timeline
         # begins, then held until it is due. Read lazily, because constructing a
         # feed must not start a generator that may open a file or a connection.
@@ -86,7 +105,7 @@ class Feed:
             return []
         assert self._source_origin is not None
 
-        horizon = self._source_origin + (now - self._decision_origin)
+        horizon = self._source_origin + self._head_start + (now - self._decision_origin)
 
         batch: list[Signal] = []
         while True:

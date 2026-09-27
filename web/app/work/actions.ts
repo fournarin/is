@@ -57,7 +57,7 @@ export async function handOver(
   const ref = String(form.get("ref") ?? "");
   const note = String(form.get("note") ?? "").trim();
   if (note === "") {
-    return { error: "เขียนสั้น ๆ ว่าทำถึงไหนแล้ว ก่อนส่งเวร" };
+    return { error: "เขียนสั้น ๆ ว่าทำถึงไหนแล้ว ก่อนส่งต่องาน" };
   }
 
   const response = await callApi(`/work-orders/${encodeURIComponent(ref)}/handover`, {

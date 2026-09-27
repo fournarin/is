@@ -63,6 +63,11 @@ WORKER = f"{socket.gethostname()}:{os.getpid()}"
 # advisor can negotiate with, and the reason `Clock` is a port at all (ADR-028).
 DEFAULT_SPEED = 60.0
 
+# Hours into the scenario the synthetic feed begins (ADR-094). Zero keeps the
+# scenario whole; a demo or a trial run at real speed sets it so the degradation
+# is already under way when a person sits down.
+DEFAULT_HEAD_START_HOURS = 0.0
+
 
 def build_clock() -> Clock:
     """Real time, or real time running fast when a demo is being compressed.
@@ -115,7 +120,16 @@ def build_feed(clock: Clock) -> Feed | None:
         scenario.duration,
         scenario.duration.total_seconds() / speed / 60,
     )
-    return Feed(SyntheticSource(scenario, seed=seed), decision_origin=clock.now())
+    head_start = timedelta(
+        hours=float(os.environ.get("SIGNAL_HEAD_START_HOURS", DEFAULT_HEAD_START_HOURS))
+    )
+    if head_start:
+        log.warning("SYNTHETIC SIGNALS: starting %s into the scenario", head_start)
+    return Feed(
+        SyntheticSource(scenario, seed=seed),
+        decision_origin=clock.now(),
+        head_start=head_start,
+    )
 
 
 def _replay_feed(clock: Clock) -> Feed:

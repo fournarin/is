@@ -1,43 +1,55 @@
 /*
- * Plain CSS, and there will not be a framework here: a new dependency needs an
- * ADR (CLAUDE.md), and a component library would be argued for by a screen that
- * needs it rather than by the shell.
+ * Plain CSS: a new dependency needs an ADR, and nothing here needs one.
  *
- * Built for a phone held at a machine. Everything below follows from that: one
- * column, tap targets no smaller than a fingertip, and contrast that survives
- * a bright shop floor.
+ * Built for a phone held at a machine, and shaped like the apps the people
+ * using it already know (ADR-093): a ride-hailing driver's one-job card for
+ * the technician, a whiteboard of columns for the shift lead. One column on a
+ * phone, tap targets a gloved thumb can hit, contrast that survives a bright
+ * shop floor, and colour that is never the only signal.
  */
 
 :root {
-  --ink: #10151c;
-  --ink-soft: #4a5568;
-  --paper: #f4f6f8;
+  --ink: #0f172a;
+  --ink-soft: #526077;
+  --paper: #eef2f7;
   --card: #ffffff;
-  --line: #d3dae2;
-  --accent: #14487a;
+  --line: #d9e0ea;
+  --accent: #1d4ed8;
+  --accent-soft: #e0e9ff;
   --accent-ink: #ffffff;
-  --warn: #8a4b08;
-  --warn-paper: #fdf3e3;
-  --error: #98211a;
-  --error-paper: #fdeceb;
+  --ok: #047857;
+  --ok-paper: #e3f6ee;
+  --warn: #9a4a00;
+  --warn-paper: #fff1dd;
+  --error: #b42318;
+  --error-paper: #fde8e6;
+  --plan: #6d28d9;
+  --plan-paper: #efe7ff;
 
-  --tap: 3rem; /* the smallest thing a gloved thumb should have to hit */
-  --radius: 0.5rem;
+  --tap: 3.25rem; /* the smallest thing a gloved thumb should have to hit */
+  --radius: 0.9rem;
+  --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 4px 14px rgb(15 23 42 / 6%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #eef2f6;
-    --ink-soft: #a4b1c0;
-    --paper: #11161c;
-    --card: #1a212a;
-    --line: #313c48;
-    --accent: #6fb0ef;
-    --accent-ink: #0b1119;
-    --warn: #f0c07a;
-    --warn-paper: #2c2314;
-    --error: #f2a19c;
-    --error-paper: #2e1715;
+    --ink: #eef2f7;
+    --ink-soft: #a7b3c6;
+    --paper: #0d1320;
+    --card: #172033;
+    --line: #2b3850;
+    --accent: #7aa2ff;
+    --accent-soft: #1f2d52;
+    --accent-ink: #0b1220;
+    --ok: #5fd3a6;
+    --ok-paper: #0f2c24;
+    --warn: #ffc27a;
+    --warn-paper: #33240f;
+    --error: #ff9b91;
+    --error-paper: #3a1714;
+    --plan: #c4a5ff;
+    --plan-paper: #291d45;
+    --shadow: none;
   }
 }
 
@@ -56,316 +68,731 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family:
-    "IBM Plex Sans Thai", "Noto Sans Thai", "Sarabun", -apple-system,
+    var(--font-thai), "IBM Plex Sans Thai", "Noto Sans Thai", -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   line-height: 1.6;
 }
 
 main {
-  max-width: 34rem;
+  max-width: 36rem;
   margin: 0 auto;
-  padding: 1.25rem 1rem 3rem;
+  padding: 1rem 1rem 6.5rem;
 }
 
 h1 {
-  font-size: 1.35rem;
-  line-height: 1.4;
-  margin: 0 0 0.25rem;
+  font-size: 1.45rem;
+  line-height: 1.35;
+  margin: 0.25rem 0 0.75rem;
 }
 
 h2 {
-  font-size: 1.05rem;
-  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 0 0 0.35rem;
 }
 
 p {
   margin: 0 0 0.75rem;
 }
 
+a {
+  color: var(--accent);
+}
+
 .muted {
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 1rem;
-  margin-bottom: 0.75rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 0.9rem;
+  box-shadow: var(--shadow);
 }
 
-.field {
-  display: block;
-  margin-bottom: 1rem;
+/* ── the app bar and the tab bar ─────────────────────────────────────────── */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
-.field span {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-weight: 600;
+.appbar-inner {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.field input {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0 0.75rem;
-  font: inherit;
-  color: var(--ink);
+main:has(.board) ~ .tabbar .tabbar-inner,
+body:has(.board) .appbar-inner {
+  max-width: 76rem;
+}
+
+.appbar .brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.appbar .person {
+  font-size: 0.9rem;
+  opacity: 0.92;
+  text-align: right;
+  line-height: 1.3;
+}
+
+.appbar form {
+  margin: 0;
+}
+
+.appbar button {
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  font-size: 0.85rem;
+  background: transparent;
+  color: var(--accent-ink);
+  border: 1px solid color-mix(in srgb, var(--accent-ink) 55%, transparent);
+}
+
+/* Bottom tabs, as on every phone app the floor already uses. */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.field input:focus-visible,
-button:focus-visible {
+.tabbar-inner {
+  max-width: 36rem;
+  margin: 0 auto;
+  display: flex;
+}
+
+.tabbar a {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  min-height: 4rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.tabbar a .icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.tabbar a.current {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ── buttons ─────────────────────────────────────────────────────────────── */
+
+button,
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--tap);
+  padding: 0 1.25rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button:focus-visible,
+.button-link:focus-visible,
+a:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
-button {
-  min-height: var(--tap);
-  width: 100%;
-  padding: 0 1rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--accent-ink);
-  background: var(--accent);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
 button:disabled {
-  opacity: 0.6;
-  cursor: progress;
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
-button.quiet {
+button.quiet,
+.button-link.quiet {
   color: var(--ink);
-  background: transparent;
-  border-color: var(--line);
-}
-
-.error {
-  color: var(--error);
-  background: var(--error-paper);
-  border: 1px solid currentColor;
-  border-radius: var(--radius);
-  padding: 0.6rem 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.pending {
-  color: var(--warn);
-  background: var(--warn-paper);
-  border: 1px solid currentColor;
-  border-radius: var(--radius);
-  padding: 0.15rem 0.5rem;
-  font-size: 0.8rem;
+  background: var(--card);
+  border: 1px solid var(--line);
   font-weight: 600;
+}
+
+button.big,
+.button-link.big {
+  width: 100%;
+  min-height: 3.75rem;
+  font-size: 1.2rem;
+}
+
+button.ok,
+.button-link.ok {
+  background: var(--ok);
+  color: #fff;
+}
+
+button.danger {
+  background: var(--error);
+  color: #fff;
+}
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.actions > * {
+  flex: 1 1 8rem;
+}
+
+.actions form {
+  margin: 0;
+}
+
+.actions form button {
+  width: 100%;
+}
+
+/* ── status: a word and a colour, never the colour alone ─────────────────── */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
   white-space: nowrap;
 }
 
-.who {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  align-items: baseline;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 0.75rem;
-  margin-bottom: 1.25rem;
+.pill.urgent {
+  background: var(--error-paper);
+  color: var(--error);
 }
 
-.who form {
-  flex: 0 0 auto;
+.pill.normal {
+  background: var(--warn-paper);
+  color: var(--warn);
 }
 
-.who button {
-  width: auto;
+.pill.planned {
+  background: var(--plan-paper);
+  color: var(--plan);
 }
 
-.screen-head {
-  display: flex;
-  gap: 0.75rem;
-  align-items: baseline;
-  justify-content: space-between;
+.pill.low,
+.pill.done {
+  background: var(--ok-paper);
+  color: var(--ok);
 }
 
-/* ── the technician's screens (slice 10.3) ───────────────────────────────── */
+/* ── the one job ─────────────────────────────────────────────────────────── */
 
-a {
-  color: var(--accent);
-}
-
-.button-link {
-  display: block;
-  min-height: var(--tap);
-  padding: 0.65rem 1rem;
-  margin-bottom: 0.75rem;
-  font-weight: 600;
-  text-align: center;
-  text-decoration: none;
-  color: var(--accent-ink);
-  background: var(--accent);
-  border-radius: var(--radius);
-}
-
-.button-link.quiet {
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--line);
-}
-
-/* The band down the left edge is the one thing readable at arm's length, and
-   `planned` must never be mistaken for `urgent` (ADR-020). */
 .job {
-  border-left: 6px solid var(--line);
+  border-top: 6px solid var(--accent);
 }
 
 .job.urgent {
-  border-left-color: var(--error);
-}
-
-.job.planned {
-  border-left-color: var(--warn);
+  border-top-color: var(--error);
 }
 
 .job.normal {
-  border-left-color: var(--accent);
+  border-top-color: var(--warn);
+}
+
+.job.planned {
+  border-top-color: var(--plan);
+}
+
+.job.low {
+  border-top-color: var(--ok);
+}
+
+.job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.machine {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0.2rem 0;
+}
+
+.symptom {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.9rem;
+}
+
+.fact {
+  background: var(--paper);
+  border-radius: 0.65rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.fact .label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.fact .value {
+  font-weight: 700;
+}
+
+.why {
+  border-left: 4px solid var(--line);
+  padding: 0.1rem 0 0.1rem 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.why .label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 
 .reason {
-  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* ── steps, as a checklist ──────────────────────────────────────────────── */
+
+.progress {
+  height: 0.5rem;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0.25rem 0 1rem;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+
+.step-number {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.step-text {
+  font-size: 1.35rem;
+  line-height: 1.5;
+  font-weight: 600;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.step-nav {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.6rem;
+  margin: 0.25rem 0 0.9rem;
+}
+
+.step-nav .done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+
+.checklist li {
+  counter-increment: step;
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.checklist li:first-child {
+  border-top: 0;
+}
+
+.checklist li::before {
+  content: counter(step);
+  flex: 0 0 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--paper);
+}
+
+.checklist li.passed::before {
+  content: "✓";
+  background: var(--ok);
+  color: #fff;
+}
+
+.checklist li.current {
+  font-weight: 700;
+}
+
+.checklist li.current::before {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ── the whiteboard ─────────────────────────────────────────────────────── */
+
+main:has(.board) {
+  max-width: 76rem;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 60rem) {
+  .board {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.column {
+  background: color-mix(in srgb, var(--line) 35%, transparent);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.column > h2 {
+  margin: 0 0 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.count {
+  min-width: 1.8rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.ticket {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--accent);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.6rem;
+  box-shadow: var(--shadow);
+}
+
+.ticket.urgent {
+  border-left-color: var(--error);
+}
+
+.ticket.normal {
+  border-left-color: var(--warn);
+}
+
+.ticket.planned {
+  border-left-color: var(--plan);
+}
+
+.ticket.low {
+  border-left-color: var(--ok);
+}
+
+.ticket-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ticket .machine-small {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.ticket p {
+  margin: 0.3rem 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.stat {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+  box-shadow: var(--shadow);
+}
+
+.stat .big-number {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.stat .label {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.meter {
+  height: 0.6rem;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 0.4rem;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+
+.meter.normal span {
+  background: var(--warn);
+}
+
+.meter.heavy span {
+  background: var(--error);
+}
+
+/* ── notices ────────────────────────────────────────────────────────────── */
+
+.warning,
+.error,
+.recorded {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 0.9rem;
   font-weight: 600;
 }
 
 .warning {
   color: var(--warn);
   background: var(--warn-paper);
-  border: 1px solid currentColor;
-  border-radius: var(--radius);
-  padding: 0.6rem 0.75rem;
-  margin-bottom: 1rem;
+}
+
+.error {
+  color: var(--error);
+  background: var(--error-paper);
+}
+
+.recorded {
+  color: var(--ok);
+  background: var(--ok-paper);
+}
+
+.pending {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.8rem;
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--ink-soft);
+}
+
+.empty .icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+/* ── kept from the earlier screens, restyled through the tokens above ───── */
+
+.who {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.who form {
+  margin: 0;
+}
+
+.screen-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.field {
+  display: block;
+  margin-bottom: 0.9rem;
+}
+
+.field span {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.field input,
+.field select,
+.field textarea,
+textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
 }
 
 summary {
   min-height: var(--tap);
   display: flex;
   align-items: center;
-  font-weight: 600;
   cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .next {
-  margin: 0.5rem 0;
-  padding-left: 1.1rem;
+  margin: 0;
+  padding-left: 1.2rem;
 }
 
 .next li {
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.5rem;
 }
-
-/* One step, large, because it is read standing up with a tool in one hand. */
-.step-text {
-  font-size: 1.25rem;
-  line-height: 1.55;
-  margin-bottom: 0.75rem;
-}
-
-.step-nav {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-}
-
-.step-nav .button-link {
-  flex: 1 1 0;
-  margin-bottom: 0;
-}
-
-.step-nav .done {
-  flex: 1 1 0;
-  text-align: center;
-}
-
-textarea {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  font: inherit;
-  color: var(--ink);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  resize: vertical;
-}
-
-textarea:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.recorded {
-  color: var(--ink-soft);
-  border-left: 3px solid var(--accent);
-  padding-left: 0.75rem;
-  font-size: 0.9rem;
-}
-
-/* ── closing a job (slice 10.4) ──────────────────────────────────────────── */
 
 fieldset {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  margin: 0 0 0.75rem;
+  padding: 0.5rem 0;
+  margin: 0 0 0.9rem;
+  background: var(--card);
 }
 
 legend {
-  padding: 0 0.4rem;
-  font-weight: 600;
+  font-weight: 700;
+  padding: 0 0.5rem;
+  margin-left: 0.5rem;
 }
 
-/* Big targets, wrapping to as many rows as the phone needs. Two taps means two
-   taps that land. */
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  padding: 0.25rem 0.75rem;
 }
 
 .chip {
-  flex: 1 1 8rem;
+  position: relative;
 }
 
 .chip input {
   position: absolute;
   opacity: 0;
-  width: 0;
-  height: 0;
+  width: 1px;
+  height: 1px;
 }
 
 .chip span {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   min-height: var(--tap);
-  padding: 0 0.75rem;
-  text-align: center;
+  padding: 0 1rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 999px;
+  background: var(--card);
   cursor: pointer;
 }
 
 .chip input:checked + span {
-  color: var(--accent-ink);
   background: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .chip input:focus-visible + span {
@@ -377,11 +804,30 @@ legend {
   max-width: 8rem;
 }
 
-/* ── the review screen (slice 10.2) ──────────────────────────────────────── */
+@media print {
+  .appbar,
+  .tabbar,
+  .no-print {
+    display: none !important;
+  }
 
-/* Wider than the technician's screens on purpose: this one is worked at a desk
-   with two things side by side, and the draft is meaningless without the page
-   it came from (ADR-064). It still collapses to one column on a phone. */
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .card {
+    box-shadow: none;
+    border-color: #999;
+  }
+}
+
+
 main:has(.two-up) {
   max-width: 62rem;
 }
@@ -575,6 +1021,7 @@ main:has(.two-up) {
 }
 
 /* Three metres away, this is the only thing that has to be legible. */
+
 .band .load {
   font-size: 3rem;
   font-weight: 700;
@@ -647,35 +1094,6 @@ main:has(.two-up) {
   border-top: 0;
 }
 
-h3 {
-  font-size: 0.95rem;
-  margin: 0 0 0.35rem;
-}
-
-/* ── reporting a fault (slice 16.2, ADR-077) ─────────────────────────────── */
-
-/* A select and a textarea are the two inputs this application had no styles
-   for, because until this screen nobody typed anything into it but a note. */
-.field select,
-.field textarea {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0.5rem 0.75rem;
-  font: inherit;
-  color: var(--ink);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-.field select:focus-visible,
-.field textarea:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* One severity per row, full width. Three choices side by side on a phone is
-   three targets nobody hits with a glove on. */
 .choice {
   display: flex;
   align-items: flex-start;

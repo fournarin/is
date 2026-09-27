@@ -15,10 +15,15 @@ export default async function SignInPage() {
   }
 
   return (
-    <>
-      <h1>ระบบแจ้งซ่อมล่วงหน้า</h1>
-      <p className="muted">เข้าสู่ระบบด้วยบัญชีที่วิศวกรตั้งไว้ให้</p>
-      <SignInForm />
-    </>
+    <main>
+      <div className="card" style={{ marginTop: "12vh" }}>
+        <p style={{ fontSize: "2.5rem", margin: 0 }} aria-hidden="true">
+          🛠️
+        </p>
+        <h1>แจ้งซ่อมล่วงหน้า</h1>
+        <p className="muted">เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านที่หัวหน้าหรือวิศวกรให้ไว้</p>
+        <SignInForm />
+      </div>
+    </main>
   );
 }

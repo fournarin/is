@@ -152,9 +152,9 @@ def seed() -> list[str]:
             "playbook, playbook_proposal, access_log, session, account CASCADE"
         )
         for user, name, role, password in [
-            (TECHNICIAN, "Somchai (technician)", Role.TECHNICIAN, PASSWORD),
-            (ENGINEER, "Pranee (engineer)", Role.ENGINEER, ENGINEER_PASSWORD),
-            (SUPERVISOR, "Anan (supervisor)", Role.SUPERVISOR, SUPERVISOR_PASSWORD),
+            (TECHNICIAN, "สมชาย", Role.TECHNICIAN, PASSWORD),
+            (ENGINEER, "ปราณี", Role.ENGINEER, ENGINEER_PASSWORD),
+            (SUPERVISOR, "อนันต์", Role.SUPERVISOR, SUPERVISOR_PASSWORD),
         ]:
             auth.create_account(conn, user=user, display_name=name, role=role, password=password)
 
@@ -340,32 +340,34 @@ def main() -> None:
 
     print("\n0b. the shift lead confirms, through their own screen")
     sign_in(SUPERVISOR, SUPERVISOR_PASSWORD)
-    panel = readable(get("/overview"))
-    expect("งานที่รอคุณยืนยัน" in panel, "the supervisor is asked, by name, about each one")
+    panel = readable(get("/board"))
+    expect("รอคุณยืนยัน" in panel, "the supervisor is asked, by name, about each one")
     for ref in proposed:
         submit("/overview/confirm", [("ref", ref)])
-    expect("ไม่มีงานรอยืนยัน" in readable(get("/overview")), "and the list empties as they answer")
+    expect("ไม่มีงานรอยืนยัน" in readable(get("/board")), "and the list empties as they answer")
 
     sign_in()
 
     print("\n1. the queue shows one job, and says why it is that one")
     queue = get("/work")
     shown = readable(queue)
-    # Split at the collapsed "next" list. The objection form is a <details>
-    # too, and it belongs above the fold with the reason it sits beside.
-    above_the_fold, _, behind = shown.partition("<summary>ถัดไป")
+    # Split at the list of what is queued behind it (ADR-093 made it a plain
+    # section rather than a collapsed one).
+    above_the_fold, _, behind = shown.partition("งานถัดไปของคุณ (")
     expect("MC-012" in above_the_fold, "the machine the scheduler chose")
     expect(
-        "วางแผนไว้" in above_the_fold,
+        "วางแผนซ่อม" in above_the_fold,
         "a predicted job is banded as planned, never as urgent (ADR-020)",
     )
     expect("ด่วน" not in above_the_fold, "and nothing above the fold calls it urgent")
     expect("คาดว่าจะถึงเกณฑ์" in above_the_fold, "the reason the backend wrote is on it")
-    expect("เห็นมาแล้ว 4 ครั้ง" in above_the_fold, "how often the rule has fired (ADR-023)")
-    expect("ทำไมงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)")
+    expect("เกิดซ้ำแล้ว 4 ครั้ง" in above_the_fold, "how often the rule has fired (ADR-023)")
     expect(
-        behind.startswith(" (1)</summary>"),
-        "one more job is queued behind it, visible and collapsed",
+        "ทำไมต้องทำงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)"
+    )
+    expect(
+        behind.startswith("1)"),
+        "one more job is queued behind it, and visible",
     )
     expect(
         'href="/work/' not in behind,
@@ -373,7 +375,9 @@ def main() -> None:
     )
 
     print("\n1b. disagreeing is recorded, and the queue does not move")
-    expect("ไม่เห็นด้วยกับลำดับนี้" in above_the_fold, "the objection sits beside the reason (ADR-005)")
+    expect(
+        "ไม่เห็นด้วยว่าควรทำงานนี้ก่อน" in above_the_fold, "the objection sits beside the reason (ADR-005)"
+    )
     blank = submit("/work", form_with(queue, 'name="reason"'), [("reason", "  ")])
     expect("เขียนสั้น ๆ" in readable(blank), "an objection with no reason is refused (ADR-059)")
 
@@ -383,20 +387,21 @@ def main() -> None:
         [("reason", "MC-004 หยุดสายจริง งานนี้รอได้")],
     )
     expect(
-        "บันทึกไว้แล้วเมื่อ" in readable(objected), "it says what was written down, not that it hopes so"
+        "ส่งความเห็นแล้วเมื่อ" in readable(objected),
+        "it says what was written down, not that it hopes so",
     )
-    expect("ลำดับงานไม่เปลี่ยน" in readable(objected), "and says plainly that nothing reordered")
+    expect("ลำดับงานยังเหมือนเดิม" in readable(objected), "and says plainly that nothing reordered")
 
     # The assertion the whole button rests on: a queue that could be argued down
     # is not a queue, and the load gate stops meaning anything (ADR-011, ADR-059).
     after = readable(get("/work"))
     expect(
-        after.partition("<summary>ถัดไป")[0] == above_the_fold,
+        after.partition("งานถัดไปของคุณ (")[0] == above_the_fold,
         "the job on top is byte-for-byte the one that was there before the objection",
     )
 
     print("\n2. starting the job goes straight to the steps")
-    steps = submit("/work", form_with(queue, "เริ่มงาน"))
+    steps = submit("/work", form_with(queue, "รับงานและเริ่มทำ"))
     expect("ขั้นที่ 1 จาก 3" in readable(steps), "the first step of three")
     expect(STEPS[0] in steps, "and it is the first step of the playbook that was snapshotted")
     expect("เปิดคู่มือหน้า 142" in readable(steps), "with the page it came from")
@@ -407,7 +412,7 @@ def main() -> None:
     expect("ขั้นที่ 2 จาก 3" in readable(second), "step two")
     expect(STEPS[1] in second, "shows the second instruction")
     last = get("/work/" + ref_from(steps) + "/steps?step=3")
-    expect("ขั้นตอนสุดท้าย" in last, "and the last one says so instead of offering another")
+    expect("ครบทุกขั้น ปิดงาน" in last, "and the last one offers closing instead of another step")
 
     print("\n4. closing the job")
     ref = ref_from(steps)
@@ -415,7 +420,7 @@ def main() -> None:
     expect("ปิดงาน" in close_page, "the close screen is reachable from the steps")
     expect("ไม่พบปัญหา" in close_page, "and offers the false-alarm outcome (ADR-022)")
     expect(
-        "ระบบไม่ถามว่าใช้เวลาไปเท่าไร" in readable(close_page),
+        "ไม่ต้องกรอกเวลาที่ใช้" in readable(close_page),
         "and says plainly that it never asks for a duration (ADR-006, ADR-025)",
     )
     expect(
@@ -436,7 +441,7 @@ def main() -> None:
         [("outcome", "fixed"), ("blocked_reason", "waiting_parts"), ("blocked_minutes", "20")],
     )
     expect(
-        "waiting cannot be longer than the work it interrupted" in impossible,
+        "เวลารอต้องไม่เกินเวลาทำงาน" in impossible,
         "an impossible number comes back as the sentence that says what to change",
     )
 
@@ -450,7 +455,7 @@ def main() -> None:
             ("technician_feedback", "วัดแล้วอุณหภูมิปกติ น่าจะเป็นเซนเซอร์"),
         ],
     )
-    expect("งานของคุณ" in closed, "closing lands back on the queue")
+    expect("งานของฉัน" in closed, "closing lands back on the queue")
 
     print("\n5. the queue advances to the next job")
     after_closing = readable(get("/work"))
@@ -473,20 +478,20 @@ def main() -> None:
 
     print("\n7. handing over the next job needs a note")
     next_ref = ref_from(after_closing)
-    next_steps = submit("/work", form_with(get("/work"), "เริ่มงาน"))
+    next_steps = submit("/work", form_with(get("/work"), "รับงานและเริ่มทำ"))
     expect(next_ref in readable(next_steps), "the next job starts")
     blank = submit(
         f"/work/{next_ref}/steps",
         form_with(next_steps, 'name="note"'),
         [("note", "   ")],
     )
-    expect("ก่อนส่งเวร" in readable(blank), "whitespace is not a handover note (ADR-025)")
+    expect("ก่อนส่งต่องาน" in readable(blank), "whitespace is not a handover note (ADR-025)")
     handed = submit(
         f"/work/{next_ref}/steps",
         form_with(next_steps, 'name="note"'),
         [("note", "ถอดฝาครอบแล้ว รออะไหล่")],
     )
-    expect("งานของคุณ" in handed, "with a note it goes through")
+    expect("งานของฉัน" in handed, "with a note it goes through")
 
     print("\n8. the manual opens at a page rather than downloading whole")
     document = re.search(r'href="/manual/([^"#]+)#page=(\d+)"', steps)

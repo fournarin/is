@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Shell } from "@/app/ui/shell";
 
 import { ReportForm } from "@/app/report/report-form";
 import { machines } from "@/lib/report";
@@ -14,20 +14,16 @@ import { requireAccount } from "@/lib/session";
  * be next to the machine when it starts making a noise.
  */
 export default async function ReportPage() {
-  await requireAccount();
+  const account = await requireAccount();
   const floor = await machines();
 
   return (
-    <>
-      <div className="who">
-        <span>แจ้งงานเสีย</span>
-        <Link href="/">หน้าแรก</Link>
-      </div>
-      <h1>เจออะไรผิดปกติ</h1>
+    <Shell account={account} current="/report">
+      <h1>📣 แจ้งซ่อม</h1>
       <p className="muted">
-        แจ้งสิ่งที่เห็น ไม่ต้องวินิจฉัย ระบบจะเปิดใบงานจากคำที่คุณเขียน แล้วให้หัวหน้ากะยืนยันก่อนจ่ายงาน
+        เลือกเครื่อง บอกสิ่งที่เห็นหรือได้ยิน ไม่ต้องวินิจฉัยเอง ระบบจะเปิดใบงานให้ แล้วหัวหน้ากะยืนยันก่อนส่งถึงช่าง
       </p>
       <ReportForm machines={floor} />
-    </>
+    </Shell>
   );
 }

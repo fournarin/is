@@ -80,7 +80,7 @@ class Handover(BaseModel):
         exactly where no note would: starting again from step one."""
         stripped = value.strip()
         if not stripped:
-            raise ValueError("a handover note cannot be only whitespace (ADR-025)")
+            raise ValueError("โน้ตส่งต่องานต้องมีข้อความ ไม่ใช่ช่องว่าง")
         return stripped
 
 
@@ -137,7 +137,7 @@ class Report(BaseModel):
         something was wrong with it (ADR-077 section 5)."""
         stripped = value.strip()
         if not stripped:
-            raise ValueError("say what you saw - a report with no description cannot be worked")
+            raise ValueError("บอกสิ่งที่เห็นหรือได้ยินด้วย ใบแจ้งที่ไม่มีคำอธิบายช่างทำต่อไม่ได้")
         return stripped
 
     @field_validator("severity")
@@ -150,10 +150,8 @@ class Report(BaseModel):
         the ticket records it afterwards."""
         if value is Severity.CRITICAL:
             raise ValueError(
-                "a report may be low, medium or high, and not critical: high is already "
-                "released on a heavy shift, and critical is reserved for a rule that "
-                "measured it. If it cannot wait for the next round, call the shift lead "
-                "and report it afterwards (ADR-077)"
+                "เลือกความเร่งด่วนได้แค่ ต่ำ ปานกลาง หรือ สูง ระดับวิกฤตใช้กับสิ่งที่เครื่องวัดได้เท่านั้น "
+                "ถ้ารอรอบถัดไปไม่ได้ ให้โทรหาหัวหน้ากะก่อนแล้วค่อยแจ้งในระบบ"
             )
         return value
 
@@ -266,8 +264,8 @@ def report(
     except KeyError as error:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
-            f"{reported.machine_id} is not a machine in this plant - check the number on "
-            f"the machine itself, or ask the shift lead to add it to the configuration",
+            f"ไม่พบเครื่อง {reported.machine_id} ในโรงงานนี้ ตรวจเลขที่ตัวเครื่องอีกครั้ง "
+            f"หรือแจ้งหัวหน้ากะให้เพิ่มเครื่องนี้เข้าระบบ",
         ) from error
 
     try:

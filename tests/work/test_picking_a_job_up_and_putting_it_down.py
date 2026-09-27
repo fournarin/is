@@ -262,7 +262,7 @@ class TestHandingOver:
         orders.accept(conn, ref, user=MORNING_TECH)
         orders.start(conn, ref, user=MORNING_TECH)
 
-        with pytest.raises(ValueError, match="note"):
+        with pytest.raises(ValueError, match="ทำถึงไหนแล้ว"):
             orders.hand_over(conn, ref, user=MORNING_TECH, note="   ")
 
         still_open = work.get(conn, ref)
@@ -334,7 +334,7 @@ class TestClosingAJob:
         orders.start(conn, ref, user=MORNING_TECH)
         clock.advance(timedelta(minutes=40))
 
-        with pytest.raises(ValueError, match="blocked"):
+        with pytest.raises(ValueError, match="เวลารอต้องไม่เกินเวลาทำงาน"):
             orders.close(
                 conn,
                 ref,

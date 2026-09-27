@@ -60,10 +60,10 @@ from pdm.platform.jobs import repo as jobs
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 
 PEOPLE = [
-    (UserId("tech-1"), "Somchai (technician)", Role.TECHNICIAN, "demo-technician"),
-    (UserId("eng-1"), "Pranee (engineer)", Role.ENGINEER, "demo-engineer"),
-    (UserId("sup-1"), "Anan (supervisor)", Role.SUPERVISOR, "demo-supervisor"),
-    (UserId("op-1"), "Malee (operator)", Role.OPERATOR, "demo-operator"),
+    (UserId("tech-1"), "สมชาย", Role.TECHNICIAN, "demo-technician"),
+    (UserId("eng-1"), "ปราณี", Role.ENGINEER, "demo-engineer"),
+    (UserId("sup-1"), "อนันต์", Role.SUPERVISOR, "demo-supervisor"),
+    (UserId("op-1"), "มาลี", Role.OPERATOR, "demo-operator"),
 ]
 
 

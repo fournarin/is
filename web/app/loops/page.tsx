@@ -1,3 +1,5 @@
+import { NotYours, Shell } from "@/app/ui/shell";
+import { homeFor } from "@/lib/screens";
 import Link from "next/link";
 
 import { estimateProposals, thresholdProposals } from "@/lib/loops";
@@ -27,15 +29,9 @@ export default async function LoopsPage() {
   const account = await requireAccount();
   if (account.role !== "engineer" && account.role !== "supervisor") {
     return (
-      <>
-        <h1>ข้อเสนอจากงานที่ปิดแล้ว</h1>
-        <p className="card">
-          หน้านี้เป็นของวิศวกรและหัวหน้ากะ บัญชีนี้เป็น{ROLE_NAMES[account.role]}
-        </p>
-        <p>
-          <Link href="/">กลับหน้าแรก</Link>
-        </p>
-      </>
+      <Shell account={account} current="/loops">
+        <NotYours home={homeFor(account.role)} what="หน้านี้เป็นของวิศวกร" />
+      </Shell>
     );
   }
 
@@ -49,22 +45,21 @@ export default async function LoopsPage() {
   const refused = thresholds.filter((line) => line.proposal === null);
 
   return (
-    <>
+    <Shell account={account} current="/loops">
       <div className="who">
         <span>
           ข้อเสนอจากงานที่ปิดแล้ว
           <span className="muted"> · {ROLE_NAMES[account.role]}</span>
         </span>
-        <Link href="/">หน้าแรก</Link>
       </div>
 
       <p className="muted">
         ระบบคำนวณให้ตอนที่เปิดหน้านี้ ไม่ได้เก็บไว้และไม่ได้ตั้งเวลารัน
         ตัวเลขทุกตัวที่นี่เป็นข้อเสนอเท่านั้น — ไม่มีปุ่มไหนแก้ค่าจริงให้
-        คนเป็นผู้แก้เอง ในที่ที่บันทึกว่าใครแก้ (ADR-022, ADR-087)
+        คนเป็นผู้แก้เอง ในที่ที่บันทึกว่าใครแก้
       </p>
 
-      <h1>1 · เวลามาตรฐานของ playbook</h1>
+      <h1>1 · เวลามาตรฐานของขั้นตอนซ่อม</h1>
       {priced.length === 0 ? (
         <p className="card">
           ยังไม่มีข้อเสนอ — งานที่ปิดแล้วยังน้อยกว่าเกณฑ์ หรือค่ากลางตรงกับค่าที่ตั้งไว้อยู่แล้ว
@@ -93,19 +88,19 @@ export default async function LoopsPage() {
               {one.capped && (
                 <p className="warning">
                   หลักฐานบอก {one.median_minutes} นาที แต่หนึ่งรอบขยับได้ไม่เกิน 20%
-                  แปลว่าค่าที่ตั้งไว้ห่างจากความจริงมากกว่าที่รอบเดียวจะแก้ได้ (ADR-022)
+                  แปลว่าค่าที่ตั้งไว้ห่างจากความจริงมากกว่าที่รอบเดียวจะแก้ได้
                 </p>
               )}
               {line.playbook_status === "needs_review" && (
                 <p className="warning">
-                  playbook ใบนี้รอรีวิวอยู่ เพราะคู่มือที่อ้างถึงถูกเปลี่ยน
-                  แต่ยังถูกส่งให้ช่างและยังใช้คิดโหลดกะอยู่ (ADR-018)
+                  ขั้นตอนชุดนี้รอรีวิวอยู่ เพราะคู่มือที่อ้างถึงถูกเปลี่ยน
+                  แต่ยังถูกส่งให้ช่างและยังใช้คิดโหลดกะอยู่
                 </p>
               )}
               <p className="muted">
-                จะใช้ค่านี้: วิศวกรกรอก {one.proposed_minutes} ตอนอนุมัติ playbook ของคู่นี้ใน{" "}
+                จะใช้ค่านี้: วิศวกรกรอก {one.proposed_minutes} ตอนอนุมัติ ขั้นตอนซ่อมของอาการนี้ใน{" "}
                 <Link href="/review">คิวรีวิว</Link> — การอนุมัติคือที่ที่บันทึกว่าใครเปลี่ยนและเมื่อไร
-                (ADR-024)
+
               </p>
             </article>
           );
@@ -114,7 +109,7 @@ export default async function LoopsPage() {
       {quiet.length > 0 && (
         <details className="card">
           <summary>
-            อีก {quiet.length} playbook ที่ยังไม่มีข้อเสนอ
+            อีก {quiet.length} ขั้นตอนซ่อมที่ยังไม่มีข้อเสนอ
           </summary>
           <ul>
             {quiet.map((line) => (
@@ -127,7 +122,7 @@ export default async function LoopsPage() {
           <p className="muted">
             &quot;ไม่มีข้อเสนอ&quot; รวมสามกรณีไว้ด้วยกัน: ใบที่ใช้ได้ยังไม่ถึงเกณฑ์ ยังไม่มีเลย
             หรือค่ากลางตรงกับค่าที่ตั้งไว้ หน้านี้ไม่แยกให้
-            เพราะการแยกต้องคัดลอกเงื่อนไขว่าใบไหน &quot;ใช้ได้&quot; มาไว้อีกที่หนึ่ง (ADR-066)
+            เพราะการแยกต้องคัดลอกเงื่อนไขว่าใบไหน &quot;ใช้ได้&quot; มาไว้อีกที่หนึ่ง
           </p>
         </details>
       )}
@@ -151,14 +146,14 @@ export default async function LoopsPage() {
                 จาก {one.observations} ใบ · แจ้งเท็จ {one.false_alarms} ใบ · พบของจริง{" "}
                 {one.faults_found} ใบ
                 {one.excluded_predictions > 0 &&
-                  ` · ตัด Finding แบบ predicted ออก ${one.excluded_predictions} ใบ`}
+                  ` · ตัด การแจ้งเตือนล่วงหน้า ออก ${one.excluded_predictions} ใบ`}
                 {line.without_a_reading > 0 &&
                   ` · ไม่มีค่าที่อ่านได้ ${line.without_a_reading} ใบ`}
               </p>
               {one.capped && (
                 <p className="warning">
                   หลักฐานแยกกันที่ {one.separating_threshold} แต่หนึ่งรอบขยับได้ไม่เกิน 10%
-                  (ADR-073)
+
                 </p>
               )}
               <p className="warning">{one.limitation}</p>
@@ -167,7 +162,7 @@ export default async function LoopsPage() {
                 <code>{line.rule_id}</code> ตั้ง <code>threshold</code> เป็น{" "}
                 <strong>{one.proposed_threshold}</strong> (ตอนนี้อ่านได้เป็น {one.current_threshold})
                 แล้ว restart ระบบไม่มีทางแก้ไฟล์นี้ให้เอง และไม่ควรมี: ไฟล์นี้คือสิ่งที่ layer 1
-                บูตขึ้นมาอ่าน และการแก้ต้องผ่านรีวิวเหมือนโค้ด (ADR-087)
+                บูตขึ้นมาอ่าน และการแก้ต้องผ่านรีวิวเหมือนโค้ด
               </p>
             </article>
           );
@@ -186,7 +181,7 @@ export default async function LoopsPage() {
           <p className={line.safety_critical ? "warning" : "reason"}>{line.refusal!.reason}</p>
         </article>
       ))}
-    </>
+    </Shell>
   );
 }
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -119,18 +120,31 @@ class TestWhatItWrites:
         }
         assert held == set(CONFIG.skills)
 
-    def test_the_roster_is_filed_under_the_shift_that_is_running_now(
+    def test_the_roster_covers_the_shift_running_now_and_the_day_after(
         self, conn: Connection[Any]
     ) -> None:
         """ADR-078 §5: resolved when it runs, not hardcoded. A demo at 23:00 files
-        under the night shift, against the date that shift began."""
+        under the night shift, against the date that shift began - and, since
+        ADR-094, every shift of the next day too, so a demo that crosses a shift
+        boundary still has somebody on it."""
         _seed_demo_accounts(conn)
         seed_demo_roster.main()
 
-        window = shift_at(CONFIG.shifts.values(), SystemClock().now(), CONFIG.timezone)
-        assert window is not None
+        now = SystemClock().now()
+        wanted = {
+            (str(found.shift_id), found.on_date)
+            for hour in range(25)
+            if (
+                found := shift_at(
+                    CONFIG.shifts.values(), now + timedelta(hours=hour), CONFIG.timezone
+                )
+            )
+            is not None
+        }
         rows = conn.execute("SELECT DISTINCT shift_id, on_date FROM shift_assignment").fetchall()
-        assert rows == [(str(window.shift_id), window.on_date)]
+        assert set(rows) == wanted
+        running = shift_at(CONFIG.shifts.values(), now, CONFIG.timezone)
+        assert running is not None and (str(running.shift_id), running.on_date) in wanted
 
     def test_every_technician_gets_the_same_declared_capacity(self, conn: Connection[Any]) -> None:
         _seed_demo_accounts(conn)
@@ -148,7 +162,11 @@ class TestWhatItWrites:
         assert seed_demo_roster.main() == 0
 
         assert len(dispatch_repo.technicians(conn)) == 3
-        assert conn.execute("SELECT count(*) FROM shift_assignment").fetchone() == (3,)
+        shifts = conn.execute(
+            "SELECT count(DISTINCT (shift_id, on_date)) FROM shift_assignment"
+        ).fetchone()
+        assert shifts is not None
+        assert conn.execute("SELECT count(*) FROM shift_assignment").fetchone() == (3 * shifts[0],)
 
     def test_it_creates_no_work(self, conn: Connection[Any]) -> None:
         """A roster is capacity, not a source of work. ADR-010's three origins

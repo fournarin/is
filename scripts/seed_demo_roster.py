@@ -27,7 +27,15 @@ from pathlib import Path
 
 from psycopg import connect
 
-from pdm.contracts import Role, ShiftAssignment, SkillId, Technician, UserId, shift_at
+from pdm.contracts import (
+    Role,
+    ShiftAssignment,
+    ShiftWindow,
+    SkillId,
+    Technician,
+    UserId,
+    shift_at,
+)
 from pdm.dispatch import repo as dispatch_repo
 from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.service import Authentication, LocalAccounts
@@ -42,9 +50,9 @@ from pdm.work.repo import PmTaskDefinition
 #
 # tech-1 is `seed_demo.py`'s account; the other two are created here.
 TECHNICIANS = [
-    (UserId("tech-1"), "Somchai (technician)", "demo-technician"),
-    (UserId("tech-2"), "Wichai (technician)", "demo-technician-2"),
-    (UserId("tech-3"), "Pimchanok (technician)", "demo-technician-3"),
+    (UserId("tech-1"), "สมชาย", "demo-technician"),
+    (UserId("tech-2"), "วิชัย", "demo-technician-2"),
+    (UserId("tech-3"), "พิมพ์ชนก", "demo-technician-3"),
 ]
 
 # Every skill in plant.yaml, to each of them, which is what the simulator's
@@ -109,6 +117,17 @@ def main() -> int:
         )
         return 1
 
+    # Every shift from now until the same time tomorrow, not only the one that
+    # is running: a demo or a trial that crosses a shift boundary otherwise
+    # finds nobody rostered and nothing dispatched (ADR-094).
+    windows: list[ShiftWindow] = []
+    for hour in range(25):
+        found = shift_at(config.shifts.values(), now + timedelta(hours=hour), config.timezone)
+        if found is not None and all(
+            (found.shift_id, found.on_date) != (one.shift_id, one.on_date) for one in windows
+        ):
+            windows.append(found)
+
     with connect(url) as conn:
         missing = [user for user in SEEDED_BY_SEED_DEMO if auth_repo.account(conn, user) is None]
         if missing:
@@ -133,15 +152,16 @@ def main() -> int:
                 known_skills=skills,
                 now=now,
             )
-            dispatch_repo.assign_to_shift(
-                conn,
-                ShiftAssignment(
-                    shift_id=window.shift_id,
-                    on_date=window.on_date,
-                    technician=user,
-                    available_minutes=AVAILABLE_MINUTES,
-                ),
-            )
+            for shift in windows:
+                dispatch_repo.assign_to_shift(
+                    conn,
+                    ShiftAssignment(
+                        shift_id=shift.shift_id,
+                        on_date=shift.on_date,
+                        technician=user,
+                        available_minutes=AVAILABLE_MINUTES,
+                    ),
+                )
             written.append(f"  {user:8} {note}")
 
         # The PM schedule, registered from plant.yaml and then given a past this
@@ -176,7 +196,7 @@ def main() -> int:
     # After the commit, never before: a failure halfway through rolls the whole
     # transaction back, and somebody who has already been told a password exists
     # has no way to find out that it does not (the pattern `seed_demo.py` set).
-    print(f"roster for shift {window.shift_id} on {window.on_date}")
+    print("roster for " + ", ".join(f"{shift.shift_id} on {shift.on_date}" for shift in windows))
     print(f"  {window.starts_at:%Y-%m-%d %H:%M} to {window.ends_at:%H:%M} UTC")
     for line in written:
         print(line)

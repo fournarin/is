@@ -298,7 +298,7 @@ class TestWhatTheReadingCannotSay:
         counted = next(row for row in body["by_history"] if row["machine_id"] == str(OFTEN))
         assert counted["history"]["pm_overdue"] == 1
         assert PM_STANDING_IS_ABSENT not in body["absent"]
-        named = next(line for line in body["absent"] if line.startswith("preventive maintenance"))
+        named = next(line for line in body["absent"] if line.startswith("งานบำรุงรักษาตามแผน"))
         assert str(ONCE) in named
         assert str(OFTEN) not in named
         assert named == PM_NOT_EVERY_MACHINE.format(

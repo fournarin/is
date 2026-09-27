@@ -115,55 +115,46 @@ def expect(condition: bool, message: str) -> None:
         sys.exit(1)
 
 
-# user, password, display name, role on screen, offered, not offered
+# user, password, display name, role on screen, tabs offered, tabs not offered
 #
-# "แจ้งงานเสีย" is on every line of this table because slice 16.2 offers it to
-# every role: whoever is standing at the machine is who reports what the rules
-# did not catch (ADR-077 §1). It is the one screen with no role behind it, so a
-# list that omitted it would be a list nobody would notice going wrong.
+# Each role lands on its own work, and its tabs are the screens it is offered
+# (ADR-093). Reporting a fault is offered to every role that stands at a
+# machine (ADR-077 §1); the engineer reaches it through the same URL but is not
+# given a tab for it, because an engineer's four tabs are their own work.
 PEOPLE = [
     (
         "tech-1",
         "demo-technician",
-        "Somchai",
+        "สมชาย",
         "ช่าง",
-        ["งานของคุณ", "แจ้งงานเสีย"],
-        ["คิวรีวิว playbook"],
+        ["งานของฉัน", "แจ้งซ่อม"],
+        ["อนุมัติขั้นตอน", "กระดานงาน"],
     ),
     (
         "eng-1",
         "demo-engineer",
-        "Pranee",
+        "ปราณี",
         "วิศวกร",
-        ["คิวรีวิว playbook", "ภาพรวมสายการผลิต", "แจ้งงานเสีย"],
-        ["งานของคุณ"],
+        ["อนุมัติขั้นตอน", "ยังไม่มีขั้นตอน", "สายการผลิต", "ข้อเสนอปรับค่า"],
+        ["งานของฉัน", "กระดานงาน"],
     ),
     (
         "sup-1",
         "demo-supervisor",
-        "Anan",
+        "อนันต์",
         "หัวหน้ากะ",
-        # The review queue is offered from slice 10.2 on: a supervisor may read
-        # it and may not decide it, and the refusal is at the endpoint rather
-        # than by hiding the door (ADR-064, invariant 6).
-        ["ภาพรวมสายการผลิต", "คิวรีวิว playbook", "แจ้งงานเสีย"],
-        ["งานของคุณ"],
+        ["กระดานงาน", "สายการผลิต", "แจ้งซ่อม"],
+        ["งานของฉัน"],
     ),
-    # One screen, and only that one. Until slice 16.2 an operator had none at
-    # all and the shell said so rather than offering a door onto nothing
-    # (ADR-058), which is what this line used to assert; reporting a fault is
-    # the first thing the role is given. Nothing else: an operator neither
-    # reviews a playbook nor is dispatched to a job (ADR-024).
+    # One screen, and only that one: an operator neither reviews a playbook nor
+    # is dispatched to a job (ADR-024).
     (
         "op-1",
         "demo-operator",
-        "Malee",
-        "ผู้ดูแลเอกสาร",
-        ["แจ้งงานเสีย"],
-        # "ยังไม่มีหน้าจอในระบบ" is in this list rather than gone from the file: it is
-        # what the shell said to an operator until 16.2, and the sentence a
-        # regression here would bring back.
-        ["งานของคุณ", "คิวรีวิว playbook", "ภาพรวมสายการผลิต", "ยังไม่มีหน้าจอในระบบ"],
+        "มาลี",
+        "พนักงานประจำเครื่อง",
+        ["แจ้งซ่อม"],
+        ["งานของฉัน", "อนุมัติขั้นตอน", "สายการผลิต", "กระดานงาน"],
     ),
 ]
 
@@ -179,7 +170,7 @@ def main() -> None:
         sessions = [cookie for cookie in jar if cookie.name == "pdm_session"]
         expect(len(sessions) == 1, "the web server set pdm_session on its own origin")
         expect(sessions[0].has_nonstandard_attr("HttpOnly"), "it is HttpOnly")
-        expect(name in page, f"the shell greets {name}")
+        expect(name in page, f"the app bar names {name}")
         expect(role in page, f"and names the role: {role}")
         for screen in offered:
             expect(screen in page, f"offered: {screen}")
@@ -196,11 +187,15 @@ def main() -> None:
     jar.clear()
     sign_in("tech-1", "demo-technician")
     token = next(cookie.value or "" for cookie in jar if cookie.name == "pdm_session")
-    shell = str(opener.open(f"{WEB}/").read().decode())
-    expect("Somchai" in shell, "the shell is reachable while signed in")
+    # "/" sends each role to its own work (ADR-093), so the shell - and the
+    # sign-out form in it - is on the page it lands on.
+    with opener.open(f"{WEB}/") as landed:
+        home = landed.geturl()
+        shell = str(landed.read().decode())
+    expect("สมชาย" in shell, "the shell is reachable while signed in")
     expect(api_status_for(token) == 200, "the API accepts the token the browser holds")
 
-    post(f"{WEB}/", hidden_fields(shell))
+    post(home, hidden_fields(shell))
     expect([c for c in jar if c.name == "pdm_session" and c.value] == [], "the cookie is cleared")
     # ADR-036 point 2: the row is what makes revocation immediate, so the token
     # has to be dead at the API even for somebody who kept a copy of it.

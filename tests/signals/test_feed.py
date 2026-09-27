@@ -183,3 +183,31 @@ class TestAgainstTheRealSource:
 
         assert len(first_hour) == 61 * len(LINE_A_TWELVE_HOURS.channels)
         assert not feed.exhausted
+
+
+class TestAHeadStart:
+    """ADR-094: a demo at real speed starts part-way into the scenario, so a
+    person's windows stay real minutes and there is still something to see."""
+
+    def test_the_readings_before_the_head_start_arrive_at_once(self) -> None:
+        feed = Feed(
+            Recorded(_samples(120)),
+            decision_origin=DECISION_START,
+            head_start=timedelta(minutes=30),
+        )
+
+        assert len(feed.due(DECISION_START)) == 31
+
+    def test_after_it_the_scenario_moves_at_the_clocks_pace(self) -> None:
+        feed = Feed(
+            Recorded(_samples(120)),
+            decision_origin=DECISION_START,
+            head_start=timedelta(minutes=30),
+        )
+        feed.due(DECISION_START)
+
+        assert len(feed.due(DECISION_START + timedelta(minutes=10))) == 10
+
+    def test_a_negative_head_start_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="negative"):
+            Feed(Recorded(_samples(5)), decision_origin=DECISION_START, head_start=-timedelta(1))

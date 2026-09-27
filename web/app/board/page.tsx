@@ -1,0 +1,185 @@
+import { NotYours, Shell } from "@/app/ui/shell";
+import { bandFor, plantTime } from "@/lib/display";
+import { homeFor } from "@/lib/screens";
+import { requireAccount } from "@/lib/session";
+import { activeWork, currentRound, proposals, ticket, type Ticket } from "@/lib/work";
+
+const STATUS: Record<string, string> = {
+  assigned: "มอบหมายแล้ว",
+  in_progress: "กำลังทำ",
+  handed_over: "ส่งต่อรอคนรับ",
+};
+
+/**
+ * The shift lead's whiteboard (ADR-093): what is waiting for them, what the
+ * system is holding back, and what the floor is on - three columns, as on the
+ * board in the maintenance office.
+ *
+ * Nothing here ranks, scores or phrases anything. The order of each column is
+ * the order the API gave, and every sentence was written by the backend
+ * (ADR-005, ADR-063). Confirming is one tap and rejecting asks why, because
+ * agreeing with the scheduler explains itself and disagreeing does not
+ * (ADR-071).
+ */
+export default async function BoardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ released?: string; confirmed?: string; rejected?: string; error?: string }>;
+}) {
+  const account = await requireAccount();
+  if (account.role !== "supervisor" && account.role !== "engineer") {
+    return (
+      <Shell account={account} current="/board">
+        <NotYours home={homeFor(account.role)} what="กระดานงานเป็นของหัวหน้ากะ" />
+      </Shell>
+    );
+  }
+  const { released, confirmed, rejected, error } = await searchParams;
+
+  const [round, waiting, active] = await Promise.all([currentRound(), proposals(), activeWork()]);
+  const tickets = new Map<string, Ticket>(
+    await Promise.all(
+      [...waiting.map((one) => one.ref), ...round.held.map((one) => one.ref)].map(
+        async (ref) => [ref, await ticket(ref)] as const,
+      ),
+    ),
+  );
+  const load = round.load_ratio === null ? null : Math.round(round.load_ratio * 100);
+
+  return (
+    <Shell account={account} current="/board">
+      <h1>กระดานงานกะนี้</h1>
+
+      {confirmed !== undefined && <p className="recorded">✓ ยืนยัน {confirmed} แล้ว งานถูกส่งถึงช่างแล้ว</p>}
+      {rejected !== undefined && <p className="recorded">↩ ปฏิเสธ {rejected} แล้ว งานกลับเข้าคิว รอบถัดไปจะจัดใหม่</p>}
+      {released !== undefined && <p className="recorded">✓ ปล่อย {released} แล้ว รอบถัดไปจะจัดช่างให้</p>}
+      {error !== undefined && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className="stats">
+        <div className="stat">
+          <div className="label">ภาระงานของกะ</div>
+          <div className="big-number">{load === null ? "—" : `${load}%`}</div>
+          <div className={`meter ${round.band}`}>
+            <span style={{ width: `${Math.min(load ?? 0, 100)}%` }} />
+          </div>
+        </div>
+        <div className="stat">
+          <div className="label">รอคุณยืนยัน</div>
+          <div className="big-number">{waiting.length}</div>
+        </div>
+        <div className="stat">
+          <div className="label">ช่างกำลังทำ</div>
+          <div className="big-number">{active.length}</div>
+        </div>
+      </div>
+      <p className="muted">{round.summary}</p>
+
+      <div className="board">
+        <section className="column">
+          <h2>
+            รอคุณยืนยัน <span className="count">{waiting.length}</span>
+          </h2>
+          {waiting.length === 0 && <p className="muted">ไม่มีงานรอยืนยัน</p>}
+          {waiting.map((one) => {
+            const job = tickets.get(one.ref)!;
+            const band = bandFor(job);
+            return (
+              <article className={`ticket ${band.tone}`} key={one.ref}>
+                <div className="ticket-head">
+                  <span className="machine-small">{job.machine_id}</span>
+                  <span className={`pill ${band.tone}`}>{band.label}</span>
+                </div>
+                <p>{job.reason}</p>
+                <p>
+                  👷 ส่งให้ <strong>{one.assignee_names.join(", ")}</strong>
+                </p>
+                <p className="muted">ทำไมก่อน: {one.priority_reason}</p>
+                <p className="muted">
+                  ถ้าไม่ตอบภายใน {plantTime(one.expires_at, round.timezone)} น. งานจะกลับเข้าคิวเอง
+                </p>
+                <div className="actions">
+                  <form method="post" action="/overview/confirm">
+                    <input type="hidden" name="ref" value={one.ref} />
+                    <button type="submit" className="ok">
+                      ✓ ยืนยัน
+                    </button>
+                  </form>
+                  <details>
+                    <summary>✗ ไม่ส่ง</summary>
+                    <form method="post" action="/overview/reject">
+                      <input type="hidden" name="ref" value={one.ref} />
+                      <label className="field">
+                        <span>ทำไมยังไม่ควรส่ง</span>
+                        <textarea name="reason" rows={2} required placeholder="เช่น ช่างคนนี้ติดงานที่สาย B อยู่" />
+                      </label>
+                      <button type="submit" className="danger">
+                        ไม่ส่ง พร้อมเหตุผลนี้
+                      </button>
+                    </form>
+                  </details>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="column">
+          <h2>
+            ระบบกันไว้ก่อน <span className="count">{round.held.length}</span>
+          </h2>
+          {round.held.length === 0 && <p className="muted">ไม่มีงานถูกกันไว้</p>}
+          {round.held.map((one) => {
+            const job = tickets.get(one.ref)!;
+            const band = bandFor(job);
+            return (
+              <article className={`ticket ${band.tone}`} key={one.ref}>
+                <div className="ticket-head">
+                  <span className="machine-small">{job.machine_id}</span>
+                  <span className={`pill ${band.tone}`}>{band.label}</span>
+                </div>
+                <p>{job.reason}</p>
+                <p className="muted">ทำไมยังไม่ปล่อย: {one.why}</p>
+                <details>
+                  <summary>ปล่อยงานนี้เลย</summary>
+                  {/* A plain form, posted and redirected: a release takes the
+                      ticket out of this list (app/overview/release/route.ts). */}
+                  <form method="post" action="/overview/release">
+                    <input type="hidden" name="ref" value={one.ref} />
+                    <label className="field">
+                      <span>ทำไมต้องปล่อยตอนนี้</span>
+                      <textarea name="reason" rows={2} required placeholder="เช่น สาย A หยุดรอชิ้นนี้อยู่" />
+                    </label>
+                    <button type="submit">ปล่อยงาน พร้อมเหตุผลนี้</button>
+                  </form>
+                </details>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="column">
+          <h2>
+            ช่างกำลังทำ <span className="count">{active.length}</span>
+          </h2>
+          {active.length === 0 && <p className="muted">ยังไม่มีงานที่ส่งถึงช่าง</p>}
+          {active.map((one) => (
+            <article className="ticket" key={one.ref}>
+              <div className="ticket-head">
+                <span className="machine-small">{one.machine_id}</span>
+                <span className={`pill ${one.status === "in_progress" ? "done" : ""}`}>
+                  {STATUS[one.status] ?? one.status}
+                </span>
+              </div>
+              <p>{one.reason}</p>
+              <p className="muted">👷 {one.assignee_names.join(", ") || "ยังไม่มีคนรับ"}</p>
+            </article>
+          ))}
+        </section>
+      </div>
+    </Shell>
+  );
+}

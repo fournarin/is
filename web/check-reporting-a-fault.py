@@ -82,7 +82,7 @@ def seed() -> None:
         auth.create_account(
             conn,
             user=OPERATOR,
-            display_name="Malee (operator)",
+            display_name="มาลี",
             role=Role.OPERATOR,
             password=PASSWORD,
         )

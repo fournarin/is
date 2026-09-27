@@ -102,8 +102,8 @@ def seed() -> dict[str, int]:
             "document CASCADE"
         )
         for user, name, role in [
-            (ENGINEER, "Pranee (engineer)", Role.ENGINEER),
-            (TECHNICIAN, "Somchai (technician)", Role.TECHNICIAN),
+            (ENGINEER, "ปราณี", Role.ENGINEER),
+            (TECHNICIAN, "สมชาย", Role.TECHNICIAN),
         ]:
             auth.create_account(conn, user=user, display_name=name, role=role, password=PASSWORD)
 

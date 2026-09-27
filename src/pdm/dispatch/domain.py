@@ -382,7 +382,9 @@ def _reason(
             if order.required_skill is not None
             else "งานนี้ไม่ต้องใช้ทักษะเฉพาะ ใครว่างก็รับได้",
         ),
-        (weights.waiting * terms.waiting, f"รอมาแล้ว {_span(waited)}"),
+        # A job that has waited under a minute has nothing to say about waiting,
+        # whatever its normalised term came to against an equally fresh round.
+        (weights.waiting * terms.waiting if waited >= 1 else 0.0, f"รอมาแล้ว {_span(waited)}"),
         (
             weights.eta_urgency * terms.eta_urgency,
             f"คาดว่าจะถึงเกณฑ์ในอีกราว {_span((order.eta - now).total_seconds() / 60.0)}"

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   const machineModel = String(form.get("machine_model") ?? "");
   const question = String(form.get("question") ?? "").trim();
 
-  const back = (query: string): Response => seeOther(`/overview?${query}`);
+  const back = (query: string): Response => seeOther(`/gaps?${query}`);
 
   if (symptomCode === "" || machineModel === "") {
     return back(`error=${encodeURIComponent("ไม่รู้ว่าจะร่างของอาการไหน")}`);
