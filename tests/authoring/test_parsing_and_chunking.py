@@ -280,3 +280,29 @@ class TestTheCorpusChunksTheWayTheAnswerKeySays:
             parsed = parse(document.path.read_bytes())
             for chunk in chunk_document(DocumentId(document.sha256), parsed.pages):
                 assert len(chunk.text) <= TARGET_CHARACTERS * 1.5
+
+
+class TestAnEncryptedManual:
+    """ADR-098: real manuals arrive AES-encrypted with an empty open password."""
+
+    @staticmethod
+    def _encrypted(*, user_password: str) -> bytes:
+        from io import BytesIO
+
+        from pypdf import PdfReader, PdfWriter
+
+        writer = PdfWriter(clone_from=PdfReader(CORPUS.documents[0].path))
+        writer.encrypt(user_password=user_password, owner_password="owner", algorithm="AES-256")
+        out = BytesIO()
+        writer.write(out)
+        return out.getvalue()
+
+    def test_one_anybody_may_open_is_read_like_any_other(self) -> None:
+        parsed = parse(self._encrypted(user_password=""))
+
+        assert len(parsed.pages) == CORPUS.documents[0].pages
+        assert "lockout" in parsed.pages[1].text.lower()
+
+    def test_one_that_needs_a_password_is_refused_saying_so(self) -> None:
+        with pytest.raises(UnreadableDocument, match="password"):
+            parse(self._encrypted(user_password="secret"))

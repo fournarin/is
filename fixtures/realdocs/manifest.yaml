@@ -1,0 +1,123 @@
+# An answer key for two real manufacturer manuals (ADR-098). The PDFs are NOT
+# in this repository: they are the owner's samples, kept outside git, and
+# `scripts/measure_rag.py realdocs` reads them from REALDOCS_DIR (default
+# ./ตัวอย่างเอกสารจริง). The key holds page numbers and questions only.
+#
+# Written by reading the manuals, before the pipeline was run on them, and all
+# `test`. Neither manual prescribes a field repair: both say to inspect and to
+# contact the manufacturer for repair or replacement. So every answered entry is
+# `documented_without_procedure`, and the outcome owed is fault-finding text from
+# the right page, never an invented procedure.
+
+version: 1
+
+documents:
+  - filename: sh3181l.pdf
+    sha256: f90f4009f2f80b5e1b3233a83c5a08badfc9dae3c0b39030318bbd017153fdad
+    title: Servo Motor Instruction Manual
+    machine_model: HC-SERVO
+    edition: SH(NA)3181-L
+    pages: 456
+    lockout_page: 66
+  - filename: sh030175b.pdf
+    sha256: 089ca3cdb311e414beb5c9c7dd5eece70e1e371805cba7c98621da72aeee0159
+    title: MR-J4 Servo Amplifier Instruction Manual (Modbus-RTU)
+    machine_model: MR-J4
+    edition: SH(NA)030175-B
+    pages: 118
+    lockout_page: 3
+
+covered: []
+
+documented_without_procedure:
+  - symptom_code: RD-01
+    split: test
+    machine_model: HC-SERVO
+    pages: [66]
+    why: chapter 4 lists what to inspect (bearing and brake noise, cables, alignment, connector screws) and the parts' life; repair is the manufacturer's
+    queries:
+      en: servo motor bearing makes an unusual noise
+      th: มอเตอร์เซอร์โวมีเสียงดังผิดปกติที่ลูกปืน
+
+  - symptom_code: RD-02
+    split: test
+    machine_model: HC-SERVO
+    pages: [66]
+    why: the life table gives the oil seal 5,000 hours and bearings 20,000 to 30,000
+    queries:
+      en: how often should the servo motor oil seal be replaced
+      th: ซีลน้ำมันมอเตอร์เซอร์โวต้องเปลี่ยนทุกกี่ชั่วโมง
+
+  - symptom_code: RD-03
+    split: test
+    machine_model: HC-SERVO
+    pages: [120, 121]
+    why: note 1 says there is no manual release and a separate 24 VDC supply releases the brake
+    queries:
+      en: need to turn the motor shaft by hand but the brake is holding it
+      th: ต้องหมุนเพลามอเตอร์ด้วยมือแต่เบรกล็อกอยู่ ปลดเบรกยังไง
+
+  - symptom_code: RD-04
+    split: test
+    machine_model: HC-SERVO
+    pages: [8]
+    why: the storage caution says what to check before use after long storage
+    queries:
+      en: motor was stored for six months, what to check before using it
+      th: มอเตอร์เก็บไว้ 6 เดือน ก่อนใช้งานต้องตรวจอะไรบ้าง
+
+  - symptom_code: RD-05
+    split: test
+    machine_model: HC-SERVO
+    pages: [8]
+    why: the electrolytic capacitor is recommended to be replaced every 10 years
+    queries:
+      en: when to replace the electrolytic capacitor of the servo amplifier
+      th: คาปาซิเตอร์ในเซอร์โวแอมป์ต้องเปลี่ยนทุกกี่ปี
+
+  - symptom_code: RD-06
+    split: test
+    machine_model: MR-J4
+    pages: [35]
+    why: section 3.4.5, on a parity, CRC, overrun or framing error the amplifier returns no message
+    queries:
+      en: servo amplifier does not answer Modbus messages, maybe a CRC error
+      th: เซอร์โวแอมป์ไม่ตอบกลับทาง Modbus สงสัยว่า CRC error
+
+  - symptom_code: RD-07
+    split: test
+    machine_model: MR-J4
+    pages: [43]
+    why: sections 4.6 and 4.7, the error register 1001h and the current alarm at 2A41h
+    queries:
+      en: how to read the current alarm number over Modbus
+      th: อ่านเลข alarm ปัจจุบันผ่าน Modbus ได้อย่างไร
+
+absent:
+  - symptom_code: RD-08
+    split: test
+    machine_model: HC-SERVO
+    why: grippers are not in a servo motor manual
+    forbidden_phrases:
+      - vacuum
+      - gripper
+    queries:
+      en: robot gripper vacuum cup is not holding the part
+      th: หัวดูดสุญญากาศของกริปเปอร์จับชิ้นงานไม่อยู่
+
+  - symptom_code: RD-09
+    split: test
+    machine_model: MR-J4
+    why: weld tip dressing is not in a servo amplifier manual
+    forbidden_phrases:
+      - dresser
+      - weld
+    queries:
+      en: spot weld tip dresser cutter is broken
+      th: ใบมีดแต่งหัวเชื่อมหัก
+
+never_an_answer:
+  - document: sh3181l.pdf
+    page: 1
+  - document: sh030175b.pdf
+    page: 1

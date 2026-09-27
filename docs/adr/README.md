@@ -110,6 +110,7 @@ entries replace parts of earlier ones, and both are kept.
 | [095](0095-a-step-carries-the-approvers-thai.md) | **A step carries the approver's Thai, with the manual's figures checked** | 003, 064 |
 | [096](0096-an-evaluation-set-the-pipeline-was-not-tuned-on.md) | An evaluation set the pipeline was not tuned on | 033, 089 |
 | [097](0097-a-reranker-decides-whether-the-manuals-answer-at-all.md) | **A reranker decides whether the manuals answer at all** | 086 |
+| [098](0098-what-two-real-manuals-changed.md) | **What two real manufacturer manuals changed** | 034, 097 |
 
 ## The invariants these records cite
 

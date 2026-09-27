@@ -302,3 +302,37 @@ class TestARelevanceScoredRequest:
         )
 
         assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 3)}
+
+
+class TestWhatIsNotAStep:
+    """ADR-098: shapes from a real manual that are numbered and are not steps."""
+
+    @staticmethod
+    def _proposal(text: str):  # type: ignore[no-untyped-def]
+        page = Evidence(
+            document_id=R2000IC_DOC,
+            page=66,
+            text=text,
+            title="manual",
+            machine_model=MachineModel("R-2000iC"),
+            score=0.9,
+        )
+        return ExtractiveDrafter().propose(_request(page, question="bearing noise"))
+
+    def test_parenthesised_section_numbers_are_not_steps(self) -> None:
+        proposal = self._proposal(
+            "(1) Inspection It is recommended to make the following checks periodically. "
+            "(a) Check the bearings for unusual noise. (2) Life The following parts must be "
+            "changed periodically as listed below."
+        )
+
+        assert proposal.kind is ProposalKind.DIAGNOSTIC
+
+    def test_numbered_footnotes_are_not_steps(self) -> None:
+        proposal = self._proposal(
+            "Note 1. There is no manual release mechanism, so use a separate supply. "
+            "2. The value for initial ON gap at 20 degrees. 3. The brake gap will increase "
+            "as the lining wears."
+        )
+
+        assert proposal.kind is ProposalKind.DIAGNOSTIC

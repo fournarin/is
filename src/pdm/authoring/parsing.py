@@ -144,7 +144,19 @@ def parse(source: BinaryIO | bytes) -> ParsedDocument:
     handle = BytesIO(source) if isinstance(source, bytes) else source
     try:
         reader = PdfReader(handle)
+        # Manufacturers' manuals are commonly AES-encrypted with an owner
+        # password and an empty user password: readable by anyone, protected
+        # against editing. pypdf opens those with the empty password, given the
+        # `crypto` extra (ADR-098). One that needs a password to open cannot be
+        # read here, and is refused with a sentence saying so.
+        if reader.is_encrypted and not reader.decrypt(""):
+            raise UnreadableDocument(
+                "the PDF needs a password to open; ask the supplier for a copy without "
+                "an open password"
+            )
         page_objects = list(reader.pages)
+    except UnreadableDocument:
+        raise
     except PdfReadError as error:
         raise UnreadableDocument(str(error)) from error
     except Exception as error:  # pypdf raises assorted exceptions on damaged files

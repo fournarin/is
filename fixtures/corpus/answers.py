@@ -162,7 +162,8 @@ class Corpus(BaseModel):
 
     version: int = Field(ge=1)
     documents: tuple[ManualDocument, ...] = Field(min_length=1)
-    covered: tuple[Answer, ...] = Field(min_length=1)
+    # Empty for a key of real manuals that prescribe no field repair (ADR-098).
+    covered: tuple[Answer, ...] = ()
     documented_without_procedure: tuple[DocumentedOnly, ...] = ()
     absent: tuple[AbsentSymptom, ...] = ()
     never_an_answer: tuple[PageRef, ...] = Field(min_length=1)
