@@ -136,6 +136,7 @@ def seed() -> None:
         dispatch_repo.add_technician(
             conn,
             Technician(user=TECHNICIAN, skills=frozenset({SkillId("robot_mechanical")})),
+            known_skills=frozenset({SkillId("robot_mechanical")}),
             now=now,
         )
         dispatch_repo.assign_to_shift(
