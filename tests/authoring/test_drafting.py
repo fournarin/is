@@ -29,11 +29,10 @@ from pdm.authoring.drafting import (
     DraftResult,
     RejectionReason,
     assemble,
-    figures,
 )
 from pdm.authoring.service import Drafting, Ingest
 from pdm.contracts import DocumentId, MachineModel, SymptomCode, UserId
-from pdm.llm.domain import DraftRequest, Proposal, ProposalKind, ProposedStep
+from pdm.llm.domain import DraftRequest, Proposal, ProposalKind, ProposedStep, figures
 from pdm.llm.extractive import ExtractiveDrafter
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config

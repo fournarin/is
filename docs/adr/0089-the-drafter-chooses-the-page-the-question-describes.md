@@ -39,7 +39,8 @@ already carries something more exact than meaning: its figures.
 2. **If the question contains figures, a page is a candidate only if it states
    every one of them**, using the same `figures()` normalisation invariant 5
    uses (`1,200` equals `1200`). `figures()` moves from `authoring/drafting.py`
-   to `llm/domain.py` so that both can use it; `authoring` re-exports it.
+   to `llm/domain.py` so that both can use it, and every caller imports it
+   from there.
 3. Among candidates, a page with a numbered procedure comes before one without,
    then fused score, then page number for determinism.
 4. **If the question has figures and no page states them, the answer is "not

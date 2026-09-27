@@ -32,9 +32,10 @@ from typing import Any
 from psycopg import Connection, connect
 
 from fixtures.corpus import CORPUS, AbsentSymptom, Answer, DocumentedOnly
-from pdm.authoring.drafting import DraftOutcome, DraftResult, figures
+from pdm.authoring.drafting import DraftOutcome, DraftResult
 from pdm.authoring.service import Drafting, Ingest
 from pdm.contracts import MachineModel, UserId
+from pdm.llm.domain import figures
 from pdm.llm.extractive import ExtractiveDrafter
 from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
