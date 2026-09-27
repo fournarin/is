@@ -78,7 +78,7 @@ reproduced from a clean checkout. All of it runs on generated data.
 | ETA accuracy, per forecast horizon | [`docs/prediction-baseline.md`](docs/prediction-baseline.md) | under three minutes of error inside three hours; about ten hours late at the twelve-hour horizon |
 | Four scheduling policies over 1,440 simulated runs | [`docs/results/README.md`](docs/results/README.md) | CP-SAT loses the least production in all eighteen cells of the sweep |
 | Why that table came out as it did | [`docs/results/diagnosis.md`](docs/results/diagnosis.md) | ranking work well does not by itself save production here, and whether it would depends on a parameter nobody has measured |
-| What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | correct on one of three repairable symptoms; the two failures are a ranking problem with a named fix |
+| What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | the outcome the answer key implies for all five symptoms, in Thai and English; a symptom the manuals never mention comes back "not found" |
 | Retrieval quality | [`docs/retrieval-baseline.md`](docs/retrieval-baseline.md) | the answer key's page comes back in the top three every time, in Thai and in English alike |
 | Machine health ranking | [`docs/results/health.md`](docs/results/health.md) | the history half ranks the degraded machines first in 39 of 40 draws |
 | Shift lead against scheduler agreement | [`docs/results/confirmations.md`](docs/results/confirmations.md) | **no figures yet** - needs a trial with a person |

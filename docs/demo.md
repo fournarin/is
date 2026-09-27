@@ -129,10 +129,10 @@ The web app is at **http://localhost:3000**, the API at
    the embedding model was chosen for (ADR-029, ADR-035), and it is the case the
    plant will actually use.
 
-   `SYM-047` is the symptom `docs/drafting-baseline.md` measured the drafter
-   getting right - but after a rehearsal it is already approved, so what is left
-   on the panel is one of the two it gets wrong. That is worth showing rather
-   than working around; see the third note below.
+   After a rehearsal `SYM-047` is already approved, so ask for `SYM-014`
+   ("มอเตอร์สายพานร้อนเกิน 85 องศา ต้องตรวจอะไรบ้าง") or `SYM-021`
+   ("กระแสแกน 1 เกิน 12.5 แอมป์ ทำอย่างไร"). Keep the figure in the question: it
+   is what the drafter uses to choose the page (ADR-089).
 
    Then **คิวรีวิว playbook** (`/review`): the draft beside the page it was
    drafted from, provenance per step, and approve / edit / send back (ADR-064).
@@ -141,19 +141,17 @@ The web app is at **http://localhost:3000**, the API at
    one screen.
 
    Three things worth saying while it is open. The drafter has **no model in it**:
-   `worker-authoring` builds `ExtractiveDrafter`, which picks the highest-scoring
-   page and quotes it, so what is on screen is text from the manual rather than
+   `worker-authoring` builds `ExtractiveDrafter`, which picks the page that
+   states the question's figures, prefers one with a numbered procedure, and
+   quotes it, so what is on screen is text from the manual rather than
    text about it (ADR-037 §9). The queue fills only after `worker-authoring` has
    indexed the manuals - `seed_demo.py` queues them as it stores them, and the
    first pass takes a minute.
 
-   And the drafter is **wrong about two of the three repair symptoms in the
-   corpus**, which is worth saying before somebody finds it. `SYM-014` and
-   `SYM-021` are handed an overview page that repeats the question's words rather
-   than the procedure a page later; `docs/drafting-baseline.md` has the table and
-   names what fixes it - a reranker, which is not built. Showing that on purpose
-   is a better answer than hoping nobody asks: it is the same page a reviewer
-   would reject, and rejecting it is what the screen is for.
+   And ask once for something the manuals do not cover - "cycle time ค่อย ๆ
+   สูงขึ้นเกิน 62 วินาที" on the M-710iC. The queue files it as **not found**
+   rather than a draft, which is principle 5 on screen: a gap in the manuals is
+   something a person has to see, not a guess to reject.
 4. **Sign in as `sup-1`** → **ภาพรวมสายการผลิต** (`/overview`), top panel:
    **งานที่รอคุณยืนยัน**. The report from step 1 is in the queue behind this
    panel: the job the operator raised reaches a technician only once somebody
