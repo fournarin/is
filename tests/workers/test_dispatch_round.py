@@ -180,7 +180,7 @@ class TestARoundPlacesWork:
         report = DispatchRounds(SimulatedClock(NOW), CONFIG).run(conn)
 
         assert report.placed == ()
-        assert "nobody is rostered on the afternoon shift" in report.round.summary
+        assert "ยังไม่มีช่างลงชื่อในกะ afternoon" in report.round.summary
 
 
 class TestWorkNobodyMayTouch:

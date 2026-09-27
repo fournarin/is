@@ -178,7 +178,7 @@ class Explainer:
             return Answer(
                 ref=ref,
                 reason=Reason.NOT_IN_QUEUE,
-                sentence="This job is not in the queue this round was given.",
+                sentence="งานนี้ไม่ได้อยู่ในคิวของรอบนี้",
             )
 
         held = {one.ref: one.why for one in self.plan.held}
@@ -189,7 +189,7 @@ class Explainer:
             return Answer(
                 ref=ref,
                 reason=Reason.HELD_BY_THE_GATE,
-                sentence=f"The load gate held this job back: {held[ref]}.",
+                sentence=f"ระบบกันงานนี้ไว้ก่อน: {held[ref]}",
             )
 
         shift = self._shift
@@ -197,10 +197,7 @@ class Explainer:
             return Answer(
                 ref=ref,
                 reason=Reason.NO_ROOM_IN_THE_PLAN,
-                sentence=(
-                    "There is no plan for this round to compare against: "
-                    f"{self.plan.summary or 'the shift had nothing to schedule with'}."
-                ),
+                sentence=(f"รอบนี้ยังไม่มีแผนให้เทียบ: {self.plan.summary or 'กะนี้ยังไม่มีอะไรให้จัด'}"),
             )
 
         built = _build(
@@ -220,39 +217,37 @@ class Explainer:
         job = next(one for one in self._shift.jobs or [] if one.ref == ref)
 
         if not skilled:
-            wanted = job.required_skill or "this work"
+            wanted = (
+                self.config.wording().skill(job.required_skill)
+                if job.required_skill
+                else "ช่างที่ทำงานนี้ได้"
+            )
             return Answer(
                 ref=ref,
                 reason=Reason.NOBODY_HOLDS_THE_SKILL,
-                sentence=(
-                    f"Nobody rostered on this shift holds {wanted}, "
-                    "so no plan can include this job."
-                ),
+                sentence=(f"กะนี้ไม่มี{wanted}ลงชื่ออยู่ จึงจัดงานนี้เข้าแผนไม่ได้"),
             )
         if not with_time:
             return Answer(
                 ref=ref,
                 reason=Reason.NOBODY_HAS_THE_TIME,
                 sentence=(
-                    f"{_people(len(skilled))} could do this job, and none of them has the "
-                    f"{job.minutes} minutes it needs left this shift."
+                    f"{_people(len(skilled))}ทำงานนี้ได้ แต่ไม่มีใครเหลือเวลาถึง "
+                    f"{job.minutes} นาทีที่งานนี้ต้องใช้ในกะนี้"
                 ),
             )
         if len(with_time) < job.crew:
             return Answer(
                 ref=ref,
                 reason=Reason.NOT_ENOUGH_PEOPLE,
-                sentence=(
-                    f"This job needs {job.crew} technicians together and only "
-                    f"{len(with_time)} could take it this shift."
-                ),
+                sentence=(f"งานนี้ต้องใช้ช่างพร้อมกัน {job.crew} คน แต่กะนี้มีคนรับได้แค่ {len(with_time)} คน"),
             )
         return Answer(
             ref=ref,
             reason=Reason.NO_ROOM_IN_THE_PLAN,
             sentence=(
-                f"{_people(len(with_time))} could do this job, and the shift is fuller with "
-                "other work than it would be with this. It is first in line for the next round."
+                f"{_people(len(with_time))}ทำงานนี้ได้ แต่กะนี้ใช้เวลากับงานอื่นได้คุ้มกว่า "
+                "งานนี้จะได้คิวแรกในรอบถัดไป"
             ),
         )
 
@@ -294,10 +289,7 @@ class Explainer:
             return Answer(
                 ref=ref,
                 reason=Reason.MOVING_IT_LATER_COSTS_NOTHING,
-                sentence=(
-                    "There was not enough time to work out what moving this job later "
-                    "would cost. Ask again."
-                ),
+                sentence=("คำนวณไม่ทันว่าถ้าเลื่อนงานนี้ออกไปจะเสียเท่าไร ลองกดใหม่อีกครั้ง"),
             )
 
         solver, status = answer
@@ -314,8 +306,7 @@ class Explainer:
                 ref=ref,
                 reason=Reason.MOVING_IT_LATER_COSTS,
                 sentence=(
-                    "Moving this job to the end of the plan would leave it undone this "
-                    f"shift, and cost the line about {extra:.0f} units of production."
+                    f"ถ้าเลื่อนงานนี้ไปท้ายแผน งานจะไม่เสร็จในกะนี้ และสายการผลิตจะเสียราว {extra:,.0f} คัน"
                 ),
                 units_lost_if_later=extra,
             )
@@ -326,9 +317,8 @@ class Explainer:
                 ref=ref,
                 reason=Reason.MOVING_IT_LATER_COSTS_NOTHING,
                 sentence=(
-                    "Nothing in this plan is waiting on this job: moving it to the end "
-                    "would start it "
-                    f"{gap} minutes later and cost the line nothing measurable."
+                    "ไม่มีงานไหนในแผนรองานนี้อยู่ ถ้าเลื่อนไปท้ายแผน "
+                    f"จะเริ่มช้าลง {gap} นาที โดยสายการผลิตแทบไม่เสียอะไร"
                 ),
                 units_lost_if_later=extra,
                 minutes_later=gap,
@@ -337,8 +327,7 @@ class Explainer:
             ref=ref,
             reason=Reason.MOVING_IT_LATER_COSTS,
             sentence=(
-                f"Moving this job to the end of the plan would start it {gap} minutes "
-                f"later and cost the line about {extra:.0f} units of production."
+                f"ถ้าเลื่อนงานนี้ไปท้ายแผน จะเริ่มช้าลง {gap} นาที และสายการผลิตจะเสียราว {extra:,.0f} คัน"
             ),
             units_lost_if_later=extra,
             minutes_later=gap,
@@ -360,4 +349,4 @@ def _production_cost(jobs: Sequence[_Job], starts: Mapping[str, int | None], hor
 
 
 def _people(count: int) -> str:
-    return "One technician on this shift" if count == 1 else f"{count} technicians on this shift"
+    return f"ช่างในกะนี้ {count} คน"

@@ -66,6 +66,8 @@ class PmTaskConfig(BaseModel):
     # and never learns the word "PM" (ADR-027).
     symptom_code: SymptomCode
     interval_hours: int = Field(gt=0)
+    # What the technician reads instead of the code, in Thai (ADR-093).
+    title: str | None = Field(default=None, min_length=1)
 
     @field_validator("symptom_code")
     @classmethod
@@ -121,6 +123,9 @@ class PlantConfig(BaseModel):
     # The single list both Playbook.required_skill and Technician.skills draw
     # from. Two vocabularies would fail to match in silence (ADR-027).
     skills: tuple[SkillId, ...]
+    # Each skill as the plant names it, in Thai (ADR-093). A skill missing here
+    # is shown by its id.
+    skill_names: dict[SkillId, str] = {}
     shifts: tuple[ShiftConfig, ...]
     # The PM schedule. Empty is a plant that has told this system nothing about
     # its preventive maintenance, which reads differently from a plant with
@@ -162,6 +167,9 @@ class RuleConfig(BaseModel):
     machine_model: MachineModel
     component: ComponentLabel
     symptom_code: SymptomCode
+    # The symptom as a technician would say it, in Thai (ADR-093). The code is
+    # for the system; this is what reaches a screen.
+    title: str | None = Field(default=None, min_length=1)
 
     metric_name: str
     comparison: str = Field(pattern="^(above|below)$")

@@ -35,6 +35,7 @@ from pdm.contracts import (
     WorkOrderStatus,
     WorkOutcome,
 )
+from pdm.contracts.wording import Wording
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo as playbooks
 from pdm.work import domain, repo
@@ -122,8 +123,16 @@ class Issued:
 class WorkOrders:
     """Creation and lifecycle. One instance per process, no state between calls."""
 
-    def __init__(self, clock: Clock, *, fallback_minutes: dict[str, dict[Severity, int]]) -> None:
+    def __init__(
+        self,
+        clock: Clock,
+        *,
+        fallback_minutes: dict[str, dict[Severity, int]],
+        wording: Wording | None = None,
+    ) -> None:
         self.clock = clock
+        # The plant's clock and names for every reason this writes (ADR-093).
+        self.wording = wording or Wording()
         # From policy.yaml, held rather than read: a second reader would be a
         # second answer to how long an unpriced job takes (design.md 3.2).
         self.fallback_minutes = fallback_minutes
@@ -174,6 +183,7 @@ class WorkOrders:
             playbook=playbook,
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
+            wording=self.wording,
         )
         return Issued(repo.issue(conn, order, now=self.clock.now()), order)
 
@@ -193,6 +203,7 @@ class WorkOrders:
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
             severity=severity,
+            wording=self.wording,
         )
         return Issued(repo.issue(conn, order, now=self.clock.now()), order)
 
@@ -289,6 +300,7 @@ class WorkOrders:
             # reference the reporter named that has since closed is not a fact
             # about this order, and a reason is written once (ADR-005).
             alongside=already_open,
+            wording=self.wording,
         )
         return Issued(repo.issue(conn, order, now=now), order)
 

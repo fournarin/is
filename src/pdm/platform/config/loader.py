@@ -43,6 +43,7 @@ from pdm.contracts import (
     Station,
     StationId,
 )
+from pdm.contracts.wording import Wording
 from pdm.platform.config.schema import PlantConfig, PmTaskConfig, PolicyConfig, RulesConfig
 
 PLANT_FILE = "plant.yaml"
@@ -139,6 +140,21 @@ class Config:
 
     def components_of(self, model: MachineModel) -> tuple[ComponentLabel, ...]:
         return self.rules.components.get(model, ())
+
+    def wording(self) -> Wording:
+        """The plant's clock and names, for every sentence a screen shows (ADR-093)."""
+        titles: dict[str, str] = {}
+        for rule in self.rules.rules:
+            if rule.title is not None:
+                titles.setdefault(str(rule.symptom_code), rule.title)
+        for task in self.plant.pm_tasks:
+            if task.title is not None:
+                titles.setdefault(str(task.symptom_code), task.title)
+        return Wording(
+            timezone=self.timezone,
+            symptom_titles=titles,
+            skill_names={str(skill): name for skill, name in self.plant.skill_names.items()},
+        )
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:

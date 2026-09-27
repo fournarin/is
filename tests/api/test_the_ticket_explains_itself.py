@@ -199,7 +199,7 @@ class TestTheGateExplainsItself:
         assert world["refs"]["quiet"] in held
         # And it says which of the gate's rules held it, in the numbers a
         # supervisor can act on.
-        assert "low" in held[world["refs"]["quiet"]]
+        assert "ความรุนแรงต่ำ" in held[world["refs"]["quiet"]]
         assert "%" in held[world["refs"]["quiet"]]
 
     def test_the_summary_is_the_sentence_adr_011_asked_for(self, client: TestClient) -> None:
@@ -207,8 +207,8 @@ class TestTheGateExplainsItself:
 
         body = client.get("/dispatch/round").json()
 
-        assert "load" in body["summary"]
-        assert "held back" in body["summary"]
+        assert "ใช้กำลังคนไป" in body["summary"]
+        assert "กันไว้ก่อน" in body["summary"]
         assert body["load_ratio"] is not None
         assert body["capacity_minutes"] == 90
 
@@ -262,8 +262,8 @@ class TestTheTicketExplainsItself:
         predicted = client.get(f"/work-orders/{refs['predicted']}").json()
         reported = client.get(f"/work-orders/{refs['urgent']}").json()
 
-        assert "expected to reach the threshold" in predicted["reason"]
-        assert "give or take 2 hours" in predicted["reason"]
+        assert "คาดว่าจะถึงเกณฑ์" in predicted["reason"]
+        assert "± 2 ชม." in predicted["reason"]
         assert "expected to reach" not in reported["reason"]
 
     def test_a_ticket_nobody_has_ranked_says_nothing_rather_than_guessing(

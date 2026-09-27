@@ -72,6 +72,13 @@ skills:
 # Three shifts, the night one crossing midnight. That crossing is the reason
 # every timestamp in this system is timezone-aware UTC: a naive datetime is wrong
 # for exactly this shift and right for the other two (ADR-028).
+# How each skill is named on screen (ADR-093).
+skill_names:
+  robot_mechanical: ช่างกลหุ่นยนต์
+  robot_controls: ช่างระบบควบคุมหุ่นยนต์
+  electrical: ช่างไฟฟ้า
+  hydraulics: ช่างไฮดรอลิก
+
 shifts:
   - shift_id: morning
     starts_at: "06:00"
@@ -108,12 +115,15 @@ pm_tasks:
   - pm_task_ref: pm-mc-001-toothed-belt
     machine_id: MC-001
     symptom_code: PM-toothed-belt
+    title: เปลี่ยนสายพานฟัน (ครบรอบบำรุงรักษา)
     interval_hours: 8000
   - pm_task_ref: pm-mc-004-toothed-belt
     machine_id: MC-004
     symptom_code: PM-toothed-belt
+    title: เปลี่ยนสายพานฟัน (ครบรอบบำรุงรักษา)
     interval_hours: 8000
   - pm_task_ref: pm-mc-012-toothed-belt
     machine_id: MC-012
     symptom_code: PM-toothed-belt
+    title: เปลี่ยนสายพานฟัน (ครบรอบบำรุงรักษา)
     interval_hours: 8000

@@ -360,7 +360,7 @@ def main() -> None:
         "a predicted job is banded as planned, never as urgent (ADR-020)",
     )
     expect("ด่วน" not in above_the_fold, "and nothing above the fold calls it urgent")
-    expect("expected to reach" in above_the_fold, "the reason the backend wrote is on it")
+    expect("คาดว่าจะถึงเกณฑ์" in above_the_fold, "the reason the backend wrote is on it")
     expect("เห็นมาแล้ว 4 ครั้ง" in above_the_fold, "how often the rule has fired (ADR-023)")
     expect("ทำไมงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)")
     expect(

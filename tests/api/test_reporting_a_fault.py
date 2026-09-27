@@ -213,7 +213,7 @@ class TestWhatTheTicketSays:
         reason = response.json()["reason"]
         assert "ได้ยินเสียงดังผิดปกติที่หัวจับ" in reason
         assert "tech-1" in reason
-        assert "2026-03-03 08:00 UTC" in reason
+        assert "3 มี.ค. 15:00 น." in reason
 
     def test_a_report_with_no_symptom_code_is_priced_from_the_fallback_and_says_so(
         self, client: TestClient
@@ -328,7 +328,7 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             distinct_from=[first],
         )
         assert second.status_code == 201, second.text
-        assert f"reported alongside {first}" in second.json()["reason"]
+        assert f"เครื่องนี้มีใบงานเปิดอยู่แล้ว: {first}" in second.json()["reason"]
 
     def test_a_ticket_that_appeared_since_the_refusal_refuses_the_retry_too(
         self, client: TestClient
