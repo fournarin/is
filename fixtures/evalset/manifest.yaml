@@ -1,0 +1,343 @@
+# The answer key for the evaluation manuals, written before the pipeline was
+# run on them (ADR-096). Same schema as fixtures/corpus/manifest.yaml, plus a
+# `split`: `dev` entries may be looked at while changing the pipeline, `test`
+# entries are measured and never tuned on.
+#
+# Queries are phrased the way a technician would type them. Several carry no
+# figures at all, because ADR-089's drafter chooses a page by the figures in the
+# question, and a technician will not always type one.
+
+version: 1
+
+documents:
+  - filename: sw-210-servo-gun.pdf
+    sha256: 7f61493feeb40f521dbb524b35d682b661feb4c3298703ecf7f241d7283f35f8
+    title: SW-210 Servo Spot Welding Gun - Maintenance
+    machine_model: SW-210
+    edition: Rev B, synthetic
+    pages: 10
+    lockout_page: 2
+  - filename: sw-310-servo-gun.pdf
+    sha256: f21fc30d2e63cfc87465e500b7ba31d41581181f48a46d1f2a8554cf6cca0ad7
+    title: SW-310 Servo Spot Welding Gun - Maintenance
+    machine_model: SW-310
+    edition: Rev A, synthetic
+    pages: 6
+    lockout_page: 2
+  - filename: cv-500-skid-conveyor.pdf
+    sha256: 17796f08a03e372af582855fa7105d8bc1d833817646b29f49e070d487dddefb
+    title: CV-500 Skid Conveyor - Maintenance
+    machine_model: CV-500
+    edition: Edition 2, synthetic
+    pages: 9
+    lockout_page: 2
+  - filename: sd-30-sealer-dispenser.pdf
+    sha256: d135719c5130bd267143b01c5f2427f3f66ec52d1a139707db3868705c4319a0
+    title: SD-30 Sealer Dispensing Unit - Maintenance
+    machine_model: SD-30
+    edition: Edition 1, synthetic
+    pages: 7
+    lockout_page: 2
+
+covered:
+  - symptom_code: EV-101
+    split: dev
+    machine_model: SW-210
+    answer_pages: [4]
+    supporting_pages: [2, 3]
+    required_skill: robot_mechanical
+    estimated_minutes: 20
+    correct_figures:
+      tip_face_limit_mm: 7.5
+      material_left_mm: 1.5
+      alignment_mm: 0.5
+      nugget_mm: 5
+    distractors:
+      - document: sw-310-servo-gun.pdf
+        page: 3
+        why: the sister model, same steps with 8 mm, 2 mm, 0.8 mm and 6 mm
+      - page: 7
+        why: the specification table repeats every figure and prescribes nothing
+    queries:
+      en: weld splash and small nuggets, the tips look worn
+      th: หัวเชื่อมสึก เชื่อมแล้วสะเก็ดไฟกระเด็นเยอะ
+
+  - symptom_code: EV-102
+    split: test
+    machine_model: SW-210
+    answer_pages: [5]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 30
+    correct_figures:
+      alarm_l_min: 4
+      supply_bar: 3
+      nominal_l_min: 6
+      within_seconds: 30
+    queries:
+      en: weld gun cooling water flow alarm below 4 L/min
+      th: น้ำหล่อเย็นหัวเชื่อมไหลน้อยกว่า 4 ลิตรต่อนาที
+
+  - symptom_code: EV-103
+    split: dev
+    machine_model: SW-210
+    answer_pages: [6]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 45
+    correct_figures:
+      cover_bolts_nm: 8
+      grease_g: 15
+      test_strokes: 50
+      settle_below_c: 70
+    queries:
+      en: servo gun motor temperature above 90 degrees
+      th: มอเตอร์หัวเชื่อมร้อนเกิน 90 องศา
+
+  - symptom_code: EV-104
+    split: test
+    machine_model: SW-210
+    answer_pages: [9, 10]
+    supporting_pages: [2]
+    required_skill: electrical
+    estimated_minutes: 60
+    correct_figures:
+      clamp_bolts_nm: 20
+    queries:
+      en: secondary weld cable jacket is cracked
+      th: สายเคเบิลเชื่อมเปลือกแตก ต้องเปลี่ยนสาย
+
+  - symptom_code: EV-111
+    split: test
+    machine_model: SW-310
+    answer_pages: [3]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 25
+    correct_figures:
+      tip_face_limit_mm: 8
+      material_left_mm: 2
+      alignment_mm: 0.8
+      nugget_mm: 6
+    distractors:
+      - document: sw-210-servo-gun.pdf
+        page: 4
+        why: the sister model, same steps with 7.5 mm, 1.5 mm, 0.5 mm and 5 mm
+    queries:
+      en: electrode tip face worn above 8 mm
+      th: ปลายหัวเชื่อมสึกเกิน 8 มม.
+
+  - symptom_code: EV-112
+    split: dev
+    machine_model: SW-310
+    answer_pages: [4]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 30
+    correct_figures:
+      alarm_l_min: 5
+      supply_bar: 4
+      nominal_l_min: 8
+      within_seconds: 45
+    queries:
+      en: gun cooling water flow low alarm
+      th: น้ำหล่อเย็นหัวเชื่อมไหลต่ำกว่า 5 ลิตรต่อนาที
+
+  - symptom_code: EV-113
+    split: test
+    machine_model: SW-310
+    answer_pages: [5]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 50
+    correct_figures:
+      cover_bolts_nm: 10
+      grease_g: 20
+      test_strokes: 50
+      settle_below_c: 75
+    queries:
+      en: weld gun servo motor running very hot
+      th: มอเตอร์ปืนเชื่อมร้อนจัด
+
+  - symptom_code: EV-121
+    split: dev
+    machine_model: CV-500
+    answer_pages: [4]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 40
+    correct_figures:
+      elongation_limit_pct: 3
+      sag_mm: 15
+      tensioner_nm: 45
+    queries:
+      en: drive chain stretched more than 2 percent
+      th: โซ่ขับคอนเวเยอร์ยืดเกิน 2 เปอร์เซ็นต์
+
+  - symptom_code: EV-122
+    split: test
+    machine_model: CV-500
+    answer_pages: [5]
+    supporting_pages: [2]
+    required_skill: electrical
+    estimated_minutes: 35
+    correct_figures:
+      gearbox_l: 2.5
+      relay_a: 16
+      running_below_a: 12
+    queries:
+      en: conveyor drive overload relay keeps tripping
+      th: มอเตอร์ขับคอนเวเยอร์ทริปโอเวอร์โหลดบ่อย
+
+  - symptom_code: EV-123
+    split: dev
+    machine_model: CV-500
+    answer_pages: [6]
+    supporting_pages: [2]
+    required_skill: hydraulics
+    estimated_minutes: 45
+    correct_figures:
+      relief_bar: 110
+      holds_above_bar: 100
+    queries:
+      en: lift table hydraulic pressure below 90 bar
+      th: แรงดันไฮดรอลิกโต๊ะยกต่ำกว่า 90 บาร์
+
+  - symptom_code: EV-124
+    split: test
+    machine_model: CV-500
+    answer_pages: [8]
+    required_skill: electrical
+    estimated_minutes: 15
+    queries:
+      en: skid presence sensor does not see the skid
+      th: เซนเซอร์ตรวจสกิดจับสกิดไม่ได้ สัญญาณกระพริบ
+
+  - symptom_code: EV-131
+    split: test
+    machine_model: SD-30
+    answer_pages: [4]
+    supporting_pages: [2]
+    required_skill: robot_mechanical
+    estimated_minutes: 35
+    correct_figures:
+      soak_minutes: 20
+      nozzle_nm: 12
+      bead_mm: [4, 5]
+    queries:
+      en: sealer bead narrower than 3 mm, nozzle may be blocked
+      th: เส้นซีลเลอร์บางกว่า 3 มม. หัวฉีดน่าจะตัน
+
+  - symptom_code: EV-132
+    split: dev
+    machine_model: SD-30
+    answer_pages: [5]
+    supporting_pages: [2]
+    required_skill: hydraulics
+    estimated_minutes: 50
+    correct_figures:
+      filter_mesh: 60
+      restart_bar: 180
+    queries:
+      en: sealer supply pressure dropped below 150 bar
+      th: แรงดันซีลเลอร์ตกต่ำกว่า 150 บาร์
+
+  - symptom_code: EV-133
+    split: test
+    machine_model: SD-30
+    answer_pages: [6]
+    required_skill: electrical
+    estimated_minutes: 30
+    correct_figures:
+      fuse_a: 10
+      element_ohm: [40, 50]
+      set_point_c: 45
+    queries:
+      en: sealer hose not heating, below 40 degrees
+      th: ท่อส่งซีลเลอร์ไม่ร้อน อุณหภูมิต่ำกว่า 40 องศา
+
+documented_without_procedure:
+  - symptom_code: EV-105
+    split: test
+    machine_model: SW-210
+    pages: [8]
+    why: the troubleshooting page says the cause depends on the amplifier alarm
+      and there is no field procedure
+    queries:
+      en: servo gun does not close fully
+      th: หัวเชื่อมปิดไม่สุด
+
+  - symptom_code: EV-125
+    split: dev
+    machine_model: CV-500
+    pages: [7]
+    why: roller noise has three possible causes and rollers are replaced by the
+      service team, never repaired in the field
+    queries:
+      en: carrier roller making noise
+      th: ลูกกลิ้งคอนเวเยอร์มีเสียงดัง
+
+  - symptom_code: EV-134
+    split: test
+    machine_model: SD-30
+    pages: [3]
+    why: an irregular bead has too many causes for one procedure; the manual
+      says to record it and ask the process engineer
+    queries:
+      en: sealer bead broken and irregular
+      th: เส้นซีลเลอร์ขาดเป็นช่วง ๆ ไม่สม่ำเสมอ
+
+absent:
+  - symptom_code: EV-106
+    split: dev
+    machine_model: SW-210
+    why: the controller's backup battery is in the robot controller manual, which
+      is not in this corpus
+    forbidden_phrases:
+      - battery
+    queries:
+      en: robot controller backup battery low alarm
+      th: แบตเตอรี่สำรองคอนโทรลเลอร์ต่ำ
+
+  - symptom_code: EV-114
+    split: test
+    machine_model: SW-310
+    why: a servo gun has no pneumatic equalizing cylinder; nothing in the corpus
+      discusses one
+    forbidden_phrases:
+      - equaliz
+    queries:
+      en: air leaking from the gun equalizing cylinder
+      th: ลมรั่วที่กระบอกสูบปรับสมดุลของหัวเชื่อม
+
+  - symptom_code: EV-126
+    split: test
+    machine_model: CV-500
+    why: network faults belong to the controls documentation, not this manual
+    forbidden_phrases:
+      - PLC
+      - communication
+    queries:
+      en: conveyor zone PLC communication error
+      th: คอนเวเยอร์ขึ้น error สื่อสารกับ PLC ไม่ได้
+
+  - symptom_code: EV-135
+    split: dev
+    machine_model: SD-30
+    why: the bead inspection camera is a separate system with its own manual
+    forbidden_phrases:
+      - camera
+      - vision
+    queries:
+      en: bead inspection camera rejects good beads
+      th: กล้องตรวจเส้นซีลเลอร์ reject ทั้งที่เส้นดี
+
+never_an_answer:
+  - document: sw-210-servo-gun.pdf
+    page: 1
+  - document: sw-310-servo-gun.pdf
+    page: 1
+  - document: cv-500-skid-conveyor.pdf
+    page: 1
+  - document: sd-30-sealer-dispenser.pdf
+    page: 1
