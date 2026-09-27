@@ -57,10 +57,12 @@ degradation scenario. **That is the demo setting.** On a plant machine set it to
 reaps expired work only, which is what a deployment waiting on its OPC UA
 connection should do rather than invent its own data.
 
-`replay` and `live` are the other two values ADR-002 names and **neither is
-built**. Setting either stops the worker at boot with a message saying so, which
-is the intended behaviour rather than a fault: a deployment that thinks it is
-reading the plant and is not would be worse than one that refuses to start.
+`replay` reads the plant's own readings from a CSV file in `plant-data/`
+(`SIGNAL_REPLAY_FILE`); [plant-data/README.md](../plant-data/README.md) has the
+format and the settings. `live` (OPC UA) is **not built**, and setting it stops
+the worker at boot with a message saying so. That is the intended behaviour
+rather than a fault: a deployment that thinks it is reading the plant and is
+not would be worse than one that refuses to start.
 
 Left on `synthetic`, the process warns at boot. Do not remove that warning line -
 on screen a generated ticket is indistinguishable from a real one, and somebody
@@ -116,6 +118,14 @@ API answers `/health` but signing in fails.
 
 The web app is at `http://localhost:3000` and the API at
 `http://localhost:8000`, whose `/docs` is the interactive one.
+
+### Load the plant's technicians, roster and PM history
+
+On a real installation, and instead of the demo roster:
+[plant-data/README.md](../plant-data/README.md) gives the three CSV formats and
+the one command that loads them. Every row is checked before anything is
+written, and running it twice changes nothing
+([ADR-091](adr/0091-plant-data-arrives-as-csv.md)).
 
 ### Load the demo data - only on a machine that has nothing to lose
 

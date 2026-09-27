@@ -101,6 +101,7 @@ entries replace parts of earlier ones, and both are kept.
 | [086](0086-what-this-term-does-not-do.md) | **What this term does not do, and why** | |
 | [087](0087-the-improvement-loops-get-a-screen-and-no-write-path.md) | The improvement loops get a screen, and deliberately no way to write | |
 | [088](0088-an-invariant-is-believed-only-where-something-breaks-it.md) | An invariant is believed only where something breaks it | |
+| [091](0091-plant-data-arrives-as-csv.md) | Plant data arrives as CSV | 002, 078, 083, 086 |
 | [089](0089-the-drafter-chooses-the-page-the-question-describes.md) | The drafter chooses the page the question describes | 037, 086 |
 
 ## The invariants these records cite
