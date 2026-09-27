@@ -53,7 +53,10 @@ OPERATOR = UserId("measurement")
 CORPORA = {
     "corpus": Path("fixtures/corpus"),
     "evalset": Path("fixtures/evalset"),
+    "realdocs": Path("fixtures/realdocs"),
 }
+# The real manuals are not in the repository (ADR-098); their key is.
+REALDOCS_DIR = Path(os.environ.get("REALDOCS_DIR", "ตัวอย่างเอกสารจริง"))
 Entry = Answer | DocumentedOnly | AbsentSymptom
 
 
@@ -114,6 +117,8 @@ def main() -> int:
     rerank = "--rerank" in sys.argv
     here = CORPORA[name]
     corpus = load(here / "manifest.yaml")
+    if name == "realdocs":
+        here = REALDOCS_DIR
     url = os.environ.get("DATABASE_URL", "")
     if not url.rsplit("/", 1)[-1].endswith("_test"):
         print("set DATABASE_URL to a *_test database")

@@ -25,6 +25,12 @@ from pdm.retrieval.embedding import MODEL_CACHE_VARIABLE
 RERANK_MODEL = "onnx-community/bge-reranker-v2-m3-ONNX"
 RERANK_FILE = "onnx/model_int8.onnx"
 
+# Pages scored per model call. fastembed's default batched forty full pages of a
+# real 456-page manual into one call and the process grew to 15 GB (ADR-098);
+# the authoring container has 4. Four pages at a time keeps it under 1 GB, and
+# the order of the scores does not depend on the batch.
+_BATCH = 4
+
 
 class Reranker(Protocol):
     def relevance(self, question: str, texts: Sequence[str]) -> list[float]:
@@ -60,4 +66,5 @@ class OnnxReranker:
             return []
         # The model emits a logit; the sigmoid makes it a probability-like score
         # a threshold can be written against and read by a person.
-        return [1.0 / (1.0 + math.exp(-score)) for score in self._model.rerank(question, texts)]
+        scores = self._model.rerank(question, texts, batch_size=_BATCH)
+        return [1.0 / (1.0 + math.exp(-score)) for score in scores]

@@ -52,3 +52,31 @@ What it says:
 - The two-page procedure is drafted from its first page in both languages
   (EV-104). The continuation's steps 5-7 are not yet joined on.
 - The original corpus stays at 10/10 with the reranker.
+
+## Two real manufacturer manuals - 28 September 2026
+
+A Mitsubishi servo motor instruction manual (456 pages) and an MR-J4 servo
+amplifier Modbus manual (118 pages), supplied by the owner as test material and
+not committed. Key: `fixtures/realdocs/manifest.yaml`, written by reading them
+first. Neither prescribes a field repair, so the right answer to every answered
+question is the inspection or reference text from the right page, as
+fault-finding ([ADR-098](../adr/0098-what-two-real-manuals-changed.md)).
+
+| | outcome as the key implies | unsafe drafts | answer page in retrieval's top 3 |
+|---|---:|---:|---:|
+| English, before ADR-098's fixes | 6/9 | 2 | 4/7 |
+| English, after | **7/9** | **0** | 4/7 |
+| Thai, before | 4/9 | 4 | 6/7 |
+| Thai, after | **6/9** | **2** | 6/7 |
+
+- **Every question about something the manuals do not cover is "not found"**,
+  in both languages.
+- **Two unsafe drafts remain, both Thai** (RD-02 on page 113, RD-07 on page
+  15): a wrong page carrying a numbered list, drafted as a repair. In a
+  456-page manual that is mostly dimension tables, the first stage of
+  retrieval ranks the answer page 13th or 21st for some questions, and the
+  reranker only sees what that stage returns. Better Thai retrieval in the
+  first stage, a stronger embedding model or more candidates, is the next
+  measured change.
+- The evaluation set is unchanged by these fixes: 12/12 English and 10/12 Thai
+  on test, no unsafe draft.

@@ -35,7 +35,13 @@ from pdm.llm.domain import DraftRequest, Evidence, Proposal, ProposalKind, Propo
 # from two PDFs built by the same generator on the same day. A line-anchored
 # version of this read the first page and found nothing on the second - no
 # error, no empty result, just a repair procedure quietly drafted as prose.
-_MARKER = re.compile(r"(?<![\d.])(?P<number>\d{1,2})[.)]\s+")
+#
+# Two shapes are not instructions, both found in a real manufacturer's manual
+# (ADR-098): a parenthesised section number, "(1) Inspection ... (2) Life", and a
+# numbered footnote, "Note 1. There is no manual release ... 2. The value ...".
+# Read as steps, an inspection chapter and a brake table's footnotes came out
+# as repair procedures.
+_MARKER = re.compile(r"(?<![\d.(])(?<!Note )(?<!NOTE )(?P<number>\d{1,2})[.)]\s+")
 
 # The three things a manual writes at the foot of a procedure. Each stops at the
 # first sentence end, because with the line breaks gone the whole block can
