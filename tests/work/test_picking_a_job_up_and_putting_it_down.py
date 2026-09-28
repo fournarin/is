@@ -40,6 +40,7 @@ from pdm.platform.config import load_config
 from pdm.work import WorkOrders
 from pdm.work import repo as work
 from pdm.work.service import TransitionRefused
+from tests.released import released
 
 pytestmark = pytest.mark.db
 
@@ -87,14 +88,17 @@ def _a_job(
     severity: Severity = Severity.HIGH,
     description: str = "grinding noise from the drive end",
 ) -> str:
-    return orders.from_report(
+    return released(
         conn,
-        machine_id=MACHINE,
-        machine_model=R2000,
-        severity=severity,
-        reported_by=UserId("sup-1"),
-        description=description,
-    ).ref
+        orders.from_report(
+            conn,
+            machine_id=MACHINE,
+            machine_model=R2000,
+            severity=severity,
+            reported_by=UserId("sup-1"),
+            description=description,
+        ).ref,
+    )
 
 
 class TestTwoUsersAndTwoShifts:

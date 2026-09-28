@@ -17,6 +17,14 @@
 
 name: pdm
 
+# Every container's log is rotated, so a plant host's disk does not fill with
+# logs nobody reads (ADR-101).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # ── data ──────────────────────────────────────────────────────────────
   postgres:
@@ -34,13 +42,21 @@ services:
       retries: 5
     networks: [app]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 1g
 
   qdrant:
     image: qdrant/qdrant:v1.12.4
     volumes:
       - qdrant-data:/qdrant/storage
+    environment:
+      # Qdrant reports usage to its vendor by default. Plant documents are under
+      # NDA and this host has no business calling out (ADR-029, ADR-101).
+      QDRANT__TELEMETRY_DISABLED: "true"
     networks: [app]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 1g
 
   # ── schema ────────────────────────────────────────────────────────────
   # A one-shot container that runs the migrations and exits. Everything that
@@ -90,9 +106,14 @@ services:
     volumes:
       - ./config:/app/config:ro
       - storage:/app/storage
-    ports: ["8000:8000"]
+    # Loopback only (ADR-101): the browser never talks to the API, the web
+    # container reaches it on the internal network, and /docs has no business
+    # on the plant network.
+    ports: ["127.0.0.1:8000:8000"]
     networks: [app]                                 # deliberately not [llm]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 1g
 
   worker-runtime:
     build: .
@@ -117,7 +138,9 @@ services:
       # built so that nothing waits for one - not because synthetic is a
       # sensible default. Unset it and the worker reaps only; there is no
       # default in the code, deliberately.
-      SIGNAL_SOURCE: ${SIGNAL_SOURCE:-synthetic}
+      # `none` unless the environment says otherwise (ADR-101): an install that
+      # forgot this line must not issue invented work orders that look real.
+      SIGNAL_SOURCE: ${SIGNAL_SOURCE:-none}
       # 60x: the twelve-hour scenario is read in about twelve minutes, which is
       # one sitting (ADR-007). At 1.0 it runs at plant speed and the first
       # Finding arrives in about two hours.
@@ -156,6 +179,8 @@ services:
       - ./plant-data:/app/plant-data:ro
     networks: [app]                                 # deliberately not [llm]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 1g
 
   worker-authoring:
     build: .
@@ -189,6 +214,8 @@ services:
     # because the work behind it is GPU-bound anyway.
     networks: [app, llm]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 3g
 
   # ── models ────────────────────────────────────────────────────────────
   # Embedding and reranker models load in-process inside api and the workers,
@@ -203,6 +230,7 @@ services:
     # reach it, which defeats the network split above.
     networks: [llm]
     restart: unless-stopped
+    logging: *logging
 
   # ── frontend ──────────────────────────────────────────────────────────
   web:
@@ -219,6 +247,8 @@ services:
     ports: ["3000:3000"]
     networks: [app]                                 # deliberately not [llm]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: 512m
 
 networks:
   app:

@@ -58,6 +58,7 @@ from pdm.platform.objects import FilesystemObjectStore
 from pdm.playbooks import repo as playbooks
 from pdm.work import AlreadyOpen, NoEstimateAvailable, WorkOrders
 from pdm.work import repo as work
+from tests.released import released
 
 pytestmark = pytest.mark.db
 
@@ -547,7 +548,7 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             reported_by=TECHNICIAN,
             description="oil under the base plate",
         )
-        orders.accept(conn, first.ref, user=TECHNICIAN)
+        orders.accept(conn, released(conn, first.ref), user=TECHNICIAN)
         orders.start(conn, first.ref, user=TECHNICIAN)
         orders.close(conn, first.ref, user=TECHNICIAN, outcome=WorkOutcome.FIXED)
 
