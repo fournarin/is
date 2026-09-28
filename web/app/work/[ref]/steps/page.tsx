@@ -97,6 +97,7 @@ export default async function StepsPage({
         >
           📖 เปิดคู่มือหน้า {current.page}
         </a>
+        {current.manual !== null && <p className="muted">จากคู่มือ {current.manual}</p>}
       </section>
 
       <div className="step-nav">

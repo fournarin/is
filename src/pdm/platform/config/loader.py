@@ -138,6 +138,10 @@ class Config:
     def model_of(self, machine_id: MachineId) -> MachineModel:
         return self._model_of[machine_id]
 
+    def machines_of(self, model: MachineModel) -> list[str]:
+        """Every machine of this model in the layout, sorted."""
+        return sorted(str(machine) for machine, of in self._model_of.items() if of == model)
+
     def components_of(self, model: MachineModel) -> tuple[ComponentLabel, ...]:
         return self.rules.components.get(model, ())
 

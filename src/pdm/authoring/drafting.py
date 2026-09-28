@@ -161,16 +161,11 @@ class PlaybookDraft(BaseModel):
         skill = required_skill or self.proposed_skill
         minutes = estimated_minutes or self.proposed_minutes
         if skill is None:
-            raise ValueError(
-                f"{self.symptom_code} has no required_skill: the evidence stated none and none "
-                "was supplied. A skill outside the vocabulary in plant.yaml cannot be assigned "
-                "to anybody (invariant 13)."
-            )
+            raise ValueError(f"{self.symptom_code}: คู่มือไม่ได้ระบุทักษะที่ต้องใช้ ต้องเลือกทักษะก่อนอนุมัติ")
         if minutes is None:
             raise ValueError(
-                f"{self.symptom_code} has no estimated_minutes: the evidence stated none and "
-                "none was supplied. The scheduler computes with this figure, so a guess here "
-                "would carry the authority of the manual and the provenance of nothing."
+                f"{self.symptom_code}: คู่มือไม่ได้ระบุเวลาที่ใช้ ต้องใส่เวลาโดยประมาณก่อนอนุมัติ "
+                "เพราะระบบใช้ตัวเลขนี้คำนวณภาระงานของกะ"
             )
 
         source_doc, page = self.primary
@@ -269,14 +264,10 @@ def assemble(
             symptom_code=request.symptom_code,
             machine_model=request.machine_model,
             reason=(
-                f"nothing in the corpus documents {request.symptom_code} for "
-                f"{request.machine_model}"
+                f"ไม่พบเรื่อง {request.symptom_code} ในคู่มือของรุ่น {request.machine_model} "
+                "ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
                 if not request.evidence
-                else (
-                    f"{len(request.evidence)} page(s) were retrieved for "
-                    f"{request.symptom_code} and the backend found nothing in them that can "
-                    "become a step"
-                )
+                else (f"พบคู่มือที่เกี่ยวข้อง {len(request.evidence)} หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้")
             ),
         )
 
@@ -292,9 +283,8 @@ def assemble(
             symptom_code=request.symptom_code,
             machine_model=request.machine_model,
             reason=(
-                f"the backend answered '{proposal.kind.value}' for {request.symptom_code} and "
-                "returned no step that could be used; nothing here is a statement about what "
-                "the manuals contain"
+                f"ระบบร่างไม่ได้ขั้นตอนที่ใช้ได้สำหรับ {request.symptom_code} "
+                "ไม่ได้แปลว่าคู่มือไม่มีเรื่องนี้ ให้ลองถามใหม่ด้วยคำอื่น"
             ),
         )
 
@@ -323,9 +313,9 @@ def assemble(
             machine_model=request.machine_model,
             rejected=tuple(rejected),
             reason=(
-                f"{len(rejected)} of {len(proposal.steps)} proposed steps failed the checks in "
-                f"ADR-037 ({', '.join(sorted({step.reason.value for step in rejected}))}), so the "
-                "whole draft is withheld"
+                f"{len(rejected)} จาก {len(proposal.steps)} ขั้นไม่ผ่านการตรวจกับหน้าคู่มือ "
+                f"({', '.join(sorted({step.reason.value for step in rejected}))}) "
+                "จึงไม่ส่งร่างนี้ทั้งฉบับ"
             ),
         )
 
@@ -345,22 +335,16 @@ def assemble(
     skill, unknown_skill = _skill_from(proposal.required_skill, skills)
     pages = sorted({(step.source_doc, step.page) for step in steps})
     notes = [
-        f"{len(steps)} step(s) from "
-        + ", ".join(f"page {page}" for _, page in pages)
-        + f" of the {request.machine_model} manual"
+        f"{len(steps)} ขั้น จาก"
+        + ", ".join(f"หน้า {page}" for _, page in pages)
+        + f" ของคู่มือรุ่น {request.machine_model}"
     ]
     if unknown_skill is not None:
-        notes.append(
-            f"the page asks for skill '{unknown_skill}', which is not in the vocabulary in "
-            "plant.yaml - the reviewer has to choose one"
-        )
+        notes.append(f"คู่มือระบุทักษะ '{unknown_skill}' ซึ่งไม่มีในรายชื่อทักษะของโรงงาน ต้องเลือกทักษะเอง")
     if proposal.estimated_minutes is None:
-        notes.append("the page states no duration - the reviewer has to supply one")
+        notes.append("คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง")
     if cross_model:
-        notes.append(
-            f"{len(cross_model)} page(s) from another model's manual were retrieved and are "
-            "shown beside the draft, never cited by it"
-        )
+        notes.append(f"พบหน้าจากคู่มือรุ่นอื่น {len(cross_model)} หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้")
 
     return DraftResult(
         outcome=(

@@ -26,6 +26,7 @@ from pdm.contracts import (
     FindingKind,
     FindingRef,
     MachineId,
+    Playbook,
     PlaybookStep,
     PMTask,
     PMTaskRef,
@@ -808,3 +809,65 @@ def firings_behind_rules(conn: Connection[Any]) -> list[RuleFirings]:
         )
         for rule_id in sorted(firings)
     ]
+
+
+def adopt_playbook(
+    conn: Connection[Any],
+    playbook: Playbook,
+    *,
+    machine_ids: Sequence[str],
+) -> list[str]:
+    """Give a newly approved playbook to the orders that were waiting for one.
+
+    ADR-102: an order issued before any playbook existed for its symptom carries
+    no steps, and nothing else will ever bring them - the Finding stays open, so
+    no new order is issued. Only orders with **no steps and no work segment**
+    adopt it, still queued, proposed or assigned; the migration 0015 trigger
+    allows that one change and nothing else, and the conditions are in the
+    statement so that a technician starting the job at the same moment wins.
+
+    Matched by symptom through the Finding (condition orders) or the PM task
+    (scheduled orders), on this playbook's machines. Reported faults name no
+    symptom, so they are left to the engineer.
+    """
+    steps = Jsonb([step.model_dump(mode="json") for step in playbook.steps])
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order AS wo
+               SET playbook_ref = %(ref)s,
+                   playbook_snapshot = %(steps)s,
+                   snapshot_approved_by = %(by)s,
+                   snapshot_approved_at = %(at)s,
+                   playbook_warning = NULL,
+                   estimated_minutes = %(minutes)s,
+                   estimate_is_fallback = false,
+                   required_skill = %(skill)s,
+                   required_technicians = %(technicians)s
+             WHERE wo.status IN ('queued', 'proposed', 'assigned')
+               AND wo.playbook_snapshot = '[]'::jsonb
+               AND wo.work_segments = '[]'::jsonb
+               AND wo.machine_id = ANY(%(machines)s)
+               AND (
+                    EXISTS (SELECT 1 FROM finding f
+                             WHERE f.finding_ref = wo.finding_ref
+                               AND f.symptom_code = %(symptom)s)
+                 OR EXISTS (SELECT 1 FROM pm_task t
+                             WHERE t.pm_task_ref = wo.pm_task_ref
+                               AND t.symptom_code = %(symptom)s)
+               )
+            RETURNING wo.work_order_ref
+            """,
+            {
+                "ref": f"{playbook.symptom_code}/{playbook.machine_model}",
+                "steps": steps,
+                "by": playbook.approved_by,
+                "at": playbook.approved_at,
+                "minutes": playbook.estimated_minutes,
+                "skill": playbook.required_skill,
+                "technicians": playbook.required_technicians,
+                "machines": list(machine_ids),
+                "symptom": playbook.symptom_code,
+            },
+        )
+        return [row[0] for row in cur.fetchall()]

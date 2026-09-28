@@ -813,7 +813,17 @@ legend {
 
   body {
     background: #fff;
+    color: #000;
     font-size: 11pt;
+  }
+
+  /* A dark-mode phone printing a ticket must still print black on white. */
+  .card,
+  .muted,
+  .fact,
+  .step-text {
+    color: #000 !important;
+    background: #fff !important;
   }
 
   main {

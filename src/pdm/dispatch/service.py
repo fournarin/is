@@ -268,9 +268,7 @@ class Confirmations:
             # refused rather than forced: confirming an order that has gone back
             # to the queue would assign somebody to a decision that no longer
             # has a crew on it.
-            raise AlreadyAnswered(
-                f"{ref} is no longer waiting to be confirmed; the next round will rank it again"
-            )
+            raise AlreadyAnswered(f"{ref} ไม่ได้รอการยืนยันแล้ว รอบถัดไปจะจัดลำดับใหม่")
         repo.settle_proposal(
             conn, ref, state=ProposalState.CONFIRMED, at=self.clock.now(), by=by, role=role
         )
@@ -289,9 +287,7 @@ class Confirmations:
         """
         proposal = self._pending(conn, ref)
         if not repo.return_to_queue(conn, ref):
-            raise AlreadyAnswered(
-                f"{ref} is no longer waiting to be confirmed; the next round will rank it again"
-            )
+            raise AlreadyAnswered(f"{ref} ไม่ได้รอการยืนยันแล้ว รอบถัดไปจะจัดลำดับใหม่")
         repo.settle_proposal(
             conn,
             ref,
@@ -306,5 +302,5 @@ class Confirmations:
     def _pending(self, conn: Connection[Any], ref: str) -> Proposal:
         proposal = repo.pending_proposal(conn, ref)
         if proposal is None:
-            raise NoProposal(f"nothing is waiting for an answer about {ref}")
+            raise NoProposal(f"{ref} ไม่ได้รอการยืนยันแล้ว อาจมีคนตอบไปก่อน ลองโหลดหน้าใหม่")
         return proposal
