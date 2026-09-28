@@ -76,11 +76,11 @@ reproduced from a clean checkout. All of it runs on generated data.
 | | where | what it says |
 |---|---|---|
 | ETA accuracy, per forecast horizon | [`docs/prediction-baseline.md`](docs/prediction-baseline.md) | under three minutes of error inside three hours; about ten hours late at the twelve-hour horizon |
-| Four scheduling policies over 1,440 simulated runs | [`docs/results/README.md`](docs/results/README.md) | CP-SAT loses the least production in all eighteen cells of the sweep |
+| Four scheduling policies over 1,440 simulated runs | [`docs/results/README.md`](docs/results/README.md) | CP-SAT loses the least production in 11 of the 18 cells of the sweep; first-come-first-served in the other 7 |
 | Why that table came out as it did | [`docs/results/diagnosis.md`](docs/results/diagnosis.md) | ranking work well does not by itself save production here, and whether it would depends on a parameter nobody has measured |
 | What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | the outcome the answer key implies for all five symptoms, in Thai and English; a symptom the manuals never mention comes back "not found" |
-| Drafting on manuals it was not tuned on | [`docs/results/rag-evaluation.md`](docs/results/rag-evaluation.md) | real manuals 9/9 EN and 8/9 TH; evaluation set 12/12 and 10/12; no unsafe draft on either |
-| Retrieval quality | [`docs/retrieval-baseline.md`](docs/retrieval-baseline.md) | the answer key's page comes back in the top three every time, in Thai and in English alike |
+| Drafting on synthetic and real manuals | [`docs/results/rag-evaluation.md`](docs/results/rag-evaluation.md) | evaluation set's test split (never tuned on) 12/12 EN and 10/12 TH; two real manuals 9/9 and 8/9, **after fixes made on those same questions**; no unsafe draft on either |
+| Retrieval quality | [`docs/retrieval-baseline.md`](docs/retrieval-baseline.md) | on the first synthetic corpus (9 Aug, before the reranker) the answer page was in the top three every time; on the 456-page real manual the first stage placed it in the top three for 4 of 7 English questions, which is why 120 candidates reach the reranker (ADR-099) |
 | Machine health ranking | [`docs/results/health.md`](docs/results/health.md) | the history half ranks the degraded machines first in 39 of 40 draws |
 | Shift lead against scheduler agreement | [`docs/results/confirmations.md`](docs/results/confirmations.md) | **no figures yet** - needs a trial with a person |
 
@@ -100,9 +100,11 @@ Better said here than found later.
   path from the plant to this system. `LiveSource` (OPC UA) does not exist, and
   `SIGNAL_SOURCE=live` refuses at boot and says so.
 - **Drafting is measured on two real manufacturer manuals and on synthetic
-  ones, not on the plant's.** On two Mitsubishi servo manuals it answers 9 of 9
-  English and 8 of 9 Thai questions as the key implies, and on an evaluation
-  set never tuned on, 12 of 12 and 10 of 12. It says "not found" for every
+  ones, not on the plant's.** On an evaluation set never tuned on it answers 12
+  of 12 English and 10 of 12 Thai questions as the key implies. On two
+  Mitsubishi servo manuals it answers 9 of 9 and 8 of 9, but those figures come
+  after fixes made while looking at the same nine questions, so they show the
+  fixes work there rather than how it does on an unseen manual. It says "not found" for every
   symptom the manuals never mention, and **no unsafe draft remains on any
   set** ([results](docs/results/rag-evaluation.md), ADR-096 to ADR-099). The
   plant's manuals need their own small answer key before these figures mean

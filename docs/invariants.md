@@ -40,7 +40,7 @@ trusting this page for.
 | 8 | One rule firing repeatedly does not create a second Finding: one live record per (machine, rule), updated | [ADR-023](adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md) | `triggers/domain.py`, and a partial unique index, `one_live_finding_per_machine_and_rule` in `migrations/versions/0007_findings.py`, that refuses a second live Finding whoever writes it; tested by firing a hundred times and requiring one record |
 | 9 | A rule of **higher** severity is not suppressed while a repair is open | [ADR-023](adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md) | suppression is keyed by rule rather than by machine, so a different rule was never suppressed; `tests/triggers/test_rule_evaluation.py::TestSuppressionDuringRepair` |
 | 10 | `dispatch()` - the runtime round, and **not** `schedule()`, the CP-SAT planner beside it - returns the same answer for the same input and touches no database | design note 7 | `.importlinter`: *domain.py must not reach the database or a repo*; `contracts/` is frozen; `now` is an argument. The planner's budget is wall-clock seconds and is outside the invariant, stated rather than fixed ([ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) §6); see [Known gaps](#known-gaps) |
-| 11 | No improvement loop may propose that a safety-linked threshold be loosened, however many false alarms it counted | [ADR-022](adr/0022-every-improvement-loop-proposes-rather-than-changes.md), [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md) | `work/thresholds.py::propose` refuses a rule marked safety-critical and names `SAFETY_CRITICAL`, tested at the function. **Nothing outside `tests/` calls `propose` yet**, so no code carries `safety_critical` from `rules.yaml` to it. See [Known gaps](#known-gaps) |
+| 11 | No improvement loop may propose that a safety-linked threshold be loosened, however many false alarms it counted | [ADR-022](adr/0022-every-improvement-loop-proposes-rather-than-changes.md), [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md) | `work/thresholds.py::propose` refuses a rule marked safety-critical and names `SAFETY_CRITICAL`, tested at the function. `GET /loops/thresholds` (`api/loops.py`, ADR-087) calls it with `rule.safety_critical` from `rules.yaml`, and nothing writes a proposal back |
 | 12 | `worker-runtime` cannot pick up an authoring job at all | [ADR-026](adr/0026-split-the-worker-into-two-roles.md) | a `job_class` filter in the claim query, `platform/jobs/repo.py`, rather than a convention |
 | 13 | Every skill label a playbook or technician names is in the vocabulary, and every machine a rule can fire on is in the topology | [ADR-027](adr/0027-operational-data-contracts.md) | **Three mechanisms, none of them at boot** ([ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) §§3-4). A playbook's skill is checked when it is drafted (`authoring/drafting.py`) and when it is approved (`playbooks/service.py`, which stands down when no vocabulary is configured). A technician's skills are checked where a technician is written: `dispatch/repo.py::add_technician` takes the vocabulary and raises `SkillNotInTheVocabulary`, broken on purpose in `tests/dispatch/test_a_technician_holds_a_skill_the_plant_declares.py`. The machine half is held by the shape of `plant.yaml` - a machine is declared inside a station and nowhere else - together with the loader refusing a rule whose model no machine uses; the boot check that could never fire is gone, and two tests in `tests/platform/test_config.py` stand in its place |
 | 14 | No module outside `platform/clock.py` reads the operating system clock | [ADR-028](adr/0028-clock-is-the-single-time-port.md) | `scripts/check_no_wall_clock.py` in CI, which parses each module and resolves what `time` and `datetime` are bound to, so an aliased import is caught as well as a plain one ([ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) §5). One test per form in `tests/test_the_wall_clock_check.py` |
@@ -64,7 +64,7 @@ brings it, rather than leaving the gap to be inferred from silence. This is
 | 1 | `tests/test_the_import_contracts_catch_a_violation.py::test_a_runtime_module_importing_llm_is_refused` | a tree where `work/`, `api/` and `dispatch/` import the drafter - directly, and through an intermediate module - which `lint-imports` must exit 1 on |
 | 2 | `tests/work/test_issuing_work_orders.py::TestInvariantTwo::test_raw_sql_cannot_change_a_snapshot` | an `UPDATE` aimed straight at the column, which the trigger refuses |
 | 3 | `tests/playbooks/test_store_and_review_queue.py::TestNothingUnapprovedIsEverServed` | both halves: `save_approved` handed a draft, and an `INSERT` of `status = 'draft'` at the table itself. The same `INSERT` at `'approved'` is the control, so the refusal is known to be about the status and not a typo |
-| 4 | **none yet** | an approved step citing `source_doc=""` constructs today, so the test would fail rather than pass. [#105](https://github.com/fournarin/is/issues/105) fixes the contract and brings the test with it |
+| 4 | `tests/contracts/test_work_contracts.py::test_a_step_citing_no_document_is_refused` | a step whose `source_doc` is empty or blank, refused by the contract (ADR-084) |
 | 5 | `tests/authoring/test_drafting_gate.py::TestFiguresMustBeASubsetOfTheEvidence::test_a_fabricated_torque_value_is_caught` | a torque value the cited page does not contain; the whole draft is withheld, not only that step |
 | 6 | `tests/api/test_review_queue.py::TestOnlyAnEngineerMayApprove` | the approve endpoint called as a technician, with the proposal still pending afterwards and the refusal in the access log |
 | 7 | `tests/platform/test_config.py::TestInvariant7ComponentLabels::test_an_undeclared_component_stops_the_boot` | a rule naming a component its machine model does not declare; the configuration refuses to load |
@@ -74,7 +74,7 @@ brings it, rather than leaving the gap to be inferred from silence. This is
 | 11 | `tests/work/test_what_the_false_alarms_propose.py::TestWhenNothingIsProposed::test_a_safety_linked_rule_is_refused_whatever_the_count` | a safety-critical rule with any number of false alarms behind it - **at the function only.** There is no call site to break until [#107](https://github.com/fournarin/is/issues/107) writes one |
 | 12 | `tests/platform/test_jobs.py::TestInvariant12::test_a_runtime_worker_never_sees_an_authoring_job` | an authoring job in the queue and a runtime worker claiming; nothing comes back |
 | 13 | **partly.** `tests/api/test_review_queue.py::TestWhatTheCodeReviewFound::test_a_skill_outside_the_plant_vocabulary_is_refused` | a playbook approved with a skill the plant does not declare. The technician half has nothing to break, because nothing checks it; the machine half **cannot be written**, because the loader's condition can never be true. Both are [#105](https://github.com/fournarin/is/issues/105) |
-| 14 | **none yet** | the script has no test of any kind. A fixture calling `datetime.today()` would fail against it until the script itself is fixed, which is [#105](https://github.com/fournarin/is/issues/105) |
+| 14 | `tests/test_the_wall_clock_check.py` | a direct call, an aliased import and a call inside a nested function, each caught by `scripts/check_no_wall_clock.py` |
 | 15 | `tests/test_llm_isolation_check.py::test_a_runtime_service_joining_the_llm_network_is_caught` | a compose file in `tmp_path` putting `api` on the model network, and an override file doing the same thing behind the base file's back |
 
 **Two gates that guard no invariant are tested the same way**, because a gate
@@ -130,19 +130,12 @@ code by [#105](https://github.com/fournarin/is/issues/105), with
 and each is now broken on purpose by a test.** The gaps they left are gone from
 this list; what remains below is what is still true.
 
-- **Invariant 11 holds because nothing runs the loop it constrains.** The
-  refusal is real and tested. But neither improvement loop has a runtime path:
-  `worker-runtime` registers only the dispatch and observe handlers, and no
-  code outside `tests/` calls `propose()` in `work/estimates.py` or
-  `work/thresholds.py`. When the caller is written, it has to pass
-  `rule.safety_critical`. Until then, `scripts/check_config_is_read.py` counts
-  `safety_critical` as read only because a parameter in `work/thresholds.py`
-  has the same name, a limitation its docstring now states. The loops are
-  [#107](https://github.com/fournarin/is/issues/107). The gate was
-  [#108](https://github.com/fournarin/is/issues/108), which planted that false
-  pass as a test rather than closing it: whether to require an attribute read
-  on a config object is a decision somebody has to defend, and it is entry 39 of
-  [decisions-to-defend](decisions-to-defend.md).
+- **Invariant 11 is read, not written.** Since ADR-087 the engineer's `/loops`
+  screen calls `propose()` with each rule's `safety_critical` flag, and it has no
+  write path: a threshold is still changed by hand in `config/rules.yaml`. The
+  refusal is real and tested; what is not built is anything that applies a
+  proposal.
+
 - **Invariant 14's gate is a regular expression.** It misses
   `datetime.today()`, `time.time_ns()`, `time.monotonic_ns()` and aliased
   imports such as `from datetime import datetime as dt`. None of these appear
