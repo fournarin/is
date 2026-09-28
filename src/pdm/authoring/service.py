@@ -23,6 +23,7 @@ from pdm.authoring.drafting import DraftResult, assemble
 from pdm.authoring.parsing import parse
 from pdm.contracts import DocumentId, MachineModel, SymptomCode
 from pdm.llm.domain import Drafter, DraftRequest, Evidence
+from pdm.llm.extractive import continues_to
 from pdm.platform.documents import Document, DocumentLibrary
 from pdm.playbooks import repo as playbooks
 from pdm.playbooks.domain import Proposal, ProposalOrigin
@@ -229,6 +230,7 @@ class Drafting:
         hits = self.hybrid.search(conn, question, profile=self.profile)
         ours, theirs = self._evidence(conn, hits, machine_model)
         ours = self._relevant(question, ours)
+        ours = self._with_continuations(conn, ours)
 
         request = DraftRequest(
             symptom_code=symptom_code,
@@ -349,6 +351,38 @@ class Drafting:
         ]
         kept.sort(key=lambda page: (-page.score, page.page))
         return tuple(kept)
+
+    def _with_continuations(
+        self, conn: Connection[Any], pages: tuple[Evidence, ...]
+    ) -> tuple[Evidence, ...]:
+        """Relevant pages plus the pages their procedures run onto (ADR-100).
+
+        A continuation page often carries only steps 5 to 7 and none of the
+        question's words, so it can score below the floor and still be half the
+        procedure. It is added at its neighbour's score, and so is a page that
+        says it continues onto a relevant one.
+        """
+        have = {(page.document_id, page.page) for page in pages}
+        wanted: dict[tuple[DocumentId, int], Evidence] = {}
+        for page in pages:
+            after = continues_to(page.text, page.page)
+            if after is not None and (page.document_id, after) not in have:
+                wanted[(page.document_id, after)] = page
+            if page.page > 1 and (page.document_id, page.page - 1) not in have:
+                wanted[(page.document_id, page.page - 1)] = page
+        if not wanted:
+            return pages
+        text = self._page_text(conn, list(wanted))
+        added = []
+        for key, source in wanted.items():
+            if key not in text:
+                continue
+            neighbour = source.model_copy(update={"page": key[1], "text": text[key]})
+            before_source = key[1] == source.page - 1
+            if before_source and continues_to(neighbour.text, neighbour.page) != source.page:
+                continue
+            added.append(neighbour)
+        return (*pages, *added)
 
     def _page_text(
         self, conn: Connection[Any], pages: list[tuple[DocumentId, int]]

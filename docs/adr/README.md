@@ -112,6 +112,7 @@ entries replace parts of earlier ones, and both are kept.
 | [097](0097-a-reranker-decides-whether-the-manuals-answer-at-all.md) | **A reranker decides whether the manuals answer at all** | 086 |
 | [098](0098-what-two-real-manuals-changed.md) | **What two real manufacturer manuals changed** | 034, 097 |
 | [099](0099-recall-before-the-reranker-and-what-a-procedure-is.md) | Enough candidates for the reranker, and what counts as a procedure | 097, 098 |
+| [100](0100-a-procedure-that-runs-over-a-page-is-drafted-whole.md) | A procedure that runs over a page is drafted whole | 097 |
 
 ## The invariants these records cite
 

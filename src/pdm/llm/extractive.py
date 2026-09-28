@@ -78,7 +78,37 @@ _SENTENCE = re.compile(r"(?<=[.:])\s+(?=[A-Z฀-๿])")
 _MINIMUM_SENTENCE_CHARACTERS = 30
 
 
-def _procedure(text: str) -> list[str]:
+# "Continued on page 10." or "continued on the next page" (ADR-100). Removed
+# from the step it ends, and followed to the page it names.
+_CONTINUED = re.compile(
+    r"\s*continued on (?:page (?P<page>\d+)|(?:the )?next page)\.?", re.IGNORECASE
+)
+
+
+def continues_to(text: str, page: int) -> int | None:
+    """The page a procedure on this page continues on, or None."""
+    match = _CONTINUED.search(text)
+    if match is None:
+        return None
+    return int(match.group("page")) if match.group("page") else page + 1
+
+
+def _continues_to(page: Evidence) -> int | None:
+    return continues_to(page.text, page.page)
+
+
+def _same_document(request: DraftRequest, page: Evidence, number: int) -> Evidence | None:
+    return next(
+        (
+            other
+            for other in request.evidence
+            if other.document_id == page.document_id and other.page == number
+        ),
+        None,
+    )
+
+
+def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list[str]:
     """The numbered instructions on a page, in the order they are written.
 
     Markers are matched by their numbering running 1, 2, 3 and not by where they
@@ -93,6 +123,7 @@ def _procedure(text: str) -> list[str]:
     inside step 1, where it belongs; taking the first would truncate step 1 to
     "... the lockout procedure on page" and lose the page it points at.
     """
+    text = _CONTINUED.sub("", text)
     end = _FOOTER.search(text)
     region = text[: end.start()] if end else text
     markers = list(_MARKER.finditer(region))
@@ -100,7 +131,7 @@ def _procedure(text: str) -> list[str]:
         return []
 
     chain: list[re.Match[str]] = []
-    expected = 1
+    expected = first
     for position, marker in enumerate(markers):
         if int(marker.group("number")) != expected:
             continue
@@ -122,7 +153,7 @@ def _procedure(text: str) -> list[str]:
         chain.append(later[-1])
         expected += 1
 
-    if len(chain) < _MINIMUM_STEPS:
+    if len(chain) < (_MINIMUM_STEPS if minimum is None else minimum):
         return []
 
     steps: list[str] = []
@@ -256,13 +287,38 @@ class ExtractiveDrafter:
         if page is None:
             return Proposal(kind=ProposalKind.NOTHING)
 
+        # A procedure that runs over a page is drafted whole (ADR-100). Chosen on
+        # its second page, it starts from the page that says it continues here;
+        # chosen on its first, the steps on the next page are joined on, each
+        # still citing the page it was read from.
+        if not _procedure(page.text):
+            before = _same_document(request, page, page.page - 1)
+            if (
+                before is not None
+                and _continues_to(before) == page.page
+                and _procedure(before.text)
+            ):
+                page = before
         numbered = _procedure(page.text)
+        cited = [page.ref] * len(numbered)
+        after = None
+        target = _continues_to(page) if numbered else None
+        if target is not None:
+            after = _same_document(request, page, target)
+            if after is not None:
+                more = _procedure(after.text, first=len(numbered) + 1, minimum=1)
+                numbered = [*numbered, *more]
+                cited = [*cited, *([after.ref] * len(more))]
+
         texts = numbered or _sentences(page.text)
         if not texts:
             return Proposal(kind=ProposalKind.NOTHING)
+        if not numbered:
+            cited = [page.ref] * len(texts)
 
-        minutes = _first(_MINUTES, page.text)
-        tools = _first(_TOOLS, page.text)
+        footer = page.text if after is None else f"{page.text}\n{after.text}"
+        minutes = _first(_MINUTES, footer)
+        tools = _first(_TOOLS, footer)
 
         return Proposal(
             # A page with numbered instructions is a procedure; a page without
@@ -271,8 +327,10 @@ class ExtractiveDrafter:
             # (ADR-009). The distinction is the manual's own formatting rather
             # than a judgement about the words.
             kind=ProposalKind.REPAIR if numbered else ProposalKind.DIAGNOSTIC,
-            steps=tuple(ProposedStep(text=text, cites=page.ref) for text in texts),
+            steps=tuple(
+                ProposedStep(text=text, cites=ref) for text, ref in zip(texts, cited, strict=True)
+            ),
             tools=tuple(tool.strip() for tool in tools.split(",")) if tools else (),
-            required_skill=_first(_SKILL, page.text),
+            required_skill=_first(_SKILL, footer),
             estimated_minutes=int(minutes) if minutes else None,
         )

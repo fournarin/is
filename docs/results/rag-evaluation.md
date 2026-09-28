@@ -97,3 +97,11 @@ fault-finding ([ADR-098](../adr/0098-what-two-real-manuals-changed.md)).
 "not found" (RD-03, EV-101, EV-105 and EV-134 in Thai) or fault-finding text
 where a procedure was wanted (EV-101 in English): the system asks an engineer
 rather than guessing.
+
+## A procedure over two pages is drafted whole - 28 September 2026
+
+[ADR-100](../adr/0100-a-procedure-that-runs-over-a-page-is-drafted-whole.md).
+EV-104 (secondary cable replacement, steps 1-4 on page 9 and 5-7 on page 10)
+is now drafted with all seven steps in both languages, each citing its own page.
+Every set is otherwise unchanged: real manuals 9/9 and 8/9, evaluation set test
+12/12 and 10/12, original corpus 10/10, **no unsafe draft on any**.

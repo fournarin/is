@@ -104,8 +104,7 @@ Better said here than found later.
   English and 8 of 9 Thai questions as the key implies, and on an evaluation
   set never tuned on, 12 of 12 and 10 of 12. It says "not found" for every
   symptom the manuals never mention, and **no unsafe draft remains on any
-  set** ([results](docs/results/rag-evaluation.md), ADR-096 to ADR-099). A
-  procedure that runs over two pages is drafted from its first page only. The
+  set** ([results](docs/results/rag-evaluation.md), ADR-096 to ADR-099). The
   plant's manuals need their own small answer key before these figures mean
   anything there.
 - **Playbook coverage is bounded by the corpus, not by the pipeline.** The

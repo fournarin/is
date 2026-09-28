@@ -374,3 +374,47 @@ class TestAProcedureIsInstructions:
             "3. Refit the cover and run the motor for ten minutes to confirm."
         )
         assert self._kind(text) is ProposalKind.REPAIR
+
+
+class TestAProcedureOverTwoPages:
+    """ADR-100: steps 1-4 on page 9, "Continued on page 10", steps 5-7 there."""
+
+    @staticmethod
+    def _pages(first_score: float, second_score: float) -> tuple[Evidence, Evidence]:
+        from fixtures.evalset.pages import SW210
+
+        return (
+            _page(SW210, 9, document_id=R2000IC_DOC, score=first_score).model_copy(
+                update={"machine_model": MachineModel("R-2000iC")}
+            ),
+            _page(SW210, 10, document_id=R2000IC_DOC, score=second_score).model_copy(
+                update={"machine_model": MachineModel("R-2000iC")}
+            ),
+        )
+
+    def test_the_steps_on_the_next_page_are_joined_on_each_citing_its_page(self) -> None:
+        first, second = self._pages(0.9, 0.2)
+
+        proposal = ExtractiveDrafter().propose(
+            _request(first, second, question="secondary cable cracked").model_copy(
+                update={"relevance_scored": True}
+            )
+        )
+
+        assert proposal.kind is ProposalKind.REPAIR
+        assert len(proposal.steps) == 7
+        assert [step.cites[1] for step in proposal.steps] == [9, 9, 9, 9, 10, 10, 10]
+        assert "Continued" not in proposal.steps[3].text
+        assert proposal.estimated_minutes == 60
+
+    def test_chosen_on_its_second_page_it_starts_from_the_first(self) -> None:
+        first, second = self._pages(0.3, 0.9)
+
+        proposal = ExtractiveDrafter().propose(
+            _request(first, second, question="replace the weld cable").model_copy(
+                update={"relevance_scored": True}
+            )
+        )
+
+        assert len(proposal.steps) == 7
+        assert proposal.steps[0].cites[1] == 9
