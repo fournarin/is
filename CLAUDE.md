@@ -18,8 +18,10 @@ technician gets tickets with real steps and page citations, a shift lead
 releases them, and **the day real data exists it can be loaded without code
 changes** - signals from a file, technicians and shifts from a file.
 
-Dates: feature freeze **22 October 2026**; weeks 13-14 (30 Oct - 12 Nov) are the
-written report, which is what gets graded. A real technician trying the system
+Dates: on 2026-09-28 the owner moved the close to **30 September 2026**: the
+system, its verification and the bound report (in Thai) all finish by then. The
+original freeze (22 October) and report weeks (30 Oct - 12 Nov) still bound
+anything after that. The written report is what gets graded. A real technician trying the system
 (ADR-014, `docs/trial-protocol.md`) is the one piece of evidence that cannot be
 generated.
 
