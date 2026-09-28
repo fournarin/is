@@ -42,7 +42,7 @@ this is nearer twenty minutes, most of it downloading):
 | | |
 |---|---|
 | accounts | 6 - the four demo people, plus the two extra technicians the roster invents |
-| technicians rostered | 3, on the shift that was running |
+| technicians rostered | 3 (tech-1 to tech-3), on every shift of the next day |
 | manuals | 2, **19 chunks indexed** |
 | approved playbooks | **1 - SYM-047 on the M-710iC** |
 | work orders | 2, with **2 proposals waiting for the shift lead** |
@@ -122,7 +122,8 @@ The web app is at **http://localhost:3000**, the API at
    **ให้ระบบร่างขั้นตอนจากคู่มือ** under one of them and type what to ask the manual - the
    field is there because `SYM-014` retrieves nothing and "belt motor running
    above 85 degrees" retrieves the page (ADR-040). The button is an engineer's
-   only: the worker behind it holds the one GPU (ADR-029).
+   only: drafting runs the reranker on the authoring worker, about 20-30 seconds
+   a draft on CPU (ADR-097).
 
    Ask **in Thai**: a Thai question of an English manual is the cross-lingual case
    the embedding model was chosen for (ADR-029, ADR-035), and it is the case the
@@ -174,9 +175,9 @@ Say these rather than letting somebody find them.
 - **The review queue starts empty, and fills when somebody asks.** `seed_demo.py`
   queues each manual for indexing as it stores it, so retrieval has something to
   find - but a draft is written only when an engineer asks for one, from the gaps
-  panel in step 3. Nothing drafts speculatively: every draft costs a pass on the
-  one GPU-bound worker (ADR-029), and a queue that fills itself is a queue its
-  owner does not control.
+  panel in step 3. Nothing drafts speculatively: every draft costs 20-30 seconds
+  of the authoring worker's CPU (ADR-097), and a queue that fills itself is a
+  queue its owner does not control.
 
   It is **not** waiting on a model server. `worker-authoring` builds its drafter
   as `ExtractiveDrafter()` - the backend with no model in it (ADR-037 §9) - and
@@ -188,14 +189,11 @@ Say these rather than letting somebody find them.
   the image at build time (ADR-079), so a machine with no route to the internet
   indexes a manual rather than failing at the first one with a TLS error that
   says nothing about a model.
-- **The technician's screen has nothing to place work on.** Dispatch needs a
-  roster - a technician record with skills, and a shift assignment - and
-  `seed_demo.py` deliberately creates neither. It is the script an operator
-  reruns on the plant's machine, and inventing technicians there would be the
-  same defect as inventing signals (ADR-032, ADR-044 §5). A demo roster is a
-  separate thing that does not exist yet. With one, step 4 above comes first:
-  `policy.yaml` ships `confirmation: supervisor`, so a technician's screen says
-  the work is waiting on their shift lead until somebody confirms it.
+- **The demo's technicians are invented.** `seed_demo.py` creates no roster,
+  because it is the script an operator reruns on the plant's machine;
+  `seed_demo_roster.py` adds three technicians (สมชาย, วิชัย, พิมพ์ชนก) on every
+  shift of the next day (ADR-078, ADR-094). On a plant install the roster comes
+  from the plant's file (ADR-091).
 - **Every work order in this demo is about a machine that is not there.**
   `SIGNAL_SOURCE=synthetic` in `.env.example`, and `worker-runtime` says so in a
   warning at boot. On screen a synthetic ticket is indistinguishable from a real
