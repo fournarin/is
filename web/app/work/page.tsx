@@ -17,8 +17,13 @@ import { currentRound, myWork, proposals, type Ticket } from "@/lib/work";
  * prevent (ADR-011, ADR-058). What is queued behind it is shown and is not
  * selectable. Every sentence on it was written by the backend (ADR-005).
  */
-export default async function WorkPage() {
+export default async function WorkPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const account = await requireAccount();
+  const { error } = await searchParams;
   if (account.role !== "technician") {
     return (
       <Shell account={account} current="/work">
@@ -62,6 +67,11 @@ export default async function WorkPage() {
 
   return (
     <Shell account={account} current="/work">
+      {error !== undefined && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       <p className="muted">
         งานที่ 1 จาก {mine.length} · ใบงาน {now.ref}
       </p>
@@ -79,6 +89,11 @@ export default async function WorkPage() {
         {/* Written by the backend when the job was created, never here. */}
         <p className="symptom reason">{now.reason}</p>
         {seen !== null && <p className="muted">{seen}</p>}
+        {/* The reason is written once (ADR-005); the machine moves on. A
+            forecast overtaken by the crossing it predicted says so here. */}
+        {now.recurrence?.status === "superseded" && (
+          <p className="warning">⚠️ สถานะล่าสุด: อาการนี้เกินเกณฑ์แล้ว ไม่ใช่แค่คาดการณ์ ให้ถือเป็นงานด่วน</p>
+        )}
 
         <div className="facts">
           <div className="fact">
@@ -96,6 +111,12 @@ export default async function WorkPage() {
             <span className="label">จำนวนช่าง</span>
             <span className="value">{now.required_technicians} คน</span>
           </div>
+          {now.tools.length > 0 && (
+            <div className="fact" style={{ gridColumn: "1 / -1" }}>
+              <span className="label">เครื่องมือที่ต้องเตรียม</span>
+              <span className="value">{now.tools.join(" · ")}</span>
+            </div>
+          )}
           <div className="fact">
             <span className="label">ขั้นตอนซ่อม</span>
             <span className="value">

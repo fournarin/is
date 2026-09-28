@@ -45,6 +45,7 @@ from pdm.contracts import (
     SkillId,
     SymptomCode,
     UserId,
+    WorkOrder,
     WorkOrderOrigin,
     WorkOrderStatus,
     WorkOutcome,
@@ -58,6 +59,7 @@ from pdm.platform.objects import FilesystemObjectStore
 from pdm.playbooks import repo as playbooks
 from pdm.work import AlreadyOpen, NoEstimateAvailable, WorkOrders
 from pdm.work import repo as work
+from pdm.work import repo as work_repo
 from tests.released import released
 
 pytestmark = pytest.mark.db
@@ -185,7 +187,7 @@ class TestInvariantTwo:
             conn, _finding(), finding_ref=FindingRef("F-1"), machine_model=R2000IC
         )
 
-        with pytest.raises(RestrictViolation, match="frozen when the order is issued"):
+        with pytest.raises(RestrictViolation, match="frozen"):
             conn.execute(
                 "UPDATE work_order SET playbook_snapshot = '[]'::jsonb WHERE work_order_ref = %s",
                 (issued.ref,),
@@ -733,3 +735,59 @@ class TestWhatTheCodeReviewFound:
         )
 
         assert "3 มี.ค. 15:00 น." in issued.order.reason
+
+
+def _order(conn: Connection[Any], ref: str) -> WorkOrder:
+    found = work_repo.get(conn, ref)
+    assert found is not None
+    return found
+
+
+class TestAPlaybookApprovedAfterTheOrder:
+    """ADR-102: an order waiting with no steps adopts the first approved playbook."""
+
+    def _waiting(self, conn: Connection[Any], orders: WorkOrders) -> str:
+        """Issued with no playbook, so its snapshot is empty."""
+        from pdm.triggers import repo as findings
+
+        ref = findings.raise_finding(conn, _finding())
+        return orders.from_finding(conn, _finding(), finding_ref=ref, machine_model=R2000IC).ref
+
+    def test_the_waiting_order_carries_the_steps(
+        self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
+    ) -> None:
+        ref = self._waiting(conn, orders)
+        assert _order(conn, ref).playbook_snapshot == ()
+
+        adopted = orders.adopt(conn, _approved_playbook(conn, manual), machine_ids=[MOTOR])
+
+        order = _order(conn, ref)
+        assert adopted == [ref]
+        assert [step.text for step in order.playbook_snapshot] == [
+            "Retighten the motor mount bolts to 42 Nm."
+        ]
+        assert order.estimated_minutes == 45
+        assert order.estimate_is_fallback is False
+
+    def test_an_order_somebody_started_is_left_as_it_was(
+        self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
+    ) -> None:
+        ref = self._waiting(conn, orders)
+        work_repo.set_status(conn, ref, status=WorkOrderStatus.ASSIGNED)
+        orders.accept(conn, ref, user=UserId("tech-1"))
+        orders.start(conn, ref, user=UserId("tech-1"))
+
+        assert orders.adopt(conn, _approved_playbook(conn, manual), machine_ids=[MOTOR]) == []
+        assert _order(conn, ref).playbook_snapshot == ()
+
+    def test_steps_once_there_are_still_never_rewritten(
+        self, conn: Connection[Any], orders: WorkOrders, manual: DocumentId
+    ) -> None:
+        ref = self._waiting(conn, orders)
+        orders.adopt(conn, _approved_playbook(conn, manual), machine_ids=[MOTOR])
+
+        with pytest.raises(RestrictViolation, match="frozen"):
+            conn.execute(
+                "UPDATE work_order SET playbook_snapshot = '[{}]'::jsonb WHERE work_order_ref = %s",
+                (ref,),
+            )

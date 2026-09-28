@@ -347,7 +347,7 @@ class TestRelease:
 
         assert first.status_code == 201
         assert second.status_code == 409
-        assert "already been released" in second.json()["detail"]
+        assert "ถูกปล่อยไปแล้ว" in second.json()["detail"]
         assert len(_overrides(database_url)) == 1
 
     def test_a_ticket_that_is_not_there_is_a_404(self, client: TestClient) -> None:

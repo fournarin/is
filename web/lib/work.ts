@@ -41,7 +41,13 @@ export type Round = {
   held: { ref: string; why: string }[];
 };
 
-export type Step = { text: string; text_th: string | null; source_doc: string; page: number };
+export type Step = {
+  text: string;
+  text_th: string | null;
+  source_doc: string;
+  page: number;
+  manual: string | null;
+};
 
 export type Recurrence = {
   occurrence_count: number;
@@ -64,6 +70,7 @@ export type Ticket = {
   required_skill: string | null;
   required_skill_name: string | null;
   station: string | null;
+  tools: string[];
   required_technicians: number;
   assignees: string[];
   playbook_warning: string | null;

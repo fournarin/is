@@ -20,6 +20,12 @@ import { ROLE_NAMES, requireAccount } from "@/lib/session";
  * side; on a phone the evidence follows the steps down the page, which is the
  * same reading order.
  */
+const OUTCOME: Record<string, string> = {
+  repair: "ขั้นตอนซ่อม",
+  diagnostic: "ไล่หาสาเหตุ",
+  not_found: "ไม่พบในคู่มือ",
+};
+
 export default async function ProposalPage({
   params,
   searchParams,
@@ -56,7 +62,7 @@ export default async function ProposalPage({
 
       <h1>
         {draft.symptom_code}
-        <span className="muted"> · {draft.origin === "technician" ? "ช่างแย้ง" : draft.outcome}</span>
+        <span className="muted"> · {draft.origin === "technician" ? "ช่างแย้ง" : (OUTCOME[draft.outcome] ?? draft.outcome)}</span>
       </h1>
       <p className="muted">{draft.reason}</p>
 

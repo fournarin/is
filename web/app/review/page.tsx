@@ -19,6 +19,12 @@ import { reviewQueue } from "@/lib/review";
  * not moving, which is their job, and the endpoints refuse them either way
  * (invariant 6).
  */
+const OUTCOME: Record<string, string> = {
+  repair: "ขั้นตอนซ่อม",
+  diagnostic: "ไล่หาสาเหตุ",
+  not_found: "ไม่พบในคู่มือ",
+};
+
 export default async function ReviewQueuePage({
   searchParams,
 }: {
@@ -72,7 +78,7 @@ export default async function ReviewQueuePage({
                   <Link href={`/review/${one.proposal_id}`}>{one.symptom_code}</Link>
                 </h2>
                 <span className="muted">
-                  {one.origin === "technician" ? "ช่างแย้ง" : `ร่าง · ${one.outcome}`}
+                  {one.origin === "technician" ? "ช่างแย้ง" : `ร่าง · ${OUTCOME[one.outcome] ?? one.outcome}`}
                 </span>
               </div>
               <p className="muted">{one.reason}</p>

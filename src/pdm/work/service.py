@@ -344,6 +344,12 @@ class WorkOrders:
             raise NoSuchOrder(f"no work order {ref}")
         return order
 
+    def adopt(
+        self, conn: Connection[Any], playbook: Playbook, *, machine_ids: Sequence[str]
+    ) -> list[str]:
+        """The orders waiting on this symptom now carry its approved steps (ADR-102)."""
+        return repo.adopt_playbook(conn, playbook, machine_ids=machine_ids)
+
     def accept(self, conn: Connection[Any], ref: str, *, user: UserId) -> WorkOrder:
         """A technician takes the job (ADR-024: technicians, and only them).
 

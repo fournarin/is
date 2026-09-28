@@ -62,7 +62,13 @@ export function Decisions({
                 <span>
                   ขั้นที่ {index + 1} <small className="muted">· {text}</small>
                 </span>
-                <textarea name="thai" rows={2} placeholder="พิมพ์คำแปลภาษาไทย" />
+                <textarea
+                  name="thai"
+                  rows={2}
+                  placeholder="พิมพ์คำแปลภาษาไทย"
+                  key={`thai-${index}-${approval.thai?.[index] ?? ""}`}
+                  defaultValue={approval.thai?.[index] ?? ""}
+                />
               </label>
             ))}
           </fieldset>

@@ -218,7 +218,7 @@ def pending_proposals(conn: Connection[Any]) -> list[Proposal]:
         cur.execute(
             f"""
             SELECT {_PROPOSAL_COLUMNS} FROM dispatch_proposal
-             WHERE state = 'pending' ORDER BY proposed_at, proposal_id
+             WHERE state = 'pending' ORDER BY priority_score DESC, proposed_at, proposal_id
             """
         )
         return [_to_proposal(dict(row)) for row in cur.fetchall()]

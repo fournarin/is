@@ -18,7 +18,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, Jobs, requires
+from pdm.api.deps import Db, Jobs, Plant, requires
+from pdm.api.work_orders import Orders
 from pdm.contracts import MachineModel, PlaybookStep, Role, SkillId, SymptomCode
 from pdm.platform.auth.domain import Account
 from pdm.platform.jobs import JobKind
@@ -313,6 +314,8 @@ def approve(
     approval: Approval,
     conn: Db,
     playbooks: Store,
+    work_orders: Orders,
+    config: Plant,
     account: Annotated[Account, Depends(requires(Role.ENGINEER, action="approve_playbook"))],
 ) -> dict[str, Any]:
     """Invariant 6. Anybody else gets a 403 from the dependency above.
@@ -333,6 +336,13 @@ def approve(
             note=approval.note,
             rewritten_steps=approval.steps,
             thai_steps=approval.thai_steps,
+        )
+        # The orders already waiting on this symptom get the steps now, rather
+        # than a technician being told none exist (ADR-102).
+        work_orders.adopt(
+            conn,
+            playbook,
+            machine_ids=config.machines_of(playbook.machine_model),
         )
     except NothingToApply as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error

@@ -38,8 +38,10 @@ from pdm.api.deps import Confirming, Db, Plant, Rounds, Time, requires
 from pdm.contracts import (
     FindingKind,
     MachineId,
+    MachineModel,
     Role,
     Severity,
+    SymptomCode,
     UserId,
     WorkOrder,
     WorkOrderOrigin,
@@ -55,6 +57,7 @@ from pdm.dispatch.service import AlreadyAnswered, NoProposal
 from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.config import Config
+from pdm.playbooks import repo as playbooks_repo
 
 # Layer 4, for one line in `confirm_proposal`. `.importlinter` bans `pdm.dispatch`
 # and `pdm.work` from importing this package at all and names only the workers
@@ -162,6 +165,9 @@ class Step(BaseModel):
     text_th: str | None = None
     source_doc: str
     page: int
+    # Which manual the page is in, so a technician holding the printed copy
+    # knows which book to open (ADR-102).
+    manual: str | None = None
 
 
 class Recurrence(BaseModel):
@@ -205,6 +211,7 @@ class TicketView(BaseModel):
     # print as they are (ADR-093). Labels, not sentences.
     required_skill_name: str | None = None
     station: str | None = None
+    tools: tuple[str, ...] = ()
     required_technicians: int
     assignees: tuple[str, ...] = ()
     playbook_warning: str | None = None
@@ -611,6 +618,27 @@ def _recurrence(conn: Connection[Any], order: WorkOrder) -> Recurrence | None:
     )
 
 
+def _manual_titles(conn: Connection[Any], ids: set[str]) -> dict[str, str]:
+    """ "R-2000iC Maintenance Manual (Edition 3)" per document id."""
+    if not ids:
+        return {}
+    rows = conn.execute(
+        "SELECT document_id, title, edition FROM document WHERE document_id = ANY(%s)",
+        (sorted(ids),),
+    ).fetchall()
+    return {row[0]: f"{row[1]} ({row[2]})" if row[2] else row[1] for row in rows}
+
+
+def _tools(conn: Connection[Any], playbook_ref: str | None) -> tuple[str, ...]:
+    """The tools the approved playbook lists (ADR-102). The snapshot freezes the
+    steps; the tool list is read from the served playbook and shown as that."""
+    if not playbook_ref or "/" not in playbook_ref:
+        return ()
+    symptom, model = playbook_ref.split("/", 1)
+    found = playbooks_repo.get(conn, SymptomCode(symptom), MachineModel(model))
+    return tuple(found[0].tools) if found is not None else ()
+
+
 def _station(config: Config, machine_id: MachineId) -> str | None:
     """ "สถานี 3", or None for a machine the current layout does not place (ADR-048)."""
     try:
@@ -637,6 +665,7 @@ def ticket(
     order = work.get(conn, work_order_ref)
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no work order {work_order_ref}")
+    manuals = _manual_titles(conn, {str(step.source_doc) for step in order.playbook_snapshot})
     return TicketView(
         ref=work_order_ref,
         machine_id=str(order.machine_id),
@@ -669,9 +698,11 @@ def ticket(
                 text_th=step.text_th,
                 source_doc=str(step.source_doc),
                 page=step.page,
+                manual=manuals.get(str(step.source_doc)),
             )
             for step in order.playbook_snapshot
         ),
+        tools=_tools(conn, order.playbook_ref),
         recurrence=_recurrence(conn, order),
     )
 
@@ -746,8 +777,7 @@ def release_held(
     if work_order_ref in dispatch_repo.released(conn):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"{work_order_ref} has already been released; it is waiting for a round, not "
-            "for the gate",
+            f"{work_order_ref} ถูกปล่อยไปแล้ว กำลังรอรอบถัดไปจัดช่าง",
         )
 
     decided = rounds.decide(conn)
@@ -761,7 +791,7 @@ def release_held(
     if work_order_ref not in {one.ref for one in decided.held}:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"the gate is not holding {work_order_ref}",
+            f"ระบบไม่ได้กัน {work_order_ref} ไว้แล้ว ลองโหลดหน้าใหม่",
         )
 
     override = Override(

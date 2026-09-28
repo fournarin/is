@@ -13,18 +13,31 @@ import { callApi } from "@/lib/api";
  * branch on what a previous round happened to do. The technician presses one
  * thing, which is what a phone at a machine deserves.
  */
+async function reason(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") return body.detail;
+  } catch {
+    // not JSON
+  }
+  return `ระบบตอบกลับผิดปกติ (${response.status}) ลองโหลดหน้าใหม่`;
+}
+
 export async function startWork(ref: string): Promise<void> {
   const accepted = await callApi(`/work-orders/${encodeURIComponent(ref)}/accept`, {
     method: "POST",
   });
   if (!accepted.ok) {
-    throw new Error(`accepting ${ref} answered ${accepted.status}`);
+    // Back to the job with the API's own sentence, never a crash page: a
+    // double tap or a stale page is normal on a phone (ADR-102).
+    redirect(`/work?error=${encodeURIComponent(await reason(accepted))}`);
   }
   const started = await callApi(`/work-orders/${encodeURIComponent(ref)}/start`, {
     method: "POST",
   });
-  if (!started.ok) {
-    throw new Error(`starting ${ref} answered ${started.status}`);
+  // 409 is "already working on it": the second tap of the same button.
+  if (!started.ok && started.status !== 409) {
+    redirect(`/work?error=${encodeURIComponent(await reason(started))}`);
   }
   redirect(`/work/${encodeURIComponent(ref)}/steps`);
 }

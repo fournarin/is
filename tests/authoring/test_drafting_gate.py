@@ -356,7 +356,7 @@ class TestSkillAndDurationAreExtractedNeverInvented:
             skills=SKILLS,
         )
         assert result.draft is not None
-        with pytest.raises(ValueError, match="estimated_minutes"):
+        with pytest.raises(ValueError, match="เวลาโดยประมาณ"):
             result.draft.into_playbook()
 
 
@@ -388,7 +388,7 @@ class TestNothingToDraft:
 
         assert result.outcome is DraftOutcome.WITHHELD
         assert result.draft is None
-        assert "backend" in result.reason
+        assert "ร่างไม่ได้ขั้นตอน" in result.reason
 
     def test_a_backend_that_returns_no_steps_is_not_a_withheld_draft(self) -> None:
         """Two silences that must not be confused.

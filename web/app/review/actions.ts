@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { callApi } from "@/lib/api";
 
-export type DecisionState = { error: string | null };
+export type DecisionState = { error: string | null; thai?: string[] };
 
 /**
  * What the API said, turned into something a reviewer can act on.
@@ -91,7 +91,9 @@ export async function approve(
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    return { error: await refusal(response) };
+    // Handed back so a refusal over one figure does not wipe every other
+    // rendering the engineer typed (ADR-102).
+    return { error: await refusal(response), thai: form.getAll("thai").map(String) };
   }
   redirect("/review");
 }
@@ -119,7 +121,9 @@ export async function sendBack(
     body: JSON.stringify({ note }),
   });
   if (!response.ok) {
-    return { error: await refusal(response) };
+    // Handed back so a refusal over one figure does not wipe every other
+    // rendering the engineer typed (ADR-102).
+    return { error: await refusal(response), thai: form.getAll("thai").map(String) };
   }
   redirect("/review");
 }
@@ -146,7 +150,9 @@ export async function dismiss(
     body: JSON.stringify({ note }),
   });
   if (!response.ok) {
-    return { error: await refusal(response) };
+    // Handed back so a refusal over one figure does not wipe every other
+    // rendering the engineer typed (ADR-102).
+    return { error: await refusal(response), thai: form.getAll("thai").map(String) };
   }
   redirect("/review");
 }

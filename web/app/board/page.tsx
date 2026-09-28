@@ -129,9 +129,23 @@ export default async function BoardPage({
 
         <section className="column">
           <h2>
-            ระบบกันไว้ก่อน <span className="count">{round.held.length}</span>
+            ระบบกันไว้ก่อน{" "}
+            <span className="count">{round.held.length + round.unassigned.length}</span>
           </h2>
-          {round.held.length === 0 && <p className="muted">ไม่มีงานถูกกันไว้</p>}
+          {round.unassigned.map((one) => (
+            // Admitted by the gate with nobody free to take it (ADR-102): on a
+            // heavy shift this is where an urgent job waits, and it must show.
+            <article className="ticket urgent" key={`free-${one.ref}`}>
+              <div className="ticket-head">
+                <span className="machine-small">{one.ref}</span>
+                <span className="pill urgent">รอช่างว่าง</span>
+              </div>
+              <p className="muted">{one.why}</p>
+            </article>
+          ))}
+          {round.held.length === 0 && round.unassigned.length === 0 && (
+            <p className="muted">ไม่มีงานถูกกันไว้</p>
+          )}
           {round.held.map((one) => {
             const job = tickets.get(one.ref)!;
             const band = bandFor(job);

@@ -41,6 +41,11 @@ export default async function PrintPage({ params }: { params: Promise<{ ref: str
             <span className="value">{job.required_technicians} คน</span>
           </div>
         </div>
+        {job.tools.length > 0 && (
+          <p>
+            <strong>เครื่องมือ:</strong> {job.tools.join(" · ")}
+          </p>
+        )}
         {job.priority_reason !== "" && (
           <div className="why">
             <span className="label">ทำไมต้องทำงานนี้ก่อน</span>
@@ -57,7 +62,7 @@ export default async function PrintPage({ params }: { params: Promise<{ ref: str
                 <span>
                   ☐ {one.text_th ?? one.text}{" "}
                   <span className="muted">
-                    (คู่มือหน้า {one.page}
+                    ({one.manual ?? "คู่มือ"} หน้า {one.page}
                     {one.text_th !== null && <>: <span lang="en">{one.text}</span></>})
                   </span>
                 </span>
