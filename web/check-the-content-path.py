@@ -258,7 +258,16 @@ def main() -> None:
 
     print("\n2. the gaps panel names the symptom nothing serves, and offers a draft")
     sign_in()
+    # On a stack started from nothing the first render can come back before
+    # the web server has warmed up, and once it listed nothing. Read again for
+    # up to thirty seconds rather than fail a fresh rehearsal on a cold cache;
+    # a symptom that never appears still fails below.
     overview = readable(get("/gaps"))
+    for _ in range(15):
+        if str(SYM) in overview:
+            break
+        time.sleep(2)
+        overview = readable(get("/gaps"))
     expect(str(SYM) in overview, f"{SYM} is listed as having no playbook (ADR-060)")
     expect("ให้ระบบร่างขั้นตอนจากคู่มือ" in overview, "and an engineer is offered a draft from that row")
 
