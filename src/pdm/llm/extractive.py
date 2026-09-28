@@ -58,10 +58,14 @@ _MINUTES = re.compile(r"Estimated time:\s*(?P<value>\d{1,4})\s*minutes?", re.IGN
 # Where the procedure ends and that block begins.
 _FOOTER = re.compile(r"(?:Required tools|Required skill|Estimated time):", re.IGNORECASE)
 
-# A numbered list has at least two items. One "1." on a page is a sentence that
-# happens to start with a figure, and treating it as a procedure would turn a
-# page of prose into a one-step repair playbook.
-_MINIMUM_STEPS = 2
+# A procedure has at least three steps, each an instruction rather than a
+# heading or a table (ADR-099). Measured: every procedure in both synthetic
+# corpora has three to six steps of six words or more. The false ones in a real
+# manual were "1) Grease 2) Lubricant" (a one-word step) and a function table
+# numbered "1. 2." (two steps of a hundred words each), and both were drafted
+# as repair playbooks.
+_MINIMUM_STEPS = 3
+_STEP_WORDS = (3, 80)
 
 # Sentence boundary for the diagnostic path. Deliberately crude - a full stop
 # followed by a space and a capital or a Thai character. A page that defeats it
@@ -129,7 +133,11 @@ def _procedure(text: str) -> list[str]:
             else _end_of_the_last_step(region, marker.end())
         )
         steps.append(" ".join(region[marker.end() : stop].split()))
-    return [step for step in steps if step]
+    steps = [step for step in steps if step]
+    low, high = _STEP_WORDS
+    if not all(low <= len(step.split()) <= high for step in steps):
+        return []
+    return steps
 
 
 def _end_of_the_last_step(region: str, start: int) -> int:

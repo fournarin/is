@@ -80,3 +80,20 @@ fault-finding ([ADR-098](../adr/0098-what-two-real-manuals-changed.md)).
   measured change.
 - The evaluation set is unchanged by these fixes: 12/12 English and 10/12 Thai
   on test, no unsafe draft.
+
+## 120 candidates, and a procedure is three instructions - 28 September 2026
+
+[ADR-099](../adr/0099-recall-before-the-reranker-and-what-a-procedure-is.md).
+
+| set | lang | outcome as the key implies | unsafe drafts |
+|---|---|---:|---:|
+| real manuals | en | **9/9** (was 7/9) | **0** |
+| real manuals | th | **8/9** (was 6/9) | **0** (was 2) |
+| evaluation set, test | en | 12/12 | 0 |
+| evaluation set, test | th | 10/12 | 0 |
+| original corpus | en / th | 5/5 / 5/5 | 0 |
+
+**No unsafe draft remains on any of the three sets.** Every remaining miss is a
+"not found" (RD-03, EV-101, EV-105 and EV-134 in Thai) or fault-finding text
+where a procedure was wanted (EV-101 in English): the system asks an engineer
+rather than guessing.
