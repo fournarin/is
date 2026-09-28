@@ -160,7 +160,10 @@ retrieval:
   # Below 0.5, so a page only one half found is still offered.
   authoring:
     min_score: 0.20
-    candidates: 40
+    # 120, not 40 (ADR-099): in a 456-page real manual the answer page was
+    # ranked 21st and 73rd by the first stage, so forty candidates never let
+    # the reranker see it. Measured on fixtures/realdocs.
+    candidates: 120
     abstain: false
     # The reranker's relevance a page needs to be drafted from at all (ADR-097).
     # Chosen on the evaluation set's dev split only: the absent symptoms'

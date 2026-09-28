@@ -3,7 +3,7 @@
 Run by hand, never by CI: it needs the embedding model.
 
     DATABASE_URL=postgresql://.../pdm_test FASTEMBED_CACHE_PATH=... \\
-        uv run python scripts/measure_rag.py [corpus|evalset] [--rerank]
+        uv run python scripts/measure_rag.py [corpus|evalset|realdocs] [--rerank] [--candidates=N]
 
 `evalset` (the default) is the corpus written for measurement (ADR-096); its
 `test` entries have never been tuned on. `corpus` is the original five-symptom
@@ -127,6 +127,9 @@ def main() -> int:
     embedder = OnnxEmbedder()
     config = load_config(Path("config"))
     authoring, _ = profiles_from(config.policy.retrieval)
+    for arg in sys.argv[1:]:
+        if arg.startswith("--candidates="):
+            authoring = authoring.model_copy(update={"candidates": int(arg.split("=", 1)[1])})
     hybrid = HybridSearch(embedder, InMemoryVectorIndex())
     reranker = OnnxReranker() if rerank else None
     drafting = Drafting(
@@ -181,7 +184,7 @@ def main() -> int:
                 cited = (
                     sorted(
                         {
-                            f"{by_hash.get(str(s.source_doc), '?')[:6]}:{s.page}"
+                            f"{by_hash.get(str(s.source_doc), '?')[:6]}:{s.page}@{s.confidence:.2f}"
                             for s in result.draft.steps
                         }
                     )

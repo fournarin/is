@@ -336,3 +336,41 @@ class TestWhatIsNotAStep:
         )
 
         assert proposal.kind is ProposalKind.DIAGNOSTIC
+
+
+class TestAProcedureIsInstructions:
+    """ADR-099: three or more steps, each a sentence, or it is not a procedure."""
+
+    @staticmethod
+    def _kind(text: str) -> ProposalKind:
+        page = Evidence(
+            document_id=R2000IC_DOC,
+            page=113,
+            text=text,
+            title="manual",
+            machine_model=MachineModel("R-2000iC"),
+            score=0.9,
+        )
+        return ExtractiveDrafter().propose(_request(page, question="lubricant interval")).kind
+
+    def test_numbered_headings_are_not_steps(self) -> None:
+        text = (
+            "Changing intervals of lubricant. 1) Grease Maintenance-free. "
+            "2) Lubricant First time 500 hours. 3) Efficiency differs by ratio."
+        )
+        assert self._kind(text) is ProposalKind.DIAGNOSTIC
+
+    def test_two_numbered_items_are_not_a_procedure(self) -> None:
+        text = (
+            "1. Remove the cover and check the bearing for play by hand. "
+            "2. Refit the cover and run the motor for ten minutes to confirm."
+        )
+        assert self._kind(text) is ProposalKind.DIAGNOSTIC
+
+    def test_three_instructions_are(self) -> None:
+        text = (
+            "1. Remove the cover and check the bearing for play by hand. "
+            "2. Clean the fins and check the fan turns freely. "
+            "3. Refit the cover and run the motor for ten minutes to confirm."
+        )
+        assert self._kind(text) is ProposalKind.REPAIR
