@@ -44,6 +44,7 @@ from pdm.platform.config import load_config
 from pdm.work import WorkOrders
 from pdm.work import repo as work
 from pdm.work.repo import PmTaskDefinition
+from tests.released import released
 
 pytestmark = pytest.mark.db
 
@@ -117,7 +118,7 @@ def _accept_and_close(
     *,
     outcome: WorkOutcome,
 ) -> None:
-    orders.accept(conn, ref, user=TECHNICIAN)
+    orders.accept(conn, released(conn, ref), user=TECHNICIAN)
     orders.start(conn, ref, user=TECHNICIAN)
     clock.advance(timedelta(minutes=30))
     orders.close(conn, ref, user=TECHNICIAN, outcome=outcome)

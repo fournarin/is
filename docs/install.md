@@ -53,7 +53,7 @@ twenty minutes, most of it downloading. Subsequent builds are minutes.
 
 `.env.example` ships `SIGNAL_SOURCE=synthetic`, which generates a twelve-hour
 degradation scenario. **That is the demo setting.** On a plant machine set it to
-`none`, or remove it: the trigger loop then does not run and `worker-runtime`
+`none` (an unset value also means `none`, ADR-101): the trigger loop then does not run and `worker-runtime`
 reaps expired work only, which is what a deployment waiting on its OPC UA
 connection should do rather than invent its own data.
 
@@ -68,7 +68,7 @@ Left on `synthetic`, the process warns at boot. Do not remove that warning line 
 on screen a generated ticket is indistinguishable from a real one, and somebody
 will eventually ask which line it came from.
 
-### The accounts, and what you cannot do about them yet
+### The accounts
 
 `scripts/seed_demo.py` creates the four accounts. **It generates a password for
 each one and prints it once**, and that is the only time anything will show it.
@@ -76,32 +76,33 @@ Write them down before the terminal scrolls.
 
 `--demo-passwords` uses the four printed in [`demo.md`](demo.md) instead. Those
 are committed to this repository on purpose and are for a demo on a machine that
-has nothing to lose. `scripts/rehearse.py` passes the flag, because the screen
-checks sign in as those accounts by name - **so a machine that has had the
-rehearsal run on it has four accounts whose passwords are public, including a
-supervisor who can confirm work orders.** That is correct for a rehearsal and
-wrong for anything else, and the paragraph below is why it cannot simply be
-fixed afterwards.
+has nothing to lose. `scripts/rehearse.py` passes the flag, and runs as its own
+Compose project (`pdm-rehearsal`), so its accounts live in the rehearsal's
+database and not in an installation's.
 
-**There is no way to change them from inside the system.** `platform/auth/repo.py`
-has `set_password`, `set_role` and `deactivate`, written and documented, and no
-endpoint, service or script calls any of the three. So on a real installation the
-accounts are whatever the seed script made them, a role cannot be changed after
-the fact, and access cannot be withdrawn without going to the database by hand:
+Accounts are administered from the host (ADR-101):
 
-```sql
--- withdraw access, keeping the person's name on what they approved (ADR-036)
-UPDATE account SET active = false WHERE user_id = '...';
-DELETE FROM session WHERE user_id = '...';
+```bash
+docker compose exec api python -m pdm.platform.auth.cli list
+docker compose exec api python -m pdm.platform.auth.cli add somsak "สมศักดิ์ ใจดี" technician
+docker compose exec api python -m pdm.platform.auth.cli reset-password somsak
+docker compose exec api python -m pdm.platform.auth.cli set-role somsak supervisor
+docker compose exec api python -m pdm.platform.auth.cli withdraw somsak
 ```
 
-> **Not run, and not a substitute for the feature.** The statements above are
-> what `deactivate` does, read out of the source. Nothing in this repository has
-> executed them against a real installation, and account administration having
-> no interface is a gap rather than a design.
+A new or reset password is generated and printed once. Withdrawing keeps the
+person's name on what they approved and closed (ADR-036) and ends their sessions
+at once. **On any machine that will hold real work, withdraw the demo accounts**
+if a demo was ever seeded there: `withdraw tech-1 tech-2 tech-3 sup-1 eng-1 op-1`.
 
-Until that is closed, treat this system as one where the account list is fixed at
-install time. That is defensible for a trial and is not for a plant.
+### Serve it over TLS on a plant network
+
+The web container speaks plain HTTP on port 3000. On a network phones reach
+over Wi-Fi, put a TLS-terminating reverse proxy in front of it (the plant's own,
+or nginx or Caddy with the plant's certificate), and then set
+`PDM_COOKIE_SECURE=1` for the `api` and `web` services so the session cookie is
+only ever sent over TLS. The API is published on `127.0.0.1` only and needs no
+proxy: the browser never talks to it.
 
 ### Check it came up
 
@@ -150,64 +151,48 @@ Never run this against an installation holding real work orders.
 
 ## Backing it up
 
-Two sets, and only two
-([ADR-019](adr/0019-content-addressed-document-storage-served-through-the-api.md) §5):
-
-1. **PostgreSQL** - work orders, playbooks, findings, sessions, the job queue,
-   and the pointers to every stored document.
-2. **The `storage` volume** - the document blobs themselves, named by the sha256
-   of their contents.
-
-**Qdrant is not backed up.** Its vectors are derived data, rebuilt by re-ingesting
-the documents that are already in the two sets above. On a machine somebody else
-maintains, one fewer backup matters more than the rebuild time costs.
+Two things hold state that cannot be rebuilt: PostgreSQL, and the `storage`
+volume holding the uploaded manuals. Qdrant is rebuilt from them.
 
 ```bash
-# 1. PostgreSQL
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" \
-  | gzip > "pdm-$(date +%F).sql.gz"
-
+set -a; . ./.env; set +a                 # POSTGRES_USER, POSTGRES_DB
+# 1. PostgreSQL, in pg_dump's custom format so a restore can stop on the first error
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" \
+  > "pdm-$(date +%F).dump"
 # 2. The storage volume
 docker run --rm -v pdm_storage:/storage -v "$PWD":/out alpine \
   tar czf "/out/pdm-storage-$(date +%F).tar.gz" -C /storage .
 ```
 
-The volume's real name is the Compose project name plus `_storage`; confirm it
-with `docker volume ls` rather than assuming the directory was called `pdm`.
+The volume names are the Compose project name (`pdm`) plus the volume's name;
+confirm them with `docker volume ls`.
 
 Documents are never deleted from disk. "Delete" is a change to `documents.status`,
 and there is no cleanup job, because a job that removes a PDF some closed work
-order still cites destroys evidence invisibly. **If the disk fills, that is an
-operator decision following a written procedure**, and this paragraph is the
-beginning of that procedure rather than the whole of it.
-
-> **Never run.** Neither command above has been executed against a real
-> installation, and there is no script in this repository that performs a backup.
-> They follow from ADR-019's structure and from the volume layout in
-> `docker-compose.yml`. Before relying on them, run both and then restore into an
-> empty stack - a backup nobody has restored is not a backup.
+order still cites destroys evidence invisibly.
 
 ## Restoring
 
+Into an empty database, never over a populated one: restoring over live tables
+mixes two histories.
+
 ```bash
+set -a; . ./.env; set +a
 docker compose down
+docker volume rm pdm_postgres-data pdm_qdrant-data     # the stale copies
 docker compose up -d postgres
-gunzip -c pdm-YYYY-MM-DD.sql.gz | docker compose exec -T postgres \
-  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+docker compose exec -T postgres pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  --exit-on-error --no-owner < pdm-YYYY-MM-DD.dump
 docker run --rm -v pdm_storage:/storage -v "$PWD":/in alpine \
   sh -c 'cd /storage && tar xzf /in/pdm-storage-YYYY-MM-DD.tar.gz'
 docker compose up -d
+docker compose exec api python -m pdm.platform.jobs.reindex   # refill Qdrant
 ```
 
-Qdrant comes back empty. Retrieval returns nothing and the review queue cannot
-fill until the documents have been re-indexed, so expect to re-ingest the manuals
-after a restore.
-
-> **Never run, and less certain than the backup.** The order above is what the
-> volume layout implies, not what anybody has carried out. In particular, whether
-> the running stack re-indexes on its own after an empty Qdrant comes up, or
-> whether each document has to be queued again by hand, **has not been
-> established**. Establish it before you need it.
+`reindex` queues every active manual for `worker-authoring` to ingest again.
+Ingesting replaces what a document had, so it is safe to run twice (ADR-035).
+Until it finishes, drafting finds nothing; tickets, playbooks and work orders
+are all in PostgreSQL and are there at once.
 
 ## When something does not start
 
@@ -215,7 +200,7 @@ after a restore.
 - `docker compose logs migrate` - read this first if the API answers `/health`
   but signing in fails.
 - `docker compose logs api` / `web` / `worker-runtime` - in that order.
-- Ports 3000 and 8000 are published on the host. Another stack already using
+- Port 3000 is published on the host and 8000 on loopback only. Another stack already using
   them is the most common reason a rehearsal reports that nothing answered.
 - `docker system df` - a daemon that hit a full disk mid-pull stops answering and
   has to be restarted.

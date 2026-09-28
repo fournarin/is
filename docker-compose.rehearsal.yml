@@ -11,6 +11,10 @@
 # It is behind a profile, so `docker compose up` never starts it. The rehearsal
 # script reaches it with `docker compose run --rm --no-deps rehearsal <command>`.
 
+# A project of its own (ADR-101), so `rehearse.py --fresh` destroys the
+# rehearsal's volumes and never a real install's.
+name: pdm-rehearsal
+
 services:
   rehearsal:
     build: .

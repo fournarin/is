@@ -145,6 +145,19 @@ def create_app(
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             )
 
+        # A body with no declared length (chunked) cannot be held to the limit
+        # before it is read, so it is refused rather than streamed to disk
+        # (ADR-101). Browsers and the web server always declare a length.
+        if (
+            request.method in ("POST", "PUT", "PATCH")
+            and declared is None
+            and ("chunked" in request.headers.get("transfer-encoding", "").lower())
+        ):
+            return JSONResponse(
+                {"detail": "a request body must declare its length"},
+                status_code=status.HTTP_411_LENGTH_REQUIRED,
+            )
+
         anonymous = deps.SESSION_COOKIE not in request.cookies
         if anonymous and request.url.path not in _PUBLIC_PATHS:
             return JSONResponse({"detail": "no session"}, status_code=status.HTTP_401_UNAUTHORIZED)

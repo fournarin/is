@@ -30,6 +30,7 @@ from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config
 from pdm.work import WorkOrders
+from tests.released import released
 
 pytestmark = pytest.mark.db
 
@@ -76,6 +77,7 @@ def world(database_url: str, clock: SimulatedClock) -> Iterator[dict[str, Any]]:
             reported_by=UserId("sup-1"),
             description="grinding noise from the drive end",
         ).ref
+        released(conn, ref)
         conn.commit()
 
     pool = ConnectionPool(database_url, min_size=1, max_size=3, open=True)

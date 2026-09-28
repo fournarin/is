@@ -7,12 +7,14 @@ even for a demo".
 
 from __future__ import annotations
 
+import os
+from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from pdm.api.deps import SESSION_COOKIE, Auth, CurrentAccount, Db
+from pdm.api.deps import SESSION_COOKIE, Auth, CurrentAccount, Db, Time
 from pdm.contracts import Role, UserId
 from pdm.platform.auth.domain import SESSION_LIFETIME
 
@@ -41,10 +43,62 @@ class Whoami(BaseModel):
     role: Role
 
 
+class _Failures:
+    """Failed sign-ins per user name, in this process (ADR-101).
+
+    Five failures within five minutes refuse that name for the rest of the
+    window. In memory on purpose: one API process, and a restart forgetting
+    the count costs an attacker a restart rather than costing the plant a table.
+    """
+
+    LIMIT = 5
+    WINDOW = timedelta(minutes=5)
+
+    def __init__(self) -> None:
+        self._seen: dict[str, list[datetime]] = {}
+
+    def _recent(self, user: str, now: datetime) -> list[datetime]:
+        kept = [at for at in self._seen.get(user, []) if now - at < self.WINDOW]
+        self._seen[user] = kept
+        return kept
+
+    def refused(self, user: str, now: datetime) -> bool:
+        return len(self._recent(user, now)) >= self.LIMIT
+
+    def failed(self, user: str, now: datetime) -> None:
+        self._recent(user, now).append(now)
+
+
+def _failures(request: Request) -> _Failures:
+    """One count per app, so each API process (and each test) keeps its own."""
+    found = getattr(request.app.state, "sign_in_failures", None)
+    if found is None:
+        found = request.app.state.sign_in_failures = _Failures()
+    return found
+
+
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
-def log_in(credentials: Credentials, response: Response, conn: Db, auth: Auth) -> Whoami:
+def log_in(
+    credentials: Credentials,
+    request: Request,
+    response: Response,
+    conn: Db,
+    auth: Auth,
+    clock: Time,
+) -> Whoami:
+    now = clock.now()
+    failures = _failures(request)
+    if failures.refused(credentials.user, now):
+        # Before the password is checked: each check costs 32 MiB of scrypt and
+        # holds a database connection, so refusing late would still let a burst
+        # of guesses take the screens down (ADR-101).
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "ใส่รหัสผ่านผิดหลายครั้งเกินไป รอ 5 นาทีแล้วลองใหม่ หรือติดต่อหัวหน้า",
+        )
     result = auth.log_in(conn, credentials.user, credentials.password)
     if result is None:
+        failures.failed(credentials.user, now)
         # One message for every kind of failure - unknown user, wrong password,
         # withdrawn access. Distinguishing them turns the login form into a way
         # of listing who works here, and helps the person who mistyped not at
@@ -58,10 +112,9 @@ def log_in(credentials: Credentials, response: Response, conn: Db, auth: Auth) -
         max_age=int(SESSION_LIFETIME.total_seconds()),
         httponly=True,
         samesite="strict",
-        # Not `secure`: the plant network serves this over plain HTTP on one
-        # node, and a cookie marked secure would simply never be sent. It goes
-        # on the day there is TLS, and that is a deployment decision rather than
-        # a code one.
+        # On once the install serves over TLS (ADR-101). Over plain HTTP a
+        # secure cookie would never be sent, so it is the install's to switch.
+        secure=os.environ.get("PDM_COOKIE_SECURE") == "1",
     )
     return Whoami(user=account.user, display_name=account.display_name, role=account.role)
 

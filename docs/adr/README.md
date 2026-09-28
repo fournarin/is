@@ -113,6 +113,7 @@ entries replace parts of earlier ones, and both are kept.
 | [098](0098-what-two-real-manuals-changed.md) | **What two real manufacturer manuals changed** | 034, 097 |
 | [099](0099-recall-before-the-reranker-and-what-a-procedure-is.md) | Enough candidates for the reranker, and what counts as a procedure | 097, 098 |
 | [100](0100-a-procedure-that-runs-over-a-page-is-drafted-whole.md) | A procedure that runs over a page is drafted whole | 097 |
+| [101](0101-what-a-plant-install-needs-before-real-work.md) | **What a plant install needs before real work depends on it** | 011, 036, 071 |
 
 ## The invariants these records cite
 

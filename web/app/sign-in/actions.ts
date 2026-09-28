@@ -60,14 +60,14 @@ export async function signIn(_previous: SignInState, form: FormData): Promise<Si
     return { error: "ระบบไม่ได้ส่ง session กลับมา แจ้งผู้ดูแลระบบ" };
   }
 
-  // Re-set on this origin with the attributes the API chose. `secure` is
-  // deliberately absent for the same reason it is absent there: the plant
-  // network serves this over plain HTTP on one node, and a cookie marked
-  // secure would simply never be sent.
+  // Re-set on this origin with the attributes the API chose. `secure` is on
+  // once the install serves over TLS and says so with PDM_COOKIE_SECURE=1
+  // (ADR-101); over plain HTTP a secure cookie would never be sent.
   (await cookies()).set({
     name: SESSION_COOKIE,
     value: session.value,
     httpOnly: true,
+    secure: process.env.PDM_COOKIE_SECURE === "1",
     sameSite: "strict",
     path: "/",
     maxAge: session.maxAge,

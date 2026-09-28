@@ -120,6 +120,12 @@ class Issued:
         return f"Issued({self.ref!r}, {self.order.origin.value})"
 
 
+# Released to people: a helper may join, and a handed-over job may be picked up.
+_TAKEABLE = frozenset(
+    {WorkOrderStatus.ASSIGNED, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.HANDED_OVER}
+)
+
+
 class WorkOrders:
     """Creation and lifecycle. One instance per process, no state between calls."""
 
@@ -348,6 +354,11 @@ class WorkOrders:
         order = self._live(conn, ref)
         if domain.holds_it(order, user):
             return order
+        # Only work a round placed and a person released can be taken (ADR-101).
+        # Queued work includes what the load gate is holding back and what the
+        # shift lead has not confirmed; taking it here went round both.
+        if order.status not in _TAKEABLE:
+            raise TransitionRefused(f"{ref} ยังไม่ได้ถูกจัดให้ช่าง งานนี้ต้องให้หัวหน้ากะยืนยันก่อน")
         if len(order.assignees) >= order.required_technicians:
             held_by = ", ".join(str(one.user) for one in order.assignees)
             raise TransitionRefused(

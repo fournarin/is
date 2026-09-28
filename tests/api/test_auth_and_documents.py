@@ -635,3 +635,46 @@ class TestAnUploadQueuesTheWorkThatIndexesIt:
         assert first.json()["document_id"] == second.json()["document_id"]
         assert first.json()["ingest_job"] != second.json()["ingest_job"]
         assert conn.execute("SELECT count(*) FROM job").fetchone() == (2,)
+
+
+class TestWhatAPlantNetworkNeeds:
+    """ADR-101: refusals that protect the install rather than a record."""
+
+    def test_five_wrong_passwords_refuse_the_name_for_a_while(
+        self, client: TestClient, setup: dict[str, Any]
+    ) -> None:
+        user = PEOPLE[Role.TECHNICIAN][0]
+        for _ in range(5):
+            assert (
+                client.post("/sessions", json={"user": user, "password": "no"}).status_code == 401
+            )
+
+        right = client.post("/sessions", json={"user": user, "password": PASSWORD})
+
+        assert right.status_code == 429
+        assert "5 นาที" in right.json()["detail"]
+
+    def test_the_count_clears_after_the_window(
+        self, client: TestClient, setup: dict[str, Any], clock: SimulatedClock
+    ) -> None:
+        user = PEOPLE[Role.TECHNICIAN][0]
+        for _ in range(5):
+            client.post("/sessions", json={"user": user, "password": "no"})
+        clock.advance(timedelta(minutes=6))
+
+        assert (
+            client.post("/sessions", json={"user": user, "password": PASSWORD}).status_code == 201
+        )
+
+    def test_a_body_with_no_declared_length_is_refused(self, client: TestClient) -> None:
+        def chunks() -> Iterator[bytes]:
+            yield b"x" * 10
+
+        response = client.post(
+            "/documents",
+            content=chunks(),
+            headers={"transfer-encoding": "chunked"},
+            cookies={"pdm_session": "not-a-real-token"},
+        )
+
+        assert response.status_code == 411

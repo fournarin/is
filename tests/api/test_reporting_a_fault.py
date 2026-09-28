@@ -46,6 +46,7 @@ from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config
 from pdm.playbooks import repo as playbooks
 from pdm.work import WorkOrders
+from tests.released import released
 
 pytestmark = pytest.mark.db
 
@@ -351,7 +352,7 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
 
         orders = WorkOrders(world["clock"], fallback_minutes=FALLBACK)
         with connect(world["database_url"]) as conn:
-            orders.accept(conn, first, user=UserId("tech-1"))
+            orders.accept(conn, released(conn, first), user=UserId("tech-1"))
             orders.start(conn, first, user=UserId("tech-1"))
             orders.close(conn, first, user=UserId("tech-1"), outcome=WorkOutcome.FIXED)
             conn.commit()
