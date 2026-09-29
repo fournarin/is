@@ -12,7 +12,7 @@ pure function of its inputs (invariant 10).
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from psycopg import Connection
@@ -495,6 +495,17 @@ class WorkOrders:
     def open_finding_refs(self, conn: Connection[Any]) -> set[FindingRef]:
         """Findings that still have an open ticket against them (ADR-044 §6)."""
         return repo.open_finding_refs(conn)
+
+    def follow_forecast(
+        self,
+        conn: Connection[Any],
+        finding_ref: FindingRef,
+        *,
+        eta: datetime,
+        eta_confidence: timedelta,
+    ) -> list[str]:
+        """Move the open orders of a re-fitted forecast to its new ETA (ADR-115)."""
+        return repo.follow_forecast(conn, finding_ref, eta=eta, eta_confidence=eta_confidence)
 
     def withdraw_for_finding(self, conn: Connection[Any], finding_ref: FindingRef) -> list[str]:
         """Cancel the untouched orders for a Finding the world has overtaken.

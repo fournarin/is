@@ -35,6 +35,7 @@ from pdm.contracts import (
     MachineId,
     RuleId,
     Signal,
+    WorkOrder,
     WorkOrderOrigin,
     WorkOrderStatus,
 )
@@ -233,6 +234,71 @@ class TestPredictedWork:
 
         assert tick.observation.forecast == ()
         assert tick.issued == ()
+
+
+def _order(conn: Connection[Any], ref: str) -> WorkOrder:
+    order = work.get(conn, ref)
+    assert order is not None
+    return order
+
+
+class TestTheTicketFollowsTheForecast:
+    """A refit moves the Finding's ETA; the ticket must move with it. Dispatch
+    reads only the work order (ADR-030), so a ticket frozen at issue ranks and
+    prints a crossing time the system no longer believes - an acceptance walk
+    saw "5 ชม. 13 นาที" on the board and 7 minutes on the overview for one fault."""
+
+    def test_a_steeper_trend_brings_the_ticket_s_eta_forward(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        slow = _warming(per_hour=2.0, count=24)
+        last = slow[-1]
+        steeper = [
+            _hot(
+                last.timestamp + timedelta(minutes=5 * (index + 1)),
+                value=last.value + 1.0 * (index + 1),
+            )
+            for index in range(12)
+        ]
+        loop = _loop(clock, slow + steeper)
+        clock.advance(timedelta(hours=2))
+        first = loop.tick(conn)
+        assert len(first.issued) == 1
+        ref = first.issued[0]
+        issued_eta = _order(conn, ref).eta
+        assert issued_eta is not None
+
+        clock.advance(timedelta(hours=1))
+        loop.tick(conn)
+
+        finding = findings.live(conn)[(MOTOR, TREND_RULE)]
+        order = _order(conn, ref)
+        assert finding.eta is not None and finding.eta < issued_eta
+        assert order.eta == finding.eta
+        assert order.eta_confidence == finding.eta_confidence
+
+    def test_a_ticket_somebody_closed_is_left_as_it_was(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        slow = _warming(per_hour=2.0, count=24)
+        last = slow[-1]
+        steeper = [
+            _hot(
+                last.timestamp + timedelta(minutes=5 * (index + 1)),
+                value=last.value + 1.0 * (index + 1),
+            )
+            for index in range(12)
+        ]
+        loop = _loop(clock, slow + steeper)
+        clock.advance(timedelta(hours=2))
+        ref = loop.tick(conn).issued[0]
+        issued_eta = _order(conn, ref).eta
+        conn.execute("UPDATE work_order SET status = 'cancelled' WHERE work_order_ref = %s", (ref,))
+
+        clock.advance(timedelta(hours=1))
+        loop.tick(conn)
+
+        assert _order(conn, ref).eta == issued_eta
 
 
 class TestAPredictionOvertaken:

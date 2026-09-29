@@ -463,6 +463,34 @@ def open_finding_refs(conn: Connection[Any]) -> set[FindingRef]:
         return {FindingRef(str(row[0])) for row in cur.fetchall()}
 
 
+def follow_forecast(
+    conn: Connection[Any],
+    finding_ref: FindingRef,
+    *,
+    eta: datetime,
+    eta_confidence: timedelta,
+) -> list[str]:
+    """Carry a re-fitted forecast onto the open orders issued from it (ADR-115).
+
+    Only orders still in play: a closed or cancelled order is a record of what
+    was believed when it ended, and ADR-018 does not let history move. The
+    `reason` sentence is not touched - it is written once, at issue (ADR-005) -
+    so what changes is the ETA a screen reads and the urgency a round ranks by.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE work_order
+               SET eta = %s, eta_confidence = %s
+             WHERE finding_ref = %s
+               AND status IN ('queued', 'proposed', 'assigned', 'in_progress', 'handed_over')
+             RETURNING work_order_ref
+            """,
+            (eta, eta_confidence, finding_ref),
+        )
+        return [str(row[0]) for row in cur.fetchall()]
+
+
 def cancel_untouched_for_finding(
     conn: Connection[Any], finding_ref: FindingRef, *, now: datetime
 ) -> list[str]:

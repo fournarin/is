@@ -134,6 +134,14 @@ class TriggerLoop:
             observation = self.triggers.observe(conn, signals, under_repair=self.under_repair(conn))
             for raised in (*observation.forecast, *observation.raised):
                 self._issue(conn, raised, issued, cancelled, unpriced)
+            # A forecast the batch re-fitted carries its new ETA onto its open
+            # tickets: dispatch ranks by the ticket's copy, never the Finding
+            # (ADR-030), so a ticket left at its issue-time ETA ranks and prints
+            # a crossing the system no longer believes (ADR-115).
+            for moved in observation.refreshed:
+                self.orders.follow_forecast(
+                    conn, moved.finding_ref, eta=moved.eta, eta_confidence=moved.eta_confidence
+                )
 
         expired = self.triggers.expire_stale_predictions(conn)
         for finding_ref in expired:

@@ -136,7 +136,7 @@ def refresh_prediction(
     eta_confidence: timedelta,
     evidence: dict[str, object],
     now: datetime,
-) -> bool:
+) -> FindingRef | None:
     """A newer fit for a forecast already open: move the ETA, keep the record.
 
     Counting the repeat and dropping the refit would leave a live prediction
@@ -145,6 +145,8 @@ def refresh_prediction(
     hours stale, on a machine whose trend has since changed.
 
     One statement, like `repeat`, and for the same reason (ADR-042 section 4).
+    Returns the Finding it moved, so its tickets can follow (ADR-115), or None
+    when the record was resolved in between.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -154,10 +156,12 @@ def refresh_prediction(
                    occurrence_count = occurrence_count + 1, last_seen_at = %s
              WHERE machine_id = %s AND rule_id = %s
                AND kind = 'predicted' AND status IN ('open', 'acknowledged')
+             RETURNING finding_ref
             """,
             (eta, eta_confidence, Jsonb(evidence), now, machine_id, rule_id),
         )
-        return cur.rowcount == 1
+        row = cur.fetchone()
+        return FindingRef(str(row[0])) if row else None
 
 
 def live(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], Finding]:

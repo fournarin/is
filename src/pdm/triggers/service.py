@@ -12,7 +12,7 @@ with nothing behind it, and a ticket referring to a Finding that was rolled back
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from psycopg import Connection
@@ -37,6 +37,16 @@ class Raised(BaseModel):
     superseded: FindingRef | None = None
 
 
+class Refreshed(BaseModel):
+    """A forecast the batch re-fitted, with the answer its tickets must now carry."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    finding_ref: FindingRef
+    eta: datetime
+    eta_confidence: timedelta
+
+
 class Observation(BaseModel):
     """What one batch of signals did. Every outcome, not only the raised ones.
 
@@ -53,6 +63,10 @@ class Observation(BaseModel):
     # Findings this shift" means something different if eleven are forecasts,
     # and ADR-020's accuracy work needs the two separable anyway.
     forecast: tuple[Raised, ...] = ()
+    # Forecasts whose ETA this batch moved (ADR-115). The work orders issued
+    # from them carry a copy of the ETA, because dispatch never reads a Finding
+    # (ADR-030); this is what tells the caller to move those copies too.
+    refreshed: tuple[Refreshed, ...] = ()
     repeated: int = 0
     suppressed: int = 0
     in_cooldown: int = 0
@@ -132,6 +146,9 @@ class Triggers:
         raised: list[Raised] = []
         predicted: list[Raised] = []
         counts = {Outcome.REPEAT: 0, Outcome.SUPPRESSED: 0, Outcome.IN_COOLDOWN: 0}
+        # Keyed by Finding: a batch re-fits the same forecast on every reading,
+        # and only the last answer is the one to carry.
+        refreshed: dict[FindingRef, Refreshed] = {}
         quiet = 0
         lost = 0
 
@@ -172,7 +189,7 @@ class Triggers:
                     predicted_again = decision.finding
                     assert predicted_again.eta is not None
                     assert predicted_again.eta_confidence is not None
-                    if repo.refresh_prediction(
+                    moved = repo.refresh_prediction(
                         conn,
                         machine_id=decision.machine_id,
                         rule_id=decision.rule_id,
@@ -180,8 +197,14 @@ class Triggers:
                         eta_confidence=predicted_again.eta_confidence,
                         evidence=predicted_again.evidence,
                         now=now,
-                    ):
+                    )
+                    if moved is not None:
                         counts[Outcome.REPEAT] += 1
+                        refreshed[moved] = Refreshed(
+                            finding_ref=moved,
+                            eta=predicted_again.eta,
+                            eta_confidence=predicted_again.eta_confidence,
+                        )
                     else:
                         lost += 1
                 elif decision.outcome is Outcome.REPEAT:
@@ -217,6 +240,7 @@ class Triggers:
         return Observation(
             raised=tuple(raised),
             forecast=tuple(predicted),
+            refreshed=tuple(refreshed.values()),
             repeated=counts[Outcome.REPEAT],
             suppressed=counts[Outcome.SUPPRESSED],
             in_cooldown=counts[Outcome.IN_COOLDOWN],
