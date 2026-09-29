@@ -56,6 +56,13 @@ export type Recurrence = {
   status: string;
 };
 
+export type WhereToLook = {
+  document_id: string;
+  manual: string;
+  page: number | null;
+  from_unapproved_draft: boolean;
+};
+
 export type Ticket = {
   ref: string;
   machine_id: string;
@@ -78,6 +85,8 @@ export type Ticket = {
   eta: string | null;
   eta_confidence_minutes: number | null;
   steps: Step[];
+  // Filled only when `steps` is empty (ADR-118).
+  where_to_look?: WhereToLook[];
   recurrence: Recurrence | null;
 };
 

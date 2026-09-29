@@ -42,6 +42,28 @@ export default async function StepsPage({
           <h1>ยังไม่มีขั้นตอนซ่อมที่อนุมัติแล้วสำหรับอาการนี้</h1>
           {/* Principle 5: saying so beats inventing a procedure. */}
           <p>ให้ดูคู่มือของเครื่อง หรือโทรถามวิศวกร อย่าเดาขั้นตอนเอง</p>
+          {(job.where_to_look ?? []).length > 0 && (
+            <>
+              <h2>ดูที่นี่</h2>
+              {(job.where_to_look ?? []).map((one) => (
+                <p key={`${one.document_id}#${one.page ?? 0}`}>
+                  <a
+                    className="button-link quiet"
+                    href={`/manual/${encodeURIComponent(one.document_id)}${one.page ? `#page=${one.page}` : ""}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    📖 {one.manual}
+                    {one.page ? ` หน้า ${one.page}` : ""}
+                  </a>
+                  {/* ADR-118: a draft's page is a page to read, never a step. */}
+                  {one.from_unapproved_draft && (
+                    <span className="muted"> · หน้าที่ร่างขั้นตอนอ้างถึง ยังไม่ผ่านการอนุมัติของวิศวกร</span>
+                  )}
+                </p>
+              ))}
+            </>
+          )}
           <p className="muted">{job.reason}</p>
         </section>
         <Link className="button-link big ok" href={close}>
