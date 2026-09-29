@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
@@ -113,6 +114,20 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
     }
     setState("refused");
     setMessage(result);
+  }
+
+  if (state === "queued" && !waiting.some((one) => one.ref === workOrder)) {
+    // The retry above took it. Saying "not sent" after it went is how a
+    // technician ends up closing the job again, or thinking it was lost.
+    return (
+      <section className="card">
+        <h2>✓ ส่งการปิดงานแล้ว</h2>
+        <p>เครือข่ายกลับมาแล้ว ระบบได้รับการปิดงาน {workOrder} เรียบร้อย</p>
+        <Link className="button-link" href="/work">
+          กลับไปที่งานของฉัน
+        </Link>
+      </section>
+    );
   }
 
   if (state === "queued") {

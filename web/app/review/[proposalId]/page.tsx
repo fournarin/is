@@ -1,10 +1,11 @@
-import { Shell } from "@/app/ui/shell";
+import { NotYours, Shell } from "@/app/ui/shell";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Decisions } from "@/app/review/[proposalId]/decisions";
 import { flagSteps, locate } from "@/lib/drafts";
 import { evidence, proposal } from "@/lib/review";
+import { homeFor } from "@/lib/screens";
 import { ROLE_NAMES, requireAccount } from "@/lib/session";
 
 /**
@@ -34,6 +35,15 @@ export default async function ProposalPage({
   searchParams: Promise<{ step?: string }>;
 }) {
   const account = await requireAccount();
+  // The same people as the queue itself. Without this the API's 403 surfaced
+  // as "A server error occurred" to anybody who followed a kept link.
+  if (account.role !== "engineer" && account.role !== "supervisor") {
+    return (
+      <Shell account={account} current="/review">
+        <NotYours home={homeFor(account.role)} what="หน้านี้เป็นของวิศวกร" />
+      </Shell>
+    );
+  }
   const { proposalId } = await params;
   const id = Number(proposalId);
   if (!Number.isInteger(id) || id <= 0) {

@@ -36,6 +36,7 @@ from psycopg import Connection, connect
 from psycopg.rows import dict_row
 
 from pdm.contracts import (
+    FindingRef,
     MachineId,
     MachineModel,
     Role,
@@ -228,7 +229,7 @@ class TestNothingIsAnybodysJobYet:
         ref = _ticket(orders, conn)
         rounds.run(conn)
 
-        with pytest.raises(TransitionRefused, match="waiting for a supervisor"):
+        with pytest.raises(TransitionRefused, match="รอหัวหน้ากะยืนยัน"):
             orders.accept(conn, ref, user=ANA)
 
     def test_nothing_is_queued_for_a_destination_before_it_is_confirmed(
@@ -665,3 +666,29 @@ class TestAnAnswerToAQuestionNobodyAsked:
 
         with pytest.raises(AlreadyAnswered):
             confirming.confirm(conn, ref, by=SUP, role=Role.SUPERVISOR)
+
+
+class TestAPredictionOvertakenWhileItWaits:
+    def test_its_unconfirmed_ticket_is_withdrawn_and_leaves_the_board(
+        self, conn: Connection[Any], rounds: DispatchRounds, orders: WorkOrders
+    ) -> None:
+        """A prediction's ticket waits in `proposed` for the shift lead (ADR-071).
+
+        On 2026-09-29 the detection that superseded a prediction issued its own
+        ticket, the prediction's was not withdrawn because the withdrawal only
+        looked at `queued`, and the board then held three tickets for one fault on
+        MC-004 - each one a technician the shift lead could send."""
+        _crew(conn, ANA)
+        ref = _ticket(orders, conn)
+        conn.execute(
+            "UPDATE work_order SET finding_ref = 'F-PREDICTED' WHERE work_order_ref = %s", (ref,)
+        )
+        rounds.run(conn)
+        assert _status(conn, ref) is WorkOrderStatus.PROPOSED
+
+        withdrawn = orders.withdraw_for_finding(conn, FindingRef("F-PREDICTED"))
+        dispatch_repo.withdraw_pending(conn, withdrawn, at=NOW)
+
+        assert withdrawn == [ref]
+        assert _status(conn, ref) is WorkOrderStatus.CANCELLED
+        assert [row["state"] for row in _proposal_rows(conn)] == [ProposalState.EXPIRED.value]

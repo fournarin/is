@@ -23,6 +23,7 @@ from psycopg import Connection
 from pydantic import BaseModel, ConfigDict
 
 from pdm.contracts import FindingRef, MachineId, RuleId, Signal, WorkOrderRef
+from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.service import DispatchRounds, describe
 from pdm.platform.clock import Clock
 from pdm.platform.config.loader import Config
@@ -136,7 +137,7 @@ class TriggerLoop:
 
         expired = self.triggers.expire_stale_predictions(conn)
         for finding_ref in expired:
-            cancelled.extend(self.orders.withdraw_for_finding(conn, finding_ref))
+            cancelled.extend(self._withdraw(conn, finding_ref))
 
         return Tick(
             signals=len(signals),
@@ -240,7 +241,17 @@ class TriggerLoop:
             # already happened, and this batch has just issued the one that says
             # so - which is the two-orders-for-one-fault case ADR-023 §7 exists
             # to prevent. A ticket somebody has accepted stays where it is.
-            cancelled.extend(self.orders.withdraw_for_finding(conn, raised.superseded))
+            cancelled.extend(self._withdraw(conn, raised.superseded))
+
+    def _withdraw(self, conn: Connection[Any], finding_ref: FindingRef) -> list[str]:
+        """Cancel the untouched tickets for a Finding, and take them off the board.
+
+        A ticket waiting for the shift lead is untouched too (ADR-071), and its
+        pending proposal goes with it: a question about work that no longer
+        exists is not one to leave on anybody's board."""
+        withdrawn = self.orders.withdraw_for_finding(conn, finding_ref)
+        dispatch_repo.withdraw_pending(conn, withdrawn, at=self.clock.now())
+        return withdrawn
 
 
 def observe_handler(loop: TriggerLoop, queue: JobQueue, clock: Clock, *, period: timedelta) -> Any:

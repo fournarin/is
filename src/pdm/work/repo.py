@@ -474,7 +474,11 @@ def cancel_untouched_for_finding(
     has already been ticketed or never happened, and `load_ratio` is a sum over
     the whole open queue (design.md 13.2).
 
-    **The `queued` condition is in the statement, not in the caller.** Between
+    `proposed` counts as untouched: it is waiting for the shift lead, and no
+    technician holds it (ADR-071). Its pending proposal is closed by the caller,
+    which owns layer 3's table.
+
+    **The status condition is in the statement, not in the caller.** Between
     reading an order and cancelling it a technician can accept it, and a check
     made in Python would cancel the ticket in somebody's hand. What is returned
     is what was actually cancelled, so a caller cannot report a withdrawal that
@@ -491,7 +495,7 @@ def cancel_untouched_for_finding(
             """
             UPDATE work_order
                SET status = 'cancelled', closed_at = %s
-             WHERE finding_ref = %s AND status = 'queued'
+             WHERE finding_ref = %s AND status IN ('queued', 'proposed')
              RETURNING work_order_ref
             """,
             (now, finding_ref),

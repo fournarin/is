@@ -61,12 +61,16 @@ pm_history.csv    pm_task_ref,last_done
 Load them into the running stack:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.rehearsal.yml \
+docker compose -f docker-compose.yml -f docker-compose.rehearsal.yml --env-file .env \
   run --rm --no-deps rehearsal python scripts/import_plant_data.py \
   --technicians plant-data/technicians.csv \
   --roster plant-data/roster.csv \
   --pm-history plant-data/pm_history.csv
 ```
+
+On a demo stack started by `scripts/rehearse.py`, which has no `.env`, use
+`--env-file .env.example`. Without either, Compose stops at "POSTGRES_USER is
+missing a value".
 
 Running it again with the same files changes nothing. A technician with no
 account gets one with a random password, printed once. Hand each person their

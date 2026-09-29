@@ -341,6 +341,28 @@ def expire_proposals(
         return [str(row[0]) for row in cur.fetchall()]
 
 
+def withdraw_pending(conn: Connection[Any], work_order_refs: list[str], *, at: datetime) -> int:
+    """Close the question on orders that were withdrawn while it was open.
+
+    A prediction overtaken by its detection has its ticket cancelled (ADR-023
+    §7). A pending proposal left behind would still sit on the shift lead's
+    board, for work that no longer exists. Recorded as `expired`: nobody
+    answered it, and the Finding the order points at says why it went.
+    """
+    if not work_order_refs:
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE dispatch_proposal
+               SET state = %s, decided_at = %s
+             WHERE state = 'pending' AND work_order_ref = ANY(%s)
+            """,
+            (ProposalState.EXPIRED.value, at, work_order_refs),
+        )
+        return cur.rowcount
+
+
 def return_to_queue(conn: Connection[Any], work_order_ref: str) -> bool:
     """Undo a placement nobody agreed to, and take the crew off it with it.
 

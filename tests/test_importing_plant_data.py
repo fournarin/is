@@ -20,7 +20,12 @@ from psycopg import Connection, connect
 
 from pdm.contracts import SkillId
 from scripts import import_plant_data
-from scripts.import_plant_data import read_pm_history, read_roster, read_technicians
+from scripts.import_plant_data import (
+    read_pm_history,
+    read_roster,
+    read_technicians,
+    shift_minutes,
+)
 
 SKILLS = frozenset({SkillId("robot_mechanical"), SkillId("electrical")})
 BANGKOK = ZoneInfo("Asia/Bangkok")
@@ -66,7 +71,7 @@ class TestRoster:
     def test_a_line_is_a_person_on_a_shift_on_a_day(self) -> None:
         data = read_roster(
             _csv("date,shift_id,user_id,available_minutes", "2026-10-01,morning,tech-07,420"),
-            shifts=frozenset({"morning"}),
+            shifts={"morning": 480},
             technicians=frozenset({"tech-07"}),
         )
 
@@ -82,11 +87,31 @@ class TestRoster:
                 "2026-10-01,morning,nobody,420",
                 "2026-10-01,morning,tech-07,0",
             ),
-            shifts=frozenset({"morning"}),
+            shifts={"morning": 480},
             technicians=frozenset({"tech-07"}),
         )
 
         assert [problem.split(":")[1] for problem in data.problems] == ["2", "3", "4", "5"]
+
+    def test_more_minutes_than_the_shift_has_is_refused(self) -> None:
+        """What a person can give is part of the shift, never more than all of it.
+
+        On 2026-09-29 a roster line of 9999 minutes on a 480-minute shift was
+        accepted, and the load gate then counted twenty shifts of one person as
+        spare capacity - a busy shift read as quiet, and low-priority work
+        released into it."""
+        data = read_roster(
+            _csv(
+                "date,shift_id,user_id,available_minutes",
+                "2026-10-01,morning,tech-07,480",
+                "2026-10-01,morning,tech-07,9999",
+            ),
+            shifts={"morning": 480},
+            technicians=frozenset({"tech-07"}),
+        )
+
+        assert [problem.split(":")[1] for problem in data.problems] == ["3"]
+        assert "480" in data.problems[0]
 
 
 class TestPmHistory:
@@ -220,7 +245,7 @@ class TestTheShippedExamplesAreValid:
         )
         roster = read_roster(
             (examples / "roster.csv").read_text(encoding="utf-8").splitlines(True),
-            shifts=frozenset(str(shift) for shift in config.shifts),
+            shifts=shift_minutes(config.shifts),
             technicians=frozenset(str(person.technician.user) for person in people.people),
         )
         history = read_pm_history(

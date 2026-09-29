@@ -72,6 +72,11 @@ body {
     BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 1.0625rem;
   line-height: 1.6;
+  /* A person's text can hold a run with no break in it - a part number, a URL.
+     `anywhere` rather than `break-word` because only `anywhere` lowers the
+     min-content width that a grid track sizes to; with neither, one such run
+     made the shift lead's board 94,953px wide (app/long-words.test.ts). */
+  overflow-wrap: anywhere;
 }
 
 main {

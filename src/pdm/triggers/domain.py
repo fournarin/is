@@ -403,6 +403,21 @@ def forecast(
             )
             continue
 
+        # The crossing this would forecast has already been detected and is still
+        # open, so it is ticketed. A dip back under the threshold while the trend
+        # still rises - or a synthetic scenario rewound by a restart - otherwise
+        # forecast it again, and the shift lead got a second ticket for one fault.
+        if (signal.machine_id, rule.rule_id) in open_findings:
+            decisions.append(
+                Decision(
+                    outcome=Outcome.SUPPRESSED,
+                    rule_id=rule_id,
+                    machine_id=signal.machine_id,
+                    why="the crossing this would forecast is already detected and open (ADR-023)",
+                )
+            )
+            continue
+
         # The cooldown applies to forecasts too, and it was missing here while
         # detections had it. A prediction resolved by a technician who looked and
         # found nothing would otherwise be re-raised on the very next reading -
