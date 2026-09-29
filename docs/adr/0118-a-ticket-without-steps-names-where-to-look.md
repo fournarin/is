@@ -29,5 +29,5 @@ pages that draft was read from.
 
 - A technician on an uncovered job is pointed at the right manual, and often at
   the right page, instead of being told only not to guess.
-- The screen that renders it follows once the step-screen change in PR #155 has
-  merged, so the two do not edit one file at once.
+- The step screen shows the manuals and pages in the block it already shows
+  when there are no steps, with the draft's pages marked as unapproved.
