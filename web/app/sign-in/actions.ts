@@ -59,6 +59,14 @@ export async function signIn(_previous: SignInState, form: FormData): Promise<Si
     // listing who works here (src/pdm/api/sessions.py).
     return { error: "ข้อมูลไม่ตรงกับบัญชีใด" };
   }
+  if (response.status === 429) {
+    // Too many wrong passwords for this name. The API says how long to wait,
+    // in Thai; a status code in its place told nobody anything (ADR-101).
+    const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
+    return {
+      error: typeof body.detail === "string" ? body.detail : "ใส่รหัสผ่านผิดหลายครั้งเกินไป รอสักครู่แล้วลองใหม่",
+    };
+  }
   if (!response.ok) {
     return { error: `ระบบตอบกลับผิดปกติ (${response.status}) ลองใหม่อีกครั้ง` };
   }
