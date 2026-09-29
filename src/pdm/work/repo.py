@@ -12,7 +12,7 @@ ever exist (invariant 2, ADR-018).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from typing import Any, NamedTuple
 
@@ -459,6 +459,25 @@ def open_finding_refs(conn: Connection[Any]) -> set[FindingRef]:
             "SELECT DISTINCT finding_ref FROM work_order "
             "WHERE finding_ref IS NOT NULL AND status = ANY(%s)",
             (list(OPEN_STATUSES),),
+        )
+        return {FindingRef(str(row[0])) for row in cur.fetchall()}
+
+
+def finished_finding_refs(conn: Connection[Any], refs: Collection[FindingRef]) -> set[FindingRef]:
+    """Which of these Findings have had tickets, and have none open any more.
+
+    A Finding with no ticket at all is not in the answer: that is a Finding
+    nobody could price, which the loop reports as `unpriced` (ADR-044), and
+    resolving it would turn a gap somebody has to close into a Finding that
+    quietly went away (ADR-119).
+    """
+    if not refs:
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT finding_ref FROM work_order WHERE finding_ref = ANY(%s) "
+            "GROUP BY finding_ref HAVING bool_and(status <> ALL(%s))",
+            (list(refs), list(OPEN_STATUSES)),
         )
         return {FindingRef(str(row[0])) for row in cur.fetchall()}
 
