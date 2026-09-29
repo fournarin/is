@@ -75,6 +75,7 @@ def main() -> int:
             windows=windows,
             horizon=timedelta(hours=policy.max_horizon_hours),
             min_samples=policy.min_samples,
+            eta_error=[(band.ahead_below_hours, band.fraction) for band in policy.eta_error],
         )
         decision = next((one for one in found if one.outcome is Outcome.FORECAST), None)
         if decision is not None:

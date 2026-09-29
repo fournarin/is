@@ -89,6 +89,18 @@ triggers:
     # horizon, which is why ADR-020 requires error to be reported per horizon
     # rather than as one number that hides it.
     max_horizon_hours: 24
+    # The "give or take" a ticket prints (ADR-106): the wider of the slope's
+    # interval and this fraction of the lead time. Provenance: the 80th
+    # percentile of |error| / lead time on synthetic seeds 0-9, per horizon band;
+    # held-out seeds covered 74-81% (docs/results/eta-calibration.md, produced by
+    # scripts/calibrate_eta.py). A property of the synthetic curves, not of the
+    # plant: recalibrate from the plant's closed forecasts.
+    eta_error:
+      - {ahead_below_hours: 1, fraction: 0.433}
+      - {ahead_below_hours: 3, fraction: 0.336}
+      - {ahead_below_hours: 6, fraction: 0.397}
+      - {ahead_below_hours: 12, fraction: 0.549}
+      - {ahead_below_hours: 8760, fraction: 0.666}
 
 # ── what the finished jobs say the estimate should be (ADR-006, ADR-066) ───
 # Provenance: recorded decision, both of them, and neither is a measurement -

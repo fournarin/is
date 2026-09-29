@@ -183,6 +183,9 @@ def build_triggers(config: Config, clock: Clock) -> Triggers:
         model_of=config.model_of,
         trend_window=timedelta(minutes=policy.trend.window_minutes),
         trend_min_samples=policy.trend.min_samples,
+        trend_eta_error=[
+            (band.ahead_below_hours, band.fraction) for band in policy.trend.eta_error
+        ],
         trend_horizon=timedelta(hours=policy.trend.max_horizon_hours),
     )
 

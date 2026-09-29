@@ -234,6 +234,20 @@ class LoadThresholds(BaseModel):
         return self
 
 
+class EtaErrorBand(BaseModel):
+    """How wrong forecasts this far ahead have turned out to be (ADR-106).
+
+    `fraction` is the share of the lead time that covered 80% of observed
+    errors, measured by `scripts/calibrate_eta.py`. It applies to forecasts made
+    less than `ahead_below_hours` ahead and at least the previous band's bound.
+    """
+
+    model_config = _STRICT
+
+    ahead_below_hours: float = Field(gt=0)
+    fraction: float = Field(ge=0)
+
+
 class TrendConfig(BaseModel):
     """Parameters of the trend extrapolation that produces predictions (ADR-020)."""
 
@@ -244,6 +258,9 @@ class TrendConfig(BaseModel):
     # Beyond this horizon the extrapolation is not reported. ADR-020 requires
     # error to be reported per horizon precisely because it grows with distance.
     max_horizon_hours: int = Field(gt=0)
+    # The "give or take" a ticket prints (ADR-106). Empty: the slope's own
+    # interval alone, which covered 18-48% of true crossings on synthetic data.
+    eta_error: tuple[EtaErrorBand, ...] = ()
 
 
 class TriggerPolicy(BaseModel):
