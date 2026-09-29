@@ -47,6 +47,8 @@ class Profile(BaseModel):
     same_model_only: bool
     # A page the reranker scores below this is not evidence at all (ADR-097).
     min_relevance: float | None = None
+    min_relevance_to_draft: float | None = None
+    min_relevance_for_repair: float | None = None
 
 
 def profiles_from(policy: RetrievalPolicy) -> tuple[Profile, Profile]:
@@ -68,6 +70,8 @@ def profiles_from(policy: RetrievalPolicy) -> tuple[Profile, Profile]:
             abstain=policy.authoring.abstain,
             same_model_only=False,
             min_relevance=policy.authoring.min_relevance,
+            min_relevance_to_draft=policy.authoring.min_relevance_to_draft,
+            min_relevance_for_repair=policy.authoring.min_relevance_for_repair,
         ),
         Profile(
             candidates=policy.runtime.candidates,

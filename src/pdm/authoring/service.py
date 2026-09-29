@@ -238,6 +238,8 @@ class Drafting:
             question=question,
             evidence=ours,
             relevance_scored=self.reranker is not None,
+            draft_floor=self.profile.min_relevance_to_draft or 0.0,
+            repair_floor=self.profile.min_relevance_for_repair or 0.0,
         )
         return assemble(
             request,
@@ -377,7 +379,9 @@ class Drafting:
         for key, source in wanted.items():
             if key not in text:
                 continue
-            neighbour = source.model_copy(update={"page": key[1], "text": text[key]})
+            neighbour = source.model_copy(
+                update={"page": key[1], "text": text[key], "joined_only": True}
+            )
             before_source = key[1] == source.page - 1
             if before_source and continues_to(neighbour.text, neighbour.page) != source.page:
                 continue

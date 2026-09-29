@@ -41,7 +41,11 @@ from pdm.llm.domain import DraftRequest, Evidence, Proposal, ProposalKind, Propo
 # numbered footnote, "Note 1. There is no manual release ... 2. The value ...".
 # Read as steps, an inspection chapter and a brake table's footnotes came out
 # as repair procedures.
-_MARKER = re.compile(r"(?<![\d.(])(?<!Note )(?<!NOTE )(?P<number>\d{1,2})[.)]\s+")
+#
+# Nor a number glued to a word or a hyphen (ADR-103): "valve MV-1. 2. Open"
+# made the "1." of "MV-1." step one's marker, step one came out empty, and a
+# lockout step vanished from a draft that still read as complete.
+_MARKER = re.compile(r"(?<![\w.(\-])(?<!Note )(?<!NOTE )(?P<number>\d{1,2})[.)]\s+")
 
 # The three things a manual writes at the foot of a procedure. Each stops at the
 # first sentence end, because with the line breaks gone the whole block can
@@ -78,6 +82,10 @@ _SENTENCE = re.compile(r"(?<=[.:])\s+(?=[A-Z฀-๿])")
 _MINIMUM_SENTENCE_CHARACTERS = 30
 
 
+# How near the end of a page the phrase must sit: room for a printed page
+# number or a running footer, and no more (ADR-103).
+_CONTINUED_TAIL = 40
+
 # "Continued on page 10." or "continued on the next page" (ADR-100). Removed
 # from the step it ends, and followed to the page it names.
 _CONTINUED = re.compile(
@@ -86,9 +94,13 @@ _CONTINUED = re.compile(
 
 
 def continues_to(text: str, page: int) -> int | None:
-    """The page a procedure on this page continues on, or None."""
+    """The page a procedure on this page continues on, or None.
+
+    Only when the phrase closes the page (ADR-103): a "continued" inside a note
+    in the middle of a page says nothing about the steps.
+    """
     match = _CONTINUED.search(text)
-    if match is None:
+    if match is None or len(text.rstrip()) - match.end() > _CONTINUED_TAIL:
         return None
     return int(match.group("page")) if match.group("page") else page + 1
 
@@ -130,6 +142,9 @@ def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list
     if not markers:
         return []
 
+    # A continuation must begin where the previous page stopped (ADR-103).
+    if first > 1 and int(markers[0].group("number")) != first:
+        return []
     chain: list[re.Match[str]] = []
     expected = first
     for position, marker in enumerate(markers):
@@ -164,7 +179,10 @@ def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list
             else _end_of_the_last_step(region, marker.end())
         )
         steps.append(" ".join(region[marker.end() : stop].split()))
-    steps = [step for step in steps if step]
+    # An empty step means a marker was misread; the procedure is refused
+    # rather than drafted with a step missing (ADR-103).
+    if any(not step for step in steps):
+        return []
     low, high = _STEP_WORDS
     if not all(low <= len(step.split()) <= high for step in steps):
         return []
@@ -248,8 +266,13 @@ def _best_page(request: DraftRequest) -> Evidence | None:
     Ties are broken by page so that the same input always drafts the same way.
     """
     ours = [
-        evidence for evidence in request.evidence if evidence.machine_model == request.machine_model
+        evidence
+        for evidence in request.evidence
+        if evidence.machine_model == request.machine_model and not evidence.joined_only
     ]
+    if request.relevance_scored:
+        # Nothing clears the draft floor: the manuals do not answer this (ADR-103).
+        ours = [evidence for evidence in ours if evidence.score >= request.draft_floor]
     asked = figures(request.question)
     if not asked and not request.relevance_scored:
         return max(ours, key=lambda evidence: (evidence.score, -evidence.page), default=None)
@@ -267,6 +290,12 @@ def _best_page(request: DraftRequest) -> Evidence | None:
             key=lambda evidence: (bool(_procedure(evidence.text)), evidence.score, -evidence.page),
         )
     stating = [evidence for evidence in ours if asked <= figures(evidence.text)]
+    if request.relevance_scored and ours:
+        # The same "nearly as relevant as the best" rule as a question with no
+        # figures (ADR-103): a procedure at 0.11 stating the figure must not
+        # beat the answer at 0.99.
+        best = max(evidence.score for evidence in ours)
+        stating = [evidence for evidence in stating if evidence.score >= best * _STRONG_FRACTION]
     return max(
         stating,
         key=lambda evidence: (bool(_procedure(evidence.text)), evidence.score, -evidence.page),
@@ -291,6 +320,7 @@ class ExtractiveDrafter:
         # its second page, it starts from the page that says it continues here;
         # chosen on its first, the steps on the next page are joined on, each
         # still citing the page it was read from.
+        chosen_score = page.score
         if not _procedure(page.text):
             before = _same_document(request, page, page.page - 1)
             if (
@@ -300,6 +330,10 @@ class ExtractiveDrafter:
             ):
                 page = before
         numbered = _procedure(page.text)
+        # A weak page is never a repair (ADR-103). A predecessor brought in to
+        # join borrows the score of the page that was chosen.
+        if request.relevance_scored and numbered and chosen_score < request.repair_floor:
+            numbered = []
         cited = [page.ref] * len(numbered)
         after = None
         target = _continues_to(page) if numbered else None

@@ -418,3 +418,91 @@ class TestAProcedureOverTwoPages:
 
         assert len(proposal.steps) == 7
         assert proposal.steps[0].cites[1] == 9
+
+
+class TestFloorsOnRelevance:
+    """ADR-103: a page barely relevant to the question is not drafted from, and
+    a page not clearly relevant is never drafted as a repair."""
+
+    @staticmethod
+    def _propose(*evidence: Evidence, question: str = "the belt motor is overheating"):  # type: ignore[no-untyped-def]
+        return ExtractiveDrafter().propose(
+            _request(*evidence, question=question).model_copy(
+                update={"relevance_scored": True, "draft_floor": 0.35, "repair_floor": 0.5}
+            )
+        )
+
+    def test_below_the_draft_floor_nothing_is_drafted(self) -> None:
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.12)
+
+        assert self._propose(procedure).kind is ProposalKind.NOTHING
+
+    def test_between_the_floors_a_procedure_is_fault_finding_not_a_repair(self) -> None:
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.4)
+
+        assert self._propose(procedure).kind is ProposalKind.DIAGNOSTIC
+
+    def test_above_both_floors_it_is_a_repair(self) -> None:
+        procedure = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.8)
+
+        assert self._propose(procedure).kind is ProposalKind.REPAIR
+
+    def test_a_page_stating_the_figure_does_not_beat_a_far_stronger_answer(self) -> None:
+        question = _question("SYM-014")
+        answer = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.99)
+        others = [
+            _page(R2000IC, page.number, document_id=R2000IC_DOC, score=0.4)
+            for page in R2000IC.pages
+            if page.number != 4
+        ]
+
+        proposal = self._propose(answer, *others, question=question)
+
+        assert {step.cites for step in proposal.steps} == {(R2000IC_DOC, 4)}
+
+    def test_a_page_joined_on_is_never_itself_the_answer(self) -> None:
+        joined = _page(R2000IC, 4, document_id=R2000IC_DOC, score=0.9).model_copy(
+            update={"joined_only": True}
+        )
+
+        assert self._propose(joined).kind is ProposalKind.NOTHING
+
+    def test_chosen_on_its_second_page_the_first_borrows_its_score(self) -> None:
+        first, second = TestAProcedureOverTwoPages._pages(0.3, 0.9)
+
+        proposal = self._propose(first, second, question="replace the weld cable")
+
+        assert proposal.kind is ProposalKind.REPAIR
+        assert len(proposal.steps) == 7
+
+
+class TestAMisreadMarkerRefusesTheProcedure:
+    """ADR-103: a number glued to a word is not a step marker, and a procedure
+    with a step that came out empty is not drafted with the step missing."""
+
+    def test_a_part_number_ending_a_step_is_not_the_next_marker(self) -> None:
+        from pdm.llm.extractive import _procedure
+
+        steps = _procedure(
+            "1. Lock out the air supply at valve MV-1. "
+            "2. Open the drain and bleed the line until the gauge reads zero. "
+            "3. Replace the filter element and close the drain again."
+        )
+
+        assert len(steps) == 3
+        assert steps[0].endswith("valve MV-1.")
+
+
+class TestContinuedOnlyWhenItClosesThePage:
+    """ADR-103: "continued on page N" in the middle of a page is not a join."""
+
+    def test_the_phrase_at_the_foot_is_followed(self) -> None:
+        from pdm.llm.extractive import continues_to
+
+        assert continues_to("1. Do this. 2. Do that. Continued on page 10. 9", 9) == 10
+
+    def test_the_phrase_mid_page_is_not(self) -> None:
+        from pdm.llm.extractive import continues_to
+
+        text = "Note: the table is continued on page 10. " + "More text on this page. " * 5
+        assert continues_to(text, 9) is None
