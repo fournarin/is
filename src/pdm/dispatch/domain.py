@@ -686,9 +686,10 @@ def _admit(
     """How deep into the ranked queue this round reaches (ADR-011).
 
     Heavy: high severity only. Normal: condition and manual work. Light: the
-    same, then PM work released in score order until the ratio reaches the light
-    boundary - not all of it, because a quiet shift handed its whole maintenance
-    backlog is a heavy shift one round later, and the work released last is the
+    same, then PM work released in score order while the ratio stays within the
+    light boundary with each job added (ADR-109) - not all of it, because a
+    quiet shift handed its whole maintenance backlog is a heavy shift one round
+    later, and the work released last is the
     work most likely to be abandoned at handover.
 
     An order a shift lead has released passes all of that (ADR-059), and it is
@@ -739,16 +740,18 @@ def _admit(
                     )
                 )
                 continue
-            if running >= load.light_below:
+            # A job is released only if the shift stays within the ceiling with
+            # it (ADR-109). Checked before adding, a 90-minute job on a shift at
+            # 0% took it to 90% - from quiet to heavy in one round. A smaller job
+            # further down the list may still fit, so the loop goes on.
+            after = running + item.person_minutes / capacity
+            if after > load.light_below:
                 held.append(
                     Withheld(
                         ref=item.ref,
                         why=(
-                            # What was checked: the shift has already reached
-                            # the ceiling. Not "releasing this would cross it" -
-                            # the job that crosses it is released (ADR-107).
-                            f"รอบนี้ปล่อยงานบำรุงรักษาตามแผนจนภาระของกะถึง {running:.0%} แล้ว "
-                            f"ซึ่งถึงเพดานของงานบำรุงรักษาตามแผน ({load.light_below:.0%})"
+                            f"ถ้าปล่อยงานนี้ ภาระของกะจะเป็น {after:.0%} "
+                            f"เกินเพดานของงานบำรุงรักษาตามแผน ({load.light_below:.0%})"
                         ),
                     )
                 )
@@ -756,7 +759,7 @@ def _admit(
             # Releasing PM work is what makes it demand (ADR-045 §2), so the
             # ratio moves as the round decides - which is what makes this
             # terminate rather than release the whole backlog at once.
-            running += item.person_minutes / capacity
+            running = after
 
         admitted.append(entry)
 
