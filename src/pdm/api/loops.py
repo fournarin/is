@@ -21,6 +21,7 @@ not moving - and the same refusal at the endpoint rather than a hidden button
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -66,6 +67,29 @@ class EstimateLine(BaseModel):
     playbook_status: PlaybookStatus
     closed_orders: int
     proposal: EstimateProposal | None
+
+
+class FloorNote(BaseModel):
+    """What a technician wrote when they closed a job (ADR-117)."""
+
+    model_config = _FROZEN
+
+    work_order_ref: str
+    machine_id: str
+    symptom_code: str | None
+    playbook_ref: str | None
+    outcome: str | None
+    closed_at: datetime
+    note: str
+
+
+class FloorNotes(BaseModel):
+    """The notes, and the clock to read their times on (ADR-093)."""
+
+    model_config = _FROZEN
+
+    timezone: str
+    notes: list[FloorNote]
 
 
 class ThresholdLine(BaseModel):
@@ -186,3 +210,37 @@ def thresholds(
             )
         )
     return sorted(lines, key=lambda line: (line.proposal is None, line.rule_id))
+
+
+# The page shows the latest notes, not an archive; the full record stays on each
+# closed order.
+_NOTES_SHOWN = 200
+
+
+@router.get("/loops/notes", response_model=FloorNotes)
+def notes(
+    conn: Db,
+    plant: Plant,
+    account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_technician_notes"))],
+) -> FloorNotes:
+    """The notes technicians left at close, newest first (ADR-117).
+
+    Read by the engineer who owns the procedures and the shift lead who assigns
+    them. Nothing here changes a playbook: a note that should become a step goes
+    through the review queue, which records who approved it (ADR-064).
+    """
+    return FloorNotes(
+        timezone=plant.plant.timezone,
+        notes=[
+            FloorNote(
+                work_order_ref=str(row["work_order_ref"]),
+                machine_id=str(row["machine_id"]),
+                symptom_code=row["symptom_code"],
+                playbook_ref=row["playbook_ref"],
+                outcome=row["outcome"],
+                closed_at=row["closed_at"],
+                note=str(row["note"]),
+            )
+            for row in work.notes_from_the_floor(conn, limit=_NOTES_SHOWN)
+        ],
+    )
