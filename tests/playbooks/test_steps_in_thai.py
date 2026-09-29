@@ -65,3 +65,29 @@ def test_a_dropped_figure_is_refused_too() -> None:
 def test_the_count_must_line_up_with_the_steps() -> None:
     with pytest.raises(ValueError, match="ต้องแปลตามลำดับขั้นให้ครบ"):
         in_thai(STEPS, ("ขั้นเดียว",))
+
+
+class TestUnitsTravelWithTheirFigures:
+    """Red team (ADR-105): the figure check compared numbers only, so a torque
+    of 3 Nm rendered as 3 มม. passed. A unit the manual states must come through
+    the Thai unchanged, in either language's spelling."""
+
+    def test_a_changed_unit_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="หน่วย"):
+            in_thai(STEPS, ("", "ถอดสกรูยึดพัดลมสี่ตัว แรงบิด 3 มม.", ""))
+
+    def test_a_dropped_unit_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="หน่วย"):
+            in_thai(STEPS, ("", "ถอดสกรูยึดพัดลมสี่ตัว แรงบิด 3", ""))
+
+    def test_the_unit_in_thai_words_is_accepted(self) -> None:
+        rendered = in_thai(STEPS, ("", "ถอดสกรูยึดพัดลมสี่ตัว แรงบิด 3 นิวตันเมตร", ""))
+
+        assert rendered[1].text_th == "ถอดสกรูยึดพัดลมสี่ตัว แรงบิด 3 นิวตันเมตร"
+
+    def test_seconds_and_rpm_in_thai_are_accepted(self) -> None:
+        rendered = in_thai(
+            STEPS, ("", "", "จ่ายไฟกลับ แล้วตรวจว่าพัดลมหมุนถึง 1500 รอบต่อนาทีภายใน 30 วินาที")
+        )
+
+        assert rendered[2].text_th is not None

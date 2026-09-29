@@ -26,7 +26,7 @@ from pdm.contracts import (
     SymptomCode,
     UserId,
 )
-from pdm.contracts.wording import figures
+from pdm.contracts.wording import figures, quantities
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo
 from pdm.playbooks.domain import (
@@ -351,6 +351,15 @@ def in_thai(steps: tuple[PlaybookStep, ...], thai: tuple[str, ...]) -> tuple[Pla
             raise ValueError(
                 f"ขั้นที่ {number}: ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ "
                 f"(ขาด {missing} · เกิน {extra}) ตรวจค่าแรงบิดและตัวเลขอีกครั้ง"
+            )
+        # A unit the manual states must come through unchanged (ADR-105): the
+        # figure check alone passed a torque of 3 Nm rendered as 3 มม.
+        lost = quantities(step.text) - quantities(text)
+        if lost:
+            named = ", ".join(sorted(f"{figure:f} {unit}" for figure, unit in lost))
+            raise ValueError(
+                f"ขั้นที่ {number}: หน่วยในคำแปลไม่ตรงกับต้นฉบับ ({named}) "
+                "ใส่ตัวเลขพร้อมหน่วยเดิม เช่น Nm หรือ นิวตันเมตร"
             )
         rendered.append(step.model_copy(update={"text_th": text}))
     return tuple(rendered)
