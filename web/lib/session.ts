@@ -7,7 +7,7 @@
  */
 import { redirect } from "next/navigation";
 
-import { callApi } from "@/lib/api";
+import { ApiUnreachable, callApi } from "@/lib/api";
 
 /**
  * The four roles of ADR-024, mirrored here only so that TypeScript can name
@@ -41,7 +41,18 @@ export async function currentAccount(): Promise<Account | null> {
 
 /** The signed-in account, or a redirect to the sign-in form. */
 export async function requireAccount(): Promise<Account> {
-  const account = await currentAccount();
+  let account: Account | null;
+  try {
+    account = await currentAccount();
+  } catch (error) {
+    if (error instanceof ApiUnreachable) {
+      // Every signed-in screen asks this first, so this is where "the API is
+      // not answering" becomes a page a person can read - rendered on the
+      // server, so a phone without JavaScript gets it too (2026-09-29).
+      redirect("/unreachable");
+    }
+    throw error;
+  }
   if (account === null) {
     redirect("/sign-in");
   }

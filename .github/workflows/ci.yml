@@ -177,6 +177,13 @@ jobs:
       - name: type check
         run: npm run typecheck
 
+      # The one screen check that needs no stack: it starts the built server
+      # against an API that does not answer and reads what a person would get.
+      - name: what a person sees when the API is down
+        run: |
+          mkdir -p .next/standalone/.next && cp -R .next/static .next/standalone/.next/
+          python3 check-when-the-api-is-down.py
+
       # The same argument as the backend image one step up: the artefact handed
       # over for the on-premise install is the image, and a Dockerfile that only
       # ever builds on the author's laptop fails on a machine we cannot reach.

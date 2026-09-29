@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import type { SignInState } from "@/app/sign-in/state";
-import { SESSION_COOKIE, callApi } from "@/lib/api";
+import { ApiUnreachable, SESSION_COOKIE, UNREACHABLE, callApi } from "@/lib/api";
 
 /**
  * What the API returned in its `Set-Cookie`, or null if it set no session.
@@ -38,11 +38,19 @@ export async function signIn(_previous: SignInState, form: FormData): Promise<Si
     return { error: "กรอกชื่อผู้ใช้และรหัสผ่านให้ครบ" };
   }
 
-  const response = await callApi("/sessions", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ user, password }),
-  });
+  let response: Response;
+  try {
+    response = await callApi("/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ user, password }),
+    });
+  } catch (error) {
+    if (error instanceof ApiUnreachable) {
+      return { error: `${UNREACHABLE} รอสักครู่แล้วลองอีกครั้ง` };
+    }
+    throw error;
+  }
 
   if (response.status === 401) {
     // The API answers every kind of failure with one message on purpose, and
