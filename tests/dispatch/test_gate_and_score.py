@@ -605,6 +605,22 @@ class TestTheScore:
         assert "ความรุนแรงระดับวิกฤต" in result.placed[0].priority_reason
         assert result.summary.startswith("กะนี้ใช้กำลังคนไป")
 
+    def test_scheduled_work_does_not_claim_waiting_stops_the_line(self) -> None:
+        """ADR-104. A PM job's machine is running while it waits; the downtime
+        figure is what doing it costs, and the sentence says so."""
+        queue = [
+            _queued(
+                "WO-pm",
+                _order(machine_id=BOTTLENECK, origin=WorkOrderOrigin.SCHEDULED, skill=None),
+            )
+        ]
+
+        result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 300)))
+
+        (placed,) = result.placed
+        assert "ถ้างานนี้รอ" not in placed.priority_reason
+        assert "ต้องหยุดเครื่อง" in placed.priority_reason
+
 
 class TestAssignment:
     def test_the_skill_decides_who_gets_it(self) -> None:

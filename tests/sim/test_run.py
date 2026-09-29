@@ -34,6 +34,8 @@ from pdm.contracts import (
     LineId,
     MachineId,
     MachineModel,
+    PMTask,
+    PMTaskRef,
     RuleId,
     Severity,
     ShiftAssignment,
@@ -42,6 +44,8 @@ from pdm.contracts import (
     SymptomCode,
     Technician,
     UserId,
+    WorkOrder,
+    WorkOrderOrigin,
     WorkOrderStatus,
 )
 from pdm.platform.config import Config, load_config
@@ -545,6 +549,73 @@ class TestWhatTheEngineRecords:
         (outage,) = result.outages
         assert outage.ended_at is not None
         assert outage.down_minutes > 60.0
+
+
+def _pm(machine_id: MachineId, *, due_after: timedelta) -> PMTask:
+    return PMTask(
+        pm_task_ref=PMTaskRef(f"pm-{machine_id}"),
+        machine_id=machine_id,
+        symptom_code=SymptomCode("PM-toothed-belt"),
+        interval=timedelta(hours=8000),
+        due_at=STARTS_AT + due_after,
+    )
+
+
+class TestScheduledMaintenance:
+    """PM work in a run (ADR-010): offered to the policy as scheduled work from
+    when it falls due, and never a stoppage of the line."""
+
+    def test_it_is_offered_when_due_and_not_before(self, config: Config) -> None:
+        seen: list[tuple[datetime, tuple[str, ...]]] = []
+
+        class Watching(FirstComeFirstServed):
+            def choose(self, state: RoundState) -> tuple[Placement, ...]:
+                seen.append((state.now, tuple(ticket.ref for ticket in state.pending)))
+                return ()
+
+        scenario = _scenario().model_copy(
+            update={"maintenance": (_pm(BUFFERED, due_after=timedelta(minutes=30)),)}
+        )
+        run(scenario, policy=Watching(), config=config, failures=())
+
+        assert seen[0] == (STARTS_AT + timedelta(minutes=30), ("PM-0001",))
+
+    def test_it_reaches_the_policy_as_scheduled_work(self, config: Config) -> None:
+        orders: list[WorkOrder] = []
+
+        class Watching(FirstComeFirstServed):
+            def choose(self, state: RoundState) -> tuple[Placement, ...]:
+                orders.extend(ticket.order for ticket in state.pending)
+                return super().choose(state)
+
+        scenario = _scenario().model_copy(
+            update={"maintenance": (_pm(BUFFERED, due_after=timedelta(0)),)}
+        )
+        result = run(scenario, policy=Watching(), config=config, failures=())
+
+        assert orders[0].origin is WorkOrderOrigin.SCHEDULED
+        assert result.tickets_finished == 1
+
+    def test_it_neither_opens_an_outage_nor_keeps_one_open(self, config: Config) -> None:
+        scenario = _scenario(duration=timedelta(hours=4)).model_copy(
+            update={"maintenance": (_pm(BOTTLENECK, due_after=timedelta(0)),)}
+        )
+
+        class RepairsOnly(FirstComeFirstServed):
+            def choose(self, state: RoundState) -> tuple[Placement, ...]:
+                repairs = tuple(ticket for ticket in state.pending if ticket.ref.startswith("WO-"))
+                return super().choose(state.model_copy(update={"pending": repairs}))
+
+        result = run(
+            scenario,
+            policy=RepairsOnly(),
+            config=config,
+            failures=(_failure(BOTTLENECK, after=timedelta(minutes=10), minutes=30),),
+        )
+
+        # The PM job is still waiting on the same machine; the line is running.
+        (outage,) = result.outages
+        assert outage.ended_at == STARTS_AT + timedelta(minutes=40)
 
 
 class TestBothLoadBands:

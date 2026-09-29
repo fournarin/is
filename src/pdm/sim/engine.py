@@ -31,9 +31,12 @@ from datetime import datetime, timedelta
 from pdm.contracts import (
     Assignee,
     AssigneeRole,
+    ComponentLabel,
     Finding,
     FindingRef,
     MachineId,
+    PMTask,
+    RuleId,
     Severity,
     Technician,
     UserId,
@@ -55,7 +58,7 @@ from pdm.sim.domain import (
     TicketRecord,
 )
 from pdm.sim.scenario import Failure, SimScenario, failures_for
-from pdm.work.domain import from_finding
+from pdm.work.domain import PM_SEVERITY, from_finding, from_pm_task
 
 # Order between events sharing a timestamp. A repair finishing frees somebody
 # for the round happening in the same instant, and a failure in that instant is
@@ -67,9 +70,12 @@ _REPAIRED, _FAILED, _ROUND, _ENDED = 0, 1, 2, 3
 class _Job:
     """A ticket, plus what the engine knows and the policy does not."""
 
-    def __init__(self, ticket: Ticket, failure: Failure) -> None:
+    def __init__(self, ticket: Ticket, failure: Failure, *, planned: bool = False) -> None:
         self.ticket = ticket
         self.failure = failure
+        # Scheduled maintenance: nothing is down until it is done, so it neither
+        # opens an outage nor keeps one open.
+        self.planned = planned
         self.started_at: datetime | None = None
         self.finished_at: datetime | None = None
         self.users: tuple[UserId, ...] = ()
@@ -165,6 +171,11 @@ def run(
             )
         schedule(failure.at, _FAILED, str(index))
 
+    for index, task in enumerate(scenario.maintenance):
+        # A PM task becomes work when it falls due, or at the start of the run
+        # if it was due already.
+        schedule(max(task.due_at, scenario.starts_at), _FAILED, f"pm:{index}")
+
     round_at = scenario.starts_at
     while round_at < scenario.ends_at:
         schedule(round_at, _ROUND, "")
@@ -178,7 +189,28 @@ def run(
         if priority == _ENDED:
             break
 
-        if priority == _FAILED:
+        if priority == _FAILED and payload.startswith("pm:"):
+            index = int(payload.removeprefix("pm:"))
+            task = scenario.maintenance[index]
+            ref = f"PM-{index + 1:04d}"
+            order = _order_for_task(task, config, fallback)
+            jobs[ref] = _Job(
+                ticket=Ticket(ref=ref, order=order, created_at=clock.now()),
+                failure=Failure(
+                    machine_id=task.machine_id,
+                    at=clock.now(),
+                    window="planned",
+                    rule_id=RuleId(str(task.pm_task_ref)),
+                    component=ComponentLabel(str(task.symptom_code)),
+                    symptom_code=task.symptom_code,
+                    severity=order.severity,
+                    repair_minutes=order.estimated_minutes,
+                ),
+                planned=True,
+            )
+            pending.append(ref)
+
+        elif priority == _FAILED:
             failure = arrivals[int(payload)]
             ref = f"WO-{int(payload) + 1:04d}"
             job = _Job(
@@ -207,7 +239,10 @@ def run(
                 del busy[user]
                 consumed[user] += job.failure.repair_minutes
             machine_id = job.failure.machine_id
-            if not any(jobs[ref].failure.machine_id == machine_id for ref in pending + in_progress):
+            if machine_id in down_since and not any(
+                not jobs[ref].planned and jobs[ref].failure.machine_id == machine_id
+                for ref in pending + in_progress
+            ):
                 close_outage(machine_id, clock.now())
             log(
                 EventKind.REPAIRED,
@@ -317,6 +352,21 @@ def _order_for(
         playbook=None,
         machine_model=config.model_of(failure.machine_id),
         fallback_minutes=fallback_minutes,
+    )
+
+
+def _order_for_task(
+    task: PMTask,
+    config: Config,
+    fallback_minutes: dict[str, dict[Severity, int]],
+) -> WorkOrder:
+    """A scheduled order, priced by the work module like any other (ADR-041)."""
+    return from_pm_task(
+        task,
+        playbook=None,
+        machine_model=config.model_of(task.machine_id),
+        fallback_minutes=fallback_minutes,
+        severity=PM_SEVERITY,
     )
 
 
