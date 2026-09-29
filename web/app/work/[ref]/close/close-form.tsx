@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { BLOCKED_REASONS, OUTCOMES, closeFromForm } from "@/lib/close";
-import { type PendingClose, enqueue, pending, settle } from "@/lib/pending-closes";
+import { type PendingClose, drain as drainQueue, enqueue, settle } from "@/lib/pending-closes";
 
 const OUTCOME_LABELS: Record<(typeof OUTCOMES)[number], string> = {
   fixed: "แก้แล้ว",
@@ -51,15 +51,10 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
   const [blocked, setBlocked] = useState(false);
 
   /** Try everything the device is holding, and report what is left. */
-  const drain = useCallback(async (): Promise<PendingClose[]> => {
-    let queue = pending(window.localStorage);
-    for (const one of queue) {
-      if ((await post(one.ref, one)) === "sent") {
-        queue = settle(window.localStorage, one.ref);
-      }
-    }
-    return queue;
-  }, []);
+  const drain = useCallback(
+    (): Promise<PendingClose[]> => drainQueue(window.localStorage, post),
+    [],
+  );
 
   // Synchronising with something outside React - the device's queue and the
   // network - which is what an effect is for. The state lands when the retries

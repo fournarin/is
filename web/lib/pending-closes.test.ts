@@ -8,7 +8,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { STORAGE_KEY, type PendingClose, type StorageLike, enqueue, pending, settle } from "./pending-closes.ts";
+import {
+  STORAGE_KEY,
+  type PendingClose,
+  type StorageLike,
+  drain,
+  enqueue,
+  pending,
+  settle,
+} from "./pending-closes.ts";
 
 function storage(initial: string | null = null): StorageLike & { raw: () => string | null } {
   let held = initial;
@@ -104,4 +112,28 @@ test("entries that are not closes are dropped rather than trusted", () => {
 
 test("the key is stable, because a rename orphans every queued close", () => {
   assert.equal(STORAGE_KEY, "pdm.pending-closes");
+});
+
+test("two retries at once end with what the device still holds, not a stale copy", async () => {
+  // 2026-09-29: the phone came back online and two retries ran together - the
+  // browser's "online" event and a second one, which a press of "ลองส่ง
+  // เดี๋ยวนี้" also starts. The first sent the close. The second was told the
+  // job was already closed and returned the copy of the queue it had read
+  // before the first settled, so the screen kept saying "รอส่งอยู่ 1 รายการ"
+  // for a job the API had closed.
+  const device = storage();
+  enqueue(device, close("WO-000001"));
+  let calls = 0;
+  const send = async (): Promise<string> => {
+    calls += 1;
+    const first = calls === 1;
+    await new Promise((resolve) => setTimeout(resolve, first ? 20 : 40));
+    return first ? "sent" : "WO-000001 ปิดไปแล้ว";
+  };
+
+  const [one, two] = await Promise.all([drain(device, send), drain(device, send)]);
+
+  assert.deepEqual(pending(device), []);
+  assert.deepEqual(one, []);
+  assert.deepEqual(two, []);
 });
