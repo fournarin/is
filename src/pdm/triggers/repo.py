@@ -177,6 +177,17 @@ def live(conn: Connection[Any]) -> dict[tuple[MachineId, RuleId], Finding]:
     return {(row["machine_id"], row["rule_id"]): _to_finding(dict(row)) for row in rows}
 
 
+def live_refs(conn: Connection[Any]) -> set[FindingRef]:
+    """The references of every open or acknowledged Finding, and nothing else.
+
+    `live` deserialises every row to key it for suppression; the question the
+    loop asks before it (ADR-119) is only which of them are still live.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT finding_ref FROM finding WHERE status IN ('open', 'acknowledged')")
+        return {FindingRef(str(row[0])) for row in cur.fetchall()}
+
+
 def rules_behind(
     conn: Connection[Any], refs: Collection[FindingRef]
 ) -> list[tuple[MachineId, RuleId]]:

@@ -54,6 +54,9 @@ class Tick(BaseModel):
     issued: tuple[str, ...] = ()
     cancelled: tuple[str, ...] = ()
     expired: tuple[FindingRef, ...] = ()
+    # Findings whose tickets were all closed or cancelled since the last tick,
+    # and which are therefore over (ADR-119).
+    resolved: tuple[FindingRef, ...] = ()
     # Findings that were raised and could not be priced. They exist in the table
     # with no ticket behind them, which is a gap somebody has to close in
     # `policy.yaml` - not a reason to stop the loop.
@@ -70,6 +73,7 @@ class Tick(BaseModel):
             or self.issued
             or self.cancelled
             or self.expired
+            or self.resolved
             or self.unpriced
             or self.unknown_machines
         )
@@ -125,6 +129,7 @@ class TriggerLoop:
         tickets for one fault, for ever, which is what ADR-023 §7 exists to stop.
         """
         signals, unknown = self._due()
+        resolved = self._settle(conn)
         issued: list[str] = []
         cancelled: list[str] = []
         unpriced: list[FindingRef] = []
@@ -153,9 +158,29 @@ class TriggerLoop:
             issued=tuple(issued),
             cancelled=tuple(cancelled),
             expired=tuple(expired),
+            resolved=tuple(resolved),
             unpriced=tuple(unpriced),
             unknown_machines=unknown,
         )
+
+    def _settle(self, conn: Connection[Any]) -> list[FindingRef]:
+        """Resolve the Findings whose tickets have all been finished (ADR-119).
+
+        Nothing else resolves a Finding. Without this a detected Finding stays
+        open after its job is closed, and ADR-023 §2 then counts every later
+        firing of the same rule on that machine as a repeat of it: the fault can
+        come back and no ticket is ever issued for it again.
+
+        A cancelled ticket counts as finished. A shift lead cancelling the job
+        says it will not be done, not that the condition cannot come back; if it
+        persists, a new Finding follows once the cooldown has passed.
+
+        Runs before observation, so a firing in this same batch meets the
+        cooldown rather than the Finding it would otherwise repeat.
+        """
+        live = self.triggers.live_refs(conn)
+        finished = self.orders.finished_finding_refs(conn, live)
+        return [ref for ref in sorted(finished) if self.triggers.resolve(conn, ref)]
 
     def _due(self) -> tuple[list[Signal], tuple[MachineId, ...]]:
         """What the feed hands over now, minus anything off the topology.
@@ -285,7 +310,7 @@ def observe_handler(loop: TriggerLoop, queue: JobQueue, clock: Clock, *, period:
         report = log.info if tick.worth_reporting else log.debug
         report(
             "tick: %s signals, %s raised, %s predicted, %s repeated, %s suppressed, "
-            "%s in cooldown -> %s issued, %s cancelled, %s expired",
+            "%s in cooldown -> %s issued, %s cancelled, %s expired, %s resolved",
             tick.signals,
             len(tick.observation.raised),
             len(tick.observation.forecast),
@@ -295,6 +320,7 @@ def observe_handler(loop: TriggerLoop, queue: JobQueue, clock: Clock, *, period:
             len(tick.issued),
             len(tick.cancelled),
             len(tick.expired),
+            len(tick.resolved),
         )
 
     return handle

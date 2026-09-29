@@ -510,6 +510,104 @@ class TestUnderRepair:
         assert loop.under_repair(conn) == {}
 
 
+class TestAFinishedJobEndsItsFinding:
+    """ADR-119. Nothing resolved a Finding: after its job was closed it stayed
+    open, and every later firing of the rule on that machine was a repeat of it,
+    so a fault that came back was never ticketed again."""
+
+    def _close(self, conn: Connection[Any], ref: str, clock: SimulatedClock) -> None:
+        from pdm.contracts import WorkOutcome
+
+        work.close(
+            conn, ref, status=WorkOrderStatus.CLOSED, outcome=WorkOutcome.FIXED, now=clock.now()
+        )
+
+    def _status(self, conn: Connection[Any], finding_ref: str) -> str:
+        row = conn.execute(
+            "SELECT status FROM finding WHERE finding_ref = %s", (finding_ref,)
+        ).fetchone()
+        assert row is not None
+        return str(row[0])
+
+    def test_closing_the_job_resolves_the_finding_on_the_next_tick(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        loop = _loop(clock, _two_minutes_of_heat(NOW))
+        clock.advance(timedelta(minutes=3))
+        first = loop.tick(conn)
+        finding_ref = first.observation.raised[0].finding_ref
+        self._close(conn, first.issued[0], clock)
+
+        clock.advance(PERIOD)
+        tick = loop.tick(conn)
+
+        assert tick.resolved == (finding_ref,)
+        assert self._status(conn, finding_ref) == FindingStatus.RESOLVED
+        assert loop.tick(conn).resolved == ()
+
+    def test_a_fault_that_comes_back_after_the_cooldown_is_ticketed_again(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        later = NOW + timedelta(minutes=45)
+        loop = _loop(clock, _two_minutes_of_heat(NOW) + _two_minutes_of_heat(later))
+        clock.advance(timedelta(minutes=3))
+        self._close(conn, loop.tick(conn).issued[0], clock)
+        clock.advance(PERIOD)
+        loop.tick(conn)
+
+        clock.advance(timedelta(minutes=45))
+        again = loop.tick(conn)
+
+        assert again.observation.repeated == 0
+        assert len(again.issued) == 1
+
+    def test_a_job_still_open_keeps_its_finding_open(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        loop = _loop(clock, _two_minutes_of_heat(NOW))
+        clock.advance(timedelta(minutes=3))
+        first = loop.tick(conn)
+        conn.execute(
+            "UPDATE work_order SET status = 'in_progress' WHERE work_order_ref = %s",
+            (first.issued[0],),
+        )
+
+        clock.advance(PERIOD)
+
+        assert loop.tick(conn).resolved == ()
+        assert self._status(conn, first.observation.raised[0].finding_ref) == FindingStatus.OPEN
+
+    def test_a_cancelled_job_ends_its_finding_too(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        """A shift lead cancelling says the job will not be done, not that the
+        condition cannot come back. Left open, it could never be ticketed again."""
+        loop = _loop(clock, _two_minutes_of_heat(NOW))
+        clock.advance(timedelta(minutes=3))
+        first = loop.tick(conn)
+        conn.execute(
+            "UPDATE work_order SET status = 'cancelled' WHERE work_order_ref = %s",
+            (first.issued[0],),
+        )
+
+        clock.advance(PERIOD)
+
+        assert loop.tick(conn).resolved == (first.observation.raised[0].finding_ref,)
+
+    def test_a_finding_that_never_had_a_ticket_stays_open(
+        self, conn: Connection[Any], clock: SimulatedClock
+    ) -> None:
+        """Unpriced is a gap somebody has to close, not a Finding that went away."""
+        loop = _loop(clock, _two_minutes_of_heat(NOW), fallback={})
+        clock.advance(timedelta(minutes=3))
+        loop.tick(conn)
+
+        clock.advance(PERIOD)
+
+        assert loop.tick(conn).resolved == ()
+        assert findings.live(conn)
+
+
 class TestWhenSomethingIsWrong:
     def test_a_finding_that_cannot_be_priced_does_not_stop_the_loop(
         self, conn: Connection[Any], clock: SimulatedClock

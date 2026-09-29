@@ -314,6 +314,10 @@ class Triggers:
         """
         return repo.rules_behind(conn, refs)
 
+    def live_refs(self, conn: Connection[Any]) -> set[FindingRef]:
+        """Findings still open or acknowledged, by reference (ADR-119)."""
+        return repo.live_refs(conn)
+
     def resolve(self, conn: Connection[Any], finding_ref: FindingRef) -> bool:
         """The condition is over, and the cooldown starts now."""
         return repo.resolve(conn, finding_ref, now=self.clock.now())
