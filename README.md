@@ -155,6 +155,16 @@ Better said here than found later.
   The first run is by the owner, a usability pass by the person who built it
   ([ADR-092](docs/adr/0092-the-owner-tries-it-first.md),
   [results](docs/results/owner-trial.md)).
+- **A technician's closing note reaches nobody.** It is stored with the work
+  order, and no screen shows it to an engineer. A correction to the steps still
+  has to be raised by the technician in person.
+- **A job with no approved steps names no manual page.** The technician is told
+  there are none and not to guess, and is not told which page to open.
+- **The offline close covers the phone's network, not the server's.** A close
+  sent while Wi-Fi is down is kept on the phone and sent when it returns. If the
+  API is down but the web server answers, the close is refused with "ระบบตอบกลับ
+  500" and has to be sent again, and the other screens show Next's English error
+  page.
 
 ## Where to read next
 

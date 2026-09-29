@@ -322,26 +322,21 @@ class WorkOrders:
     def _live(self, conn: Connection[Any], ref: str) -> WorkOrder:
         order = repo.get_for_update(conn, ref)
         if order is None:
-            raise NoSuchOrder(f"no work order {ref}")
+            raise NoSuchOrder(f"ไม่พบใบงาน {ref}")
         if order.status not in domain.STILL_LIVE:
-            raise TransitionRefused(
-                f"{ref} is {order.status.value} and nothing moves after that; "
-                f"a new problem on this machine is a new ticket"
-            )
+            raise TransitionRefused(f"{ref} ปิดไปแล้ว แก้ไม่ได้อีก ถ้าเครื่องนี้มีปัญหาใหม่ ให้แจ้งซ่อมเป็นใบใหม่")
         if order.status is WorkOrderStatus.PROPOSED:
             # Refused here rather than by the order being invisible (ADR-071 §7).
             # It should not be reachable - `GET /work-orders/mine` does not serve
             # proposals - and a technician who got to it through a link they kept
             # is owed the reason rather than a job that does nothing when pressed.
-            raise TransitionRefused(
-                f"{ref} is waiting for a supervisor to confirm it and is not yours yet"
-            )
+            raise TransitionRefused(f"{ref} ยังรอหัวหน้ากะยืนยัน ยังไม่ได้เป็นงานของคุณ")
         return order
 
     def _reread(self, conn: Connection[Any], ref: str) -> WorkOrder:
         order = repo.get(conn, ref)
         if order is None:  # pragma: no cover - the row is locked by this transaction
-            raise NoSuchOrder(f"no work order {ref}")
+            raise NoSuchOrder(f"ไม่พบใบงาน {ref}")
         return order
 
     def adopt(
@@ -368,7 +363,7 @@ class WorkOrders:
         if len(order.assignees) >= order.required_technicians:
             held_by = ", ".join(str(one.user) for one in order.assignees)
             raise TransitionRefused(
-                f"{ref} needs {order.required_technicians} and already has {held_by}"
+                f"{ref} ใช้ช่าง {order.required_technicians} คน และมีคนรับไปแล้ว: {held_by}"
             )
         repo.add_assignee(conn, ref, Assignee(user=user, role=domain.role_for_new_assignee(order)))
         # A helper joining a job somebody is already working must not push it
@@ -387,12 +382,9 @@ class WorkOrders:
         """
         order = self._live(conn, ref)
         if not domain.holds_it(order, user):
-            raise TransitionRefused(f"{user} has not accepted {ref}")
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
         if domain.has_an_open_segment(order, user):
-            raise TransitionRefused(
-                f"{user} is already working on {ref}; a second segment would count "
-                f"the same minutes twice"
-            )
+            raise TransitionRefused(f"คุณกำลังทำ {ref} อยู่แล้ว ไม่ต้องกดเริ่มซ้ำ")
         repo.open_segment(conn, ref, user=user, now=self.clock.now())
         repo.set_status(conn, ref, status=WorkOrderStatus.IN_PROGRESS)
         return self._reread(conn, ref)
@@ -411,7 +403,7 @@ class WorkOrders:
         """
         order = self._live(conn, ref)
         if not domain.holds_it(order, user):
-            raise TransitionRefused(f"{user} has not accepted {ref}")
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
         if not note.strip():
             raise ValueError("ส่งต่องานต้องเขียนว่าทำถึงไหนแล้ว ไม่อย่างนั้นคนถัดไปต้องเริ่มใหม่ตั้งแต่ขั้นแรก")
 
@@ -450,7 +442,7 @@ class WorkOrders:
         """
         order = self._live(conn, ref)
         if not domain.holds_it(order, user):
-            raise TransitionRefused(f"{user} has not accepted {ref}")
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
 
         now = self.clock.now()
         worked = domain.minutes_worked_if_closed_at(order, now)

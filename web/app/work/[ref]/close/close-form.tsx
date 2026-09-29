@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { BLOCKED_REASONS, OUTCOMES, closeFromForm } from "@/lib/close";
-import { type PendingClose, enqueue, pending, settle } from "@/lib/pending-closes";
+import { type PendingClose, drain as drainQueue, enqueue, settle } from "@/lib/pending-closes";
 
 const OUTCOME_LABELS: Record<(typeof OUTCOMES)[number], string> = {
   fixed: "แก้แล้ว",
@@ -50,15 +51,10 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
   const [blocked, setBlocked] = useState(false);
 
   /** Try everything the device is holding, and report what is left. */
-  const drain = useCallback(async (): Promise<PendingClose[]> => {
-    let queue = pending(window.localStorage);
-    for (const one of queue) {
-      if ((await post(one.ref, one)) === "sent") {
-        queue = settle(window.localStorage, one.ref);
-      }
-    }
-    return queue;
-  }, []);
+  const drain = useCallback(
+    (): Promise<PendingClose[]> => drainQueue(window.localStorage, post),
+    [],
+  );
 
   // Synchronising with something outside React - the device's queue and the
   // network - which is what an effect is for. The state lands when the retries
@@ -113,6 +109,20 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
     }
     setState("refused");
     setMessage(result);
+  }
+
+  if (state === "queued" && !waiting.some((one) => one.ref === workOrder)) {
+    // The retry above took it. Saying "not sent" after it went is how a
+    // technician ends up closing the job again, or thinking it was lost.
+    return (
+      <section className="card">
+        <h2>✓ ส่งการปิดงานแล้ว</h2>
+        <p>เครือข่ายกลับมาแล้ว ระบบได้รับการปิดงาน {workOrder} เรียบร้อย</p>
+        <Link className="button-link" href="/work">
+          กลับไปที่งานของฉัน
+        </Link>
+      </section>
+    );
   }
 
   if (state === "queued") {

@@ -428,3 +428,71 @@ class TestTheSnapshotStaysFrozen:
         closed = orders.close(conn, ref, user=NIGHT_TECH, outcome=WorkOutcome.FIXED)
 
         assert closed.playbook_snapshot == ()
+
+
+def _english_left(message: str, *, ref: str) -> list[str]:
+    """Latin words in a refusal once the reference and the user ids are taken out.
+
+    A technician reads these at a machine, through the close screen that shows
+    the API's own sentence (ADR-093). On 2026-09-29 the acceptance walk found
+    "tech-1 has not accepted WO-000011" on that screen.
+    """
+    import re
+
+    for known in (ref, str(MORNING_TECH), str(NIGHT_TECH)):
+        message = message.replace(known, "")
+    return re.findall(r"[A-Za-z]{3,}", message)
+
+
+class TestARefusalATechnicianReadsIsThai:
+    def test_closing_a_job_you_never_accepted(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        ref = _a_job(conn, orders)
+        orders.accept(conn, ref, user=MORNING_TECH)
+
+        with pytest.raises(TransitionRefused) as refused:
+            orders.close(conn, ref, user=NIGHT_TECH, outcome=WorkOutcome.FIXED)
+
+        assert _english_left(str(refused.value), ref=ref) == []
+
+    def test_closing_a_job_twice(self, conn: Connection[Any], orders: WorkOrders) -> None:
+        ref = _a_job(conn, orders)
+        orders.accept(conn, ref, user=MORNING_TECH)
+        orders.close(conn, ref, user=MORNING_TECH, outcome=WorkOutcome.FIXED)
+
+        with pytest.raises(TransitionRefused) as refused:
+            orders.close(conn, ref, user=MORNING_TECH, outcome=WorkOutcome.FIXED)
+
+        assert _english_left(str(refused.value), ref=ref) == []
+
+    def test_a_second_person_on_a_one_person_job(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        ref = _a_job(conn, orders)
+        orders.accept(conn, ref, user=MORNING_TECH)
+
+        with pytest.raises(TransitionRefused) as refused:
+            orders.accept(conn, ref, user=NIGHT_TECH)
+
+        assert _english_left(str(refused.value), ref=ref) == []
+
+    def test_starting_twice(self, conn: Connection[Any], orders: WorkOrders) -> None:
+        ref = _a_job(conn, orders)
+        orders.accept(conn, ref, user=MORNING_TECH)
+        orders.start(conn, ref, user=MORNING_TECH)
+
+        with pytest.raises(TransitionRefused) as refused:
+            orders.start(conn, ref, user=MORNING_TECH)
+
+        assert _english_left(str(refused.value), ref=ref) == []
+
+    def test_handing_over_a_job_you_never_accepted(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        ref = _a_job(conn, orders)
+
+        with pytest.raises(TransitionRefused) as refused:
+            orders.hand_over(conn, ref, user=MORNING_TECH, note="ถึงขั้น 3")
+
+        assert _english_left(str(refused.value), ref=ref) == []

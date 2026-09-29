@@ -86,3 +86,23 @@ export function settle(storage: StorageLike, ref: string): PendingClose[] {
   storage.setItem(STORAGE_KEY, JSON.stringify(queue));
   return queue;
 }
+
+/**
+ * Send everything the device is holding, and say what is still waiting.
+ *
+ * What is returned is read from the device after sending, not a copy kept from
+ * before. Two retries can run at once - the "online" event and a press of
+ * "ลองส่งเดี๋ยวนี้" - and the one that finishes last would otherwise report a
+ * close the other had already sent as still waiting.
+ */
+export async function drain(
+  storage: StorageLike,
+  send: (ref: string, close: PendingClose) => Promise<string>,
+): Promise<PendingClose[]> {
+  for (const one of pending(storage)) {
+    if ((await send(one.ref, one)) === "sent") {
+      settle(storage, one.ref);
+    }
+  }
+  return pending(storage);
+}

@@ -138,13 +138,19 @@ def read_technicians(
     return data
 
 
+def shift_minutes(shifts: Mapping[Any, Any]) -> dict[str, int]:
+    """plant.yaml's shifts, each with its length in minutes."""
+    return {str(key): int(shift.length.total_seconds() // 60) for key, shift in shifts.items()}
+
+
 def read_roster(
     lines: Iterable[str],
     *,
-    shifts: frozenset[str],
+    shifts: Mapping[str, int],
     technicians: frozenset[str],
     name: str = "roster.csv",
 ) -> PlantData:
+    """`shifts` is each shift in plant.yaml and how many minutes long it is."""
     data = PlantData()
     for line, row in _rows(lines, ROSTER_COLUMNS, name, data.problems):
         where = f"{name}:{line}"
@@ -173,6 +179,12 @@ def read_roster(
             data.problems.append(
                 f"{where}: available_minutes must be a whole number above zero, "
                 f"not {row['available_minutes']!r}"
+            )
+            continue
+        if minutes > shifts[row["shift_id"]]:
+            data.problems.append(
+                f"{where}: available_minutes {minutes} is more than the whole "
+                f"{row['shift_id']} shift, which is {shifts[row['shift_id']]} minutes"
             )
             continue
         data.roster.append(
@@ -267,7 +279,7 @@ def main(argv: list[str] | None = None, environ: Mapping[str, str] = os.environ)
             known = _existing_technicians(conn) | {str(p.technician.user) for p in people.people}
             roster = read_roster(
                 roster_lines,
-                shifts=frozenset(str(shift) for shift in config.shifts),
+                shifts=shift_minutes(config.shifts),
                 technicians=known,
                 name=args.roster.name,
             )

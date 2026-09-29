@@ -29,6 +29,7 @@ import http.cookiejar
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from datetime import timedelta
 
@@ -400,6 +401,21 @@ def main() -> None:
 
     print("\n8. the queue is empty and says so")
     expect("ไม่มีใบรออนุมัติ" in readable(get("/review")), "nothing waiting, stated plainly")
+
+    print("\n9. a proposal opened by somebody it is not for says whose it is")
+    # A link kept from a chat, or typed: the API refuses it with 403, and the
+    # screen said "A server error occurred" in English instead of the refusal
+    # every other screen gives (2026-09-29).
+    jar.clear()  # signed in, /sign-in redirects home and carries no form to post
+    sign_in(TECHNICIAN)
+    try:
+        refused = readable(get(f"/review/{ids['wrong']}"))
+    except urllib.error.HTTPError as error:
+        refused = f"HTTP {error.code}"
+    expect(
+        "หน้านี้เป็นของวิศวกร" in refused,
+        f"the technician is told whose page it is, got {refused[:80]!r}",
+    )
 
     print("\nall checks passed")
 

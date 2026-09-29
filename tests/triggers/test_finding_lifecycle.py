@@ -575,6 +575,24 @@ class TestPredictedFindings:
         assert again.forecast == ()
         assert again.in_cooldown > 0
 
+    def test_no_forecast_of_a_crossing_already_detected_and_open(
+        self, conn: Connection[Any], predicting: Triggers
+    ) -> None:
+        """The crossing it would predict has happened and is ticketed.
+
+        On 2026-09-29 the demo's worker-runtime was restarted with the belt motor
+        already over 85 and its detection open. The readings dipped back under
+        the threshold while still rising, the trend forecast the crossing again,
+        and a second ticket for the same fault on the same machine went to the
+        shift lead beside the first."""
+        predicting.observe(conn, _two_minutes_of_heat())
+        assert (MOTOR, RuleId("R-motor-temp-high")) in findings.live(conn)
+
+        again = predicting.observe(conn, self._warming())
+
+        assert again.forecast == ()
+        assert (MOTOR, RuleId("R-motor-temp-high/trend")) not in findings.live(conn)
+
     def test_a_forecast_does_not_supersede_another_forecast(
         self, conn: Connection[Any], predicting: Triggers
     ) -> None:
