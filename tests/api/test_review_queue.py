@@ -376,10 +376,10 @@ class TestWhatTheCodeReviewFound:
         _log_in(client, Role.ENGINEER)
         pending = client.get(f"/playbooks/queue/{setup['proposal_id']}").json()
         english = [step["text"] for step in pending["steps"]]
-        # Each rendering carries exactly the figures of the step it renders.
-        thai = [
-            "ขั้นที่แปลแล้ว " + " ".join(re.findall(r"\d[\d,]*(?:\.\d+)?", text)) for text in english
-        ]
+        # Each rendering carries exactly the figures of the step it renders, each
+        # with the unit the step gives it (ADR-108).
+        quantity = r"\d[\d,]*(?:\.\d+)?(?:\s*(?:degrees Celsius|Nm|mm|N|rpm|minutes?|seconds?|%))?"
+        thai = ["ขั้นที่แปลแล้ว " + " ".join(re.findall(quantity, text)) for text in english]
 
         response = client.post(
             f"/playbooks/queue/{setup['proposal_id']}/approve",

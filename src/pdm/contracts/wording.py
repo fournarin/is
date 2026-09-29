@@ -122,3 +122,49 @@ def figures(text: str) -> frozenset[Decimal]:
         except InvalidOperation:  # pragma: no cover - the pattern cannot produce one
             continue
     return frozenset(found)
+
+
+# Units a manual states beside a figure, each spelled the ways an English manual
+# and a Thai approver write it, mapped to one name (ADR-108). Longer spellings
+# first, so "นิวตันเมตร" is a torque before "นิวตัน" can read it as a force. Single
+# letters are case-sensitive and must end the word, so "2 steps" has no unit.
+_UNITS: tuple[tuple[str, str], ...] = (
+    ("Nm", r"N\s*[·.\-]?\s*m\b|นิวตัน\s*-?\s*เมตร"),
+    ("mm", r"mm\b|มม\.?|มิลลิเมตร"),
+    ("MPa", r"MPa\b|เมกะปาสคาล"),
+    ("kPa", r"kPa\b|กิโลปาสคาล"),
+    ("bar", r"bar\b|บาร์"),
+    ("psi", r"psi\b"),
+    ("rpm", r"rpm\b|r/min\b|รอบ\s*(?:ต่อ|/)\s*นาที"),
+    ("degC", r"°\s*C\b|degrees?\s+Celsius\b|deg\s*C\b|องศา(?:\s*เซลเซียส)?|°"),
+    ("N", r"N\b|นิวตัน"),
+    ("A", r"A\b|amps?\b|amperes?\b|แอมป์|แอมแปร์"),
+    ("V", r"V\b|volts?\b|โวลต์"),
+    ("kW", r"kW\b|กิโลวัตต์"),
+    ("kg", r"kg\b|กก\.?|กิโลกรัม"),
+    ("L", r"L\b|litres?\b|liters?\b|ลิตร"),
+    ("h", r"h\b|hrs?\b|hours?\b|ชั่วโมง|ชม\.?"),
+    ("min", r"min(?:utes?)?\b|นาที"),
+    ("s", r"s\b|secs?\b|seconds?\b|วินาที"),
+    ("%", r"%|เปอร์เซ็นต์"),
+)
+_QUANTITY = re.compile(
+    r"(?P<figure>\d[\d,]*(?:\.\d+)?)\s*(?P<unit>"
+    + "|".join(f"(?P<u{index}>{pattern})" for index, (_, pattern) in enumerate(_UNITS))
+    + ")"
+)
+
+
+def quantities(text: str) -> frozenset[tuple[Decimal, str]]:
+    """Every figure written with a unit, as (figure, unit) with the unit named once.
+
+    "3 Nm" and "3 นิวตันเมตร" are one quantity; "3 Nm" and "3 มม." are two. A
+    figure with no unit beside it is not here - `figures` covers it.
+    """
+    found: set[tuple[Decimal, str]] = set()
+    for match in _QUANTITY.finditer(text):
+        unit = next(
+            name for index, (name, _) in enumerate(_UNITS) if match.group(f"u{index}") is not None
+        )
+        found.add((Decimal(match.group("figure").replace(",", "")).normalize(), unit))
+    return frozenset(found)

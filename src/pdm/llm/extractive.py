@@ -62,6 +62,15 @@ _MINUTES = re.compile(r"Estimated time:\s*(?P<value>\d{1,4})\s*minutes?", re.IGN
 # Where the procedure ends and that block begins.
 _FOOTER = re.compile(r"(?:Required tools|Required skill|Estimated time):", re.IGNORECASE)
 
+# A safety notice printed on the page (ADR-108). It is part of doing the steps
+# safely, so a draft that keeps the steps and drops it reads as complete and is
+# not. Upper case is how manuals print them; a lower-case "warning" is prose.
+_WARNING = re.compile(r"\b(?:WARNING|CAUTION|DANGER)\b\s*[:!\-–]?\s*")
+
+# A step is a sentence: a last step that does not finish one was cut off where
+# the page ended (ADR-108).
+_FINISHED = (".", "!", "?", ")")
+
 # A procedure has at least three steps, each an instruction rather than a
 # heading or a table (ADR-099). Measured: every procedure in both synthetic
 # corpora has three to six steps of six words or more. The false ones in a real
@@ -170,6 +179,15 @@ def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list
 
     if len(chain) < (_MINIMUM_STEPS if minimum is None else minimum):
         return []
+    # The number after the last step, printed before it: "1, 2, 4, 3" is a list
+    # scrambled by extraction or two lists interleaved, and reading it as 1, 2, 3
+    # merges a step into its neighbour (ADR-108).
+    beyond = expected
+    if any(
+        int(marker.group("number")) == beyond and marker.start() < chain[-1].start()
+        for marker in markers
+    ):
+        return []
 
     steps: list[str] = []
     for position, marker in enumerate(chain):
@@ -186,7 +204,32 @@ def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list
     low, high = _STEP_WORDS
     if not all(low <= len(step.split()) <= high for step in steps):
         return []
+    # A page that ends inside a step has lost the rest of the procedure (ADR-108).
+    if not steps[-1].endswith(_FINISHED):
+        return []
     return steps
+
+
+def _notices(text: str, steps: list[str]) -> list[str]:
+    """The page's WARNING, CAUTION and DANGER notices that no step already holds.
+
+    Each runs to the next notice, the next numbered step, the footer, a blank
+    line or the end of the page, whichever comes first (ADR-108).
+    """
+    found: list[str] = []
+    for match in _WARNING.finditer(text):
+        ends = [len(text)]
+        for pattern in (_WARNING, _MARKER, _FOOTER, _CONTINUED):
+            following = pattern.search(text, match.end())
+            if following is not None:
+                ends.append(following.start())
+        blank = text.find("\n\n", match.end())
+        if blank != -1:
+            ends.append(blank)
+        notice = " ".join(text[match.start() : min(ends)].split())
+        if notice and not any(notice in step for step in steps) and notice not in found:
+            found.append(notice)
+    return found
 
 
 def _end_of_the_last_step(region: str, start: int) -> int:
@@ -201,6 +244,9 @@ def _end_of_the_last_step(region: str, start: int) -> int:
     sentence end followed by a new sentence. A step that merely wrapped -
     "4. If deflection is" / "outside that range" - has neither, and stays whole.
     """
+    notice = _WARNING.search(region, start)
+    if notice is not None:
+        region = region[: notice.start()]
     position = start
     while (newline := region.find("\n", position)) != -1:
         ended = region[start:newline].rstrip().endswith((".", ":", ";"))
@@ -343,6 +389,16 @@ class ExtractiveDrafter:
                 more = _procedure(after.text, first=len(numbered) + 1, minimum=1)
                 numbered = [*numbered, *more]
                 cited = [*cited, *([after.ref] * len(more))]
+
+        # Every notice on the pages a repair was read from leads it, citing its
+        # page: a caution about the O-ring is needed during step 3, not after
+        # step 6 (ADR-108).
+        if numbered:
+            notices = [(notice, page.ref) for notice in _notices(page.text, numbered)]
+            if after is not None:
+                notices += [(notice, after.ref) for notice in _notices(after.text, numbered)]
+            numbered = [*(notice for notice, _ in notices), *numbered]
+            cited = [*(ref for _, ref in notices), *cited]
 
         texts = numbered or _sentences(page.text)
         if not texts:
