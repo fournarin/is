@@ -352,7 +352,7 @@ def in_thai(steps: tuple[PlaybookStep, ...], thai: tuple[str, ...]) -> tuple[Pla
                 f"ขั้นที่ {number}: ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ "
                 f"(ขาด {missing} · เกิน {extra}) ตรวจค่าแรงบิดและตัวเลขอีกครั้ง"
             )
-        # A unit the manual states must come through unchanged (ADR-105): the
+        # A unit the manual states must come through unchanged (ADR-108): the
         # figure check alone passed a torque of 3 Nm rendered as 3 มม.
         lost = quantities(step.text) - quantities(text)
         if lost:

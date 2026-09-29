@@ -1,4 +1,4 @@
-# ADR-105: What a draft must keep
+# ADR-108: What a draft must keep
 
 Written on 2026-09-29, from a red-team pass over drafting and approval after
 ADR-103. Builds on ADR-095 (a step carries the approver's Thai) and ADR-099

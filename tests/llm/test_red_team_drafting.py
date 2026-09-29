@@ -1,4 +1,4 @@
-"""Red team: drafts that read as complete and are not (ADR-105).
+"""Red team: drafts that read as complete and are not (ADR-108).
 
 Each case is a way a plausible, wrong procedure could reach a technician. They
 were written before the fix, as failing tests, and each states what must happen

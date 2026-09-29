@@ -68,7 +68,7 @@ def test_the_count_must_line_up_with_the_steps() -> None:
 
 
 class TestUnitsTravelWithTheirFigures:
-    """Red team (ADR-105): the figure check compared numbers only, so a torque
+    """Red team (ADR-108): the figure check compared numbers only, so a torque
     of 3 Nm rendered as 3 มม. passed. A unit the manual states must come through
     the Thai unchanged, in either language's spelling."""
 

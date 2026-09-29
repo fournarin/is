@@ -62,13 +62,13 @@ _MINUTES = re.compile(r"Estimated time:\s*(?P<value>\d{1,4})\s*minutes?", re.IGN
 # Where the procedure ends and that block begins.
 _FOOTER = re.compile(r"(?:Required tools|Required skill|Estimated time):", re.IGNORECASE)
 
-# A safety notice printed on the page (ADR-105). It is part of doing the steps
+# A safety notice printed on the page (ADR-108). It is part of doing the steps
 # safely, so a draft that keeps the steps and drops it reads as complete and is
 # not. Upper case is how manuals print them; a lower-case "warning" is prose.
 _WARNING = re.compile(r"\b(?:WARNING|CAUTION|DANGER)\b\s*[:!\-–]?\s*")
 
 # A step is a sentence: a last step that does not finish one was cut off where
-# the page ended (ADR-105).
+# the page ended (ADR-108).
 _FINISHED = (".", "!", "?", ")")
 
 # A procedure has at least three steps, each an instruction rather than a
@@ -181,7 +181,7 @@ def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list
         return []
     # The number after the last step, printed before it: "1, 2, 4, 3" is a list
     # scrambled by extraction or two lists interleaved, and reading it as 1, 2, 3
-    # merges a step into its neighbour (ADR-105).
+    # merges a step into its neighbour (ADR-108).
     beyond = expected
     if any(
         int(marker.group("number")) == beyond and marker.start() < chain[-1].start()
@@ -204,7 +204,7 @@ def _procedure(text: str, *, first: int = 1, minimum: int | None = None) -> list
     low, high = _STEP_WORDS
     if not all(low <= len(step.split()) <= high for step in steps):
         return []
-    # A page that ends inside a step has lost the rest of the procedure (ADR-105).
+    # A page that ends inside a step has lost the rest of the procedure (ADR-108).
     if not steps[-1].endswith(_FINISHED):
         return []
     return steps
@@ -214,7 +214,7 @@ def _notices(text: str, steps: list[str]) -> list[str]:
     """The page's WARNING, CAUTION and DANGER notices that no step already holds.
 
     Each runs to the next notice, the next numbered step, the footer, a blank
-    line or the end of the page, whichever comes first (ADR-105).
+    line or the end of the page, whichever comes first (ADR-108).
     """
     found: list[str] = []
     for match in _WARNING.finditer(text):
@@ -392,7 +392,7 @@ class ExtractiveDrafter:
 
         # Every notice on the pages a repair was read from leads it, citing its
         # page: a caution about the O-ring is needed during step 3, not after
-        # step 6 (ADR-105).
+        # step 6 (ADR-108).
         if numbered:
             notices = [(notice, page.ref) for notice in _notices(page.text, numbered)]
             if after is not None:

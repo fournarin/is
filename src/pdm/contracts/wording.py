@@ -125,7 +125,7 @@ def figures(text: str) -> frozenset[Decimal]:
 
 
 # Units a manual states beside a figure, each spelled the ways an English manual
-# and a Thai approver write it, mapped to one name (ADR-105). Longer spellings
+# and a Thai approver write it, mapped to one name (ADR-108). Longer spellings
 # first, so "นิวตันเมตร" is a torque before "นิวตัน" can read it as a force. Single
 # letters are case-sensitive and must end the word, so "2 steps" has no unit.
 _UNITS: tuple[tuple[str, str], ...] = (
