@@ -244,6 +244,35 @@ def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary}"
 
 
+def form_with_or_none(page: str, marker: str) -> list[tuple[str, str]] | None:
+    try:
+        return form_with(page, marker)
+    except AssertionError:
+        return None
+
+
+def seed_not_found() -> int:
+    """A draft the manuals had nothing for, as the drafter files it (ADR-040)."""
+    with connect(os.environ["DATABASE_URL"]) as conn:
+        found = playbooks.add_proposal(
+            conn,
+            symptom_code=SymptomCode("SYM-031"),
+            machine_model=M710,
+            origin=ProposalOrigin.DRAFTED,
+            outcome="not_found",
+            steps=(),
+            tools=(),
+            proposed_skill=None,
+            proposed_minutes=None,
+            rejected=(),
+            reason="ไม่พบเรื่อง SYM-031 ในคู่มือของรุ่น M-710iC",
+            created_at=SystemClock().now(),
+            created_by=None,
+        )
+        conn.commit()
+    return found.proposal_id
+
+
 def readable(page: str) -> str:
     """The page with React's text-node separators taken out."""
     return re.sub(r"<!--.*?-->", "", page)
@@ -401,6 +430,17 @@ def main() -> None:
 
     print("\n8. the queue is empty and says so")
     expect("ไม่มีใบรออนุมัติ" in readable(get("/review")), "nothing waiting, stated plainly")
+
+    print("\n8b. a draft that found nothing offers nothing to approve")
+    # 2026-09-29: the approve button was on a "not found" draft. Pressed, the API
+    # refused (409, nothing to approve) and the screen said "ใบนี้ถูกตัดสินไปแล้ว",
+    # which was untrue - it was still pending.
+    empty = seed_not_found()
+    page = readable(get(f"/review/{empty}"))
+    expect("ร่างนี้ไม่มีขั้นตอนให้อนุมัติ" in page, "the screen says there is nothing to approve")
+    expect(form_with_or_none(page, ">อนุมัติ<") is None, "and offers no approve button")
+    expect(form_with_or_none(page, ">ปิดใบนี้<") is not None, "but can still be closed with a reason")
+    expect(stored(empty)["status"] == "pending", "and it is still pending")
 
     print("\n9. a proposal opened by somebody it is not for says whose it is")
     # A link kept from a chat, or typed: the API refuses it with 403, and the

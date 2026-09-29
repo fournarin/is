@@ -39,104 +39,113 @@ export function Decisions({
 
   return (
     <>
-      <section className="card">
-        <h2>อนุมัติ</h2>
-        <form action={approveAction}>
-          <input type="hidden" name="proposal_id" value={proposalId} />
-          {approval.error !== null && (
-            <p className="error" role="alert">
-              {approval.error}
-            </p>
-          )}
+      {steps.length === 0 ? (
+        // Nothing to approve: the API refuses it (409), and the screen then
+        // said "ใบนี้ถูกตัดสินไปแล้ว", which was untrue (2026-09-29).
+        <section className="card">
+          <h2>อนุมัติ</h2>
+          <p>ร่างนี้ไม่มีขั้นตอนให้อนุมัติ — ตีกลับพร้อมคำถามใหม่ หรือปิดใบนี้พร้อมเหตุผล</p>
+        </section>
+      ) : (
+        <section className="card">
+          <h2>อนุมัติ</h2>
+          <form action={approveAction}>
+            <input type="hidden" name="proposal_id" value={proposalId} />
+            {approval.error !== null && (
+              <p className="error" role="alert">
+                {approval.error}
+              </p>
+            )}
 
-          {/* ADR-095: what the technician reads first. Every figure has to match
-              the step it renders; the API refuses a rendering that changed one. */}
-          <fieldset>
-            <legend>คำแปลภาษาไทยสำหรับช่าง</legend>
-            <p className="muted">
-              ช่างจะเห็นคำแปลก่อน แล้วเห็นต้นฉบับจากคู่มือด้านล่าง ตัวเลขทุกตัว (แรงบิด ขนาด เวลา) ต้องตรงกับต้นฉบับ
-              ขั้นไหนไม่แปลให้เว้นว่าง
-            </p>
-            {steps.map((text, index) => (
-              <label className="field" key={index} style={{ padding: "0 0.75rem" }}>
-                <span>
-                  ขั้นที่ {index + 1} <small className="muted">· {text}</small>
-                </span>
-                <textarea
-                  name="thai"
-                  rows={2}
-                  placeholder="พิมพ์คำแปลภาษาไทย"
-                  key={`thai-${index}-${approval.thai?.[index] ?? ""}`}
-                  defaultValue={approval.thai?.[index] ?? ""}
-                />
-              </label>
-            ))}
-          </fieldset>
+            {/* ADR-095: what the technician reads first. Every figure has to match
+                the step it renders; the API refuses a rendering that changed one. */}
+            <fieldset>
+              <legend>คำแปลภาษาไทยสำหรับช่าง</legend>
+              <p className="muted">
+                ช่างจะเห็นคำแปลก่อน แล้วเห็นต้นฉบับจากคู่มือด้านล่าง ตัวเลขทุกตัว (แรงบิด ขนาด เวลา) ต้องตรงกับต้นฉบับ
+                ขั้นไหนไม่แปลให้เว้นว่าง
+              </p>
+              {steps.map((text, index) => (
+                <label className="field" key={index} style={{ padding: "0 0.75rem" }}>
+                  <span>
+                    ขั้นที่ {index + 1} <small className="muted">· {text}</small>
+                  </span>
+                  <textarea
+                    name="thai"
+                    rows={2}
+                    placeholder="พิมพ์คำแปลภาษาไทย"
+                    key={`thai-${index}-${approval.thai?.[index] ?? ""}`}
+                    defaultValue={approval.thai?.[index] ?? ""}
+                  />
+                </label>
+              ))}
+            </fieldset>
 
-          <details>
-            <summary>แก้ข้อความก่อนอนุมัติ</summary>
-            <p className="muted">
-              แก้ได้เฉพาะข้อความ ที่มาของแต่ละขั้น (เอกสารและหน้า) ติดไปกับขั้นนั้นเสมอ
-              และแก้ไม่ได้ ถ้าจะเพิ่มหรือลบขั้นตอน แปลว่าร่างนี้ผิด ให้ตีกลับ
-            </p>
-            {steps.map((text, index) => (
-              <label className="field" key={index}>
-                <span>ขั้นที่ {index + 1}</span>
-                {/* The drafted wording travels with the form so the action can
-                    tell an approval from an edit. Without it every approval
-                    made through this form would arrive as an edit of every step
-                    to itself, and the edit rate - a number in the report -
-                    would count it (ADR-064). A hidden field can be tampered
-                    with and nothing rests on it: the diff it produces is stored
-                    beside the text that was actually approved. */}
-                <input type="hidden" name="original" value={text} />
-                <textarea name="step" rows={3} defaultValue={text} />
-              </label>
-            ))}
-          </details>
+            <details>
+              <summary>แก้ข้อความก่อนอนุมัติ</summary>
+              <p className="muted">
+                แก้ได้เฉพาะข้อความ ที่มาของแต่ละขั้น (เอกสารและหน้า) ติดไปกับขั้นนั้นเสมอ
+                และแก้ไม่ได้ ถ้าจะเพิ่มหรือลบขั้นตอน แปลว่าร่างนี้ผิด ให้ตีกลับ
+              </p>
+              {steps.map((text, index) => (
+                <label className="field" key={index}>
+                  <span>ขั้นที่ {index + 1}</span>
+                  {/* The drafted wording travels with the form so the action can
+                      tell an approval from an edit. Without it every approval
+                      made through this form would arrive as an edit of every step
+                      to itself, and the edit rate - a number in the report -
+                      would count it (ADR-064). A hidden field can be tampered
+                      with and nothing rests on it: the diff it produces is stored
+                      beside the text that was actually approved. */}
+                  <input type="hidden" name="original" value={text} />
+                  <textarea name="step" rows={3} defaultValue={text} />
+                </label>
+              ))}
+            </details>
 
-          {/* The two figures a manual often does not state. Asked here because
-              the approver is the only person who can say, and a value invented
-              anywhere else would carry the authority of the manual and the
-              provenance of nothing (ADR-037 section 8). */}
-          <label className="field">
-            <span>
-              ทักษะที่ต้องใช้
-              {proposedSkill !== null && <span className="muted"> · ร่างเสนอ {proposedSkill}</span>}
-            </span>
-            <input
-              name="required_skill"
-              defaultValue={proposedSkill ?? ""}
-              required={proposedSkill === null}
-              placeholder="เช่น robot_mechanical"
-            />
-          </label>
-          <label className="field">
-            <span>
-              เวลาโดยประมาณ (นาที)
-              {proposedMinutes !== null && <span className="muted"> · ร่างเสนอ {proposedMinutes}</span>}
-            </span>
-            <input
-              name="estimated_minutes"
-              type="number"
-              min={1}
-              defaultValue={proposedMinutes ?? ""}
-              required={proposedMinutes === null}
-            />
-          </label>
-          <label className="field">
-            {/* ADR-025: a two-person job consumes twice the shift's capacity,
-                and nothing drafts this, so leaving it at one quietly makes
-                load_ratio read low. */}
-            <span>ต้องใช้ช่างกี่คน</span>
-            <input name="required_technicians" type="number" min={1} max={4} defaultValue={1} />
-          </label>
+            {/* The two figures a manual often does not state. Asked here because
+                the approver is the only person who can say, and a value invented
+                anywhere else would carry the authority of the manual and the
+                provenance of nothing (ADR-037 section 8). */}
+            <label className="field">
+              <span>
+                ทักษะที่ต้องใช้
+                {proposedSkill !== null && <span className="muted"> · ร่างเสนอ {proposedSkill}</span>}
+              </span>
+              <input
+                name="required_skill"
+                defaultValue={proposedSkill ?? ""}
+                required={proposedSkill === null}
+                placeholder="เช่น robot_mechanical"
+              />
+            </label>
+            <label className="field">
+              <span>
+                เวลาโดยประมาณ (นาที)
+                {proposedMinutes !== null && <span className="muted"> · ร่างเสนอ {proposedMinutes}</span>}
+              </span>
+              <input
+                name="estimated_minutes"
+                type="number"
+                min={1}
+                defaultValue={proposedMinutes ?? ""}
+                required={proposedMinutes === null}
+              />
+            </label>
+            <label className="field">
+              {/* ADR-025: a two-person job consumes twice the shift's capacity,
+                  and nothing drafts this, so leaving it at one quietly makes
+                  load_ratio read low. */}
+              <span>ต้องใช้ช่างกี่คน</span>
+              <input name="required_technicians" type="number" min={1} max={4} defaultValue={1} />
+            </label>
 
-          <button type="submit" disabled={approving}>
-            {approving ? "กำลังบันทึก..." : "อนุมัติ"}
-          </button>
-        </form>
-      </section>
+            <button type="submit" disabled={approving}>
+              {approving ? "กำลังบันทึก..." : "อนุมัติ"}
+            </button>
+          </form>
+        </section>
+      )}
 
       <section className="card">
         <h2>ตีกลับให้ร่างใหม่</h2>
