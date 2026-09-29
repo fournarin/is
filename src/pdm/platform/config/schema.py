@@ -368,6 +368,10 @@ class DispatchPolicy(BaseModel):
     # feasible schedule it found, and a round that has not found one falls back
     # to the ranked queue rather than returning nothing.
     solver_seconds: float = Field(gt=0)
+    # How much search CP-SAT is given, in its deterministic time units (ADR-110).
+    # Unlike wall-clock seconds, the same budget gives the same plan on any
+    # machine. `solver_seconds` stays as a safety cap and should not bind.
+    solver_budget: float = Field(gt=0)
     # Who makes a round's decision real (ADR-071). `supervisor` writes proposals
     # a shift lead confirms; `automatic` writes assignments, which is what every
     # record before ADR-071 assumed. Not a boolean: the two are named because

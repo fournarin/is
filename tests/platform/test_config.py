@@ -82,6 +82,7 @@ POLICY: dict[str, Any] = {
     "dispatch": {
         "round_seconds": 300,
         "solver_seconds": 5.0,
+        "solver_budget": 0.5,
         "confirmation": "supervisor",
         "proposal_expires_minutes": 30,
     },

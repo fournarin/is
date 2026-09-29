@@ -399,3 +399,65 @@ class TestWhatItCosts:
         assert plan != greedy or all(one.starts_in_minutes is not None for one in plan.placed), (
             "the round fell back, so the model did not solve in its budget"
         )
+
+
+class TestItStartsFromGreedy:
+    """ADR-110: 3C's round is the solver's first solution, so 3D is never worse
+    than greedy, even when the budget runs out almost at once."""
+
+    @staticmethod
+    def _objective(*, fixed: bool, budget: float) -> float:
+        from ortools.sat.python import cp_model
+
+        from pdm.dispatch.solver import _build, _shift, _start_from
+
+        machines = (BUFFERED, MachineId("MC-004"), BOTTLENECK, MachineId("MC-018"))
+        queue = [
+            _queued(
+                f"WO-{index:02d}",
+                _order(
+                    machine_id=machines[index % 4],
+                    severity=Severity.HIGH,
+                    minutes=30 + 15 * (index % 5),
+                    skill=None,
+                ),
+                age_minutes=index,
+            )
+            for index in range(30)
+        ]
+        people = _people(ANA, BEN)
+        shift = _shift(
+            queue,
+            technicians=people,
+            assignments=[(ANA, 480), (BEN, 480)],
+            config=CONFIG,
+            now=NOW,
+            shift_id=MORNING,
+            on_date=None,
+        )
+        assert shift.jobs is not None
+        built = _build(
+            shift.jobs, available=shift.available, left=shift.left, horizon=shift.horizon
+        )
+        _start_from(built, shift.ranked)
+        solver = cp_model.CpSolver()
+        solver.parameters.num_workers = 1
+        solver.parameters.random_seed = 0
+        solver.parameters.max_deterministic_time = budget
+        solver.parameters.fix_variables_to_their_hinted_value = fixed
+        status = solver.solve(built.model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+        return solver.objective_value
+
+    def test_the_hint_is_a_complete_feasible_schedule(self) -> None:
+        assert self._objective(fixed=True, budget=5.0) > 0
+
+    def test_a_tiny_budget_is_still_no_worse_than_greedy(self) -> None:
+        greedy = self._objective(fixed=True, budget=5.0)
+
+        assert self._objective(fixed=False, budget=0.01) <= greedy
+
+    def test_the_shipped_budget_improves_on_it_here(self) -> None:
+        greedy = self._objective(fixed=True, budget=5.0)
+
+        assert self._objective(fixed=False, budget=CONFIG.policy.dispatch.solver_budget) < greedy

@@ -96,9 +96,11 @@ def schedule(
         return shift.ranked
 
     built = _build(shift.jobs, available=shift.available, left=shift.left, horizon=shift.horizon)
+    _start_from(built, shift.ranked)
     answer = _run(
         built,
         seconds=seconds if seconds is not None else config.policy.dispatch.solver_seconds,
+        budget=config.policy.dispatch.solver_budget,
     )
     if answer is None:
         # No feasible schedule inside the limit. The issue for this slice names
@@ -371,10 +373,20 @@ def _weight(job: _Job) -> int:
     return round(job.rate * _RATE_SCALE) + round(job.score * _SCORE_SCALE)
 
 
-def _run(built: _Model, *, seconds: float) -> tuple[cp_model.CpSolver, str] | None:
-    """Solve, deterministically. None means no feasible answer inside the limit."""
+def _run(
+    built: _Model, *, seconds: float, budget: float | None = None
+) -> tuple[cp_model.CpSolver, str] | None:
+    """Solve, deterministically. None means no feasible answer inside the limit.
+
+    `budget` is CP-SAT's deterministic time (ADR-110): the same budget gives the
+    same plan on every machine, which a wall-clock limit did not - one of 1,440
+    comparison runs came back different on a faster machine. `seconds` stays as
+    a cap that should not bind.
+    """
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = seconds
+    if budget is not None:
+        solver.parameters.max_deterministic_time = budget
     # One worker and a fixed seed. CP-SAT's portfolio is parallel and the first
     # worker to prove optimality wins, so several of them make the *solution*
     # depend on how the machine was loaded that afternoon - which would make
@@ -385,6 +397,45 @@ def _run(built: _Model, *, seconds: float) -> tuple[cp_model.CpSolver, str] | No
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None
     return solver, str(solver.status_name(status))
+
+
+def _start_from(built: _Model, ranked: Round) -> None:
+    """Hand the solver 3C's round as its first solution (ADR-110).
+
+    `dispatch()` has already assigned the admitted orders to people, in rank
+    order, and never beyond anybody's minutes. Laid end to end per person that is
+    a complete schedule, so CP-SAT starts from the greedy plan and can only move
+    to a better one. Without it, the solver spent its whole budget and on long
+    queues returned plans several times worse than the one greedy had already
+    found (ADR-107).
+
+    An order 3C admitted and could not crew is hinted absent. A hint the model
+    rejects is not an error: CP-SAT repairs or drops it and searches as before.
+    """
+    cursor: dict[UserId, int] = {}
+    crews = {one.ref: tuple(assignee.user for assignee in one.assignees) for one in ranked.placed}
+    by_ref = {job.ref: job for job in built.jobs}
+    for placement in ranked.placed:
+        job = by_ref.get(placement.ref)
+        crew = crews[placement.ref]
+        if job is None or any((job.ref, user) not in built.doing for user in crew):
+            continue
+        start = max((cursor.get(user, 0) for user in crew), default=0)
+        for user in crew:
+            cursor[user] = start + job.minutes
+        built.model.add_hint(built.starts[job.ref], start)
+        built.model.add_hint(built.present[job.ref], 1)
+        built.model.add_hint(built.effective[job.ref], start)
+        for (ref, user), variable in built.doing.items():
+            if ref == job.ref:
+                built.model.add_hint(variable, 1 if user in crew else 0)
+    for job in built.jobs:
+        if job.ref not in crews:
+            built.model.add_hint(built.present[job.ref], 0)
+            built.model.add_hint(built.effective[job.ref], built.horizon)
+            for (ref, _), variable in built.doing.items():
+                if ref == job.ref:
+                    built.model.add_hint(variable, 0)
 
 
 def _plan_of(

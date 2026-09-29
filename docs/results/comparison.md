@@ -18,27 +18,27 @@ Read `README.md` in this directory first. It says what this is not.
 | as configured | 3A first-come-first-served | 1610.0 | 42.5 | 54.5 | 0 | - |
 | as configured | 3B priority matrix | 1618.1 | 46.0 | 26.5 | 0 | - |
 | as configured | 3C gate + score | 1616.1 | 45.5 | 20.5 | 458 | 16 / 7 / 30 |
-| as configured | 3D gate + CP-SAT | 1612.5 | 43.4 | 22.3 | 399 | - |
+| as configured | 3D gate + CP-SAT | 1612.5 | 43.3 | 23.6 | 397 | - |
 | 0 units | 3A first-come-first-served | 1688.4 | 42.5 | 54.5 | 0 | - |
 | 0 units | 3B priority matrix | 1693.7 | 46.0 | 26.5 | 0 | - |
 | 0 units | 3C gate + score | 1693.7 | 45.4 | 22.7 | 458 | 16 / 7 / 30 |
-| 0 units | 3D gate + CP-SAT | 1686.4 | 43.1 | 22.6 | 390 | - |
+| 0 units | 3D gate + CP-SAT | 1686.4 | 43.1 | 23.3 | 388 | - |
 | 5 units | 3A first-come-first-served | 1630.7 | 42.5 | 54.5 | 0 | - |
 | 5 units | 3B priority matrix | 1637.0 | 46.0 | 26.5 | 0 | - |
 | 5 units | 3C gate + score | 1637.0 | 45.4 | 22.8 | 458 | 16 / 7 / 30 |
-| 5 units | 3D gate + CP-SAT | 1626.5 | 43.1 | 22.2 | 389 | - |
+| 5 units | 3D gate + CP-SAT | 1626.5 | 43.1 | 23.9 | 389 | - |
 | 10 units | 3A first-come-first-served | 1572.9 | 42.5 | 54.5 | 0 | - |
 | 10 units | 3B priority matrix | 1580.2 | 46.0 | 26.5 | 0 | - |
 | 10 units | 3C gate + score | 1576.7 | 45.4 | 22.9 | 458 | 16 / 7 / 30 |
-| 10 units | 3D gate + CP-SAT | 1573.3 | 43.4 | 21.9 | 397 | - |
+| 10 units | 3D gate + CP-SAT | 1573.3 | 43.3 | 24.1 | 397 | - |
 | 20 units | 3A first-come-first-served | 1457.4 | 42.5 | 54.5 | 0 | - |
 | 20 units | 3B priority matrix | 1466.7 | 46.0 | 26.5 | 0 | - |
 | 20 units | 3C gate + score | 1466.7 | 45.5 | 23.4 | 458 | 16 / 7 / 30 |
-| 20 units | 3D gate + CP-SAT | 1459.1 | 43.7 | 21.3 | 410 | - |
+| 20 units | 3D gate + CP-SAT | 1459.1 | 43.7 | 24.0 | 410 | - |
 | 40 units | 3A first-come-first-served | 1235.7 | 42.5 | 54.5 | 0 | - |
 | 40 units | 3B priority matrix | 1248.5 | 46.0 | 26.5 | 0 | - |
 | 40 units | 3C gate + score | 1248.5 | 45.9 | 23.3 | 460 | 16 / 7 / 30 |
-| 40 units | 3D gate + CP-SAT | 1247.1 | 45.4 | 18.9 | 454 | - |
+| 40 units | 3D gate + CP-SAT | 1245.9 | 45.4 | 19.5 | 454 | - |
 
 ## Arrival multiplier 1.0
 
@@ -47,27 +47,27 @@ Read `README.md` in this directory first. It says what this is not.
 | as configured | 3A first-come-first-served | 1178.9 | 14.3 | 37.4 | 0 | - |
 | as configured | 3B priority matrix | 1207.9 | 16.4 | 20.3 | 0 | - |
 | as configured | 3C gate + score | 1204.0 | 16.0 | 18.2 | 80 | 25 / 8 / 9 |
-| as configured | 3D gate + CP-SAT | 1180.0 | 14.4 | 21.4 | 60 | - |
+| as configured | 3D gate + CP-SAT | 1180.0 | 14.4 | 22.1 | 60 | - |
 | 0 units | 3A first-come-first-served | 1247.0 | 14.3 | 37.4 | 0 | - |
 | 0 units | 3B priority matrix | 1273.5 | 16.4 | 20.3 | 0 | - |
 | 0 units | 3C gate + score | 1269.3 | 16.1 | 18.0 | 81 | 25 / 8 / 9 |
-| 0 units | 3D gate + CP-SAT | 1240.4 | 14.2 | 21.5 | 56 | - |
+| 0 units | 3D gate + CP-SAT | 1239.4 | 14.2 | 22.7 | 56 | - |
 | 5 units | 3A first-come-first-served | 1194.5 | 14.3 | 37.4 | 0 | - |
 | 5 units | 3B priority matrix | 1222.0 | 16.4 | 20.3 | 0 | - |
 | 5 units | 3C gate + score | 1217.0 | 16.1 | 18.0 | 81 | 25 / 8 / 9 |
-| 5 units | 3D gate + CP-SAT | 1186.4 | 14.2 | 21.3 | 56 | - |
+| 5 units | 3D gate + CP-SAT | 1185.4 | 14.3 | 22.4 | 57 | - |
 | 10 units | 3A first-come-first-served | 1142.2 | 14.3 | 37.4 | 0 | - |
 | 10 units | 3B priority matrix | 1170.7 | 16.4 | 20.3 | 0 | - |
 | 10 units | 3C gate + score | 1165.2 | 16.0 | 18.4 | 82 | 25 / 8 / 9 |
-| 10 units | 3D gate + CP-SAT | 1132.6 | 14.3 | 20.6 | 57 | - |
+| 10 units | 3D gate + CP-SAT | 1131.6 | 14.3 | 22.3 | 57 | - |
 | 20 units | 3A first-come-first-served | 1038.1 | 14.3 | 37.4 | 0 | - |
 | 20 units | 3B priority matrix | 1068.5 | 16.4 | 20.3 | 0 | - |
 | 20 units | 3C gate + score | 1065.3 | 16.0 | 18.7 | 82 | 25 / 8 / 9 |
-| 20 units | 3D gate + CP-SAT | 1045.0 | 15.1 | 18.9 | 58 | - |
+| 20 units | 3D gate + CP-SAT | 1044.0 | 15.1 | 20.9 | 58 | - |
 | 40 units | 3A first-come-first-served | 840.0 | 14.3 | 37.4 | 0 | - |
 | 40 units | 3B priority matrix | 873.7 | 16.4 | 20.3 | 0 | - |
 | 40 units | 3C gate + score | 874.2 | 16.4 | 18.3 | 83 | 25 / 8 / 9 |
-| 40 units | 3D gate + CP-SAT | 857.3 | 15.8 | 18.0 | 77 | - |
+| 40 units | 3D gate + CP-SAT | 857.0 | 15.8 | 18.7 | 77 | - |
 
 ## Arrival multiplier 2.0
 
@@ -92,7 +92,7 @@ Read `README.md` in this directory first. It says what this is not.
 | 20 units | 3A first-come-first-served | 624.3 | 4.2 | 13.2 | 0 | - |
 | 20 units | 3B priority matrix | 631.3 | 4.5 | 11.4 | 0 | - |
 | 20 units | 3C gate + score | 621.6 | 4.5 | 10.8 | 2 | 21 / 1 / 0 |
-| 20 units | 3D gate + CP-SAT | 606.5 | 4.3 | 10.7 | 0 | - |
+| 20 units | 3D gate + CP-SAT | 606.5 | 4.3 | 11.0 | 0 | - |
 | 40 units | 3A first-come-first-served | 466.6 | 4.2 | 13.2 | 0 | - |
 | 40 units | 3B priority matrix | 473.0 | 4.5 | 11.4 | 0 | - |
 | 40 units | 3C gate + score | 465.1 | 4.5 | 10.5 | 2 | 21 / 1 / 0 |
