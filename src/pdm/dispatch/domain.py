@@ -374,7 +374,12 @@ def _reason(
         ),
         (
             weights.downtime * terms.downtime,
-            f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
+            # Scheduled work stops nothing by waiting: the machine is running.
+            # The same figure is then what doing the job costs the line, and
+            # saying "if this waits the line loses N" would be false (ADR-104).
+            f"งานนี้ต้องหยุดเครื่อง ถ้าทำระหว่างเดินสาย การผลิตจะหายราว {downtime:,.0f} คัน"
+            if order.origin is WorkOrderOrigin.SCHEDULED
+            else f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
         ),
         (
             weights.skill_match * terms.skill_match,

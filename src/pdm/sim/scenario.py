@@ -33,6 +33,7 @@ from pdm.contracts import (
     ComponentLabel,
     LineId,
     MachineId,
+    PMTask,
     RuleId,
     Severity,
     ShiftAssignment,
@@ -109,6 +110,10 @@ class SimScenario(BaseModel):
     assignments: tuple[ShiftAssignment, ...] = ()
 
     windows: tuple[ArrivalWindow, ...] = ()
+    # Scheduled maintenance waiting at the start of the run: the lower-priority
+    # work a quiet shift is meant to absorb (ADR-010, ADR-011). Empty by default,
+    # so the policy comparison runs on failures alone, as it always has.
+    maintenance: tuple[PMTask, ...] = ()
 
     @model_validator(mode="after")
     def _time_is_timezone_aware_and_moves_forward(self) -> SimScenario:

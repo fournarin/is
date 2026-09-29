@@ -19,13 +19,22 @@ not the generator's random number stream.
 hides that (ADR-020). The buckets are how far ahead the prediction was made, not
 how far ahead it turned out to be.
 
+**Across seeds, magnitudes and a baseline.** The signed mean lets early and
+late cancel, so each bucket also reports the mean absolute error and the 90th
+percentile of |error|, pooled over `SEEDS`. The baseline is a straight line
+through the first and last reading in the same window, with no fit and no
+interval gate, asked at the same moments the trend answered - so the two
+columns are paired and differ only in the method.
+
 **Write the output into `docs/prediction-baseline.md` when it changes.**
 """
 
 from __future__ import annotations
 
+import math
 import sys
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -55,11 +64,27 @@ def _bucket(ahead: timedelta) -> str:
     return BUCKETS[-1][0]
 
 
+SEEDS: tuple[int, ...] = (20260813, *range(20))
+
+
 def _minutes(delta: timedelta) -> float:
     return delta.total_seconds() / 60.0
 
 
-def measure(scenario: Scenario, seed: int) -> dict[str, list[tuple[float, str, str]]]:
+def _two_point_eta(readings: Sequence[tuple[datetime, float]], threshold: float) -> datetime | None:
+    """The baseline: a line through the window's first and last reading."""
+    (first_at, first), (last_at, last) = readings[0], readings[-1]
+    hours = (last_at - first_at).total_seconds() / 3600.0
+    if hours <= 0 or last == first:
+        return None
+    ahead = (threshold - last) / ((last - first) / hours)
+    return last_at + timedelta(hours=ahead) if ahead >= 0 else None
+
+
+Measured = dict[str, list[tuple[float, float, str, str]]]
+
+
+def measure(scenario: Scenario, seed: int) -> Measured:
     """Every prediction the mechanism would have made, with its signed error.
 
     Signed, and never absolute-valued before the mean: on an accelerating curve a
@@ -70,7 +95,7 @@ def measure(scenario: Scenario, seed: int) -> dict[str, list[tuple[float, str, s
     policy = config.policy.triggers.trend
     source = SyntheticSource(scenario, seed=seed)
 
-    by_bucket: dict[str, list[tuple[float, str, str]]] = defaultdict(list)
+    by_bucket: Measured = defaultdict(list)
     windows = Window(timedelta(minutes=policy.window_minutes))
     horizon = timedelta(hours=policy.max_horizon_hours)
 
@@ -117,52 +142,72 @@ def measure(scenario: Scenario, seed: int) -> dict[str, list[tuple[float, str, s
                 # alarm, and counted as one rather than as an error of unknown
                 # size.
                 by_bucket["never crosses"].append(
-                    (float("nan"), str(signal.machine_id), str(rule.rule_id))
+                    (math.nan, math.nan, str(signal.machine_id), str(rule.rule_id))
                 )
                 continue
 
             ahead = found.at - signal.timestamp
             error = _minutes(found.at - crosses_at)
-            by_bucket[_bucket(ahead)].append((error, str(signal.machine_id), str(rule.rule_id)))
+            baseline_at = _two_point_eta(readings, rule.threshold)
+            baseline = math.nan if baseline_at is None else _minutes(baseline_at - crosses_at)
+            by_bucket[_bucket(ahead)].append(
+                (error, baseline, str(signal.machine_id), str(rule.rule_id))
+            )
 
     return by_bucket
 
 
+def _p90(values: list[float]) -> float:
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, math.ceil(0.9 * len(ordered)) - 1)]
+
+
 def main() -> int:
     print(f"measured {datetime.now().astimezone().date().isoformat()}")
-    print(f"scenario {LINE_A_TWELVE_HOURS.name}, seed 20260813\n")
+    print(f"scenario {LINE_A_TWELVE_HOURS.name}, seeds {SEEDS[0]} and 0-{len(SEEDS) - 2}\n")
 
-    by_bucket = measure(LINE_A_TWELVE_HOURS, seed=20260813)
+    by_bucket: Measured = defaultdict(list)
+    for seed in SEEDS:
+        for name, rows in measure(LINE_A_TWELVE_HOURS, seed=seed).items():
+            by_bucket[name] += rows
 
-    header = f"{'horizon':12} {'n':>5} {'mean err':>10} {'median':>9} {'worst':>9}  channels"
+    header = (
+        f"{'horizon':8} {'n':>6} {'mean':>8} {'MAE':>7} {'P90|e|':>7} {'worst':>8}"
+        f"   {'base n':>6} {'base MAE':>8} {'base P90':>8}"
+    )
     print(header)
     print("-" * len(header))
 
     for name, _, _ in BUCKETS:
         rows = by_bucket.get(name, [])
         if not rows:
-            print(f"{name:12} {0:>5}          -         -         -")
+            print(f"{name:8} {0:>6}")
             continue
-        errors = sorted(error for error, _, _ in rows)
-        mean = sum(errors) / len(errors)
-        median = errors[len(errors) // 2]
+        errors = [error for error, _, _, _ in rows]
+        magnitudes = [abs(error) for error in errors]
         worst = max(errors, key=abs)
-        channels = sorted({f"{machine}/{rule}" for _, machine, rule in rows})
+        base = [abs(b) for _, b, _, _ in rows if not math.isnan(b)]
+        base_text = (
+            f"{len(base):>6} {sum(base) / len(base):>7.1f}m {_p90(base):>7.1f}m"
+            if base
+            else f"{0:>6}"
+        )
         print(
-            f"{name:12} {len(rows):>5} {mean:>9.1f}m {median:>8.1f}m {worst:>8.1f}m  "
-            f"{', '.join(channels)}"
+            f"{name:8} {len(rows):>6} {sum(errors) / len(errors):>7.1f}m "
+            f"{sum(magnitudes) / len(magnitudes):>6.1f}m {_p90(magnitudes):>6.1f}m "
+            f"{worst:>7.1f}m   {base_text}"
         )
 
     false_alarms = by_bucket.get("never crosses", [])
     print(f"\npredictions on channels that never cross: {len(false_alarms)}")
-    if false_alarms:
-        for channel in sorted({f"{machine}/{rule}" for _, machine, rule in false_alarms}):
-            print(f"  {channel}")
+    for channel in sorted({f"{machine}/{rule}" for _, _, machine, rule in false_alarms}):
+        print(f"  {channel}")
 
     print(
-        "\nError is signed: positive is late, negative is early. Taking magnitudes\n"
-        "first would hide the direction, which is the thing that says which shapes\n"
-        "of degradation this method is wrong about (ADR-020)."
+        "\nmean is signed (positive late, negative early) so the direction shows\n"
+        "(ADR-020); MAE and P90 are of |error|, so early and late do not cancel.\n"
+        "base: a line through the window's first and last reading, asked at the\n"
+        "same moments; n differs where it points away from the threshold."
     )
     return 0
 

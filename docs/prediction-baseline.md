@@ -13,6 +13,35 @@ This is the answer to the advisor's first requirement - "monitor **and
 predict**" - and to ADR-020's promise that the accuracy would be measured before
 any plant data arrived.
 
+## Across 21 seeds, in magnitude, against a baseline - 29 September 2026
+
+The table below this one is one seed and a signed mean, and "under three
+minutes inside three hours" read from it is a mean in which early and late
+cancel: the same bucket's worst case is 270 minutes early. This run pools seed
+20260813 and seeds 0-19, and adds the mean absolute error, the 90th percentile of
+|error| and a baseline. The baseline is a straight line through the first and
+last reading of the same window, with no fit and no interval gate, asked at the
+same moments the trend answered, so the two are paired.
+
+| horizon | n | signed mean | MAE | P90 of \|error\| | worst | baseline MAE | baseline P90 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0-1h | 3065 | −0.0 min | **9.1** | 17.1 | −439.3 | 15.2 | 29.8 |
+| 1-3h | 6688 | +2.4 min | **22.3** | 51.8 | −413.6 | 42.4 | 64.8 |
+| 3-6h | 9371 | +9.3 min | **45.6** | 126.5 | −358.6 | 100.7 | 165.9 |
+| 6-12h | 4770 | +151.6 min | **158.4** | 366.7 | +448.4 | 342.9 | 538.9 |
+| 12h+ | 2226 | +608.6 min | **608.6** | 799.0 | +917.0 | 1913.4 | 1893.5 |
+
+Predictions on a channel that never crosses: 614, all `MC-018/R-cycle-time-drift`.
+
+**What this changes.** Inside one to three hours a technician should expect a
+forecast to be about 20 minutes off, and one in ten to be off by nearly an hour;
+"under three minutes" is not a claim this system can make. The fitted trend's
+error is about half the baseline's in every bucket, so the regression and its
+interval gate earn their place. Beyond six hours both are hours out, which is
+why the horizon gate exists. The data is still synthetic and the ground truth is
+the curve that generated it (ADR-032): this measures the method against shapes
+it was built for, not a plant.
+
 ## ETA error by forecast horizon
 
 Error is **signed**: positive is late, negative is early. Magnitudes taken before
