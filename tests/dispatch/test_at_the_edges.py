@@ -150,31 +150,40 @@ class TestTheSameRoundForTheSameInputs:
 
 
 class TestScheduledWorkAtTheEdge:
-    """ADR-107. The ceiling on released PM work is checked before a job is added,
-    so the job that crosses it is released. Pinned here, and named, because it
-    lets one long PM job take a quiet shift into the heavy band. Changing it
-    changes the policy the comparison measured, which is the owner's call."""
+    """ADR-109: a scheduled job is released only if the shift stays within the
+    ceiling with it, and a smaller one further down may still fit."""
 
-    def test_the_job_that_crosses_the_ceiling_is_released(self) -> None:
+    def test_a_job_that_would_cross_the_ceiling_is_held(self) -> None:
         pm = _queued(
             "WO-pm",
             _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=90, skill=None),
         )
         result = _round([pm], technicians=_people(ANA), roster=_roster((ANA, 100)))
 
-        assert "WO-pm" in {placement.ref for placement in result.placed}
+        assert "WO-pm" not in {placement.ref for placement in result.placed}
+        (held,) = [one for one in result.held if one.ref == "WO-pm"]
+        assert "90%" in held.why
 
-    def test_the_next_one_is_held_with_the_load_it_reached(self) -> None:
-        first = _queued(
-            "WO-pm1",
-            _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=60, skill=None),
+    def test_a_smaller_job_behind_it_still_fits(self) -> None:
+        big = _queued(
+            "WO-big",
+            _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=90, skill=None),
         )
-        second = _queued(
-            "WO-pm2",
-            _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=20, skill=None),
+        small = _queued(
+            "WO-small",
+            _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=30, skill=None),
             age_minutes=1,
         )
-        result = _round([first, second], technicians=_people(ANA), roster=_roster((ANA, 100)))
+        result = _round([big, small], technicians=_people(ANA), roster=_roster((ANA, 100)))
 
-        (held,) = [one for one in result.held if one.ref in {"WO-pm1", "WO-pm2"}]
-        assert "ถึง 60%" in held.why or "ถึง 20%" in held.why
+        placed = {placement.ref for placement in result.placed}
+        assert "WO-small" in placed and "WO-big" not in placed
+
+    def test_a_job_that_lands_exactly_on_the_ceiling_is_released(self) -> None:
+        pm = _queued(
+            "WO-pm",
+            _order(origin=WorkOrderOrigin.SCHEDULED, severity=Severity.LOW, minutes=50, skill=None),
+        )
+        result = _round([pm], technicians=_people(ANA), roster=_roster((ANA, 100)))
+
+        assert "WO-pm" in {placement.ref for placement in result.placed}
