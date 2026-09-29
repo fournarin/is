@@ -284,7 +284,7 @@ class Explainer:
             forced.model.add(mine >= forced.starts[other.ref] + other.minutes)
 
         self.solves += 1
-        answer = _run(forced, seconds=self._limit)
+        answer = _run(forced, seconds=self._limit, budget=self.config.policy.dispatch.solver_budget)
         if answer is None:
             return Answer(
                 ref=ref,

@@ -52,7 +52,15 @@ dispatch:
   # instant it is replaced; five seconds is a small fraction of that and, on the
   # scenarios measured here, an order of magnitude more than the model needs.
   # It is a ceiling, not a duration: an optimal answer stops the search.
-  solver_seconds: 5.0
+  # Since ADR-110 a safety cap only, set well above what solver_budget takes on
+  # a long queue (8.6 s at 200 orders on the development machine), so that the
+  # deterministic budget, not the clock, decides the plan.
+  solver_seconds: 30.0
+  # CP-SAT's search, in deterministic time units (ADR-110). Provenance:
+  # docs/results/solver-budget.md - starting from 3C's plan, 0.5 reached plans
+  # within 2% of what a budget of 1 found on 50 and 200 orders, at 1.4-8.6 s
+  # of wall time, well inside the 300 s round.
+  solver_budget: 0.5
   # Who makes a round's decision real (ADR-071). Provenance: recorded decision -
   # the advisor was asked on 2026-08-23 who presses the button and answered that
   # a person should at first, and that automatic approval is something to
