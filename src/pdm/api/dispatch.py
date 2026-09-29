@@ -186,6 +186,22 @@ class Recurrence(BaseModel):
     status: str
 
 
+class WhereToLook(BaseModel):
+    """Where a technician holding a ticket with no approved steps should look (ADR-118).
+
+    Principle 5 in the ticket's own words: "not found - see manual page X or
+    ask an engineer". Only facts the system already holds: the manuals in
+    service for this machine model, and the pages a draft waiting for an
+    engineer cites. A draft page is marked as one, because it has not been
+    approved; it is a page to read, never a step to follow.
+    """
+
+    document_id: str
+    manual: str
+    page: int | None = None
+    from_unapproved_draft: bool = False
+
+
 class TicketView(BaseModel):
     """One ticket as the person who has to do it sees it.
 
@@ -226,6 +242,8 @@ class TicketView(BaseModel):
     eta_confidence_minutes: int | None = None
 
     steps: tuple[Step, ...] = ()
+    # Filled only when `steps` is empty (ADR-118).
+    where_to_look: tuple[WhereToLook, ...] = ()
     recurrence: Recurrence | None = None
 
 
@@ -629,6 +647,63 @@ def _manual_titles(conn: Connection[Any], ids: set[str]) -> dict[str, str]:
     return {row[0]: f"{row[1]} ({row[2]})" if row[2] else row[1] for row in rows}
 
 
+# How many pages of a waiting draft are offered: enough to find the procedure,
+# few enough that the list is read (the draft's first pages are where it starts).
+_DRAFT_PAGES_SHOWN = 3
+
+
+def _where_to_look(
+    conn: Connection[Any], config: Config, order: WorkOrder
+) -> tuple[WhereToLook, ...]:
+    """The pages a waiting draft cites, then the manuals in service (ADR-118)."""
+    try:
+        model = config.model_of(order.machine_id)
+    except KeyError:
+        return ()
+    symptom = _symptom_of(conn, order)
+    found: list[WhereToLook] = []
+    if symptom is not None:
+        waiting = playbooks_repo.awaiting_review(conn, symptom_code=symptom, machine_model=model)
+        draft = playbooks_repo.proposal(conn, waiting) if waiting is not None else None
+        if draft is not None:
+            cited = list(dict.fromkeys((str(step.source_doc), step.page) for step in draft.steps))
+            titles = _manual_titles(conn, {document for document, _ in cited})
+            found += [
+                WhereToLook(
+                    document_id=document,
+                    manual=titles.get(document, document[:12]),
+                    page=page,
+                    from_unapproved_draft=True,
+                )
+                for document, page in cited[:_DRAFT_PAGES_SHOWN]
+            ]
+    rows = conn.execute(
+        "SELECT document_id, title, edition FROM document "
+        "WHERE machine_model = %s AND status = 'active' ORDER BY uploaded_at DESC, document_id",
+        (str(model),),
+    ).fetchall()
+    found += [
+        WhereToLook(document_id=row[0], manual=f"{row[1]} ({row[2]})" if row[2] else row[1])
+        for row in rows
+    ]
+    return tuple(found)
+
+
+def _symptom_of(conn: Connection[Any], order: WorkOrder) -> SymptomCode | None:
+    """What the order is about, from whatever raised it."""
+    if order.finding_ref is not None:
+        row = conn.execute(
+            "SELECT symptom_code FROM finding WHERE finding_ref = %s", (order.finding_ref,)
+        ).fetchone()
+        return SymptomCode(row[0]) if row else None
+    if order.pm_task_ref is not None:
+        row = conn.execute(
+            "SELECT symptom_code FROM pm_task WHERE pm_task_ref = %s", (order.pm_task_ref,)
+        ).fetchone()
+        return SymptomCode(row[0]) if row else None
+    return None
+
+
 def _tools(conn: Connection[Any], playbook_ref: str | None) -> tuple[str, ...]:
     """The tools the approved playbook lists (ADR-102). The snapshot freezes the
     steps; the tool list is read from the served playbook and shown as that."""
@@ -703,6 +778,7 @@ def ticket(
             for step in order.playbook_snapshot
         ),
         tools=_tools(conn, order.playbook_ref),
+        where_to_look=() if order.playbook_snapshot else _where_to_look(conn, config, order),
         recurrence=_recurrence(conn, order),
     )
 

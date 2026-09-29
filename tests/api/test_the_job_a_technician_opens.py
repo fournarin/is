@@ -300,3 +300,93 @@ class TestHowOftenThisHasBeenSeen:
         and "there is nothing to count" are different sentences, and a screen
         must not print the first when it means the second."""
         assert _ticket(client, world["refs"]["reported"])["recurrence"] is None
+
+
+class TestWhereToLookWithoutSteps:
+    """ADR-118: a ticket with no approved steps names where to look instead of
+    only "don't guess" - the manuals in service, and a waiting draft's pages,
+    marked as not approved."""
+
+    def test_a_job_without_steps_names_the_manual_for_its_model(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        ticket = _ticket(client, world["refs"]["reported"])
+
+        assert ticket["steps"] == []
+        assert ticket["where_to_look"] == [
+            {
+                "document_id": str(world["manual"]),
+                "manual": "R-2000iC Maintenance Manual",
+                "page": None,
+                "from_unapproved_draft": False,
+            }
+        ]
+
+    def test_a_job_with_steps_needs_no_such_list(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        assert _ticket(client, world["refs"]["predicted"])["where_to_look"] == []
+
+    def test_a_waiting_draft_s_pages_come_first_and_say_they_are_unapproved(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        from pdm.playbooks.domain import ProposalOrigin
+
+        other = SymptomCode("SYM-021")
+        with connect(world["url"]) as conn:
+            finding = Finding(
+                machine_id=MachineId("MC-004"),
+                component=ComponentLabel("servo_axis_1"),
+                symptom_code=other,
+                severity=Severity.MEDIUM,
+                rule_id=RuleId("R-servo-current-high"),
+                detected_at=NOW,
+                evidence={"value": 13.1},
+                kind=FindingKind.DETECTED,
+            )
+            finding_ref = findings.raise_finding(conn, finding)
+            ref = (
+                WorkOrders(world["clock"], fallback_minutes=FALLBACK)
+                .from_finding(conn, finding, finding_ref=finding_ref, machine_model=R2000)
+                .ref
+            )
+            playbooks.add_proposal(
+                conn,
+                symptom_code=other,
+                machine_model=R2000,
+                origin=ProposalOrigin.DRAFTED,
+                outcome="repair",
+                steps=(
+                    PlaybookStep(
+                        text="Check axis 1 current.",
+                        source_doc=world["manual"],
+                        page=57,
+                        confidence=0.8,
+                    ),
+                    PlaybookStep(
+                        text="Inspect the reducer.",
+                        source_doc=world["manual"],
+                        page=57,
+                        confidence=0.8,
+                    ),
+                ),
+                tools=(),
+                proposed_skill=None,
+                proposed_minutes=None,
+                rejected=(),
+                reason="drafted for the test",
+                created_at=NOW,
+                created_by=ENGINEER,
+            )
+            conn.commit()
+
+        where = _ticket(client, ref)["where_to_look"]
+
+        assert where[0] == {
+            "document_id": str(world["manual"]),
+            "manual": "R-2000iC Maintenance Manual",
+            "page": 57,
+            "from_unapproved_draft": True,
+        }
+        assert where[1]["page"] is None
+        assert len(where) == 2
