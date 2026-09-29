@@ -66,3 +66,12 @@ figure for PM work with a positive weight, so of two PM jobs the one that stops
 the line for longer ranks higher. For condition work that is right; for
 scheduled work it is arguably backwards. Changing it changes the policy the
 comparison measured, so it is left as it is and named here.
+
+## Is fusion needed? (`scripts/measure_first_stage.py`)
+
+The owner asked whether RRF, or the sparse half, is needed once a reranker
+decides. Measured as recall into the 120-chunk cut, on all three sets: dense
+alone, RRF and a plain union all reach every answer page; sparse alone misses
+most Thai questions, because the full-text index cannot segment Thai. The
+shipped hybrid is kept - see `docs/results/first-stage.md` for why - and the
+report states that it shows no measured benefit on these corpora.
