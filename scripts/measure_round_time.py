@@ -91,9 +91,8 @@ def main() -> int:
                         now=NOW,
                     )
                     timings[name].append(time.perf_counter() - started)
-            lines.append(
-                f"| {count} | {people} | {median(timings['3C']):.3f} | {median(timings['3D']):.3f} |"
-            )
+            greedy, planned = median(timings["3C"]), median(timings["3D"])
+            lines.append(f"| {count} | {people} | {greedy:.3f} | {planned:.3f} |")
     OUT.write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
     return 0
