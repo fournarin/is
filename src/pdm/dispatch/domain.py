@@ -744,8 +744,11 @@ def _admit(
                     Withheld(
                         ref=item.ref,
                         why=(
-                            f"ถ้าปล่อยงานนี้ ภาระของกะจะเกิน {load.light_below:.0%} "
-                            f"ซึ่งเป็นเพดานของงานบำรุงรักษาตามแผน"
+                            # What was checked: the shift has already reached
+                            # the ceiling. Not "releasing this would cross it" -
+                            # the job that crosses it is released (ADR-107).
+                            f"รอบนี้ปล่อยงานบำรุงรักษาตามแผนจนภาระของกะถึง {running:.0%} แล้ว "
+                            f"ซึ่งถึงเพดานของงานบำรุงรักษาตามแผน ({load.light_below:.0%})"
                         ),
                     )
                 )
