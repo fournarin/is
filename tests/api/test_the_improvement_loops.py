@@ -460,10 +460,70 @@ class TestTheLoopsChangeNothing:
 
 
 @pytest.mark.db
+def _closed_with_a_note(
+    conn: Connection[Any], *, index: int, note: str | None, closed: bool = True
+) -> None:
+    work.issue(
+        conn,
+        WorkOrder(
+            origin=WorkOrderOrigin.MANUAL,
+            machine_id=MachineId(f"MC-{index:03d}"),
+            severity=Severity.MEDIUM,
+            playbook_ref=f"{SYM}/{R2000IC}",  # type: ignore[arg-type]
+            estimated_minutes=CURRENT_MINUTES,
+            reason="reported by the operator",
+            status=WorkOrderStatus.CLOSED if closed else WorkOrderStatus.QUEUED,
+            outcome=WorkOutcome.FIXED if closed else None,
+            technician_feedback=note,
+        ),
+        now=START + timedelta(minutes=index),
+    )
+    if closed:
+        conn.execute(
+            "UPDATE work_order SET closed_at = %s WHERE machine_id = %s",
+            (START + timedelta(minutes=index), f"MC-{index:03d}"),
+        )
+
+
+class TestWhatTheTechniciansWrote:
+    """ADR-117: the note written at close reaches the engineer who owns the steps."""
+
+    def test_a_closing_note_is_listed_with_its_symptom_newest_first(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        _closed_with_a_note(conn, index=901, note="ขั้น 3 ต้องใช้ลูกบ็อกซ์ 13 มม. ไม่ใช่ 10")
+        _closed_with_a_note(conn, index=902, note="  ฝาครอบแน่นมาก ใช้เวลาถอดนาน  ")
+        conn.commit()
+        _log_in(client, Role.ENGINEER)
+
+        rows = [
+            row
+            for row in client.get("/loops/notes").json()["notes"]
+            if row["machine_id"] >= "MC-901"
+        ]
+
+        assert [row["machine_id"] for row in rows] == ["MC-902", "MC-901"]
+        assert rows[0]["note"] == "ฝาครอบแน่นมาก ใช้เวลาถอดนาน"
+        assert rows[1]["symptom_code"] == SYM
+
+    def test_blank_notes_and_open_jobs_are_not_listed(
+        self, client: TestClient, conn: Connection[Any]
+    ) -> None:
+        _closed_with_a_note(conn, index=903, note="   ")
+        _closed_with_a_note(conn, index=904, note=None)
+        _closed_with_a_note(conn, index=905, note="ยังทำไม่เสร็จ", closed=False)
+        conn.commit()
+        _log_in(client, Role.ENGINEER)
+
+        machines = {row["machine_id"] for row in client.get("/loops/notes").json()["notes"]}
+
+        assert not machines & {"MC-903", "MC-904", "MC-905"}
+
+
 class TestWhoMayLook:
     """Invariant 6 at the endpoint, not by hiding a link."""
 
-    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds"])
+    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds", "/loops/notes"])
     @pytest.mark.parametrize("role", [Role.TECHNICIAN, Role.OPERATOR])
     def test_the_endpoint_refuses_the_two_roles_that_decide_nothing_here(
         self, client: TestClient, role: Role, path: str
@@ -472,7 +532,7 @@ class TestWhoMayLook:
 
         assert client.get(path).status_code == 403
 
-    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds"])
+    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds", "/loops/notes"])
     def test_a_shift_lead_may_read_what_they_may_not_decide(
         self, client: TestClient, path: str
     ) -> None:
@@ -483,7 +543,7 @@ class TestWhoMayLook:
 
         assert client.get(path).status_code == 200
 
-    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds"])
+    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds", "/loops/notes"])
     def test_the_refusal_is_in_the_access_log(
         self, client: TestClient, conn: Connection[Any], path: str
     ) -> None:

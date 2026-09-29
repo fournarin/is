@@ -707,6 +707,36 @@ def close(
         return cur.rowcount == 1
 
 
+def notes_from_the_floor(conn: Connection[Any], *, limit: int) -> list[dict[str, Any]]:
+    """The notes technicians wrote when they closed a job, newest first (ADR-117).
+
+    `technician_feedback` was written at every close and read by nothing, so a
+    technician telling the engineer "step 3 needs a 13 mm socket, not 10" said it
+    to nobody. The symptom is taken from whatever the order came from - its
+    Finding, its PM task, or the playbook it was priced from - so a note can be
+    read beside the procedure it is about.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT o.work_order_ref, o.machine_id, o.playbook_ref, o.outcome,
+                   o.closed_at, btrim(o.technician_feedback) AS note,
+                   COALESCE(f.symptom_code, p.symptom_code,
+                            NULLIF(split_part(o.playbook_ref, '/', 1), '')) AS symptom_code
+              FROM work_order o
+              LEFT JOIN finding f ON f.finding_ref = o.finding_ref
+              LEFT JOIN pm_task p ON p.pm_task_ref = o.pm_task_ref
+             WHERE o.status = 'closed'
+               AND o.technician_feedback IS NOT NULL
+               AND btrim(o.technician_feedback) <> ''
+             ORDER BY o.closed_at DESC, o.work_order_ref
+             LIMIT %s
+            """,
+            (limit,),
+        )
+        return list(cur.fetchall())
+
+
 def closed_jobs_for(conn: Connection[Any], *, playbook_ref: str) -> list[ClosedJob]:
     """Every closed order that was priced from one playbook, as evidence.
 

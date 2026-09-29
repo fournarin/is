@@ -21,11 +21,12 @@ const LINE: Tab = { href: "/overview", label: "สายการผลิต", 
 const REVIEW: Tab = { href: "/review", label: "อนุมัติขั้นตอน", icon: "✅" };
 const GAPS: Tab = { href: "/gaps", label: "ยังไม่มีขั้นตอน", icon: "📚" };
 const LOOPS: Tab = { href: "/loops", label: "ข้อเสนอปรับค่า", icon: "📈" };
+const NOTES: Tab = { href: "/notes", label: "บันทึกจากช่าง", icon: "📝" };
 
 export const TABS: Readonly<Record<Role, readonly Tab[]>> = {
   technician: [WORK, REPORT],
   supervisor: [BOARD, LINE, REPORT],
-  engineer: [REVIEW, GAPS, LINE, LOOPS],
+  engineer: [REVIEW, GAPS, LINE, LOOPS, NOTES],
   operator: [REPORT],
 };
 
