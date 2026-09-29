@@ -170,6 +170,14 @@ retrieval:
     # best page scored 0.000 and every answered symptom but one scored 0.62 or
     # more. Below it the draft is "not found", and an engineer is asked.
     min_relevance: 0.10
+    # What a page must score to be drafted from at all, and to be drafted as a
+    # repair (ADR-103). From the evaluation set's dev split only: every page the
+    # key calls an answer scored 0.618 or more, and the absent symptoms 0.000.
+    # Below 0.35 is "not found"; between 0.35 and 0.50 a numbered page is shown
+    # as fault-finding text. Under the single 0.10 floor, two questions from a
+    # safety review drew repair drafts from pages scored 0.107 and 0.129.
+    min_relevance_to_draft: 0.35
+    min_relevance_for_repair: 0.50
 
   # Precision leads here, because nothing stands between the system and the
   # technician. The review already happened, at approval time.

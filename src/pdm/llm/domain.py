@@ -49,6 +49,10 @@ class Evidence(BaseModel):
     # through to `PlaybookStep.confidence`, which is why a backend is not asked
     # to report a confidence of its own (ADR-037 section 6).
     score: float = Field(ge=0.0, le=1.0)
+    # A page brought in only to join a procedure that runs onto it or from it
+    # (ADR-100). Never itself a candidate answer, and its score is borrowed
+    # (ADR-103).
+    joined_only: bool = False
 
     @property
     def ref(self) -> EvidenceRef:
@@ -74,6 +78,11 @@ class DraftRequest(BaseModel):
     # rank score (ADR-097). Only a relevance is a magnitude a backend may
     # compare across pages as "nearly as good".
     relevance_scored: bool = False
+    # Floors on a relevance (ADR-103): below `draft_floor` nothing is drafted
+    # ("not found"); below `repair_floor` a numbered page is drafted as
+    # fault-finding text, never as a repair. Zero when not relevance-scored.
+    draft_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+    repair_floor: float = Field(default=0.0, ge=0.0, le=1.0)
 
     def offered(self, ref: EvidenceRef) -> Evidence | None:
         for evidence in self.evidence:

@@ -267,6 +267,9 @@ class RetrievalProfile(BaseModel):
     # The reranker's relevance below which a page is not evidence (ADR-097).
     # None where no reranker is used.
     min_relevance: float | None = Field(default=None, ge=0, le=1)
+    # Floors a draft and a repair must clear (ADR-103).
+    min_relevance_to_draft: float | None = Field(default=None, ge=0, le=1)
+    min_relevance_for_repair: float | None = Field(default=None, ge=0, le=1)
     # Safety questions use a stricter bar. Only meaningful on the runtime
     # profile, where nobody stands between the system and the technician.
     safety_min_score: float | None = Field(default=None, ge=0, le=1)

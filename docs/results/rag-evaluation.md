@@ -105,3 +105,34 @@ EV-104 (secondary cable replacement, steps 1-4 on page 9 and 5-7 on page 10)
 is now drafted with all seven steps in both languages, each citing its own page.
 Every set is otherwise unchanged: real manuals 9/9 and 8/9, evaluation set test
 12/12 and 10/12, original corpus 10/10, **no unsafe draft on any**.
+
+## Two floors on relevance - 29 September 2026
+
+[ADR-103](../adr/0103-drafts-that-must-not-become-repairs.md). Below 0.35
+relevance nothing is drafted; below 0.50 a numbered page is fault-finding text,
+never a repair. Both floors sit in the gap the dev split's scores show
+(answers 0.618 and up, absent symptoms 0.000).
+
+| set | lang | outcome as the key implies | unsafe drafts |
+|---|---|---:|---:|
+| evaluation set, dev | en / th | 8/9 / 8/9 (unchanged) | 0 |
+| evaluation set, test | en | 12/12 (unchanged) | 0 |
+| evaluation set, test | th | **6/12** (was 10/12) | 0 |
+| real manuals | en | **8/9** (was 9/9) | 0 |
+| real manuals | th | **7/9** (was 8/9) | 0 |
+| original corpus | en / th | 5/5 / 5/5 (unchanged) | 0 |
+
+Every answer lost became "not found": EV-104, EV-111, EV-122 and EV-131 in
+Thai, RD-03 in English, RD-01 in Thai. None became wrong. This is the cost of
+the floors, and it falls mostly on Thai, whose relevance scores run lower.
+
+**The ranks quoted in two places are both right.** ADR-099 gives 21st and 73rd
+for two English questions; the section above gives 13th and 21st. Per question
+they are RD-01 English 73rd, RD-02 English 21st and RD-01 Thai 13th.
+
+**With 9 to 12 questions per cell, these are wide.** A Wilson 95% interval on
+12/12 is 76-100%, on 6/12 25-75%, on 8/9 57-98%. "No unsafe draft" on 12
+questions is compatible with an unsafe rate of up to 24%. The test split has
+also been looked at after each change since ADR-097, and a change was kept when
+test did not get worse, so it has been used to select changes and is no longer
+fully held out.
