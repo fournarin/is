@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { Shell } from "@/app/ui/shell";
 import { HandoverForm } from "@/app/work/[ref]/steps/handover-form";
+import { pagesNamed } from "@/lib/page-references";
+import { evidence } from "@/lib/review";
 import { requireAccount } from "@/lib/session";
 import { ticket } from "@/lib/work";
 
@@ -59,6 +61,16 @@ export default async function StepsPage({
   const current = job.steps[at - 1]!;
   const last = at === total;
 
+  // Other pages the step sends the technician to - "the lockout procedure on
+  // page 2" - checked against what the index read of the same manual. A page it
+  // never saw is said to be missing rather than offered as a link to nothing.
+  const named = await Promise.all(
+    pagesNamed(`${current.text} ${current.text_th ?? ""}`, current.page).map(async (page) => {
+      const read = await evidence(current.source_doc, page).catch(() => undefined);
+      return { page, missing: read === null || read?.outcome === "not_indexed" };
+    }),
+  );
+
   return (
     <Shell account={account} current="/work">
       <div className="who">
@@ -97,6 +109,23 @@ export default async function StepsPage({
         >
           📖 เปิดคู่มือหน้า {current.page}
         </a>
+        {named.map(({ page, missing }) =>
+          missing ? (
+            <p className="warning" key={page}>
+              ⚠️ หน้า {page} ที่ขั้นนี้อ้างถึง ไม่มีในคู่มือที่ระบบอ่านไว้ — ถามวิศวกรก่อนทำขั้นนี้
+            </p>
+          ) : (
+            <a
+              className="button-link quiet"
+              key={page}
+              href={`/manual/${encodeURIComponent(current.source_doc)}#page=${page}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              📖 เปิดหน้า {page} ที่ขั้นนี้อ้างถึง
+            </a>
+          ),
+        )}
         {current.manual !== null && <p className="muted">จากคู่มือ {current.manual}</p>}
       </section>
 
