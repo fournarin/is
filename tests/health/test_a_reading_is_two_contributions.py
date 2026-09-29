@@ -377,3 +377,41 @@ class TestOnlyClosedOrdersAreHistory:
         assert reduced.outcome is WorkOutcome.FIXED
         assert reduced.is_failure
         assert not reduced.is_false_alarm
+
+
+class TestARateNeedsAWindow:
+    """ADR-116: a rate over a few minutes is an extrapolation, not a history.
+    An acceptance walk saw three minutes printed as 41,647.5 failures per 100
+    days."""
+
+    def test_three_minutes_of_history_gives_no_rate_and_says_why(self) -> None:
+        (reading,) = assess(
+            [MC],
+            repairs=[repair(days_ago=0.001)],
+            pm_tasks=[],
+            findings=[],
+            now=NOW,
+            observed_from=NOW - timedelta(minutes=3),
+        )
+
+        assert reading.history.failures_per_100_days is None
+        assert reading.history.failures == 1
+        assert "ยังสั้นเกินกว่าจะบอกอัตราการเสีย" in reading.history.reason
+
+    def test_a_week_is_enough(self) -> None:
+        (reading,) = assess(
+            [MC],
+            repairs=[repair(days_ago=2)],
+            pm_tasks=[],
+            findings=[],
+            now=NOW,
+            observed_from=NOW - timedelta(days=7),
+        )
+
+        assert reading.history.failures_per_100_days == pytest.approx(100 / 7)
+
+    def test_no_records_still_says_there_are_none(self) -> None:
+        (reading,) = assess([MC], repairs=[], pm_tasks=[], findings=[], now=NOW)
+
+        assert reading.history.failures_per_100_days is None
+        assert "ยังไม่มีใบงานที่ปิดแล้ว" in reading.history.reason

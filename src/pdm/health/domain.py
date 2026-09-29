@@ -61,6 +61,13 @@ AGE_AGAINST_ITS_CLASS_IS_ABSENT = (
 
 _DAYS = 86_400.0
 
+# The shortest span a failure rate is reported over (ADR-116). Provenance:
+# recorded decision. A week holds every shift pattern once; below it a single
+# failure reads as several per hundred days, and an acceptance walk saw three
+# minutes of history printed as 41,647.5. What is known is still shown - how
+# many repairs, how many were failures - only the rate waits.
+MINIMUM_OBSERVED_DAYS = 7.0
+
 
 class ClosedRepair(BaseModel):
     """One closed order, reduced to what a machine's history may learn from.
@@ -285,7 +292,7 @@ def _history_of(
     last_failure = max((repair.closed_at for repair in failures), default=None)
     since_last = None if last_failure is None else (now - last_failure).total_seconds() / _DAYS
 
-    rate = None if span_days <= 0.0 else len(failures) / span_days * 100.0
+    rate = None if span_days < MINIMUM_OBSERVED_DAYS else len(failures) / span_days * 100.0
 
     overdue = [task for task in pm_tasks if task.is_due(now)]
     worst_overdue = (
@@ -345,7 +352,12 @@ def _history_reason(
     Every clause names the count it came from. A reason that said "history is
     poor" would be the blended number of ADR-072 section 2 written out in words.
     """
-    if rate is None:
+    if rate is None and span_days > 0.0:
+        head = (
+            f"ประวัติของ {machine_id} มีแค่ {span_days:.1f} วัน ยังสั้นเกินกว่าจะบอกอัตราการเสีย "
+            f"(ต้องอย่างน้อย {MINIMUM_OBSERVED_DAYS:.0f} วัน) · เสีย {failures} ครั้งในช่วงนี้"
+        )
+    elif rate is None:
         head = f"ยังไม่มีใบงานที่ปิดแล้วของ {machine_id} ในข้อมูลที่มี"
     elif failures == 0:
         head = f"{machine_id} ไม่เสียเลยตลอด {span_days:.0f} วันที่นับ ({rate:.1f} ครั้งต่อ 100 วัน)"
