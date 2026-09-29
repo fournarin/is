@@ -64,6 +64,8 @@ from pdm.platform.config import load_config
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 from pdm.playbooks import repo as playbooks
+from pdm.retrieval import repo as index
+from pdm.retrieval.domain import Chunk, IndexedPage, PageOutcome
 from pdm.triggers import repo as findings
 from pdm.work import WorkOrders
 
@@ -87,9 +89,13 @@ SYM = SymptomCode("SYM-014")
 RULE = RuleId("R-motor-temp-high/trend")
 STEPS = (
     "หยุดหุ่นยนต์ด้วยปุ่มหยุดฉุกเฉิน",
-    "ตัดเบรกเกอร์ CP-3 แล้วใส่กุญแจล็อกของตัวเอง",
-    "ถอดฝาครอบพัดลมออก",
+    # A step that sends the technician to another page. Page 2 is indexed below;
+    # page 900 is not, and the screen has to say so rather than offer a link to
+    # nothing (2026-09-29: "lockout procedure on page 2" linked only page 5).
+    "ตัดเบรกเกอร์ CP-3 แล้วใส่กุญแจล็อกของตัวเอง ตามขั้นตอนล็อกเอาต์ในหน้า 2",
+    "ถอดฝาครอบพัดลมออก ดูรูปประกอบที่ page 900",
 )
+LOCKOUT_PAGE = "Safety and lockout. Open breaker CP-3 and apply a personal lock."
 
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -183,6 +189,19 @@ def seed() -> list[str]:
             title="R-2000iC Maintenance Manual",
             uploaded_by=ENGINEER,
         ).document_id
+        index.replace_pages(
+            conn,
+            manual,
+            [
+                IndexedPage(
+                    document_id=manual,
+                    page=2,
+                    outcome=PageOutcome.TEXT,
+                    characters=len(LOCKOUT_PAGE),
+                )
+            ],
+        )
+        index.insert_chunks(conn, [Chunk(document_id=manual, page=2, ordinal=0, text=LOCKOUT_PAGE)])
         playbook = Playbook(
             symptom_code=SYM,
             machine_model=R2000,
@@ -416,6 +435,18 @@ def main() -> None:
     expect(STEPS[1] in second, "shows the second instruction")
     last = get("/work/" + ref_from(steps) + "/steps?step=3")
     expect("ครบทุกขั้น ปิดงาน" in last, "and the last one offers closing instead of another step")
+
+    print("\n3b. a step that names another page lets the technician open it")
+    expect(
+        re.search(r'href="/manual/[^"#]+#page=2"', second) is not None,
+        "step two says page 2, and page 2 of the same manual is one tap away",
+    )
+    expect("เปิดหน้า 2 ที่ขั้นนี้อ้างถึง" in readable(second), "labelled as the page the step names")
+    expect(
+        re.search(r'href="/manual/[^"#]+#page=900"', last) is None,
+        "page 900 was never read from the manual, so it is not offered as a link",
+    )
+    expect("หน้า 900 ที่ขั้นนี้อ้างถึง ไม่มีในคู่มือที่ระบบอ่านไว้" in readable(last), "and the screen says so")
 
     print("\n4. closing the job")
     ref = ref_from(steps)
