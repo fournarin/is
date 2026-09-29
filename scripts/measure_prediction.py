@@ -37,6 +37,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
+from statistics import median
 
 from pdm.contracts import MachineId
 from pdm.platform.config import load_config
@@ -81,7 +82,8 @@ def _two_point_eta(readings: Sequence[tuple[datetime, float]], threshold: float)
     return last_at + timedelta(hours=ahead) if ahead >= 0 else None
 
 
-Measured = dict[str, list[tuple[float, float, str, str]]]
+# (signed error, baseline error, printed half-width, lead time, machine, rule), in minutes.
+Measured = dict[str, list[tuple[float, float, float, float, str, str]]]
 
 
 def measure(scenario: Scenario, seed: int) -> Measured:
@@ -142,7 +144,14 @@ def measure(scenario: Scenario, seed: int) -> Measured:
                 # alarm, and counted as one rather than as an error of unknown
                 # size.
                 by_bucket["never crosses"].append(
-                    (math.nan, math.nan, str(signal.machine_id), str(rule.rule_id))
+                    (
+                        math.nan,
+                        math.nan,
+                        math.nan,
+                        math.nan,
+                        str(signal.machine_id),
+                        str(rule.rule_id),
+                    )
                 )
                 continue
 
@@ -151,7 +160,14 @@ def measure(scenario: Scenario, seed: int) -> Measured:
             baseline_at = _two_point_eta(readings, rule.threshold)
             baseline = math.nan if baseline_at is None else _minutes(baseline_at - crosses_at)
             by_bucket[_bucket(ahead)].append(
-                (error, baseline, str(signal.machine_id), str(rule.rule_id))
+                (
+                    error,
+                    baseline,
+                    _minutes(found.interval),
+                    _minutes(ahead),
+                    str(signal.machine_id),
+                    str(rule.rule_id),
+                )
             )
 
     return by_bucket
@@ -173,7 +189,7 @@ def main() -> int:
 
     header = (
         f"{'horizon':8} {'n':>6} {'mean':>8} {'MAE':>7} {'P90|e|':>7} {'worst':>8}"
-        f"   {'base n':>6} {'base MAE':>8} {'base P90':>8}"
+        f"   {'base n':>6} {'base MAE':>8} {'base P90':>8}   {'± median':>8} {'covered':>7}"
     )
     print(header)
     print("-" * len(header))
@@ -183,10 +199,13 @@ def main() -> int:
         if not rows:
             print(f"{name:8} {0:>6}")
             continue
-        errors = [error for error, _, _, _ in rows]
+        errors = [error for error, _, _, _, _, _ in rows]
         magnitudes = [abs(error) for error in errors]
         worst = max(errors, key=abs)
-        base = [abs(b) for _, b, _, _ in rows if not math.isnan(b)]
+        base = [abs(b) for _, b, _, _, _, _ in rows if not math.isnan(b)]
+        # Whether the "give or take" a ticket prints contains the true crossing.
+        covered = sum(abs(e) <= w for e, _, w, _, _, _ in rows) / len(rows)
+        width = median(w for _, _, w, _, _, _ in rows)
         base_text = (
             f"{len(base):>6} {sum(base) / len(base):>7.1f}m {_p90(base):>7.1f}m"
             if base
@@ -195,19 +214,21 @@ def main() -> int:
         print(
             f"{name:8} {len(rows):>6} {sum(errors) / len(errors):>7.1f}m "
             f"{sum(magnitudes) / len(magnitudes):>6.1f}m {_p90(magnitudes):>6.1f}m "
-            f"{worst:>7.1f}m   {base_text}"
+            f"{worst:>7.1f}m   {base_text}   {width:>7.1f}m {covered:>6.0%}"
         )
 
     false_alarms = by_bucket.get("never crosses", [])
     print(f"\npredictions on channels that never cross: {len(false_alarms)}")
-    for channel in sorted({f"{machine}/{rule}" for _, _, machine, rule in false_alarms}):
+    for channel in sorted({f"{machine}/{rule}" for _, _, _, _, machine, rule in false_alarms}):
         print(f"  {channel}")
 
     print(
         "\nmean is signed (positive late, negative early) so the direction shows\n"
         "(ADR-020); MAE and P90 are of |error|, so early and late do not cancel.\n"
         "base: a line through the window's first and last reading, asked at the\n"
-        "same moments; n differs where it points away from the threshold."
+        "same moments; n differs where it points away from the threshold.\n"
+        "± median: the half-width a ticket prints (one slope standard error);\n"
+        "covered: how often the true crossing fell inside it."
     )
     return 0
 

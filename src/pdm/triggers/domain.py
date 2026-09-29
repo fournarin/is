@@ -354,6 +354,7 @@ def forecast(
     cooldown: timedelta = timedelta(minutes=30),
     horizon: timedelta,
     min_samples: int,
+    eta_error: Sequence[tuple[float, float]] = (),
 ) -> list[Decision]:
     """What the trend says is coming, for the rules watching this signal.
 
@@ -397,7 +398,7 @@ def forecast(
                     rule_id=rule_id,
                     machine_id=signal.machine_id,
                     why="the trend still predicts a crossing already forecast (ADR-023)",
-                    finding=_predicted(signal, rule, rule_id, found, now=now),
+                    finding=_predicted(signal, rule, rule_id, found, now=now, eta_error=eta_error),
                 )
             )
             continue
@@ -428,7 +429,7 @@ def forecast(
                 rule_id=rule_id,
                 machine_id=signal.machine_id,
                 why=trend.describe(found, metric_name=rule.metric_name, threshold=rule.threshold),
-                finding=_predicted(signal, rule, rule_id, found, now=now),
+                finding=_predicted(signal, rule, rule_id, found, now=now, eta_error=eta_error),
             )
         )
 
@@ -442,6 +443,7 @@ def _predicted(
     found: trend.Crossing,
     *,
     now: datetime,
+    eta_error: Sequence[tuple[float, float]] = (),
 ) -> Finding:
     """The forecast as a `Finding`, with its ETA on the decision-time axis.
 
@@ -469,9 +471,27 @@ def _predicted(
         # as a forecast, and the contract refuses one without the other
         # (ADR-020, ui.md 2.2).
         eta=now + ahead,
-        eta_confidence=found.interval,
+        eta_confidence=printed_interval(found.interval, ahead, eta_error),
         status=FindingStatus.OPEN,
     )
+
+
+def printed_interval(
+    fitted: timedelta, ahead: timedelta, bands: Sequence[tuple[float, float]]
+) -> timedelta:
+    """The "give or take" a ticket prints (ADR-106).
+
+    The slope's own interval is what gates a forecast (ADR-043), and it stays
+    so. What a technician reads is the wider of it and the error forecasts this
+    far ahead have actually had: `bands` is (ahead_below_hours, fraction) in
+    increasing order, and the fraction of the lead time it gives covered 80% of
+    observed errors. Beyond the last band the last fraction applies.
+    """
+    if not bands or ahead <= timedelta(0):
+        return fitted
+    hours = ahead.total_seconds() / 3600.0
+    fraction = next((f for below, f in bands if hours < below), bands[-1][1])
+    return max(fitted, ahead * fraction)
 
 
 def rules_watching(rules: Iterable[RuleConfig], metric_name: str) -> list[RuleConfig]:

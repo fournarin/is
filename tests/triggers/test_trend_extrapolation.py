@@ -494,3 +494,39 @@ class TestAReadingThatIsNotANumber:
         spoiled = list(clean)
         spoiled[7] = (spoiled[7][0], float("nan"))
         assert fit(spoiled) is None
+
+
+class TestThePrintedInterval:
+    """ADR-106: what a ticket prints is the wider of the slope's interval and the
+    error forecasts this far ahead have actually had."""
+
+    BANDS = ((1.0, 0.4), (3.0, 0.3), (8760.0, 0.6))
+
+    def test_no_bands_prints_the_fitted_interval(self) -> None:
+        from pdm.triggers.domain import printed_interval
+
+        fitted = timedelta(minutes=6)
+        assert printed_interval(fitted, timedelta(hours=2), ()) == fitted
+
+    def test_the_band_for_the_lead_time_widens_it(self) -> None:
+        from pdm.triggers.domain import printed_interval
+
+        assert printed_interval(timedelta(minutes=6), timedelta(hours=2), self.BANDS) == timedelta(
+            minutes=36
+        )
+        assert printed_interval(
+            timedelta(minutes=6), timedelta(minutes=30), self.BANDS
+        ) == timedelta(minutes=12)
+
+    def test_it_never_narrows_the_fitted_interval(self) -> None:
+        from pdm.triggers.domain import printed_interval
+
+        wide = timedelta(hours=3)
+        assert printed_interval(wide, timedelta(hours=2), self.BANDS) == wide
+
+    def test_the_last_band_holds_beyond_its_bound(self) -> None:
+        from pdm.triggers.domain import printed_interval
+
+        assert printed_interval(timedelta(0), timedelta(hours=10000), self.BANDS) == timedelta(
+            hours=6000
+        )

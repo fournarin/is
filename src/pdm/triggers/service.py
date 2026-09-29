@@ -11,7 +11,7 @@ with nothing behind it, and a ticket referring to a Finding that was rolled back
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import timedelta
 from typing import Any
 
@@ -85,6 +85,7 @@ class Triggers:
         model_of: Callable[[MachineId], MachineModel] | None = None,
         trend_window: timedelta | None = None,
         trend_min_samples: int = 10,
+        trend_eta_error: Sequence[tuple[float, float]] = (),
         trend_horizon: timedelta | None = None,
     ) -> None:
         self.clock = clock
@@ -106,6 +107,7 @@ class Triggers:
         # other half.
         self.windows = Window(trend_window) if trend_window else None
         self.trend_min_samples = trend_min_samples
+        self.trend_eta_error = tuple(trend_eta_error)
         self.trend_horizon = trend_horizon or timedelta(hours=24)
 
     def observe(
@@ -157,6 +159,7 @@ class Triggers:
                     cooldown=self.cooldown,
                     horizon=self.trend_horizon,
                     min_samples=self.trend_min_samples,
+                    eta_error=self.trend_eta_error,
                 )
 
             for decision in decisions:
