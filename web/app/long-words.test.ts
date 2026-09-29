@@ -65,23 +65,40 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8">
 
 async function measure(executable: string): Promise<{ page: number; widest: string }> {
   const profile = mkdtempSync(join(tmpdir(), "pdm-long-words-"));
-  const port = 9400 + Math.floor(Math.random() * 400);
+  // Port 0: Chrome picks a free one and says which on stderr. A fixed port
+  // guessed here can be taken, and a CI runner is slower to start than a laptop.
   const browser = spawn(
     executable,
     [
       "--headless=new",
-      `--remote-debugging-port=${port}`,
+      "--remote-debugging-port=0",
       `--user-data-dir=${profile}`,
       "--no-first-run",
       "--no-sandbox",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
       `--window-size=${PHONE},844`,
       "about:blank",
     ],
-    { stdio: "ignore" },
+    { stdio: ["ignore", "ignore", "pipe"] },
   );
+  let said = "";
+  const listening = new Promise<string>((resolve, reject) => {
+    browser.stderr.on("data", (chunk: Buffer) => {
+      said += chunk.toString();
+      const found = /DevTools listening on ws:\/\/[^:]+:(\d+)\//.exec(said);
+      if (found?.[1] !== undefined) resolve(found[1]);
+    });
+    browser.once("exit", (code) => reject(new Error(`Chrome exited (${code}): ${said.slice(-500)}`)));
+    setTimeout(
+      () => reject(new Error(`Chrome said nothing usable in 60s: ${said.slice(-500)}`)),
+      60_000,
+    ).unref();
+  });
   try {
+    const port = await listening;
     let socketUrl: string | undefined;
-    for (let attempt = 0; attempt < 100 && socketUrl === undefined; attempt++) {
+    for (let attempt = 0; attempt < 300 && socketUrl === undefined; attempt++) {
       try {
         const targets = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()) as {
           type: string;
@@ -89,11 +106,11 @@ async function measure(executable: string): Promise<{ page: number; widest: stri
         }[];
         socketUrl = targets.find((target) => target.type === "page")?.webSocketDebuggerUrl;
       } catch {
-        // not listening yet
+        // not answering yet
       }
       if (socketUrl === undefined) await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    assert.ok(socketUrl, "headless Chrome did not start");
+    assert.ok(socketUrl, `headless Chrome listed no page: ${said.slice(-500)}`);
 
     const socket = new WebSocket(socketUrl);
     await new Promise((resolve) => socket.addEventListener("open", resolve));
