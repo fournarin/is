@@ -117,6 +117,9 @@ runs the database migrations once and exits. `migrate` exiting with code 0 is
 correct; `migrate` exiting with anything else is the first log to read when the
 API answers `/health` but signing in fails.
 
+`/health` answers `{"status": "ok", "database": "ok"}`. If PostgreSQL is not
+answering it says `"database": "down"` with status 503, and `curl -f` fails.
+
 The web app is at `http://localhost:3000` and the API at
 `http://localhost:8000`, whose `/docs` is the interactive one.
 

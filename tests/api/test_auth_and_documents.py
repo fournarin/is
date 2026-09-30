@@ -432,7 +432,9 @@ class TestGuardsThatRunBeforeTheBodyIsRead:
 
     def test_the_login_route_stays_reachable_without_a_session(self, client: TestClient) -> None:
         """The guard must not lock the door it is standing in front of."""
-        assert client.get("/health").status_code == 200
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json() == {"status": "ok", "database": "ok"}
         assert client.post("/sessions", json={"user": "nobody", "password": "x"}).status_code == 401
 
 

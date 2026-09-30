@@ -62,6 +62,10 @@ log = logging.getLogger(__name__)
 # stopped under the rehearsal stack (2026-09-30).
 API_POOL_TIMEOUT_SECONDS = 5.0
 
+# How long `/health` waits for one. Shorter again: it is asked by somebody
+# deciding whether the service is up, and "not within two seconds" is the answer.
+HEALTH_WAIT_SECONDS = 2.0
+
 
 def create_app(
     *,
@@ -201,13 +205,26 @@ def create_app(
     app.include_router(loops.router)
 
     @app.get("/health", tags=["health"])
-    def health() -> dict[str, str]:
+    def health(request: Request) -> JSONResponse:
         """The one route with no session, besides logging in.
 
         A health check that required credentials would mean the thing watching
         the service needs an account, and an account for a monitor is an account
         nobody rotates.
+
+        It asks the database one question, because this process answering is not
+        the service working: with PostgreSQL stopped it said `ok` while every
+        screen failed (2026-09-30). The wait is short so that the answer about a
+        database that is down arrives while somebody is still looking.
         """
-        return {"status": "ok"}
+        try:
+            with request.app.state.pool.connection(timeout=HEALTH_WAIT_SECONDS) as conn:
+                conn.execute("SELECT 1")
+        except (PoolTimeout, OperationalError):
+            return JSONResponse(
+                {"status": "unavailable", "database": "down"},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return JSONResponse({"status": "ok", "database": "ok"})
 
     return app
