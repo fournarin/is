@@ -45,5 +45,25 @@ def test_a_database_that_does_not_answer_is_a_503_and_soon(tmp_path: Path) -> No
     assert waited < 5
 
 
+def test_health_says_the_database_is_down(tmp_path: Path) -> None:
+    """`/health` answered `ok` with PostgreSQL stopped, to the person following
+    `docs/install.md` and to anything watching the service."""
+    clock = SystemClock()
+    pool = ConnectionPool(NOBODY_HOME, min_size=1, max_size=2, open=True, timeout=1.0)
+    library = DocumentLibrary(FilesystemObjectStore(tmp_path), clock)
+    try:
+        app = create_app(pool=pool, library=library, clock=clock)
+        with TestClient(app) as client:
+            started = time.monotonic()
+            response = client.get("/health")
+            waited = time.monotonic() - started
+    finally:
+        pool.close()
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable", "database": "down"}
+    assert waited < 5
+
+
 def test_the_api_waits_seconds_for_a_connection_and_not_half_a_minute() -> None:
     assert API_POOL_TIMEOUT_SECONDS <= 5

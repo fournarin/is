@@ -206,8 +206,11 @@ class TestNoCapacitySaysWhichKind:
         )
 
         assert result.band is Band.NO_CAPACITY
-        assert "ยังไม่มีช่างลงชื่อในกะ morning" in result.held[0].why
-        assert "ยังไม่มีช่างลงชื่อในกะ morning" in result.summary
+        assert "ยังไม่มีช่างลงชื่อในกะนี้" in result.held[0].why
+        assert "ยังไม่มีช่างลงชื่อในกะนี้" in result.summary
+        # `morning` is plant.yaml's id for the shift, not a word the shift lead
+        # uses; the screens printed it as it was (2026-09-30).
+        assert "morning" not in result.summary
 
     def test_people_rostered_with_no_minutes_left_are_not_reported_as_absent(self) -> None:
         """The case the two-way wording states falsely: they are on the line, and

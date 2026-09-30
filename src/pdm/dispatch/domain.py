@@ -471,11 +471,14 @@ def _no_capacity_cause(shift_id: ShiftId | None, assignments: Sequence[tuple[Use
     """
     if shift_id is None:
         return "ตอนนี้ไม่มีกะทำงาน"
+    # "This shift", not its id: `afternoon` is plant.yaml's word, the round is
+    # always about the shift running now, and the screens printed the id as it
+    # was (2026-09-30, ADR-093).
     if not assignments:
-        return f"ยังไม่มีช่างลงชื่อในกะ {shift_id}"
+        return "ยังไม่มีช่างลงชื่อในกะนี้"
     # Rostered, but every one of them is already spent. Saying "nobody is
     # rostered" here would be false about people who are standing on the line.
-    return f"ช่างทุกคนในกะ {shift_id} มีงานเต็มเวลาแล้ว"
+    return "ช่างทุกคนในกะนี้มีงานเต็มเวลาแล้ว"
 
 
 def dispatch(
