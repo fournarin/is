@@ -30,7 +30,9 @@ def dsn() -> str:
     return value
 
 
-def make_pool(min_size: int = 1, max_size: int = 4) -> ConnectionPool[Connection[Any]]:
+def make_pool(
+    min_size: int = 1, max_size: int = 4, timeout: float = 30.0
+) -> ConnectionPool[Connection[Any]]:
     """A pool that hands out a connection it has just verified.
 
     `check` is what makes a connection the server has closed somebody else's
@@ -49,12 +51,16 @@ def make_pool(min_size: int = 1, max_size: int = 4) -> ConnectionPool[Connection
     `worker-runtime` is where it matters most: a failed checkout there is a
     failed trigger tick or a failed dispatch round, and the queue retrying is
     recovery rather than the absence of a fault.
+
+    `timeout` is how long a caller waits for a connection. A worker can wait; a
+    person looking at a screen cannot, so the API passes a shorter one.
     """
     return ConnectionPool(
         dsn(),
         min_size=min_size,
         max_size=max_size,
         open=True,
+        timeout=timeout,
         check=ConnectionPool.check_connection,
     )
 

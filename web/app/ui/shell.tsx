@@ -72,3 +72,19 @@ export function NotYours({ home, what }: { home: string; what: string }) {
     </div>
   );
 }
+
+/** A link to an order or a draft that is not there: say so, and point home. */
+export function NotThere({ home, what }: { home: string; what: string }) {
+  return (
+    <div className="card empty">
+      <span className="icon" aria-hidden="true">
+        🔍
+      </span>
+      <h1>{what}</h1>
+      <p>อาจพิมพ์เลขผิด หรือเป็นลิงก์เก่า</p>
+      <Link className="button-link quiet" href={home}>
+        กลับหน้าหลักของฉัน
+      </Link>
+    </div>
+  );
+}

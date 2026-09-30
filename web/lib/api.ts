@@ -35,6 +35,7 @@ function apiBase(): string {
  *
  * Returns the response whatever its status: 401 is an answer this application
  * acts on rather than an error, and the caller is the one that knows which.
+ * The exception is "not answering" (502, 503, 504), which is thrown.
  */
 export async function callApi(path: string, init: RequestInit = {}): Promise<Response> {
   const session = (await cookies()).get(SESSION_COOKIE)?.value;
@@ -43,8 +44,9 @@ export async function callApi(path: string, init: RequestInit = {}): Promise<Res
     headers.set("cookie", `${SESSION_COOKIE}=${session}`);
   }
   const url = new URL(path, apiBase());
+  let response: Response;
   try {
-    return await fetch(url, {
+    response = await fetch(url, {
       ...init,
       headers,
       // Nothing this application reads can be cached. A ticket, a queue and a
@@ -57,6 +59,13 @@ export async function callApi(path: string, init: RequestInit = {}): Promise<Res
     // a person that rather than showing an error page (2026-09-29).
     throw new ApiUnreachable(url.pathname, cause);
   }
+  // The API is up and what it stands on is not: it says 503 when PostgreSQL
+  // does not answer (2026-09-30). To a person that is the same event, so it
+  // takes the same path - the unreachable page, and a close kept on the phone.
+  if (response.status === 502 || response.status === 503 || response.status === 504) {
+    throw new ApiUnreachable(url.pathname, `the API answered ${response.status}`);
+  }
+  return response;
 }
 
 /** The API did not answer at all, as distinct from answering with an error. */

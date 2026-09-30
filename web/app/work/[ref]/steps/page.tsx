@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Shell } from "@/app/ui/shell";
+import { NotThere, Shell } from "@/app/ui/shell";
 import { HandoverForm } from "@/app/work/[ref]/steps/handover-form";
 import { pagesNamed } from "@/lib/page-references";
 import { evidence } from "@/lib/review";
+import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { ticket } from "@/lib/work";
+import { ticketAt } from "@/lib/work";
 
 /**
  * One step at a time, because the other hand is holding a tool - with the whole
@@ -27,7 +28,14 @@ export default async function StepsPage({
   const { ref } = await params;
   const { step } = await searchParams;
 
-  const job = await ticket(decodeURIComponent(ref));
+  const job = await ticketAt(decodeURIComponent(ref));
+  if (job === null) {
+    return (
+      <Shell account={account} current="/work">
+        <NotThere home={homeFor(account.role)} what="ไม่พบใบงานนี้" />
+      </Shell>
+    );
+  }
   const total = job.steps.length;
   const close = `/work/${encodeURIComponent(job.ref)}/close`;
 

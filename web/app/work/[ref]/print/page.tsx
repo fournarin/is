@@ -1,7 +1,8 @@
-import { Shell } from "@/app/ui/shell";
+import { NotThere, Shell } from "@/app/ui/shell";
 import { bandFor, minutesText } from "@/lib/display";
+import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { ticket } from "@/lib/work";
+import { ticketAt } from "@/lib/work";
 
 /**
  * The work order on one sheet of paper. The plant still runs on paper, and a
@@ -11,7 +12,14 @@ import { ticket } from "@/lib/work";
 export default async function PrintPage({ params }: { params: Promise<{ ref: string }> }) {
   const account = await requireAccount();
   const { ref } = await params;
-  const job = await ticket(decodeURIComponent(ref));
+  const job = await ticketAt(decodeURIComponent(ref));
+  if (job === null) {
+    return (
+      <Shell account={account} current="/work">
+        <NotThere home={homeFor(account.role)} what="ไม่พบใบงานนี้" />
+      </Shell>
+    );
+  }
   const band = bandFor(job);
 
   return (

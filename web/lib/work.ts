@@ -106,6 +106,26 @@ export async function ticket(ref: string): Promise<Ticket> {
   return read<Ticket>(`/work-orders/${encodeURIComponent(ref)}`);
 }
 
+/**
+ * The ticket behind a link somebody followed, or null when there is none.
+ *
+ * A kept or mistyped link names an order that is not there, and the API's 404
+ * used to surface as the "cannot connect, try again" page (2026-09-30). Null
+ * rather than `notFound()`: that answer is drawn by the browser's script, and a
+ * phone whose bundle never arrived would be shown an empty page.
+ */
+export async function ticketAt(ref: string): Promise<Ticket | null> {
+  const path = `/work-orders/${encodeURIComponent(ref)}`;
+  const response = await callApi(path);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`the API answered ${response.status} for ${path}`);
+  }
+  return (await response.json()) as Ticket;
+}
+
 export type Mine = {
   ref: string;
   status: Ticket["status"];

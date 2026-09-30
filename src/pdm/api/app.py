@@ -11,6 +11,7 @@ what makes ADR-003 physically true rather than merely enforced by an import rule
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +19,8 @@ from typing import Any
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
+from psycopg import OperationalError
+from psycopg_pool import PoolTimeout
 
 from pdm.api import (
     deps,
@@ -52,6 +55,14 @@ MAX_BODY_BYTES = 256 * 1024 * 1024
 _PUBLIC_PATHS = frozenset({"/health", "/sessions", "/docs", "/redoc", "/openapi.json"})
 
 
+log = logging.getLogger(__name__)
+
+# How long a request waits for a database connection. The pool's own default is
+# thirty seconds, which is what every screen waited, blank, when PostgreSQL was
+# stopped under the rehearsal stack (2026-09-30).
+API_POOL_TIMEOUT_SECONDS = 5.0
+
+
 def create_app(
     *,
     pool: Any | None = None,
@@ -75,7 +86,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.pool = pool or make_pool()
+        app.state.pool = pool or make_pool(timeout=API_POOL_TIMEOUT_SECONDS)
         # The layout, for the handlers that have to resolve a machine id to the
         # model whose manual answers for it (ADR-027). One copy, loaded above, so
         # the API and the workers cannot be reading different plants.
@@ -164,6 +175,21 @@ def create_app(
 
         response: Response = await call_next(request)
         return response
+
+    async def database_is_not_answering(request: Request, error: Exception) -> JSONResponse:
+        """503, not 500: nothing is wrong with the request, and it is worth retrying.
+
+        The web layer reads 503 as "not answering" and keeps a technician's
+        close on the phone until it goes through, which it cannot do for a 500.
+        """
+        log.warning("the database did not answer for %s: %s", request.url.path, error)
+        return JSONResponse(
+            {"detail": "the database is not answering"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    app.add_exception_handler(PoolTimeout, database_is_not_answering)
+    app.add_exception_handler(OperationalError, database_is_not_answering)
 
     app.include_router(sessions.router)
     app.include_router(documents.router)
