@@ -57,3 +57,13 @@ export function closeFromForm(form: FormData): ClosePayload | null {
     technician_feedback: note === "" ? null : note,
   };
 }
+
+/**
+ * A status that means nothing behind this server answered: the close was not
+ * refused, it was never read. The phone keeps it and sends it later, as it does
+ * when its own network drops. A 500 is not one of these - that is the API
+ * answering with a fault, and retrying it for ever would never drain the queue.
+ */
+export function reachedNobody(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}

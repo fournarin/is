@@ -10,9 +10,13 @@
 import type { NextRequest } from "next/server";
 
 import { callApi } from "@/lib/api";
-import { seeOther } from "@/lib/redirect";
+import { orUnreachable, seeOther } from "@/lib/redirect";
 
-export async function POST(request: NextRequest): Promise<Response> {
+export function POST(request: NextRequest): Promise<Response> {
+  return orUnreachable(() => handle(request));
+}
+
+async function handle(request: NextRequest): Promise<Response> {
   const form = await request.formData();
   const ref = String(form.get("ref") ?? "");
   const reason = String(form.get("reason") ?? "").trim();

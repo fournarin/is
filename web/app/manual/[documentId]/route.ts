@@ -21,6 +21,7 @@
 import type { NextRequest } from "next/server";
 
 import { callApi } from "@/lib/api";
+import { orUnreachable } from "@/lib/redirect";
 
 // Headers that describe the bytes rather than the connection. Anything not
 // listed - transfer-encoding, connection - belongs to the hop it arrived on and
@@ -35,7 +36,14 @@ const PASSED_THROUGH = [
   "last-modified",
 ];
 
-export async function GET(
+export function GET(
+  request: NextRequest,
+  context: { params: Promise<{ documentId: string }> },
+): Promise<Response> {
+  return orUnreachable(() => handle(request, context));
+}
+
+async function handle(
   request: NextRequest,
   context: { params: Promise<{ documentId: string }> },
 ): Promise<Response> {

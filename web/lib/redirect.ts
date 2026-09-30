@@ -1,3 +1,5 @@
+import { ApiUnreachable } from "@/lib/api";
+
 /**
  * A redirect the client can actually follow.
  *
@@ -21,4 +23,20 @@ export function seeOther(path: string): Response {
   // 303 rather than 302 so the client follows with GET. A repeated POST would
   // be a second close of a job that is already closed.
   return new Response(null, { status: 303, headers: { location: path } });
+}
+
+/**
+ * Run a form's handler, and send the person to the "cannot reach the system"
+ * page if the API did not answer. A form posted from the board used to end on
+ * Chrome's "HTTP ERROR 500" (2026-09-29), with nothing to say what had happened.
+ */
+export async function orUnreachable(handler: () => Promise<Response>): Promise<Response> {
+  try {
+    return await handler();
+  } catch (error) {
+    if (error instanceof ApiUnreachable) {
+      return seeOther("/unreachable");
+    }
+    throw error;
+  }
 }

@@ -160,11 +160,11 @@ Better said here than found later.
   has to be raised by the technician in person.
 - **A job with no approved steps names no manual page.** The technician is told
   there are none and not to guess, and is not told which page to open.
-- **The offline close covers the phone's network, not the server's.** A close
-  sent while Wi-Fi is down is kept on the phone and sent when it returns. If the
-  API is down but the web server answers, the close is refused with "ระบบตอบกลับ
-  500" and has to be sent again, and the other screens show Next's English error
-  page.
+- **An offline close waits for a phone with JavaScript.** A close sent while
+  Wi-Fi is down, or while the API is down behind a working web server, is kept
+  on the phone and sent when the system answers again. A phone without
+  JavaScript posts the form directly and gets the "เชื่อมต่อระบบไม่ได้ชั่วคราว" page
+  instead, and has to send it again.
 
 ## Where to read next
 

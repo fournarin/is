@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import { BLOCKED_REASONS, OUTCOMES, closeFromForm } from "@/lib/close";
+import { BLOCKED_REASONS, OUTCOMES, closeFromForm, reachedNobody } from "@/lib/close";
 import { type PendingClose, drain as drainQueue, enqueue, settle } from "@/lib/pending-closes";
 
 const OUTCOME_LABELS: Record<(typeof OUTCOMES)[number], string> = {
@@ -34,6 +34,11 @@ async function post(ref: string, close: unknown): Promise<"sent" | "offline" | s
     });
     if (response.ok) {
       return "sent";
+    }
+    if (reachedNobody(response.status)) {
+      // This server answered and the API behind it did not: the same case as
+      // the phone's own network dropping, so the close is kept, not lost.
+      return "offline";
     }
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     return body.error ?? `ระบบตอบกลับ ${response.status}`;

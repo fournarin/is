@@ -17,7 +17,7 @@
 import type { NextRequest } from "next/server";
 
 import { callApi } from "@/lib/api";
-import { seeOther } from "@/lib/redirect";
+import { orUnreachable, seeOther } from "@/lib/redirect";
 
 /**
  * What the API refused, in words an engineer can act on.
@@ -41,7 +41,11 @@ function refusal(detail: unknown, status: number): string {
   return `ระบบตอบกลับ ${status}`;
 }
 
-export async function POST(request: NextRequest): Promise<Response> {
+export function POST(request: NextRequest): Promise<Response> {
+  return orUnreachable(() => handle(request));
+}
+
+async function handle(request: NextRequest): Promise<Response> {
   const form = await request.formData();
   const symptomCode = String(form.get("symptom_code") ?? "");
   const machineModel = String(form.get("machine_model") ?? "");

@@ -183,6 +183,16 @@ def main() -> None:
     expect("ข้อมูลไม่ตรงกับบัญชีใด" in page, "one message, which does not say which half was wrong")
     expect([c for c in jar if c.name == "pdm_session"] == [], "and no session was set")
 
+    print("\n3b. too many wrong passwords says to wait, in the API's own words")
+    # Not a demo account, so this cannot lock anybody out of the rehearsal. The
+    # API answers 429 with a Thai sentence (ADR-101); the screen used to replace
+    # it with "ระบบตอบกลับผิดปกติ (429)" (2026-09-30).
+    for _ in range(6):
+        jar.clear()
+        page = sign_in("nobody-guessing", "wrong")
+    expect("รอ 5 นาที" in page, "the person is told to wait five minutes")
+    expect("(429)" not in page, "not shown a status code")
+
     print("\n4. signing out ends the session, not only the cookie")
     jar.clear()
     sign_in("tech-1", "demo-technician")

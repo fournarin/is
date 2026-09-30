@@ -11,7 +11,7 @@
  */
 import type { NextRequest } from "next/server";
 
-import { callApi } from "@/lib/api";
+import { ApiUnreachable, UNREACHABLE, callApi } from "@/lib/api";
 import { type ClosePayload, closeFromForm, isBlockedReason, isOutcome } from "@/lib/close";
 import { seeOther } from "@/lib/redirect";
 
@@ -63,7 +63,18 @@ export async function POST(
     return back("เลือกก่อนว่างานจบอย่างไร", 400);
   }
 
-  const response = await sendClose(ref, close);
+  let response: Response;
+  try {
+    response = await sendClose(ref, close);
+  } catch (error) {
+    if (!(error instanceof ApiUnreachable)) {
+      throw error;
+    }
+    // Not a refusal: nothing answered. 503 is what the phone's queue reads as
+    // "keep it and send it later", the same as its own network dropping. As a
+    // 500 it was shown as an error and the close was thrown away (2026-09-29).
+    return back(`${UNREACHABLE} การปิดงานนี้ยังไม่ถูกส่ง ลองอีกครั้งเมื่อระบบกลับมา`, 503);
+  }
   if (!response.ok) {
     // The API's own sentence, not the status code. It is the one that says what
     // to change - "waiting cannot be longer than the work it interrupted" is

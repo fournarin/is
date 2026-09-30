@@ -42,11 +42,30 @@ export async function callApi(path: string, init: RequestInit = {}): Promise<Res
   if (session !== undefined) {
     headers.set("cookie", `${SESSION_COOKIE}=${session}`);
   }
-  return fetch(new URL(path, apiBase()), {
-    ...init,
-    headers,
-    // Nothing this application reads can be cached. A ticket, a queue and a
-    // shift's load are all answers about right now.
-    cache: "no-store",
-  });
+  const url = new URL(path, apiBase());
+  try {
+    return await fetch(url, {
+      ...init,
+      headers,
+      // Nothing this application reads can be cached. A ticket, a queue and a
+      // shift's load are all answers about right now.
+      cache: "no-store",
+    });
+  } catch (cause) {
+    // Nothing answered: the API is stopped, restarting or unreachable. Named,
+    // so the pages that can still be useful - sign-in, the close queue - tell
+    // a person that rather than showing an error page (2026-09-29).
+    throw new ApiUnreachable(url.pathname, cause);
+  }
 }
+
+/** The API did not answer at all, as distinct from answering with an error. */
+export class ApiUnreachable extends Error {
+  constructor(path: string, cause: unknown) {
+    super(`the API did not answer for ${path}`, { cause });
+    this.name = "ApiUnreachable";
+  }
+}
+
+/** What a person reads when the API does not answer. */
+export const UNREACHABLE = "เชื่อมต่อระบบไม่ได้ชั่วคราว";
