@@ -536,6 +536,20 @@ def main() -> None:
         expect(response.status == 206, "a range request comes back 206 (ADR-019)")
         expect(len(response.read()) == 100, "with only the bytes that were asked for")
 
+    print("\n9. a link to a job that is not there says so")
+    # 2026-09-30: a kept link to an order that no longer exists answered 500 and
+    # "เชื่อมต่อระบบไม่ได้ชั่วคราว ... กดลองใหม่", which is untrue - trying again
+    # never helps. Read without the scripts, because that is what a phone whose
+    # bundle never arrived is shown.
+    for screen in ("steps", "close", "print"):
+        try:
+            gone = readable(get(f"/work/WO-999999/{screen}"))
+            gone = re.sub(r"<script.*?</script>", "", gone, flags=re.S)
+        except urllib.error.HTTPError as error:
+            gone = f"HTTP {error.code}"
+        expect("ไม่พบใบงานนี้" in gone, f"/work/WO-999999/{screen} says the job is not there")
+        expect("งานของฉัน" in gone, "and keeps the way back to the technician's own work")
+
     print("\nall checks passed")
 
 

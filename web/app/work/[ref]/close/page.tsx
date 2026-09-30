@@ -1,9 +1,10 @@
-import { Shell } from "@/app/ui/shell";
+import { NotThere, Shell } from "@/app/ui/shell";
 import Link from "next/link";
 
 import { CloseForm } from "@/app/work/[ref]/close/close-form";
+import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { ticket } from "@/lib/work";
+import { ticketAt } from "@/lib/work";
 
 /**
  * How the job ended, in two taps.
@@ -23,7 +24,14 @@ export default async function ClosePage({
   const account = await requireAccount();
   const { ref } = await params;
   const { error } = await searchParams;
-  const job = await ticket(decodeURIComponent(ref));
+  const job = await ticketAt(decodeURIComponent(ref));
+  if (job === null) {
+    return (
+      <Shell account={account} current="/work">
+        <NotThere home={homeFor(account.role)} what="ไม่พบใบงานนี้" />
+      </Shell>
+    );
+  }
 
   return (
     <Shell account={account} current="/work">

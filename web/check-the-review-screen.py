@@ -442,6 +442,15 @@ def main() -> None:
     expect(form_with_or_none(page, ">ปิดใบนี้<") is not None, "but can still be closed with a reason")
     expect(stored(empty)["status"] == "pending", "and it is still pending")
 
+    print("\n8c. a link to a proposal that is not there says so")
+    # 2026-09-30: this answered 500 and "เชื่อมต่อระบบไม่ได้ชั่วคราว", as if
+    # trying again would help.
+    try:
+        gone = re.sub(r"<script.*?</script>", "", readable(get("/review/999999")), flags=re.S)
+    except urllib.error.HTTPError as error:
+        gone = f"HTTP {error.code}"
+    expect("ไม่พบร่างนี้" in gone, "/review/999999 says the draft is not there")
+
     print("\n9. a proposal opened by somebody it is not for says whose it is")
     # A link kept from a chat, or typed: the API refuses it with 403, and the
     # screen said "A server error occurred" in English instead of the refusal

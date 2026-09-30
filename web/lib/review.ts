@@ -23,8 +23,17 @@ export async function reviewQueue(): Promise<QueuedProposal[]> {
   return read<QueuedProposal[]>("/playbooks/queue");
 }
 
-export async function proposal(proposalId: number): Promise<Proposal> {
-  return read<Proposal>(`/playbooks/queue/${proposalId}`);
+/** The proposal behind a link, or null when there is none (see `ticketAt`). */
+export async function proposal(proposalId: number): Promise<Proposal | null> {
+  const path = `/playbooks/queue/${proposalId}`;
+  const response = await callApi(path);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`the API answered ${response.status} for ${path}`);
+  }
+  return (await response.json()) as Proposal;
 }
 
 /**

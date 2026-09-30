@@ -1,4 +1,4 @@
-import { NotYours, Shell } from "@/app/ui/shell";
+import { NotThere, NotYours, Shell } from "@/app/ui/shell";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -51,6 +51,13 @@ export default async function ProposalPage({
   }
 
   const draft = await proposal(id);
+  if (draft === null) {
+    return (
+      <Shell account={account} current="/review">
+        <NotThere home={homeFor(account.role)} what="ไม่พบร่างนี้" />
+      </Shell>
+    );
+  }
   const steps = flagSteps(draft.steps);
   const asked = Number((await searchParams).step ?? 0);
   const chosen = Number.isInteger(asked) && asked >= 0 && asked < steps.length ? asked : 0;

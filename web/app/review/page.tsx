@@ -54,7 +54,7 @@ export default async function ReviewQueuePage({
 
       {groups.length === 0 ? (
         <p className="card">
-          ไม่มีใบรออนุมัติในคิวตอนนี้ — ร่างใหม่จะขึ้นมาเองเมื่อ worker ร่างเสร็จ
+          ไม่มีใบรออนุมัติในคิวตอนนี้ — ร่างใหม่จะขึ้นมาเองเมื่อระบบร่างเสร็จ
         </p>
       ) : (
         <>
@@ -97,8 +97,8 @@ export default async function ReviewQueuePage({
 
       {account.role === "supervisor" && (
         <p className="muted">
+          {/* Invariant 6: the API refuses it, the button is not merely hidden. */}
           หัวหน้ากะดูคิวได้เพื่อจะได้ถามว่าทำไมคิวไม่ขยับ แต่การอนุมัติเป็นของวิศวกรเท่านั้น
-          และ API ปฏิเสธที่ endpoint ไม่ใช่แค่ซ่อนปุ่ม (invariant 6)
         </p>
       )}
     </Shell>
