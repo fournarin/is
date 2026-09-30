@@ -196,35 +196,33 @@ def propose(
     if safety_critical:
         return refused(
             NoProposalCause.SAFETY_CRITICAL,
-            f"{rule_id} is safety-linked. ADR-022 forbids any loop from proposing that its "
-            f"threshold be loosened, however many false alarms it produces: the answer there "
-            f"is a condition that makes it more precise, never one that makes it less "
-            f"sensitive.",
+            # ADR-022. What a person reads is Thai and cites no record (ADR-093).
+            f"{rule_id} เกี่ยวกับความปลอดภัย ระบบไม่เสนอให้ผ่อนเกณฑ์ของกฎนี้ ไม่ว่าจะแจ้งเตือน"
+            f"ผิดกี่ครั้ง ถ้าแจ้งเตือนผิดบ่อย ให้เพิ่มเงื่อนไขให้แม่นขึ้น ไม่ใช่ลดความไว",
         )
 
     if len(usable) < min_observations:
         return refused(
             NoProposalCause.BELOW_FLOOR,
-            f"{len(usable)} closed orders behind {rule_id}, and {min_observations} is the "
-            f"floor. A separating threshold rests on the two observations either side of it, "
-            f"and this set is not yet large enough to say where they are (ADR-073).",
+            # ADR-073.
+            f"ใบงานที่ปิดแล้วของ {rule_id} มี {len(usable)} ใบ ต้องมีอย่างน้อย "
+            f"{min_observations} ใบจึงจะบอกได้ว่าเกณฑ์ควรอยู่ตรงไหน",
         )
 
     if not alarms:
         return refused(
             NoProposalCause.NO_FALSE_ALARMS,
-            f"None of the {len(usable)} closed orders behind {rule_id} closed "
-            f"no_problem_found. The evidence says this threshold is not firing on nothing - "
-            f"which is an answer, and not the same as having no evidence.",
+            f"ใบงานที่ปิดแล้วของ {rule_id} ทั้ง {len(usable)} ใบ ไม่มีใบไหนปิดว่า "
+            f"“ไม่พบปัญหา” แปลว่าเกณฑ์นี้ไม่ได้แจ้งเตือนผิด ซึ่งเป็นคำตอบ ไม่ใช่การไม่มีข้อมูล",
         )
 
     if not faults:
         return refused(
             NoProposalCause.NO_CONFIRMED_FAULT,
-            f"All {len(usable)} closed orders behind {rule_id} closed no_problem_found, so "
-            f"there is no reading this rule must keep firing on. A threshold past all of them "
-            f"silences the rule, and a loop may not propose that a machine stop being "
-            f"watched (ADR-073).",
+            # ADR-073.
+            f"ใบงานที่ปิดแล้วของ {rule_id} ทั้ง {len(usable)} ใบ ปิดว่า “ไม่พบปัญหา” ทั้งหมด "
+            f"ยังไม่มีครั้งไหนที่พบความเสียจริง เกณฑ์ที่เลยทุกค่านี้ไปจะทำให้กฎนี้เงียบ "
+            f"ระบบไม่เสนอให้เลิกเฝ้าเครื่อง",
         )
 
     # The boundary the proposal may not cross: the mildest reading behind an order
@@ -239,10 +237,10 @@ def propose(
     if not separable:
         return refused(
             NoProposalCause.NO_SEPARATING_THRESHOLD,
-            f"Every one of the {len(alarms)} false alarms behind {rule_id} read further past "
-            f"the threshold than the mildest confirmed fault ({mildest_fault}). No threshold "
-            f"separates them, so this rule needs another condition rather than a looser one "
-            f"(ADR-022).",
+            # ADR-022.
+            f"การแจ้งเตือนผิดทั้ง {len(alarms)} ครั้งของ {rule_id} อ่านค่าเกินเกณฑ์มากกว่า"
+            f"ความเสียจริงที่เบาที่สุด ({mildest_fault}) จึงไม่มีเกณฑ์ใดแยกสองกลุ่มนี้ได้ "
+            f"กฎนี้ต้องเพิ่มเงื่อนไข ไม่ใช่ผ่อนเกณฑ์",
         )
 
     # A rule fires strictly above or strictly below and never at its threshold
@@ -270,24 +268,24 @@ def propose(
     if not excluded:
         return refused(
             NoProposalCause.CAP_EXCLUDES_NOTHING,
-            f"The evidence behind {rule_id} separates at {separating}, and one cycle may move "
-            f"a threshold by at most {round(max_change_ratio * 100)}% of {current_threshold}. "
-            f"The move that allows would still have fired on every false alarm, so there is "
-            f"nothing to propose this cycle (ADR-073).",
+            # ADR-073.
+            f"ข้อมูลของ {rule_id} แยกกันที่ {separating} แต่แต่ละรอบขยับเกณฑ์ได้ไม่เกิน "
+            f"{round(max_change_ratio * 100)}% ของ {current_threshold} ซึ่งยังแจ้งเตือนผิด"
+            f"ทุกครั้งอยู่ดี รอบนี้จึงไม่มีอะไรเสนอ",
         )
 
+    fires = "เกิน" if above else "ต่ำกว่า"
     reason = (
-        f"{len(alarms)} of {len(usable)} closed orders behind {rule_id} found nothing wrong. "
-        f"The rule fires {comparison} {current_threshold}; at {bounded} it would not have "
-        f"fired on {len(excluded)} of them, and it still fires on all {len(faults)} orders "
-        f"where a fault was found - the mildest of those read {mildest_fault}"
+        f"ใบงานที่ปิดแล้วของ {rule_id} {len(usable)} ใบ มี {len(alarms)} ใบที่ไม่พบปัญหา "
+        f"กฎนี้แจ้งเตือนเมื่อค่า{fires} {current_threshold} ถ้าเปลี่ยนเป็น {bounded} จะไม่แจ้ง"
+        f"เตือนผิด {len(excluded)} ครั้งในนั้น และยังแจ้งเตือนครบทั้ง {len(faults)} ใบที่พบ"
+        f"ความเสียจริง ซึ่งค่าที่เบาที่สุดคือ {mildest_fault}"
     )
     if capped:
+        # ADR-073.
         reason += (
-            f". The evidence separates at {separating}, and one cycle may move a threshold by "
-            f"at most {round(max_change_ratio * 100)}% of it (ADR-073)"
+            f" ข้อมูลแยกกันที่ {separating} แต่แต่ละรอบขยับเกณฑ์ได้ไม่เกิน {round(max_change_ratio * 100)}%"
         )
-    reason += "."
 
     return ThresholdProposal(
         rule_id=rule_id,

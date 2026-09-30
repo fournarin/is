@@ -256,6 +256,16 @@ def main(argv: list[str] | None = None, environ: Mapping[str, str] = os.environ)
     args = parser.parse_args(argv)
     if not (args.technicians or args.roster or args.pm_history):
         parser.error("give at least one of --technicians, --roster, --pm-history")
+    # A mistyped path used to end in a FileNotFoundError traceback. Named in one
+    # line, before the database is asked for anything.
+    missing = [
+        str(path)
+        for path in (args.technicians, args.roster, args.pm_history)
+        if path and not path.is_file()
+    ]
+    if missing:
+        print(f"ไม่พบไฟล์ / no such file: {', '.join(missing)}")
+        return 1
 
     url = environ.get("DATABASE_URL")
     if not url:
