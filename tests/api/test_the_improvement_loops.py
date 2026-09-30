@@ -344,7 +344,7 @@ class TestTheSafetyLinkedRuleIsRefusedThroughTheRealPath:
         line = _line_for(client.get("/loops/thresholds").json(), INTERLOCK_RULE)
 
         assert line["refusal"]["false_alarms"] >= 1
-        assert "ADR-022" in line["refusal"]["reason"]
+        assert "ไม่เสนอให้ผ่อนเกณฑ์" in line["refusal"]["reason"]
 
     def test_the_value_that_reaches_the_loop_is_the_one_in_the_file(
         self, client: TestClient

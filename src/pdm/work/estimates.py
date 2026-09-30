@@ -180,18 +180,18 @@ def propose(
     if proposed == current_minutes:
         return None
 
-    direction = "longer" if proposed > current_minutes else "shorter"
+    # What a person reads is Thai and cites no record (ADR-093).
+    direction = "นานขึ้น" if proposed > current_minutes else "สั้นลง"
     reason = (
-        f"{len(usable)} closed jobs for {symptom_code} on {machine_model} took a median of "
-        f"{middle} minutes of repair time, against an estimate of {current_minutes}. "
-        f"Proposing {proposed} minutes, {direction}"
+        f"งาน {symptom_code} ของรุ่น {machine_model} ที่ปิดแล้ว {len(usable)} ใบ ใช้เวลาซ่อม"
+        f"ค่ากลาง {middle} นาที เทียบกับเวลาประมาณ {current_minutes} นาที "
+        f"เสนอเป็น {proposed} นาที ({direction})"
     )
     if capped:
+        # ADR-022, ADR-066.
         reason += (
-            f" - the evidence says {middle}, and one cycle may move the estimate by at most "
-            f"{round(max_change_ratio * 100)}% (ADR-022, ADR-066)"
+            f" ข้อมูลบอก {middle} นาที แต่แต่ละรอบขยับเวลาประมาณได้ไม่เกิน {round(max_change_ratio * 100)}%"
         )
-    reason += "."
 
     return EstimateProposal(
         symptom_code=symptom_code,

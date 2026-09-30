@@ -331,3 +331,23 @@ class TestNothingHereWrites:
 
         assert "INSERT" not in source
         assert "UPDATE" not in source
+
+
+class TestWhatTheEngineerReads:
+    """The reason on the loops screen is Thai, with no ADR numbers (ADR-093).
+
+    2026-09-29: "5 closed jobs for SYM-014 on R-2000iC took a median of ...
+    (ADR-022, ADR-066)" was on the engineer's screen."""
+
+    @pytest.mark.parametrize("worked", [120, 60])
+    def test_the_reason_is_thai_and_cites_no_adr(self, worked: int) -> None:
+        import re
+
+        jobs = [_job(f"WO-00000{n}", worked_minutes=worked) for n in range(1, 6)]
+        proposal = _propose(jobs, current_minutes=45)
+
+        assert proposal is not None
+        reason = proposal.reason.replace(str(SYM), "").replace(str(R2000IC), "")
+        assert re.search(r"[฀-๿]", reason), reason
+        assert "ADR" not in reason, reason
+        assert re.findall(r"[A-Za-z]{3,}", reason) == [], reason

@@ -15,7 +15,9 @@ proposal ever silences an order where a technician found a fault.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 import yaml
@@ -163,7 +165,7 @@ class TestWhatIsProposed:
         assert result.capped is True
         # 86.0, 90.0 and 93.0 are under 93.5; 94.5, 95.0 and 97.0 are not.
         assert len(result.would_not_have_fired) == 3
-        assert "at most 10%" in result.reason
+        assert "ไม่เกิน 10%" in result.reason
 
     def test_a_reading_exactly_at_the_proposal_stops_firing(self) -> None:
         """`breaches` is strictly above, never at, so the boundary is inclusive.
@@ -197,7 +199,7 @@ class TestWhenNothingIsProposed:
 
         assert isinstance(result, NoProposal)
         assert result.cause is NoProposalCause.SAFETY_CRITICAL
-        assert "ADR-022" in result.reason
+        assert "ไม่เสนอให้ผ่อนเกณฑ์" in result.reason
 
     def test_below_the_floor_nothing_is_proposed(self) -> None:
         """Nine orders where the separation is obvious. Still nothing."""
@@ -275,7 +277,7 @@ class TestWhenNothingIsProposed:
 
         assert isinstance(result, NoProposal)
         assert result.cause is NoProposalCause.CAP_EXCLUDES_NOTHING
-        assert "separates at 97.0" in result.reason
+        assert "แยกกันที่ 97.0" in result.reason
 
 
 class TestWhatIsNotEvidence:
@@ -347,8 +349,8 @@ class TestWhatTheProposalCarries:
         )
 
         assert isinstance(result, ThresholdProposal)
-        assert "found nothing wrong" in result.reason
-        assert "still fires on all 4" in result.reason
+        assert "ไม่พบปัญหา" in result.reason
+        assert "ยังแจ้งเตือนครบทั้ง 4 ใบ" in result.reason
 
     def test_a_comparison_that_is_neither_is_refused(self) -> None:
         with pytest.raises(ValueError, match="above or below"):
@@ -380,3 +382,40 @@ class TestNothingWritesAThreshold:
         interlock = next(r for r in rules["rules"] if r["rule_id"] == "R-safety-interlock-open")
 
         assert interlock["safety_critical"] is True
+
+
+class TestWhatTheEngineerReads:
+    """Every reason on the loops screen is Thai, with no ADR numbers in it.
+
+    2026-09-29: the engineer's screen read "0 closed orders behind
+    R-cycle-time-drift, and 10 is the floor. ... (ADR-073)" (ADR-093: what a
+    person reads is Thai and familiar).
+    """
+
+    CASES: ClassVar[dict[str, Callable[[], ThresholdProposal | NoProposal]]] = {
+        "proposal": lambda: _propose(
+            _alarms([85.4, 85.9, 86.2, 86.6, 86.8, 87.0]) + _faults([92.0, 95.5, 99.0, 104.0])
+        ),
+        "capped proposal": lambda: _propose(
+            _alarms([85.4, 86.0, 90.0, 93.0, 94.0, 97.0]) + _faults([98.0, 99.0, 104.0, 110.0])
+        ),
+        "safety": lambda: _propose(
+            _alarms([0.0] * 12), comparison="below", current_threshold=1.0, safety_critical=True
+        ),
+        "floor": lambda: _propose(_alarms([86.0, 87.0])),
+        "no false alarms": lambda: _propose(
+            _faults([92.0, 95.5, 99.0, 104.0, 91.0, 93.0, 96.0, 97.0, 101.0, 110.0])
+        ),
+        "no fault": lambda: _propose(_alarms([86.0, 87.0, 88.0, 89.0, 90.0, 91.0] * 2)),
+    }
+
+    @pytest.mark.parametrize("case", list(CASES))
+    def test_the_reason_is_thai_and_cites_no_adr(self, case: str) -> None:
+        import re
+
+        reason = self.CASES[case]().reason
+        english = re.findall(r"[A-Za-z]{3,}", reason.replace(str(RULE), ""))
+
+        assert re.search(r"[฀-๿]", reason), reason
+        assert "ADR" not in reason, reason
+        assert english == [], reason

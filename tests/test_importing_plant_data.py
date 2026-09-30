@@ -183,6 +183,24 @@ def _files(tmp_path: Path, roster_minutes: str = "420") -> list[str]:
 
 
 @pytest.mark.db
+class TestAFileThatIsNotThere:
+    def test_it_is_named_in_one_line_before_anything_else(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """2026-09-29: a mistyped path printed a FileNotFoundError traceback. The
+        person running this at a plant needs the file's name and nothing else,
+        and it is checked before the database is asked for anything."""
+        missing = tmp_path / "rostr.csv"
+
+        code = import_plant_data.main(["--roster", str(missing)], {})
+
+        said = capsys.readouterr()
+        assert code == 1
+        assert str(missing) in said.out + said.err
+        assert "Traceback" not in said.out + said.err
+        assert "DATABASE_URL" not in said.out + said.err
+
+
 class TestWritingIt:
     def test_what_the_files_say_is_what_the_database_holds(
         self, conn: Connection[Any], tmp_path: Path
