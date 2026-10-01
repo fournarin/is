@@ -101,6 +101,11 @@ def _a_job(
     )
 
 
+def _offered_again(conn: Connection[Any], ref: str) -> None:
+    """What the next round and its shift lead's confirmation do (ADR-120)."""
+    conn.execute("UPDATE work_order SET status = 'assigned' WHERE work_order_ref = %s", (ref,))
+
+
 class TestTwoUsersAndTwoShifts:
     def test_actual_minutes_is_the_sum_of_the_segments(
         self, conn: Connection[Any], orders: WorkOrders, clock: SimulatedClock
@@ -121,6 +126,7 @@ class TestTwoUsersAndTwoShifts:
         orders.hand_over(conn, ref, user=MORNING_TECH, note="cover off, breaker CP-3 locked out")
 
         clock.advance(timedelta(hours=7, minutes=20))
+        _offered_again(conn, ref)
         orders.accept(conn, ref, user=NIGHT_TECH)
         orders.start(conn, ref, user=NIGHT_TECH)
         clock.advance(timedelta(minutes=25))
@@ -146,6 +152,7 @@ class TestTwoUsersAndTwoShifts:
         first_ended = work.get(conn, ref).work_segments[0].ended_at  # type: ignore[union-attr]
 
         clock.advance(timedelta(hours=7))
+        _offered_again(conn, ref)
         orders.accept(conn, ref, user=NIGHT_TECH)
         after = orders.start(conn, ref, user=NIGHT_TECH)
 
@@ -157,16 +164,15 @@ class TestTwoUsersAndTwoShifts:
     def test_handing_over_frees_the_person_who_handed_it_over(
         self, conn: Connection[Any], orders: WorkOrders, clock: SimulatedClock
     ) -> None:
-        """ADR-056. Layer 3 subtracts an order's minutes from every assignee of a
-        `handed_over` order, so a technician left on the list keeps losing
-        capacity on shifts they are not going to spend on it."""
+        """ADR-056, and ADR-120: with nobody left on it the order is queued work
+        carrying its note, which is what a round can offer to the next shift."""
         ref = _a_job(conn, orders)
         orders.accept(conn, ref, user=MORNING_TECH)
         orders.start(conn, ref, user=MORNING_TECH)
 
         handed = orders.hand_over(conn, ref, user=MORNING_TECH, note="waiting on the seal kit")
 
-        assert handed.status is WorkOrderStatus.HANDED_OVER
+        assert handed.status is WorkOrderStatus.QUEUED
         assert handed.assignees == ()
         assert handed.handover_note == "waiting on the seal kit"
         # The evidence of who worked stays where it belongs.
@@ -424,6 +430,7 @@ class TestTheSnapshotStaysFrozen:
         orders.start(conn, ref, user=MORNING_TECH)
         clock.advance(timedelta(minutes=10))
         orders.hand_over(conn, ref, user=MORNING_TECH, note="paused")
+        _offered_again(conn, ref)
         orders.accept(conn, ref, user=NIGHT_TECH)
         closed = orders.close(conn, ref, user=NIGHT_TECH, outcome=WorkOutcome.FIXED)
 

@@ -94,6 +94,11 @@ class Queued(BaseModel):
     # rank it.
     released: bool = False
 
+    # The shift lead said "not now" to this one, and why (ADR-120). Handed in on
+    # the queue item for the same reason `released` is: `dispatch()` may not
+    # read a table. A job set aside is not ranked, gated or crewed this round.
+    set_aside: str | None = None
+
     @property
     def person_minutes(self) -> int:
         """What this job costs the shift (ADR-025, design.md 13.2).
@@ -223,6 +228,10 @@ class Round(BaseModel):
     # a supervisor can act on, and a ticket that simply did not appear is not.
     unassigned: tuple[Withheld, ...] = ()
     held: tuple[Withheld, ...] = ()
+    # What the shift lead put aside themselves, with their reason (ADR-120).
+    # Separate from `held`: that is the gate's decision and can be released,
+    # this is a person's and can be brought back.
+    set_aside: tuple[Withheld, ...] = ()
     summary: str = ""
 
 
@@ -254,6 +263,28 @@ def committed(queue: Iterable[Queued]) -> int:
             item.order.origin is WorkOrderOrigin.SCHEDULED
             and item.order.status is WorkOrderStatus.QUEUED
         )
+    )
+
+
+def waiting(queue: Iterable[Queued]) -> list[Queued]:
+    """The orders a round may rank: queued, and not set aside by the shift lead.
+
+    A set-aside order stays in `committed` - the work has not gone away - and is
+    left out of the ranking, so its absence does not move anybody else's
+    normalised terms in a way the lead did not ask for beyond that (ADR-120).
+    """
+    return [
+        item
+        for item in queue
+        if item.order.status is WorkOrderStatus.QUEUED and item.set_aside is None
+    ]
+
+
+def _set_aside(queue: Iterable[Queued]) -> tuple[Withheld, ...]:
+    return tuple(
+        Withheld(ref=item.ref, why=item.set_aside)
+        for item in queue
+        if item.order.status is WorkOrderStatus.QUEUED and item.set_aside
     )
 
 
@@ -516,7 +547,7 @@ def dispatch(
         key=lambda person: person.user,
     )
 
-    placeable = [item for item in queue if item.order.status is WorkOrderStatus.QUEUED]
+    placeable = waiting(queue)
     ranked = _rank(placeable, available=available, config=config, now=now)
 
     if band is Band.NO_CAPACITY:
@@ -538,6 +569,7 @@ def dispatch(
                 )
                 for item, _, _, _ in ranked
             ),
+            set_aside=_set_aside(queue),
             summary=f"{cause} · มีงานรออยู่ {len(ranked)} ใบ",
         )
 
@@ -565,6 +597,7 @@ def dispatch(
         placed=tuple(placed),
         unassigned=tuple(unassigned),
         held=tuple(held),
+        set_aside=_set_aside(queue),
         summary=_summary(
             band,
             ratio,
@@ -607,7 +640,7 @@ def ranking(
         (person for person in technicians if person.active and person.user in rostered),
         key=lambda person: person.user,
     )
-    placeable = [item for item in queue if item.order.status is WorkOrderStatus.QUEUED]
+    placeable = waiting(queue)
     return {
         item.ref: entry
         for entry in _rank(placeable, available=available, config=config, now=now)

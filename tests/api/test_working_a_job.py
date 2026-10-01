@@ -108,6 +108,12 @@ def _signed_in(client: TestClient, role: Role) -> TestClient:
     return client
 
 
+def _offered_again(pool: ConnectionPool[Any], ref: str) -> None:
+    """What a round and a shift lead's confirmation do to a queued order."""
+    with pool.connection() as conn:
+        conn.execute("UPDATE work_order SET status = 'assigned' WHERE work_order_ref = %s", (ref,))
+
+
 class TestOneJobEndToEnd:
     def test_accept_start_hand_over_and_close(
         self, client: TestClient, world: dict[str, Any]
@@ -125,9 +131,13 @@ class TestOneJobEndToEnd:
             f"/work-orders/{ref}/handover", json={"note": "cover off, CP-3 locked"}
         )
         assert handed.status_code == 200, handed.text
-        assert handed.json()["status"] == "handed_over"
+        # Nobody is left on it, so it is queued work with a note (ADR-120).
+        assert handed.json()["status"] == "queued"
+        assert handed.json()["handover_note"] == "cover off, CP-3 locked"
 
         clock.advance(timedelta(hours=6))
+        # The next shift's round proposes it and its lead confirms it.
+        _offered_again(world["pool"], ref)
         client.post(f"/work-orders/{ref}/accept")
         client.post(f"/work-orders/{ref}/start")
         clock.advance(timedelta(minutes=15))

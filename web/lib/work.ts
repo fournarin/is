@@ -39,6 +39,8 @@ export type Round = {
   placed: Ranked[];
   unassigned: { ref: string; why: string }[];
   held: { ref: string; why: string }[];
+  // What the shift lead set aside this shift, with their reason (ADR-120).
+  set_aside: { ref: string; why: string }[];
 };
 
 export type Step = {
@@ -81,6 +83,8 @@ export type Ticket = {
   required_technicians: number;
   assignees: string[];
   playbook_warning: string | null;
+  // How far the last person got before putting the job down (ADR-025, ADR-120).
+  handover_note: string | null;
   finding_kind: "detected" | "predicted" | null;
   eta: string | null;
   eta_confidence_minutes: number | null;

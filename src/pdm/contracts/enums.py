@@ -116,7 +116,10 @@ class WorkOrderStatus(StrEnum):
     # Assigned to technicians but not started.
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
-    # Shift ended before completion. Requires handover_note (ADR-025).
+    # Shift ended before completion. Requires handover_note (ADR-025). Since
+    # ADR-120 nothing writes it: a job put down with nobody left on it goes back
+    # to QUEUED with its note, which a round can offer to the next shift. Kept
+    # because closed orders from before then carry it.
     HANDED_OVER = "handed_over"
     CLOSED = "closed"
     CANCELLED = "cancelled"

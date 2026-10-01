@@ -53,7 +53,7 @@ from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.agreement import AgreementReport, agreement
 from pdm.dispatch.overrides import Override, OverrideKind
 from pdm.dispatch.proposals import Proposal, ProposalState
-from pdm.dispatch.service import AlreadyAnswered, NoProposal
+from pdm.dispatch.service import AlreadyAnswered, NoProposal, NotSetAside
 from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.config import Config
@@ -149,6 +149,8 @@ class RoundView(BaseModel):
     placed: list[Ranked] = []
     unassigned: list[Withheld] = []
     held: list[Withheld] = []
+    # What the shift lead set aside this shift, each with their reason (ADR-120).
+    set_aside: list[Withheld] = []
 
 
 class Step(BaseModel):
@@ -231,6 +233,9 @@ class TicketView(BaseModel):
     required_technicians: int
     assignees: tuple[str, ...] = ()
     playbook_warning: str | None = None
+    # What the last person to put this job down wrote about how far it got
+    # (ADR-025). The next person, and the lead offering it to them, read it.
+    handover_note: str | None = None
 
     # A predicted job must not be able to reach a screen looking like a detected
     # one. `eta_confidence` is serialised as whole minutes and is **never**
@@ -387,6 +392,7 @@ def current_round(
         ],
         unassigned=[Withheld(ref=one.ref, why=one.why) for one in decided.unassigned],
         held=[Withheld(ref=one.ref, why=one.why) for one in decided.held],
+        set_aside=[Withheld(ref=one.ref, why=one.why) for one in decided.set_aside],
     )
 
 
@@ -587,13 +593,12 @@ def reject_proposal(
     confirming: Confirming,
     account: Annotated[Account, Depends(requires(*_MAY_CONFIRM, action="reject_proposal"))],
 ) -> ProposalAnswered:
-    """Not this, and here is why - and the order is back in the queue at once.
+    """Not now, and here is why - and the order is set aside for this shift.
 
-    No delivery is queued, because nothing became anybody's job. The next round
-    ranks the order against what is true then and may well propose the same
-    pairing again (ADR-071 §4); a second rejection with a second reason is
-    evidence about the score rather than a loop, and suppressing it would throw
-    away the only measurement of the score a real shift produces.
+    No delivery is queued, because nothing became anybody's job. The crew is
+    freed at once, and no round proposes the order again until the shift ends or
+    the lead brings it back (ADR-120, which replaces ADR-071 §4: proposed again
+    every five minutes, a rejection read as a button that did nothing).
     """
     try:
         confirming.reject(
@@ -612,6 +617,32 @@ def reject_proposal(
         at=clock.now(),
         by=str(account.user),
         reason=objection.reason,
+    )
+
+
+@router.post(
+    "/dispatch/set-aside/{work_order_ref}/bring-back",
+    response_model=ProposalAnswered,
+    status_code=status.HTTP_201_CREATED,
+)
+def bring_back(
+    work_order_ref: str,
+    conn: Db,
+    clock: Time,
+    rounds: Rounds,
+    confirming: Confirming,
+    account: Annotated[Account, Depends(requires(*_MAY_CONFIRM, action="bring_back_set_aside"))],
+) -> ProposalAnswered:
+    """The shift lead takes their "not now" back; the next round ranks the order."""
+    since = rounds.shift_started_at()
+    try:
+        if since is None:
+            raise NotSetAside(f"{work_order_ref} ไม่ได้ถูกพักไว้ในกะนี้")
+        confirming.bring_back(conn, work_order_ref, by=account.user, since=since)
+    except NotSetAside as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    return ProposalAnswered(
+        ref=work_order_ref, state=ProposalState.REJECTED, at=clock.now(), by=str(account.user)
     )
 
 
@@ -760,6 +791,7 @@ def ticket(
         required_technicians=order.required_technicians,
         assignees=tuple(str(who.user) for who in order.assignees),
         playbook_warning=order.playbook_warning,
+        handover_note=order.handover_note,
         finding_kind=order.finding_kind,
         eta=order.eta,
         eta_confidence_minutes=(

@@ -125,6 +125,10 @@ export default async function WorkPage({
           </div>
         </div>
 
+        {now.handover_note && (
+          <p className="warning">↪ ช่างคนก่อนทำไว้ถึงตรงนี้: {now.handover_note}</p>
+        )}
+
         {now.playbook_warning !== null && (
           <p className="warning">
             ⚠️ คู่มือของเครื่องนี้เพิ่งถูกเปลี่ยน ขั้นตอนชุดนี้รอวิศวกรตรวจใหม่ ให้เทียบกับคู่มือก่อนลงมือ

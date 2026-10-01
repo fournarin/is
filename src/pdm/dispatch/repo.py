@@ -177,6 +177,51 @@ def released(conn: Connection[Any]) -> set[str]:
         return {str(row[0]) for row in cur.fetchall()}
 
 
+def set_aside(conn: Connection[Any], *, since: datetime) -> dict[str, str]:
+    """The orders the shift lead said "not now" to in this shift, with the reason.
+
+    An order is set aside by a rejection made since the shift started that
+    nobody has taken back (ADR-120). The shift is the lifetime, and that is a
+    decision rather than a constant: the person who said no goes home when it
+    ends, and the next lead is asked afresh. `since` is when the shift started;
+    the shift a proposal was *made* in is not the test, because a proposal made
+    at 15:58 and refused at 16:02 was refused by the afternoon's lead.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (work_order_ref) work_order_ref, reason
+              FROM dispatch_proposal
+             WHERE state = 'rejected' AND resumed_at IS NULL AND decided_at >= %s
+             ORDER BY work_order_ref, decided_at DESC, proposal_id DESC
+            """,
+            (since,),
+        )
+        return {str(row[0]): str(row[1] or "ไม่ได้ระบุเหตุผล") for row in cur.fetchall()}
+
+
+def bring_back(
+    conn: Connection[Any],
+    work_order_ref: str,
+    *,
+    since: datetime,
+    by: UserId,
+    at: datetime,
+) -> bool:
+    """Take back this shift's "not now" on one order. False if there was none."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE dispatch_proposal
+               SET resumed_at = %s, resumed_by = %s
+             WHERE work_order_ref = %s AND state = 'rejected' AND resumed_at IS NULL
+               AND decided_at >= %s
+            """,
+            (at, by, work_order_ref, since),
+        )
+        return cur.rowcount > 0
+
+
 def propose(conn: Connection[Any], proposal: Proposal) -> None:
     """Ask a supervisor about one placement (ADR-071).
 

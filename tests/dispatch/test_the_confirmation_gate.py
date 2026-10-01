@@ -50,7 +50,13 @@ from pdm.contracts import (
 )
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.proposals import ProposalState
-from pdm.dispatch.service import AlreadyAnswered, Confirmations, DispatchRounds, NoProposal
+from pdm.dispatch.service import (
+    AlreadyAnswered,
+    Confirmations,
+    DispatchRounds,
+    NoProposal,
+    NotSetAside,
+)
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config
 from pdm.work import TransitionRefused, WorkOrders
@@ -363,7 +369,7 @@ class TestRejecting:
         assert row["state"] == ProposalState.REJECTED.value
         assert row["reason"] == "ana is on the press line"
 
-    def test_the_next_round_proposes_it_again_and_that_is_the_decision(
+    def test_the_next_round_leaves_it_alone_for_the_rest_of_the_shift(
         self,
         conn: Connection[Any],
         rounds: DispatchRounds,
@@ -371,21 +377,75 @@ class TestRejecting:
         orders: WorkOrders,
         clock: SimulatedClock,
     ) -> None:
-        """No cooling period, no suppression (ADR-071 §4). If nothing about the
-        shift has changed the same pairing is still the right answer, and a
-        second rejection with a second reason is evidence about the score rather
-        than a loop."""
+        """ADR-120, replacing ADR-071 §4. Proposed again five minutes later, a
+        "not now" read as a button that did nothing; the shift lead's answer
+        lasts the shift, and the round says what it is not touching and why."""
         _crew(conn, ANA)
         ref = _ticket(orders, conn)
         rounds.run(conn)
         confirming.reject(conn, ref, by=SUP, role=Role.SUPERVISOR, reason="not now")
 
         clock.advance(timedelta(seconds=CONFIG.policy.dispatch.round_seconds))
+        report = rounds.run(conn)
+
+        assert report.proposed == ()
+        assert [(one.ref, one.why) for one in report.round.set_aside] == [(ref, "not now")]
+
+    def test_brought_back_it_is_proposed_at_the_next_round(
+        self,
+        conn: Connection[Any],
+        rounds: DispatchRounds,
+        confirming: Confirmations,
+        orders: WorkOrders,
+        clock: SimulatedClock,
+    ) -> None:
+        _crew(conn, ANA)
+        ref = _ticket(orders, conn)
+        rounds.run(conn)
+        confirming.reject(conn, ref, by=SUP, role=Role.SUPERVISOR, reason="not now")
+        since = rounds.shift_started_at()
+        assert since is not None
+
+        confirming.bring_back(conn, ref, by=SUP, since=since)
+        clock.advance(timedelta(seconds=CONFIG.policy.dispatch.round_seconds))
+
         assert rounds.run(conn).proposed == (ref,)
-        assert [row["state"] for row in _proposal_rows(conn)] == [
-            ProposalState.REJECTED.value,
-            ProposalState.PENDING.value,
-        ]
+
+    def test_bringing_back_what_was_never_set_aside_is_refused(
+        self,
+        conn: Connection[Any],
+        rounds: DispatchRounds,
+        confirming: Confirmations,
+        orders: WorkOrders,
+    ) -> None:
+        _crew(conn, ANA)
+        ref = _ticket(orders, conn)
+        since = rounds.shift_started_at()
+        assert since is not None
+
+        with pytest.raises(NotSetAside):
+            confirming.bring_back(conn, ref, by=SUP, since=since)
+
+    def test_the_next_shift_is_asked_afresh(
+        self,
+        conn: Connection[Any],
+        rounds: DispatchRounds,
+        confirming: Confirmations,
+        orders: WorkOrders,
+        clock: SimulatedClock,
+    ) -> None:
+        """The person who said no goes home; the next lead decides for themselves."""
+        _crew(conn, ANA)
+        ref = _ticket(orders, conn)
+        rounds.run(conn)
+        confirming.reject(conn, ref, by=SUP, role=Role.SUPERVISOR, reason="not now")
+        started = rounds.shift_started_at()
+        assert started is not None
+
+        while rounds.shift_started_at() == started:
+            clock.advance(timedelta(hours=1))
+
+        assert all(one.ref != ref for one in rounds.decide(conn).set_aside)
 
     def test_rejecting_queues_nothing_for_a_destination(
         self,
@@ -401,6 +461,34 @@ class TestRejecting:
         confirming.reject(conn, ref, by=SUP, role=Role.SUPERVISOR, reason="not now")
 
         assert _outstanding(conn) == []
+
+
+class TestAJobPutDown:
+    def test_a_handed_over_job_is_offered_to_the_shift_lead_again(
+        self,
+        conn: Connection[Any],
+        rounds: DispatchRounds,
+        confirming: Confirmations,
+        orders: WorkOrders,
+        clock: SimulatedClock,
+    ) -> None:
+        """ADR-120. It used to become `handed_over`, which no round placed and no
+        technician's screen listed: the owner's second trial put one down and it
+        was never seen again."""
+        _crew(conn, ANA)
+        ref = _ticket(orders, conn)
+        rounds.run(conn)
+        confirming.confirm(conn, ref, by=SUP, role=Role.SUPERVISOR)
+        orders.accept(conn, ref, user=ANA)
+        orders.start(conn, ref, user=ANA)
+        orders.hand_over(conn, ref, user=ANA, note="cover off, waiting for the seal kit")
+
+        clock.advance(timedelta(seconds=CONFIG.policy.dispatch.round_seconds))
+
+        assert rounds.run(conn).proposed == (ref,)
+        order = work_repo.get(conn, ref)
+        assert order is not None
+        assert order.handover_note == "cover off, waiting for the seal kit"
 
 
 class TestAProposalHoldsItsCapacity:
