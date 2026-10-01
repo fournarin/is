@@ -169,6 +169,15 @@ class DispatchRounds:
         # runs rounds (ADR-026), so this is the only writer the sweep races with.
         return tuple(ref for ref in refs if repo.return_to_queue(conn, ref))
 
+    def shift_started_at(self) -> datetime | None:
+        """When the shift running now began, or None outside every shift.
+
+        What "this shift" means for a rejection that lasts the shift (ADR-120):
+        the round and the request that takes one back have to agree on it.
+        """
+        window = shift_at(self._shifts, self.clock.now(), self._zone)
+        return window.starts_at if window is not None else None
+
     def decide(self, conn: Connection[Any]) -> Round:
         """What a round would do, without doing any of it (ADR-050).
 
@@ -185,8 +194,18 @@ class DispatchRounds:
         # round is handed, in the same sense the roster is: this is the half of
         # the split that talks to the database (ADR-059).
         let_through = repo.released(conn)
+        # What the shift lead said "not now" to since this shift started
+        # (ADR-120). Outside any shift nothing is set aside, and nothing is
+        # placed either.
+        aside = repo.set_aside(conn, since=window.starts_at) if window is not None else {}
         queue = [
-            Queued(ref=ref, order=order, created_at=created_at, released=ref in let_through)
+            Queued(
+                ref=ref,
+                order=order,
+                created_at=created_at,
+                released=ref in let_through,
+                set_aside=aside.get(ref),
+            )
             for ref, order, created_at in work_repo.open_orders(conn)
         ]
         # No shift covers this moment: the plant is not running, and `dispatch()`
@@ -220,6 +239,10 @@ def describe(report: RoundReport) -> str:
     if report.moved_on:
         parts.append(f"{len(report.moved_on)} were accepted while the round was deciding")
     return "; ".join(parts)
+
+
+class NotSetAside(LookupError):
+    """Nobody on this shift has set this order aside."""
 
 
 class NoProposal(LookupError):
@@ -277,13 +300,14 @@ class Confirmations:
     def reject(
         self, conn: Connection[Any], ref: str, *, by: UserId, role: Role, reason: str
     ) -> Proposal:
-        """A supervisor does not, and the order goes back into the queue now.
+        """A supervisor does not, and the order is set aside for the shift.
 
-        Not held, not cooled off, not marked so that it is proposed differently
-        next time (ADR-071 §4). If the round proposes the same pairing again that
-        is information rather than a defect: nothing about the shift has changed,
-        and a second rejection with a second reason is evidence about the score
-        rather than noise.
+        ADR-071 §4 returned it to the queue to be proposed again at the next
+        round, on the argument that a second rejection is evidence about the
+        score. In use it was a card that came back five minutes after somebody
+        said no to it (ADR-120). The order still returns to `queued`, which
+        frees the crew; the rejection itself is what the round reads to leave it
+        alone until the shift ends or the lead brings it back.
         """
         proposal = self._pending(conn, ref)
         if not repo.return_to_queue(conn, ref):
@@ -298,6 +322,15 @@ class Confirmations:
             reason=reason,
         )
         return proposal
+
+    def bring_back(self, conn: Connection[Any], ref: str, *, by: UserId, since: datetime) -> None:
+        """The lead takes their "not now" back, and the next round ranks the order.
+
+        `since` is when the current shift started: only this shift's rejections
+        are in force, so only those can be taken back (ADR-120).
+        """
+        if not repo.bring_back(conn, ref, since=since, by=by, at=self.clock.now()):
+            raise NotSetAside(f"{ref} ไม่ได้ถูกพักไว้ในกะนี้")
 
     def _pending(self, conn: Connection[Any], ref: str) -> Proposal:
         proposal = repo.pending_proposal(conn, ref)

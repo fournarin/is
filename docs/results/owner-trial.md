@@ -23,6 +23,21 @@ explains:
 | 5 | technician | a job card to act on | a reason paragraph and a small start button | fixed: one job card with the machine large, facts in tiles, one large button, steps as a checklist, and a printable ticket |
 | 6 | every screen | Thai labels | "playbook", ADR references, English demo names | fixed |
 
-## Run 2
+## Run 2 - 30 September 2026: failed
 
-Not run yet. The same protocol against the rebuilt screens.
+On main `3717406`, rehearsed 7/7 and left untouched for the trial.
+
+**Verdict, in the owner's words:** the frontend does not pass yet - it may be
+usable, but it is not something people would want to use - and several
+decisions behind it should be looked at again for a better way.
+
+| # | Screen | What the owner asked or saw | What reading the live stack found | Outcome |
+|---|---|---|---|---|
+| 1 | shift lead's line overview (`/overview`) | "what is this page for? I'm very confused" | a status page of station codes, symptom codes, component labels in English, and two blocks about what it cannot compute | next: one purpose line, Thai names, the jargon blocks removed |
+| 2 | shift lead's board | "if you do not answer by 22:37 it goes back to the queue" - past 22:37 and nothing moved | the page was never re-read, and the expiry re-proposed the same pairing | fixed: ADR-120 §4 - the board re-reads itself, the sentence is gone |
+| 3 | shift lead's board | "waited 1 h 30 min - true?"; "why does a job I did not send come back to the same place?" | the waiting time was true when written; a rejection was proposed again at the next round (ADR-071 §4) | fixed: ADR-120 §1-2 - "พักไว้ก่อน" lasts the shift, with a column and a way back |
+| 4 | technician's step screen, WO-000015 | no repair steps | no approved playbook for that symptom; the screen named the manual and page (ADR-118) but drafting waits for an engineer to ask | next: drafting starts by itself when a symptom has no steps |
+| 5 | technician | "a job handed over and waiting for someone - where does it go?" | nowhere: `handed_over` was placed by no round and listed on no screen | fixed: ADR-120 §3 - back to the queue with its note |
+| 6 | engineer's review | "drafting is not automatic, I have to write it myself - must the engineer know more than the technician?" | the engineer asks for each draft, and types the Thai for each step | next: see ADR-121 |
+| 7 | reporting a fault | "I reported it - where did it go?" | the report screen forgets the report once sent; it reached the shift lead's board as a proposal | next: the reporter's own list with each report's state |
+

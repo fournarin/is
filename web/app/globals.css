@@ -515,7 +515,8 @@ main:has(.board) {
 
 @media (min-width: 60rem) {
   .board {
-    grid-template-columns: repeat(3, 1fr);
+    /* Three columns, or four while the lead has something set aside (ADR-120). */
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   }
 }
 

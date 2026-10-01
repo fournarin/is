@@ -73,6 +73,7 @@ export default async function StepsPage({
             </>
           )}
           <p className="muted">{job.reason}</p>
+          {job.handover_note && <p className="warning">↪ ช่างคนก่อนทำไว้ถึงตรงนี้: {job.handover_note}</p>}
         </section>
         <Link className="button-link big ok" href={close}>
           ✓ ทำเสร็จแล้ว ปิดงาน
@@ -111,6 +112,8 @@ export default async function StepsPage({
       <div className="progress" aria-hidden="true">
         <span style={{ width: `${Math.round((at / total) * 100)}%` }} />
       </div>
+
+      {job.handover_note && <p className="warning">↪ ช่างคนก่อนทำไว้ถึงตรงนี้: {job.handover_note}</p>}
 
       {job.playbook_warning !== null && (
         <p className="warning">⚠️ คู่มือเพิ่งถูกเปลี่ยน ขั้นตอนชุดนี้รอวิศวกรตรวจใหม่ ให้เทียบกับคู่มือก่อน</p>

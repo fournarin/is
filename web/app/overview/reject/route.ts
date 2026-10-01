@@ -1,5 +1,6 @@
 /**
- * Not this, and here is why - and the order is back in the queue at once.
+ * Not now, and here is why - and the job is set aside for the rest of the shift
+ * (ADR-120). The crew is freed at once; the lead can bring it back from the board.
  *
  * The reason is required here and at the API (ADR-059, ADR-071 §4). A rejection
  * with no reason is indistinguishable from a misclick when somebody reads it
@@ -24,10 +25,10 @@ async function handle(request: NextRequest): Promise<Response> {
   const back = (query: string): Response => seeOther(`/board?${query}`);
 
   if (ref === "") {
-    return back(`error=${encodeURIComponent("ไม่รู้ว่าจะปฏิเสธงานไหน")}`);
+    return back(`error=${encodeURIComponent("ไม่รู้ว่าจะพักงานไหน")}`);
   }
   if (reason === "") {
-    return back(`error=${encodeURIComponent("เขียนเหตุผลสั้น ๆ ก่อนปฏิเสธงานนี้")}`);
+    return back(`error=${encodeURIComponent("เขียนเหตุผลสั้น ๆ ก่อนพักงานนี้")}`);
   }
 
   const response = await callApi(`/dispatch/proposals/${encodeURIComponent(ref)}/reject`, {

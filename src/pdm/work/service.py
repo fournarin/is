@@ -397,9 +397,13 @@ class WorkOrders:
         step one, and a handover recorded without one would be worse than none -
         it would look complete.
 
-        The handover ends this person's assignment (ADR-056). The order becomes
-        `handed_over` only when nobody is left on it: a helper stepping off a job
-        the primary is still working has not handed anything over.
+        The handover ends this person's assignment (ADR-056). When nobody is
+        left on the order it goes back to the queue with the note on it, and the
+        next round offers it to the shift lead like any other job (ADR-120). It
+        used to become `handed_over`, a status no round placed and no
+        technician's screen listed, so it waited for somebody who could not see
+        it. A helper stepping off a job the primary is still working has not
+        handed anything over, and the status stays where it is.
         """
         order = self._live(conn, ref)
         if not domain.holds_it(order, user):
@@ -413,7 +417,7 @@ class WorkOrders:
         repo.set_status(
             conn,
             ref,
-            status=(WorkOrderStatus.HANDED_OVER if not remaining.assignees else remaining.status),
+            status=(WorkOrderStatus.QUEUED if not remaining.assignees else remaining.status),
             handover_note=note.strip(),
         )
         return self._reread(conn, ref)

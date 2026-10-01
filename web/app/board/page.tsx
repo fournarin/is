@@ -1,5 +1,6 @@
+import { KeepFresh } from "@/app/ui/keep-fresh";
 import { NotYours, Shell } from "@/app/ui/shell";
-import { bandFor, plantTime } from "@/lib/display";
+import { bandFor } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
 import { activeWork, currentRound, proposals, ticket, type Ticket } from "@/lib/work";
@@ -17,14 +18,21 @@ const STATUS: Record<string, string> = {
  *
  * Nothing here ranks, scores or phrases anything. The order of each column is
  * the order the API gave, and every sentence was written by the backend
- * (ADR-005, ADR-063). Confirming is one tap and rejecting asks why, because
+ * (ADR-005, ADR-063). Confirming is one tap and setting aside asks why, because
  * agreeing with the scheduler explains itself and disagreeing does not
- * (ADR-071).
+ * (ADR-071). A job set aside stays aside for the shift and has its own column,
+ * so "not now" visibly does something (ADR-120).
  */
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ released?: string; confirmed?: string; rejected?: string; error?: string }>;
+  searchParams: Promise<{
+    released?: string;
+    confirmed?: string;
+    rejected?: string;
+    brought?: string;
+    error?: string;
+  }>;
 }) {
   const account = await requireAccount();
   if (account.role !== "supervisor" && account.role !== "engineer") {
@@ -34,12 +42,16 @@ export default async function BoardPage({
       </Shell>
     );
   }
-  const { released, confirmed, rejected, error } = await searchParams;
+  const { released, confirmed, rejected, brought, error } = await searchParams;
 
   const [round, waiting, active] = await Promise.all([currentRound(), proposals(), activeWork()]);
   const tickets = new Map<string, Ticket>(
     await Promise.all(
-      [...waiting.map((one) => one.ref), ...round.held.map((one) => one.ref)].map(
+      [
+        ...waiting.map((one) => one.ref),
+        ...round.held.map((one) => one.ref),
+        ...round.set_aside.map((one) => one.ref),
+      ].map(
         async (ref) => [ref, await ticket(ref)] as const,
       ),
     ),
@@ -48,11 +60,24 @@ export default async function BoardPage({
 
   return (
     <Shell account={account} current="/board">
+      <KeepFresh />
       <h1>กระดานงานกะนี้</h1>
+      <p className="muted">
+        ระบบเลือกช่างให้แต่ละงานแล้ว กด “ยืนยัน” เพื่อส่งงานถึงช่าง หรือ “พักไว้ก่อน” ถ้ายังไม่ควรทำตอนนี้
+      </p>
 
       {confirmed !== undefined && <p className="recorded">✓ ยืนยัน {confirmed} แล้ว งานถูกส่งถึงช่างแล้ว</p>}
-      {rejected !== undefined && <p className="recorded">↩ ปฏิเสธ {rejected} แล้ว งานกลับเข้าคิว รอบถัดไปจะจัดใหม่</p>}
-      {released !== undefined && <p className="recorded">✓ ปล่อย {released} แล้ว รอบถัดไปจะจัดช่างให้</p>}
+      {rejected !== undefined && (
+        <p className="recorded">
+          ⏸ พัก {rejected} ไว้แล้ว ระบบจะไม่เสนองานนี้อีกในกะนี้ จนกว่าคุณจะกด “นำกลับมา”
+        </p>
+      )}
+      {brought !== undefined && (
+        <p className="recorded">↩ นำ {brought} กลับมาแล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5 นาที)</p>
+      )}
+      {released !== undefined && (
+        <p className="recorded">✓ ปล่อย {released} แล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5 นาที)</p>
+      )}
       {error !== undefined && (
         <p className="error" role="alert">
           {error}
@@ -97,10 +122,10 @@ export default async function BoardPage({
                 <p>
                   👷 ส่งให้ <strong>{one.assignee_names.join(", ")}</strong>
                 </p>
+                {job.handover_note && (
+                  <p className="warning">↪ ช่างคนก่อนส่งต่อไว้: {job.handover_note}</p>
+                )}
                 <p className="muted">ทำไมก่อน: {one.priority_reason}</p>
-                <p className="muted">
-                  ถ้าไม่ตอบภายใน {plantTime(one.expires_at, round.timezone)} น. งานจะกลับเข้าคิวเอง
-                </p>
                 <div className="actions">
                   <form method="post" action="/overview/confirm">
                     <input type="hidden" name="ref" value={one.ref} />
@@ -109,15 +134,16 @@ export default async function BoardPage({
                     </button>
                   </form>
                   <details>
-                    <summary>✗ ไม่ส่ง</summary>
+                    <summary>⏸ พักไว้ก่อน</summary>
                     <form method="post" action="/overview/reject">
                       <input type="hidden" name="ref" value={one.ref} />
+                      <p className="muted">งานจะไปอยู่ในช่อง “คุณพักไว้” และไม่ถูกเสนออีกจนจบกะ หรือจนกว่าคุณจะนำกลับมา</p>
                       <label className="field">
-                        <span>ทำไมยังไม่ควรส่ง</span>
-                        <textarea name="reason" rows={2} required placeholder="เช่น ช่างคนนี้ติดงานที่สาย B อยู่" />
+                        <span>ทำไมยังไม่ควรทำตอนนี้</span>
+                        <textarea name="reason" rows={2} required placeholder="เช่น รอหยุดสายตอนพักเที่ยง" />
                       </label>
                       <button type="submit" className="danger">
-                        ไม่ส่ง พร้อมเหตุผลนี้
+                        พักไว้ พร้อมเหตุผลนี้
                       </button>
                     </form>
                   </details>
@@ -126,6 +152,32 @@ export default async function BoardPage({
             );
           })}
         </section>
+
+        {round.set_aside.length > 0 && (
+          <section className="column">
+            <h2>
+              คุณพักไว้ <span className="count">{round.set_aside.length}</span>
+            </h2>
+            {round.set_aside.map((one) => {
+              const job = tickets.get(one.ref)!;
+              const band = bandFor(job);
+              return (
+                <article className={`ticket ${band.tone}`} key={`aside-${one.ref}`}>
+                  <div className="ticket-head">
+                    <span className="machine-small">{job.machine_id}</span>
+                    <span className={`pill ${band.tone}`}>{band.label}</span>
+                  </div>
+                  <p>{job.reason}</p>
+                  <p className="muted">เหตุผลที่พัก: {one.why}</p>
+                  <form method="post" action="/overview/bring-back">
+                    <input type="hidden" name="ref" value={one.ref} />
+                    <button type="submit">↩ นำกลับมาให้ระบบจัดช่าง</button>
+                  </form>
+                </article>
+              );
+            })}
+          </section>
+        )}
 
         <section className="column">
           <h2>
