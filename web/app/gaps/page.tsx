@@ -34,7 +34,8 @@ export default async function GapsPage({
     <Shell account={account} current="/gaps">
       <h1>อาการที่ยังไม่มีขั้นตอนซ่อม</h1>
       <p className="muted">
-        ใบงานของอาการเหล่านี้ถึงมือช่างโดยไม่มีขั้นตอน ให้ระบบร่างจากคู่มือ แล้ววิศวกรตรวจและอนุมัติก่อนใช้งานจริง
+        ใบงานของอาการเหล่านี้ถึงมือช่างโดยไม่มีขั้นตอน ระบบร่างขั้นตอนจากคู่มือให้เองเมื่ออาการเกิดครั้งแรก
+        ร่างจะไปรอที่หน้า “อนุมัติขั้นตอน” วิศวกรตรวจเทียบกับหน้าคู่มือแล้วอนุมัติก่อนถึงมือช่าง
       </p>
 
       {drafting !== undefined && (
@@ -71,23 +72,20 @@ export default async function GapsPage({
             ) : (
               account.role === "engineer" && (
                 <details>
-                  <summary>📝 ให้ระบบร่างขั้นตอนจากคู่มือ</summary>
+                  <summary>📝 ขอร่างใหม่</summary>
                   <form method="post" action="/overview/draft">
                     <input type="hidden" name="symptom_code" value={row.symptom_code} />
                     <input type="hidden" name="machine_model" value={row.machine_model} />
                     <label className="field">
-                      <span>อธิบายอาการตามที่คู่มือน่าจะเขียน</span>
-                      <input
-                        type="text"
-                        name="question"
-                        required
-                        placeholder="เช่น มอเตอร์สายพานร้อนเกิน 85 องศา"
-                      />
-                      {/* The drafter chooses the page by the figures in the
-                          question (ADR-089), so the hint asks for them. */}
+                      <span>คำที่ใช้ค้นคู่มือ</span>
+                      <input type="text" name="question" required defaultValue={row.title ?? ""} />
+                      {/* The rule's own words are the default, and drafting also
+                          checks every page against them (ADR-121). The old hint
+                          asked for figures, and "85 องศา" typed for the safety
+                          interlock drafted the belt-motor page. */}
                       <small className="muted">
-                        ใส่ตัวเลขด้วย เช่น 85 องศา หรือ 12.5 แอมป์ ระบบจะหาหน้าที่มีตัวเลขตรงกัน
-                        ถ้าไม่มีหน้าไหนตรง ระบบจะบอกว่าไม่พบ ไม่เดา
+                        ระบบใส่ชื่ออาการไว้ให้แล้ว เติมคำที่คู่มือน่าจะใช้ได้ ขั้นตอนที่ร่างต้องเกี่ยวกับอาการนี้เสมอ
+                        ถ้าคู่มือไม่มีเรื่องนี้ ระบบจะบอกว่าไม่พบ ไม่เดา
                       </small>
                     </label>
                     <button type="submit">ขอร่าง</button>

@@ -54,3 +54,40 @@ def test_when_nothing_clears_the_floor_there_is_no_evidence() -> None:
     kept = _drafting([0.0, 0.001])._relevant("q", (_page(3, 1.0), _page(4, 1.0)))
 
     assert kept == ()
+
+
+class ByQuestion:
+    """Scores by what is asked: the question passes every page, the symptom only
+    the pages named for it."""
+
+    def __init__(self, symptom: str, about: set[int]) -> None:
+        self.symptom = symptom
+        self.about = about
+
+    def relevance(self, question: str, texts: Sequence[str]) -> list[float]:
+        if question != self.symptom:
+            return [0.9] * len(texts)
+        return [0.8 if int(text.split()[1]) in self.about else 0.01 for text in texts]
+
+
+def _about(symptom: str, about: set[int]) -> Drafting:
+    drafting = _drafting(())
+    drafting.reranker = ByQuestion(symptom, about)
+    return drafting
+
+
+def test_a_page_that_answers_the_question_and_not_the_symptom_is_dropped() -> None:
+    """ADR-121: "85 องศา" typed for the safety interlock found the belt-motor page."""
+    pages = (_page(4, 0.9), _page(11, 0.5))
+
+    kept = _about("interlock open", {11})._about("interlock open", pages)
+
+    assert [page.page for page in kept] == [11]
+
+
+def test_the_symptom_filters_and_keeps_the_questions_scores() -> None:
+    pages = (_page(4, 0.9), _page(7, 0.5))
+
+    kept = _about("belt motor hot", {4, 7})._about("belt motor hot", pages)
+
+    assert [(page.page, page.score) for page in kept] == [(4, 0.9), (7, 0.5)]

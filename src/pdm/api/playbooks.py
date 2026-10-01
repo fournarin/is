@@ -23,7 +23,7 @@ from pdm.api.work_orders import Orders
 from pdm.contracts import MachineModel, PlaybookStep, Role, SkillId, SymptomCode
 from pdm.platform.auth.domain import Account
 from pdm.platform.jobs import JobKind
-from pdm.playbooks import repo as playbooks_repo
+from pdm.playbooks import asking
 from pdm.playbooks.domain import Proposal
 from pdm.playbooks.repo import NothingToApply
 from pdm.playbooks.service import NotADraft, NotAnEngineer, PlaybookStore
@@ -195,6 +195,7 @@ def request_draft(
     requested: DraftRequested,
     conn: Db,
     jobs: Jobs,
+    config: Plant,
     account: Annotated[Account, Depends(requires(Role.ENGINEER, action="request_draft"))],
 ) -> dict[str, Any]:
     """Queue a drafting job. 202, because nothing has been drafted yet.
@@ -203,49 +204,33 @@ def request_draft(
     reaches a technician without an approval that is also engineer-only - but
     because the worker behind it holds the one GPU (ADR-029), and a queue anybody
     can fill is a queue the person who has to empty it does not control.
-    """
-    pair: dict[str, object] = {
-        "symptom_code": requested.symptom_code,
-        "machine_model": requested.machine_model,
-    }
-    # Asking twice for something already coming is not an error (ADR-040): the
-    # second press gets the first job's id. A 409 would teach people to press
-    # again to find out, and each press costs a pass on the one GPU.
-    already = jobs.pending(conn, kind=JobKind.DRAFT, payload=pair)
-    if already is not None:
-        return {
-            "job": already.id,
-            "symptom_code": requested.symptom_code,
-            "status": already.status.value,
-            "queued_already": True,
-        }
 
-    # The same courtesy one stage later: a draft that has already arrived and is
-    # waiting for a decision is the answer to this ask too. A second one would
-    # sit beside the first in the review queue, which nothing there merges, and
-    # would cost another pass on the one GPU to produce the duplicate.
-    #
-    # The screen hides the button in this case (`web/app/overview/page.tsx`),
-    # which is where a person sees it and not where the rule holds: this
-    # endpoint is reachable from `/docs` and curl, and invariant 6's argument
-    # about approval - a rule enforced in one of two entry points is a rule with
-    # a way round it - is the same argument here (ADR-080).
-    waiting = playbooks_repo.awaiting_review(
-        conn, symptom_code=requested.symptom_code, machine_model=requested.machine_model
+    Asking twice for something already coming, or already waiting for review, is
+    answered with what is coming (ADR-040, ADR-080); `pdm.playbooks.asking`
+    holds both rules, because the trigger loop asks through it too (ADR-121).
+    The rule's own description of the symptom travels with the job, so drafting
+    can refuse pages that answer the typed question and not the fault.
+    """
+    asked = asking.ask(
+        conn,
+        jobs,
+        symptom_code=requested.symptom_code,
+        machine_model=requested.machine_model,
+        question=requested.question,
+        symptom=config.wording().symptom(requested.symptom_code),
     )
-    if waiting is not None:
+    if asked.awaiting_review is not None:
         return {
-            "proposal": waiting,
+            "proposal": asked.awaiting_review,
             "symptom_code": requested.symptom_code,
             "awaiting_review": True,
         }
-
-    job = jobs.enqueue(conn, kind=JobKind.DRAFT, payload={**pair, "question": requested.question})
+    assert asked.job is not None
     return {
-        "job": job.id,
+        "job": asked.job,
         "symptom_code": requested.symptom_code,
-        "status": job.status.value,
-        "queued_already": False,
+        "status": "queued",
+        "queued_already": asked.queued_already,
     }
 
 
@@ -370,6 +355,7 @@ def send_back(
     conn: Db,
     jobs: Jobs,
     playbooks: Store,
+    config: Plant,
     account: Annotated[Account, Depends(requires(Role.ENGINEER, action="send_back_proposal"))],
 ) -> dict[str, Any]:
     """Refuse the draft and ask for another, in one transaction.
@@ -406,9 +392,19 @@ def send_back(
     # The same courtesy `request_draft` extends (ADR-040): a redraft already
     # queued for this pair is the answer to this one as well, and each press
     # costs a pass on the one GPU.
+    #
+    # The note is the question; the rule's description of the symptom goes with
+    # it, so a note that reads like another fault cannot draft that fault's page
+    # under this one (ADR-121).
     already = jobs.pending(conn, kind=JobKind.DRAFT, payload=pair)
     job = already or jobs.enqueue(
-        conn, kind=JobKind.DRAFT, payload={**pair, "question": sending_back.note}
+        conn,
+        kind=JobKind.DRAFT,
+        payload={
+            **pair,
+            "question": sending_back.note,
+            "symptom": config.wording().symptom(decided.symptom_code),
+        },
     )
     return {
         "proposal_id": decided.proposal_id,

@@ -367,6 +367,24 @@ def awaiting_review(
     return int(row[0]) if row is not None else None
 
 
+def ever_proposed(
+    conn: Connection[Any], *, symptom_code: SymptomCode, machine_model: MachineModel
+) -> bool:
+    """Whether anything has ever been filed for this pair, in any state (ADR-121).
+
+    The test for asking by itself: once a draft has been filed - approved,
+    dismissed, sent back or "not found" - the next one is a person's decision,
+    not the loop's, or every new Finding of an unanswered symptom would ask again.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM playbook_proposal "
+            "WHERE symptom_code = %s AND machine_model = %s LIMIT 1",
+            (str(symptom_code), str(machine_model)),
+        )
+        return cur.fetchone() is not None
+
+
 def proposal(conn: Connection[Any], proposal_id: int) -> Proposal | None:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(

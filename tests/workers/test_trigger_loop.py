@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 from psycopg import Connection, connect
+from psycopg.types.json import Jsonb
 
 from pdm.contracts import (
     FindingKind,
@@ -35,6 +36,7 @@ from pdm.contracts import (
     MachineId,
     RuleId,
     Signal,
+    SymptomCode,
     WorkOrder,
     WorkOrderOrigin,
     WorkOrderStatus,
@@ -118,6 +120,7 @@ def _loop(
     *,
     predicting: bool = True,
     fallback: dict[str, Any] | None = None,
+    drafts: JobQueue | None = None,
 ) -> TriggerLoop:
     policy = CONFIG.policy.triggers
     triggers = Triggers(
@@ -139,6 +142,7 @@ def _loop(
         # and gets exactly those signals. A compressed demo differs only in how
         # fast the clock moves (ADR-044 §4).
         feed=Feed(Recorded(signals), decision_origin=clock.now()),
+        drafts=drafts,
     )
 
 
@@ -606,6 +610,61 @@ class TestAFinishedJobEndsItsFinding:
 
         assert loop.tick(conn).resolved == ()
         assert findings.live(conn)
+
+
+class TestAskingForADraftByItself:
+    """ADR-121. A ticket with no steps used to wait for an engineer to notice
+    the gap and type a question; the owner's second trial read that as drafting
+    not being automatic at all."""
+
+    @pytest.fixture
+    def drafts(self, conn: Connection[Any], clock: SimulatedClock) -> JobQueue:
+        conn.execute("TRUNCATE playbook_proposal, playbook CASCADE")
+        conn.commit()
+        return JobQueue(job_class=JobClass.AUTHORING, worker="test", timing=TIMING, clock=clock)
+
+    def _draft_jobs(self, conn: Connection[Any]) -> list[dict[str, Any]]:
+        return [
+            row[0]
+            for row in conn.execute(
+                "SELECT payload FROM job WHERE kind = 'draft' ORDER BY id"
+            ).fetchall()
+        ]
+
+    def test_the_first_ticket_without_steps_asks_in_the_rules_own_words(
+        self, conn: Connection[Any], clock: SimulatedClock, drafts: JobQueue
+    ) -> None:
+        loop = _loop(clock, _two_minutes_of_heat(NOW), drafts=drafts)
+        clock.advance(timedelta(minutes=3))
+
+        loop.tick(conn)
+
+        title = CONFIG.wording().symptom(SymptomCode("SYM-014"))
+        assert self._draft_jobs(conn) == [
+            {
+                "symptom_code": "SYM-014",
+                "machine_model": "R-2000iC",
+                "question": title,
+                "symptom": title,
+            }
+        ]
+
+    def test_a_symptom_drafted_before_is_not_asked_again(
+        self, conn: Connection[Any], clock: SimulatedClock, drafts: JobQueue
+    ) -> None:
+        """A draft that came back "not found", or that an engineer dismissed, is
+        an answer; asking again is the engineer's decision, not every Finding's."""
+        conn.execute(
+            "INSERT INTO job (job_class, kind, payload, status, available_at, created_at)"
+            " VALUES ('authoring', 'draft', %s, 'done', now(), now())",
+            (Jsonb({"symptom_code": "SYM-014", "machine_model": "R-2000iC", "question": "x"}),),
+        )
+        loop = _loop(clock, _two_minutes_of_heat(NOW), drafts=drafts)
+        clock.advance(timedelta(minutes=3))
+
+        loop.tick(conn)
+
+        assert len(self._draft_jobs(conn)) == 1
 
 
 class TestWhenSomethingIsWrong:

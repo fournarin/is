@@ -136,3 +136,30 @@ questions is compatible with an unsafe rate of up to 24%. The test split has
 also been looked at after each change since ADR-097, and a change was kept when
 test did not get worse, so it has been used to select changes and is no longer
 fully held out.
+
+## A draft must also be about the symptom - 1 October 2026
+
+[ADR-121](../adr/0121-drafting-starts-by-itself-and-must-be-about-the-symptom.md).
+`scripts/measure_rag.py evalset --rerank` with `--symptom` (the symptom's
+description handed to drafting, here the other language's query) and
+`--mismatched` (each symptom asked another symptom's question of the same model).
+`min_relevance` 0.10 for both tests, as before.
+
+| run | dev en | dev th | test en | test th | unsafe drafts |
+|---|---:|---:|---:|---:|---:|
+| question only | 8/9 | 8/9 | 12/12 | 6/12 | 0 |
+| question + description in the other language | 8/9 | 8/9 | 9/12 | 6/12 | 0 |
+| another symptom's question | 0/9 | 2/9 | 0/12 | 1/12 | **22** |
+| another symptom's question + its own description | 2/9 | 2/9 | 2/12 | 2/12 | **0** |
+
+What it says:
+
+- **A wrong question is the dangerous input, not a rare one.** Asked another
+  symptom's question, the pipeline drafted a repair from that symptom's page in
+  22 of 42 cases, because the relevance gate tests pages against the question.
+  This is what happened in the owner's second trial ("85 องศา" for the safety
+  interlock).
+- **Testing the page against the symptom as well removes all 22.**
+- **It costs three correct drafts when the description is in another language**
+  (EV-104, EV-105, EV-134 in English with a Thai description): they become "not
+  found", the safe failure. The dev split shows no cost, so no floor was tuned.
