@@ -50,7 +50,7 @@ _COLUMNS = """
     snapshot_approved_at, playbook_warning, estimated_minutes, required_skill,
     required_technicians, estimate_is_fallback, reason, priority_score,
     priority_reason, status, assignees, work_segments, handover_note,
-    blocked_minutes, blocked_reason, outcome, technician_feedback
+    blocked_minutes, blocked_reason, outcome, technician_feedback, reported_by
 """
 
 OPEN_STATUSES = ("queued", "proposed", "assigned", "in_progress", "handed_over")
@@ -88,7 +88,7 @@ def issue(conn: Connection[Any], order: WorkOrder, *, now: datetime) -> str:
             f"""
             INSERT INTO work_order ({_COLUMNS}, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING work_order_ref
             """,
             (
@@ -120,12 +120,34 @@ def issue(conn: Connection[Any], order: WorkOrder, *, now: datetime) -> str:
                 [reason.value for reason in order.blocked_reason],
                 order.outcome.value if order.outcome else None,
                 order.technician_feedback,
+                order.reported_by,
                 now,
             ),
         )
         row = cur.fetchone()
     assert row is not None
     return str(row["work_order_ref"])
+
+
+def reported_by(
+    conn: Connection[Any], user: UserId, *, limit: int
+) -> list[tuple[str, datetime, datetime | None, WorkOrder]]:
+    """What this person reported, newest first, whatever became of it (ADR-122)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT work_order_ref, created_at, closed_at, {_COLUMNS} FROM work_order
+             WHERE reported_by = %s
+             ORDER BY created_at DESC, work_order_ref DESC
+             LIMIT %s
+            """,
+            (user, limit),
+        )
+        rows = cur.fetchall()
+    return [
+        (str(row["work_order_ref"]), row["created_at"], row["closed_at"], _to_order(dict(row)))
+        for row in rows
+    ]
 
 
 def get(conn: Connection[Any], work_order_ref: str) -> WorkOrder | None:

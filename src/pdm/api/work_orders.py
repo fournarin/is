@@ -275,6 +275,8 @@ def report(
             machine_model=machine_model,
             severity=reported.severity,
             reported_by=account.user,
+            # The name the board prints, rather than the sign-in (ADR-093).
+            reporter_name=account.display_name,
             description=reported.description,
             symptom_code=reported.symptom_code,
             distinct_from=reported.distinct_from,

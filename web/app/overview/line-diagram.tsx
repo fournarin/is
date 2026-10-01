@@ -76,7 +76,7 @@ export function LineFaults({ line, timezone }: { line: Line; timezone: string })
       {faults.map((station) => (
         <li key={station.station_id} className={station.state}>
           <strong>
-            {station.station_id} · {station.machine_id}
+            {station.machine_id} · {station.symptom_title ?? "มีสัญญาณผิดปกติ"}
           </strong>
           {station.state === "over_threshold" ? (
             <p>เกินเกณฑ์มาแล้ว {spell(station.over_threshold_minutes ?? 0)}</p>
@@ -89,7 +89,7 @@ export function LineFaults({ line, timezone }: { line: Line; timezone: string })
             </p>
           )}
           <p className="muted">
-            {station.symptom_code} · {station.component}
+            สถานี {station.station_id}
             {station.live_findings > 1 && ` · อีก ${station.live_findings - 1} อาการที่สถานีนี้`}
             {station.bottleneck && " · คอขวด"}
             {station.buffer_units === 0 && " · ไม่มีบัฟเฟอร์"}

@@ -22,6 +22,8 @@ export type Station = {
   machine_id: string | null;
   component: string | null;
   symptom_code: string | null;
+  // The symptom as the plant names it (ADR-093).
+  symptom_title: string | null;
   severity: string | null;
   rule_id: string | null;
   live_findings: number;

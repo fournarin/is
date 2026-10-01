@@ -108,7 +108,8 @@ machine_id, severity, finding_kind?, eta?, eta_confidence?,
 estimated_minutes, required_skill?, required_technicians, estimate_is_fallback,
 reason, priority_score, priority_reason, status,
 assignees[], work_segments[], handover_note,
-actual_minutes, blocked_minutes, blocked_reason, outcome, technician_feedback
+actual_minutes, blocked_minutes, blocked_reason, outcome, technician_feedback,
+reported_by?        (a manual order only, ADR-122)
 ```
 ```
 assignees[]     = [{ user, role: primary | helper }]
