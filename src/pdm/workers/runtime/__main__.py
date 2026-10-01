@@ -217,6 +217,16 @@ def main() -> None:
         config=config,
         clock=clock,
         feed=build_feed(clock),
+        # Rows on the authoring queue, which worker-authoring claims (ADR-121).
+        drafts=JobQueue(
+            job_class=JobClass.AUTHORING,
+            worker=WORKER,
+            timing=ClassTiming(
+                heartbeat_seconds=config.policy.jobs.authoring.heartbeat_seconds,
+                dead_after_seconds=config.policy.jobs.authoring.dead_after_seconds,
+            ),
+            clock=clock,
+        ),
     )
 
     rounds = DispatchRounds(clock, config)

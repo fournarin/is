@@ -28,6 +28,7 @@ from pdm.dispatch.service import DispatchRounds, describe
 from pdm.platform.clock import Clock
 from pdm.platform.config.loader import Config
 from pdm.platform.jobs import Job, JobKind, JobQueue
+from pdm.playbooks import asking
 from pdm.signals import Feed
 from pdm.sinks import Deliveries
 from pdm.sinks import describe as describe_deliveries
@@ -96,8 +97,14 @@ class TriggerLoop:
         config: Config,
         clock: Clock,
         feed: Feed | None = None,
+        drafts: JobQueue | None = None,
     ) -> None:
         self.triggers = triggers
+        # The authoring queue, for asking for a draft the first time a symptom
+        # with no approved steps gets a ticket (ADR-121). A row in a table: this
+        # process still has no route to the model (ADR-003). None in a loop that
+        # should not ask, which is every test that is not about asking.
+        self.drafts = drafts
         self.orders = orders
         self.config = config
         self.clock = clock
@@ -269,6 +276,21 @@ class TriggerLoop:
             return
 
         issued.append(order.ref)
+        if not order.order.playbook_snapshot and self.drafts is not None:
+            # Nothing approved serves this symptom on this model, so the
+            # technician was handed no steps. The first time that happens the
+            # system asks for a draft itself, in the rule's own words; after
+            # that, asking again is an engineer's decision (ADR-121).
+            title = self.config.wording().symptom(finding.symptom_code)
+            asking.ask(
+                conn,
+                self.drafts,
+                symptom_code=finding.symptom_code,
+                machine_model=self.config.model_of(finding.machine_id),
+                question=title,
+                symptom=title,
+                only_if_never_asked=True,
+            )
         if raised.superseded is not None:
             # The prediction came true. Its ticket describes a crossing that has
             # already happened, and this batch has just issued the one that says

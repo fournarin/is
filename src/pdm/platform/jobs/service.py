@@ -71,6 +71,11 @@ class JobQueue:
             conn, job_class=self.job_class, kind=kind.value, payload=payload
         )
 
+    def ever(self, conn: Connection[Any], *, kind: JobKind, payload: dict[str, object]) -> bool:
+        """Whether a job of this kind with these payload keys was ever queued,
+        whatever became of it (ADR-121)."""
+        return repo.ever_of_kind(conn, job_class=self.job_class, kind=kind.value, payload=payload)
+
     def claim(self, conn: Connection[Any]) -> Job | None:
         """Take the next job of this queue's class, and no other (invariant 12)."""
         return repo.claim(conn, job_class=self.job_class, worker=self.worker, now=self.clock.now())

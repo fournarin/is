@@ -218,18 +218,27 @@ class Drafting:
         symptom_code: SymptomCode,
         machine_model: MachineModel,
         question: str,
+        symptom: str | None = None,
     ) -> DraftResult:
         """Draft one playbook, or say why there is none.
 
         `question` is what retrieval is asked. It comes from the caller rather
         than from the symptom code, because a code is not a query: SYM-014
         retrieves nothing and "belt motor running above 85 degrees" retrieves the
-        page. Where that sentence comes from - a rule's description, an engineer
-        typing it - is the caller's problem and not settled yet.
+        page.
+
+        `symptom` is the rule's own description of the fault, and a page must be
+        relevant to it as well as to the question (ADR-121). In the owner's
+        second trial "85 องศา" was typed for the safety-interlock symptom; the
+        belt-motor page answers "85 degrees" well, and its six steps were filed
+        as a repair for an interlock. A question can be wrong; the symptom the
+        draft will be filed under cannot.
         """
         hits = self.hybrid.search(conn, question, profile=self.profile)
         ours, theirs = self._evidence(conn, hits, machine_model)
         ours = self._relevant(question, ours)
+        if symptom is not None and symptom.strip() and symptom.strip() != question.strip():
+            ours = self._about(symptom.strip(), ours)
         ours = self._with_continuations(conn, ours)
 
         request = DraftRequest(
@@ -353,6 +362,19 @@ class Drafting:
         ]
         kept.sort(key=lambda page: (-page.score, page.page))
         return tuple(kept)
+
+    def _about(self, symptom: str, pages: tuple[Evidence, ...]) -> tuple[Evidence, ...]:
+        """The pages that are also about the symptom, keeping the question's scores.
+
+        The same reranker and the same floor as `_relevant`, asked about the
+        rule's description instead of the question. Only filters: the order and
+        the scores the drafter sees stay the question's (ADR-121).
+        """
+        if self.reranker is None or not pages:
+            return pages
+        scores = self.reranker.relevance(symptom, [page.text for page in pages])
+        floor = self.profile.min_relevance or 0.0
+        return tuple(page for page, score in zip(pages, scores, strict=True) if score >= floor)
 
     def _with_continuations(
         self, conn: Connection[Any], pages: tuple[Evidence, ...]

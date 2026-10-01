@@ -91,6 +91,18 @@ def pending_of_kind(
     return _to_job(row) if row else None
 
 
+def ever_of_kind(
+    conn: Connection[Any], *, job_class: JobClass, kind: str, payload: dict[str, object]
+) -> bool:
+    """A job of this kind whose payload contains these keys, in any status."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM job WHERE job_class = %s AND kind = %s AND payload @> %s LIMIT 1",
+            (job_class.value, kind, Jsonb(payload)),
+        )
+        return cur.fetchone() is not None
+
+
 def claim(
     conn: Connection[Any],
     *,

@@ -4,6 +4,15 @@ Run by hand, never by CI: it needs the embedding model.
 
     DATABASE_URL=postgresql://.../pdm_test FASTEMBED_CACHE_PATH=... \\
         uv run python scripts/measure_rag.py [corpus|evalset|realdocs] [--rerank] [--candidates=N]
+            [--symptom] [--mismatched]
+
+`--symptom` hands drafting the symptom's description as well as the question
+(ADR-121), using the other language's query as the description: it measures
+what the second relevance test costs a question that is right. `--mismatched`
+asks each symptom another symptom's question of the same model, with its own
+description: it measures whether a wrong question still drafts the wrong page
+under this symptom. Without `--symptom`, `--mismatched` shows what that cost
+before ADR-121.
 
 `evalset` (the default) is the corpus written for measurement (ADR-096); its
 `test` entries have never been tuned on. `corpus` is the original five-symptom
@@ -115,6 +124,8 @@ def main() -> int:
     args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     name = args[0] if args else "evalset"
     rerank = "--rerank" in sys.argv
+    with_symptom = "--symptom" in sys.argv
+    mismatched = "--mismatched" in sys.argv
     here = CORPORA[name]
     corpus = load(here / "manifest.yaml")
     if name == "realdocs":
@@ -139,6 +150,8 @@ def main() -> int:
         f"measured {datetime.now(UTC).date().isoformat()} on {name} · model {embedder.model_name}"
         f" · reranker {reranker.model_name if reranker else 'none'}"
         f" · min_relevance {authoring.min_relevance if reranker else '-'}"
+        f"{' · symptom described' if with_symptom else ''}"
+        f"{' · mismatched questions' if mismatched else ''}"
     )
 
     conn = connect(url)
@@ -164,7 +177,20 @@ def main() -> int:
         for entry in entries:
             own = corpus.document(entry.machine_model).sha256
             kind = type(entry).__name__
-            for language, query in (("en", entry.queries.en), ("th", entry.queries.th)):
+            # Another symptom of the same model, for --mismatched: the next one
+            # round the list, so every symptom is asked somebody else's question.
+            same_model = [one for one in entries if one.machine_model == entry.machine_model]
+            other = same_model[(same_model.index(entry) + 1) % len(same_model)]
+            for language, own_query, other_language in (
+                ("en", entry.queries.en, entry.queries.th),
+                ("th", entry.queries.th, entry.queries.en),
+            ):
+                query = (
+                    (other.queries.en if language == "en" else other.queries.th)
+                    if mismatched and other is not entry
+                    else own_query
+                )
+                symptom = (own_query if mismatched else other_language) if with_symptom else None
                 hits = hybrid.search(
                     conn, query, machine_model=MachineModel(entry.machine_model), profile=authoring
                 )
@@ -179,6 +205,7 @@ def main() -> int:
                     symptom_code=entry.symptom_code,
                     machine_model=entry.machine_model,
                     question=query,
+                    symptom=symptom,
                 )
                 ok, unsafe = _verdict(entry, result, own)
                 cited = (

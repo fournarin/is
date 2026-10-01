@@ -53,6 +53,9 @@ class DraftPayload(BaseModel):
     symptom_code: SymptomCode
     machine_model: MachineModel
     question: str = Field(min_length=1)
+    # The rule's own description of the fault (ADR-121). Optional so a job queued
+    # before it existed still runs; without it only the question is tested.
+    symptom: str | None = None
 
     @field_validator("question")
     @classmethod
@@ -110,6 +113,7 @@ def draft_handler(drafting: Drafting, clock: Clock) -> Any:
             symptom_code=payload.symptom_code,
             machine_model=payload.machine_model,
             question=payload.question,
+            symptom=payload.symptom,
         )
         proposal = drafting.file(conn, result, now=clock.now())
         log.info(
