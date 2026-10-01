@@ -331,6 +331,9 @@ class WorkOrder(BaseModel):
     blocked_reason: tuple[BlockedReason, ...] = ()
     outcome: WorkOutcome | None = None
     technician_feedback: str | None = None
+    # Who reported it, on a manual order (ADR-077, ADR-122). The reason sentence
+    # names them too; this is what lets the reporter find it again.
+    reported_by: UserId | None = None
 
     @property
     def actual_minutes(self) -> int:

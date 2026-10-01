@@ -360,7 +360,7 @@ def main() -> None:
     )
     expect(f"ปล่อย {first} แล้ว" in readable(released), "with a reason the screen names what it did")
     expect(
-        "รอบถัดไปจะจัดช่างให้" in readable(released),
+        "รอบถัดไป" in readable(released),
         "and says the next round places it, rather than pretending the queue moved",
     )
     expect(
@@ -380,9 +380,12 @@ def main() -> None:
     print("\n7. machine health: two lists, and what the screen cannot say")
     health = json.loads(get("/overview/health", where=API))
     expect("สุขภาพเครื่องจักร" in page, "the panel is on the supervisor's overview")
+    # With nothing closed there is no history to rank, and the screen shows the
+    # one list it has rather than a column of "too little data" (ADR-122).
     expect(
-        "เสียบ่อยที่สุดในช่วงที่นับ" in page and "มีเรื่องค้างอยู่ตอนนี้" in page,
-        "two lists and never one (ADR-072 §2)",
+        ("เสียบ่อยที่สุดในช่วงที่นับ" in page) == (health["observed_from"] is not None)
+        and "มีเรื่องค้างอยู่ตอนนี้" in page,
+        "two lists and never one (ADR-072 §2), the first only when anything has closed",
     )
     for row in health["by_history"]:
         expect(

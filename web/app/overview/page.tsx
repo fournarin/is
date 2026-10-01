@@ -1,3 +1,4 @@
+import { KeepFresh } from "@/app/ui/keep-fresh";
 import { NotYours, Shell } from "@/app/ui/shell";
 
 import { LineDiagram, LineFaults } from "@/app/overview/line-diagram";
@@ -24,21 +25,35 @@ export default async function OverviewPage() {
   if (account.role !== "supervisor" && account.role !== "engineer") {
     return (
       <Shell account={account} current="/overview">
-        <NotYours home={homeFor(account.role)} what="หน้านี้เป็นของหัวหน้ากะและวิศวกร" />
+        <NotYours
+          home={homeFor(account.role)}
+          what="หน้านี้เป็นของหัวหน้ากะและวิศวกร"
+        />
       </Shell>
     );
   }
 
-  const [overview, health] = await Promise.all([lineOverview(), machineHealth()]);
+  const [overview, health] = await Promise.all([
+    lineOverview(),
+    machineHealth(),
+  ]);
   const shift = overview.shift;
-  const load = shift.load_ratio === null ? null : Math.round(shift.load_ratio * 100);
+  const load =
+    shift.load_ratio === null ? null : Math.round(shift.load_ratio * 100);
 
   return (
     <Shell account={account} current="/overview">
+      <KeepFresh seconds={60} />
       <div className="who">
         <h1 style={{ margin: 0 }}>สายการผลิต</h1>
-        <span className="muted">อัปเดต {plantTime(overview.at, overview.timezone)} น.</span>
+        <span className="muted">
+          อัปเดต {plantTime(overview.at, overview.timezone)} น.
+        </span>
       </div>
+      <p className="muted">
+        ดูว่าเครื่องไหนกำลังมีปัญหา หรือกำลังจะมี และกะนี้มีงานมากแค่ไหน
+        งานที่ต้องตัดสินใจอยู่ที่ “กระดานงาน”
+      </p>
 
       <div className="stats">
         <div className="stat">
@@ -58,7 +73,8 @@ export default async function OverviewPage() {
         </div>
       </div>
       <p className="muted">
-        {shift.summary} · ใช้ไป {shift.committed_minutes} จาก {shift.capacity_minutes} นาที-คน
+        {shift.summary} · ใช้ไป {shift.committed_minutes} จาก{" "}
+        {shift.capacity_minutes} นาที-คน
       </p>
 
       {overview.lines.map((line) => (
@@ -76,13 +92,12 @@ export default async function OverviewPage() {
         </p>
       )}
 
-
       <section>
         <h2>สุขภาพเครื่องจักร</h2>
 
         <p className="muted">
           {health.observed_from === null
-            ? "ยังไม่มีใบงานที่ปิดแล้ว จึงยังไม่มีอะไรให้นับ"
+            ? "ยังไม่มีงานที่ปิดแล้ว จึงยังบอกไม่ได้ว่าเครื่องไหนเสียบ่อย ด้านล่างคือเรื่องที่ค้างอยู่ตอนนี้"
             : `นับจากใบงานที่ปิดแล้วในช่วง ${plantDateTime(
                 health.observed_from,
                 overview.timezone,
@@ -92,35 +107,37 @@ export default async function OverviewPage() {
         </p>
 
         <div className="health">
-          <div className="card">
-            <h3>เสียบ่อยที่สุดในช่วงที่นับ</h3>
-            <ol className="health-list">
-              {health.by_history.map((row) => (
-                <li key={`history-${row.machine_id}`}>
-                  <strong>{row.machine_id}</strong>{" "}
-                  <span className="muted">
-                    {row.history.failures_per_100_days === null
-                      ? "ยังไม่มีช่วงเวลาให้หาร"
-                      : `${row.history.failures_per_100_days.toFixed(1)} ครั้งต่อ 100 วัน`}
-                  </span>
-                  <br />
-                  <span className="muted">{row.history.reason}</span>
-                  {/* Displayed, never ranked on: a machine somebody was sent to
+          {health.observed_from !== null && (
+            <div className="card">
+              <h3>เสียบ่อยที่สุดในช่วงที่นับ</h3>
+              <ol className="health-list">
+                {health.by_history.map((row) => (
+                  <li key={`history-${row.machine_id}`}>
+                    <strong>{row.machine_id}</strong>{" "}
+                    <span className="muted">
+                      {row.history.failures_per_100_days === null
+                        ? "ข้อมูลยังน้อยเกินไป"
+                        : `${row.history.failures_per_100_days.toFixed(1)} ครั้งต่อ 100 วัน`}
+                    </span>
+                    <br />
+                    <span className="muted">{row.history.reason}</span>
+                    {/* Displayed, never ranked on: a machine somebody was sent to
                       for nothing has a rule problem rather than a machine
                       problem (ADR-076 section 3). */}
-                  {row.history.false_alarms > 0 && (
-                    <>
-                      <br />
-                      <span className="muted">
-                        ปิดงานแบบไม่พบปัญหา {row.history.false_alarms} ครั้ง —
-                        เป็นหลักฐานเรื่องกฎ ไม่ใช่เรื่องเครื่อง
-                      </span>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </div>
+                    {row.history.false_alarms > 0 && (
+                      <>
+                        <br />
+                        <span className="muted">
+                          ปิดงานแบบไม่พบปัญหา {row.history.false_alarms} ครั้ง —
+                          เป็นหลักฐานเรื่องกฎ ไม่ใช่เรื่องเครื่อง
+                        </span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
 
           <div className="card">
             <h3>มีเรื่องค้างอยู่ตอนนี้</h3>
@@ -143,14 +160,14 @@ export default async function OverviewPage() {
 
         {/* Principle 5, where it matters: the caveat belongs next to the number
             a person is deciding from, not in a document they will not open. */}
-        <div className="card">
-          <h3>สิ่งที่หน้านี้ยังบอกไม่ได้</h3>
+        <details>
+          <summary className="muted">ตัวเลขในส่วนนี้มีข้อจำกัดอะไรบ้าง</summary>
           <ul className="muted">
             {health.absent.map((sentence) => (
               <li key={sentence}>{sentence}</li>
             ))}
           </ul>
-        </div>
+        </details>
 
         {health.unplaced_machines.length > 0 && (
           <p className="muted">
@@ -160,7 +177,6 @@ export default async function OverviewPage() {
           </p>
         )}
       </section>
-
     </Shell>
   );
 }

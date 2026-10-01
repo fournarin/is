@@ -63,6 +63,7 @@ from pdm.contracts import (
     SymptomCode,
     WorkOrderRef,
 )
+from pdm.contracts.wording import Wording
 from pdm.health import ClosedRepair, MachineHealth, assess, by_history, by_now
 from pdm.platform.auth.domain import Account
 from pdm.playbooks import repo as playbooks
@@ -310,6 +311,12 @@ def group_by_model(pending: Iterable[PendingForPair]) -> list[ModelQueue]:
     return sorted(counted.values(), key=lambda group: (group.oldest, group.machine_model))
 
 
+def _titled(station: StationView, wording: Wording) -> StationView:
+    if station.symptom_code is None:
+        return station
+    return station.model_copy(update={"symptom_title": wording.symptom(station.symptom_code)})
+
+
 @router.get("/overview/gaps", response_model=Gaps)
 def gaps(
     conn: Db,
@@ -406,6 +413,9 @@ class StationView(BaseModel):
     machine_id: MachineId | None = None
     component: ComponentLabel | None = None
     symptom_code: SymptomCode | None = None
+    # The symptom as the plant names it, for the screen to print instead of the
+    # code (ADR-093; the owner's second trial read "SYM-014 · belt_motor").
+    symptom_title: str | None = None
     severity: Severity | None = None
     rule_id: RuleId | None = None
     live_findings: int = 0
@@ -641,6 +651,7 @@ def line_overview(
         machine_id for station in plant.stations.values() for machine_id in station.machine_ids
     }
     grouped, unplaced = group_by_machine(triggers.live(conn).values(), known=known)
+    wording = plant.wording()
 
     return LineOverview(
         # The round's own moment, so the stations and the band describe one
@@ -652,11 +663,14 @@ def line_overview(
             LineView(
                 line_id=str(line_id),
                 takt_seconds=line.takt_seconds,
-                stations=read_the_line(
-                    line,
-                    [one for one in plant.stations.values() if one.line_id == line_id],
-                    live=grouped,
-                    now=decided.at,
+                stations=tuple(
+                    _titled(station, wording)
+                    for station in read_the_line(
+                        line,
+                        [one for one in plant.stations.values() if one.line_id == line_id],
+                        live=grouped,
+                        now=decided.at,
+                    )
                 ),
             )
             for line_id, line in sorted(plant.lines.items())

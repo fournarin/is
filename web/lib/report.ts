@@ -23,3 +23,23 @@ export async function machines(): Promise<Machine[]> {
   }
   return (await response.json()) as Machine[];
 }
+
+/** One fault this person reported, and where it is now (ADR-122). */
+export type Reported = {
+  ref: string;
+  machine_id: string;
+  reported_at: string;
+  reported_when: string;
+  reason: string;
+  status: string;
+  where: string;
+  finished: boolean;
+};
+
+export async function myReports(): Promise<Reported[]> {
+  const response = await callApi("/work-orders/reported");
+  if (!response.ok) {
+    throw new Error(`the API answered ${response.status} for /work-orders/reported`);
+  }
+  return (await response.json()) as Reported[];
+}

@@ -337,6 +337,7 @@ def from_report(
     now: datetime,
     alongside: Sequence[str] = (),
     wording: Wording = _PLAIN,
+    reporter_name: str | None = None,
 ) -> WorkOrder:
     """A manual order: a person saw something.
 
@@ -369,8 +370,10 @@ def from_report(
         required_skill=playbook.required_skill if playbook else None,
         required_technicians=playbook.required_technicians if playbook else 1,
         estimate_is_fallback=is_fallback,
+        reported_by=reported_by,
         reason=(
-            f"แจ้งโดย {reported_by} เมื่อ {wording.day_and_clock(now)} ที่เครื่อง {machine_id}: "
+            f"แจ้งโดย {reporter_name or reported_by} เมื่อ {wording.day_and_clock(now)} "
+            f"ที่เครื่อง {machine_id}: "
             f"{description}"
             + (f" (เครื่องนี้มีใบงานเปิดอยู่แล้ว: {', '.join(alongside)})" if alongside else "")
         ),

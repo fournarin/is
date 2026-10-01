@@ -30,7 +30,7 @@ from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from psycopg import Connection
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -47,6 +47,7 @@ from pdm.contracts import (
     WorkOrderOrigin,
     WorkOrderRef,
     WorkOrderStatus,
+    WorkOutcome,
 )
 from pdm.dispatch import Band
 from pdm.dispatch import repo as dispatch_repo
@@ -394,6 +395,80 @@ def current_round(
         held=[Withheld(ref=one.ref, why=one.why) for one in decided.held],
         set_aside=[Withheld(ref=one.ref, why=one.why) for one in decided.set_aside],
     )
+
+
+class Reported(BaseModel):
+    """One fault this person reported, and where it is now (ADR-122)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    machine_id: str
+    reported_at: datetime
+    # The same moment on the plant's clock, as people say it (ADR-093).
+    reported_when: str
+    reason: str
+    status: WorkOrderStatus
+    # Where it is, in a sentence the reporter reads. Written here rather than by
+    # the screen: every sentence a person reads comes from the backend (ADR-063).
+    where: str
+    finished: bool
+
+
+_OUTCOME_TH = {
+    WorkOutcome.FIXED: "ช่างซ่อมเสร็จแล้ว",
+    WorkOutcome.TEMPORARY_FIX: "ช่างแก้ชั่วคราวแล้ว ยังต้องซ่อมจริงอีกครั้ง",
+    WorkOutcome.NOT_FIXED: "ช่างยังซ่อมไม่ได้",
+    WorkOutcome.NO_PROBLEM_FOUND: "ช่างตรวจแล้วไม่พบปัญหา",
+}
+
+
+def _where(order: WorkOrder, names: tuple[str, ...]) -> str:
+    who = ", ".join(names)
+    if order.status is WorkOrderStatus.QUEUED:
+        return "รอหัวหน้ากะจัดช่าง"
+    if order.status is WorkOrderStatus.PROPOSED:
+        return f"ระบบเลือก {who} ไว้ รอหัวหน้ากะยืนยัน"
+    if order.status is WorkOrderStatus.ASSIGNED:
+        return f"ส่งให้ {who} แล้ว รอเริ่มงาน"
+    if order.status is WorkOrderStatus.IN_PROGRESS:
+        return f"{who} กำลังซ่อม"
+    if order.status is WorkOrderStatus.HANDED_OVER:
+        return "ช่างส่งต่อไว้ รอคนรับงานต่อ"
+    if order.status is WorkOrderStatus.CANCELLED:
+        return "ยกเลิกแล้ว"
+    return _OUTCOME_TH.get(order.outcome, "ปิดงานแล้ว") if order.outcome else "ปิดงานแล้ว"
+
+
+@router.get("/work-orders/reported", response_model=list[Reported])
+def reported_by_me(
+    conn: Db,
+    plant: Plant,
+    account: Annotated[
+        Account,
+        Depends(requires(*_MAY_READ, action="read_my_reports")),
+    ],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> list[Reported]:
+    """What the caller reported, newest first, and where each one is (ADR-122).
+
+    Registered before `/work-orders/{work_order_ref}` for the reason `mine` is.
+    In the owner's second trial a report, once sent, could not be found again
+    by the person who sent it.
+    """
+    return [
+        Reported(
+            ref=ref,
+            machine_id=str(order.machine_id),
+            reported_at=created_at,
+            reported_when=plant.wording().day_and_clock(created_at),
+            reason=order.reason,
+            status=order.status,
+            where=_where(order, _names(conn, (one.user for one in order.assignees))),
+            finished=order.status in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED),
+        )
+        for ref, created_at, _closed, order in work.reported_by(conn, account.user, limit=limit)
+    ]
 
 
 @router.get("/work-orders/mine", response_model=list[Mine])

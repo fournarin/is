@@ -213,7 +213,8 @@ class TestWhatTheTicketSays:
 
         reason = response.json()["reason"]
         assert "ได้ยินเสียงดังผิดปกติที่หัวจับ" in reason
-        assert "tech-1" in reason
+        # The name the board prints, not the sign-in (ADR-122).
+        assert "Somchai" in reason
         assert "3 มี.ค. 15:00 น." in reason
 
     def test_a_report_with_no_symptom_code_is_priced_from_the_fallback_and_says_so(
@@ -358,6 +359,50 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             conn.commit()
 
         assert _report(client).status_code == 201
+
+
+class TestWhatIReported:
+    """ADR-122. In the owner's second trial a report could not be found again
+    by the person who made it."""
+
+    def test_the_reporter_finds_it_with_where_it_is(self, client: TestClient) -> None:
+        _signed_in(client, Role.OPERATOR)
+        ref = _report(client).json()["ref"]
+
+        mine = client.get("/work-orders/reported")
+
+        assert mine.status_code == 200, mine.text
+        (one,) = mine.json()
+        assert one["ref"] == ref
+        assert one["where"] == "รอหัวหน้ากะจัดช่าง"
+        assert one["finished"] is False
+        assert one["reported_when"] == "3 มี.ค. 15:00 น."
+
+    def test_somebody_else_does_not_see_it(self, client: TestClient) -> None:
+        _signed_in(client, Role.OPERATOR)
+        _report(client)
+        client.post("/sessions/logout")
+        client.cookies.clear()
+        _signed_in(client, Role.TECHNICIAN)
+
+        assert client.get("/work-orders/reported").json() == []
+
+    def test_a_closed_report_says_what_the_technician_found(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        _signed_in(client, Role.OPERATOR)
+        ref = _report(client).json()["ref"]
+        with connect(world["database_url"]) as conn:
+            conn.execute(
+                "UPDATE work_order SET status = 'closed', outcome = 'no_problem_found',"
+                " closed_at = now() WHERE work_order_ref = %s",
+                (ref,),
+            )
+
+        (one,) = client.get("/work-orders/reported").json()
+
+        assert one["where"] == "ช่างตรวจแล้วไม่พบปัญหา"
+        assert one["finished"] is True
 
 
 class TestTheListOfMachinesToReportAgainst:

@@ -263,6 +263,7 @@ class WorkOrders:
         description: str,
         symptom_code: SymptomCode | None = None,
         distinct_from: Sequence[str] = (),
+        reporter_name: str | None = None,
     ) -> Issued:
         """Somebody saw something.
 
@@ -296,6 +297,7 @@ class WorkOrders:
             machine_id=machine_id,
             severity=severity,
             reported_by=reported_by,
+            reporter_name=reporter_name,
             description=description,
             playbook=playbook,
             playbook_warning=warning,

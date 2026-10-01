@@ -1,7 +1,8 @@
 import { Shell } from "@/app/ui/shell";
 
 import { ReportForm } from "@/app/report/report-form";
-import { machines } from "@/lib/report";
+import { KeepFresh } from "@/app/ui/keep-fresh";
+import { machines, myReports } from "@/lib/report";
 import { requireAccount } from "@/lib/session";
 
 /**
@@ -15,7 +16,7 @@ import { requireAccount } from "@/lib/session";
  */
 export default async function ReportPage() {
   const account = await requireAccount();
-  const floor = await machines();
+  const [floor, mine] = await Promise.all([machines(), myReports()]);
 
   return (
     <Shell account={account} current="/report">
@@ -24,6 +25,26 @@ export default async function ReportPage() {
         เลือกเครื่อง บอกสิ่งที่เห็นหรือได้ยิน ไม่ต้องวินิจฉัยเอง ระบบจะเปิดใบงานให้ แล้วหัวหน้ากะยืนยันก่อนส่งถึงช่าง
       </p>
       <ReportForm machines={floor} />
+
+      {/* What happened to each report, so it can be found again after it was
+          sent (ADR-122). In the owner's second trial it could not. */}
+      <KeepFresh />
+      <h2>เรื่องที่คุณแจ้งไว้</h2>
+      {mine.length === 0 ? (
+        <p className="muted">ยังไม่เคยแจ้ง</p>
+      ) : (
+        mine.map((one) => (
+          <article className="ticket" key={one.ref}>
+            <div className="ticket-head">
+              <span className="machine-small">{one.machine_id}</span>
+              <span className={`pill ${one.finished ? "done" : ""}`}>{one.where}</span>
+            </div>
+            <p className="muted">
+              {one.ref} · แจ้งเมื่อ {one.reported_when}
+            </p>
+          </article>
+        ))
+      )}
     </Shell>
   );
 }
