@@ -60,6 +60,7 @@ from pdm.playbooks import repo as playbooks
 from pdm.work import AlreadyOpen, NoEstimateAvailable, WorkOrders
 from pdm.work import repo as work
 from pdm.work import repo as work_repo
+from pdm.work.domain import when_expected
 from tests.released import released
 
 pytestmark = pytest.mark.db
@@ -311,8 +312,11 @@ class TestAConditionOrder:
             machine_model=R2000IC,
         )
 
-        assert "คาดว่าจะถึงเกณฑ์" in issued.order.reason
-        assert "± 2 ชม." in issued.order.reason
+        assert "จะถึงเกณฑ์" in issued.order.reason
+        # The interval is never dropped; it is rendered from the live fields
+        # rather than frozen into the reason (ADR-123).
+        expected = when_expected(issued.order)
+        assert expected is not None and "± 2 ชม." in expected
         assert issued.order.eta == NOW + timedelta(hours=6)
 
 
@@ -734,7 +738,7 @@ class TestWhatTheCodeReviewFound:
             machine_model=R2000IC,
         )
 
-        assert "3 มี.ค. 15:00 น." in issued.order.reason
+        assert "3 มี.ค. 15:00 น." in (when_expected(issued.order) or "")
 
 
 def _order(conn: Connection[Any], ref: str) -> WorkOrder:

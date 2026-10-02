@@ -88,6 +88,8 @@ export type Ticket = {
   finding_kind: "detected" | "predicted" | null;
   eta: string | null;
   eta_confidence_minutes: number | null;
+  // The live forecast with its interval, as the backend wrote it (ADR-123).
+  eta_text: string | null;
   steps: Step[];
   // Filled only when `steps` is empty (ADR-118).
   where_to_look?: WhereToLook[];
@@ -179,6 +181,7 @@ export type Active = {
   assignees: string[];
   assignee_names: string[];
   reason: string;
+  eta_text: string | null;
 };
 
 /** What the floor is on right now, for the shift lead's board (ADR-093). */

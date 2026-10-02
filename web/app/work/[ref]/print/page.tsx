@@ -35,6 +35,7 @@ export default async function PrintPage({ params }: { params: Promise<{ ref: str
           {job.station !== null && ` · ${job.station}`}
         </p>
         <p className="symptom">{job.reason}</p>
+        {job.eta_text && <p>{job.eta_text}</p>}
         <div className="facts">
           <div className="fact">
             <span className="label">เวลาโดยประมาณ</span>

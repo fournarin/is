@@ -49,6 +49,7 @@ from pdm.triggers import Triggers
 from pdm.triggers import repo as findings
 from pdm.work import WorkOrders
 from pdm.work import repo as work
+from pdm.work.domain import when_expected
 from pdm.workers.runtime.handlers import TriggerLoop, ensure_tick_queued, observe_handler
 
 pytestmark = pytest.mark.db
@@ -222,8 +223,10 @@ class TestPredictedWork:
         _, order, _ = _open_orders(conn)[0]
         assert order.finding_kind is FindingKind.PREDICTED
         assert order.eta is not None and order.eta_confidence is not None
-        assert "คาดว่าจะถึงเกณฑ์" in order.reason
-        assert "คลาดเคลื่อนได้ ±" in order.reason
+        assert "จะถึงเกณฑ์" in order.reason
+        # The time and its interval are rendered from the live fields (ADR-123).
+        expected = when_expected(order)
+        assert expected is not None and "คลาดเคลื่อนได้ ±" in expected
 
     def test_prediction_is_on_in_this_process(
         self, conn: Connection[Any], clock: SimulatedClock
@@ -271,9 +274,14 @@ class TestTheTicketFollowsTheForecast:
         ref = first.issued[0]
         issued_eta = _order(conn, ref).eta
         assert issued_eta is not None
+        printed_at_issue = when_expected(_order(conn, ref))
 
         clock.advance(timedelta(hours=1))
         loop.tick(conn)
+        # What a screen prints moves with it, and the frozen reason no longer
+        # carries a time that could disagree (ADR-123).
+        assert when_expected(_order(conn, ref)) != printed_at_issue
+        assert "คลาดเคลื่อนได้" not in _order(conn, ref).reason
 
         finding = findings.live(conn)[(MOTOR, TREND_RULE)]
         order = _order(conn, ref)

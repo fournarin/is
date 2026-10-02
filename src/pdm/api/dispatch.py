@@ -74,6 +74,7 @@ from pdm.sinks import repo as deliveries
 # assemble a screen.
 from pdm.triggers import repo as findings
 from pdm.work import repo as work
+from pdm.work.domain import when_expected
 
 router = APIRouter(tags=["dispatch"])
 
@@ -246,6 +247,9 @@ class TicketView(BaseModel):
     finding_kind: FindingKind | None = None
     eta: datetime | None = None
     eta_confidence_minutes: int | None = None
+    # The live forecast as a sentence, interval included (ADR-123). Rendered
+    # here so no screen prints a time without its give-or-take.
+    eta_text: str | None = None
 
     steps: tuple[Step, ...] = ()
     # Filled only when `steps` is empty (ADR-118).
@@ -512,6 +516,7 @@ class Active(BaseModel):
     assignees: tuple[str, ...] = ()
     assignee_names: tuple[str, ...] = ()
     reason: str
+    eta_text: str | None = None
 
 
 _ON_SOMEBODY = frozenset(
@@ -522,6 +527,7 @@ _ON_SOMEBODY = frozenset(
 @router.get("/work-orders/active", response_model=list[Active])
 def active_work(
     conn: Db,
+    rounds: Rounds,
     account: Annotated[
         Account, Depends(requires(*_MAY_READ_THE_RECORD, action="read_active_work"))
     ],
@@ -539,6 +545,7 @@ def active_work(
             assignees=tuple(str(who.user) for who in order.assignees),
             assignee_names=_names(conn, (who.user for who in order.assignees)),
             reason=order.reason,
+            eta_text=when_expected(order, rounds.config.wording()),
         )
         for ref, order, _ in work.open_orders(conn)
         if order.status in _ON_SOMEBODY
@@ -868,6 +875,7 @@ def ticket(
         playbook_warning=order.playbook_warning,
         handover_note=order.handover_note,
         finding_kind=order.finding_kind,
+        eta_text=when_expected(order, config.wording()),
         eta=order.eta,
         eta_confidence_minutes=(
             None
