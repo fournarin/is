@@ -209,12 +209,13 @@ def main() -> None:
     print("\n5. the words on the ticket are the reporter's own")
     with connect(os.environ["DATABASE_URL"]) as conn:
         rows = conn.execute(
-            "SELECT reason, origin, status FROM work_order ORDER BY work_order_ref"
+            "SELECT reason, origin, status, reported_by FROM work_order ORDER BY work_order_ref"
         ).fetchall()
     expect(len(rows) == 2, "two tickets, not four - the refusal held (ADR-023's argument)")
     reasons = [row[0] for row in rows]
     expect(SEEN in reasons[0], "the description is on the ticket unrewritten (ADR-005)")
-    expect(str(OPERATOR) in reasons[0], "with who reported it")
+    # The reason names them as the board does; the record keeps the sign-in (ADR-122).
+    expect(rows[0][3] == str(OPERATOR), "with who reported it")
     expect(first.group(0) in reasons[1], "and the second names the ticket it was raised beside")
     expect(
         all(row[1] == "manual" and row[2] == "queued" for row in rows),

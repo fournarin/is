@@ -394,8 +394,11 @@ def main() -> None:
         )
     # The reason is the backend's, quoted rather than rebuilt from the numbers
     # beside it (ADR-081 §5).
-    quoted = health["by_history"][0]["history"]["reason"]
-    expect(quoted in page, "the sentence on screen is the one the backend wrote")
+    # Only when anything has closed: with nothing to rank, the screen draws no
+    # history list at all and says why in one sentence (ADR-122).
+    if health["observed_from"] is not None:
+        quoted = health["by_history"][0]["history"]["reason"]
+        expect(quoted in page, "the sentence on screen is the one the backend wrote")
     for sentence in health["absent"]:
         expect(sentence in page, f"the screen says what it cannot: {sentence[:40]}...")
     expect(
