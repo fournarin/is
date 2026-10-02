@@ -88,6 +88,7 @@ export default async function WorkPage({
 
         {/* Written by the backend when the job was created, never here. */}
         <p className="symptom reason">{now.reason}</p>
+        {now.eta_text && <p>{now.eta_text}</p>}
         {seen !== null && <p className="muted">{seen}</p>}
         {/* The reason is written once (ADR-005); the machine moves on. A
             forecast overtaken by the crossing it predicted says so here. */}

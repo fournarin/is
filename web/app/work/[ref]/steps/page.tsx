@@ -73,6 +73,7 @@ export default async function StepsPage({
             </>
           )}
           <p className="muted">{job.reason}</p>
+          {job.eta_text && <p className="muted">{job.eta_text}</p>}
           {job.handover_note && <p className="warning">↪ ช่างคนก่อนทำไว้ถึงตรงนี้: {job.handover_note}</p>}
         </section>
         <Link className="button-link big ok" href={close}>

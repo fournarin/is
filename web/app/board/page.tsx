@@ -119,6 +119,7 @@ export default async function BoardPage({
                   <span className={`pill ${band.tone}`}>{band.label}</span>
                 </div>
                 <p>{job.reason}</p>
+                {job.eta_text && <p>{job.eta_text}</p>}
                 <p>
                   👷 ส่งให้ <strong>{one.assignee_names.join(", ")}</strong>
                 </p>
@@ -168,6 +169,7 @@ export default async function BoardPage({
                     <span className={`pill ${band.tone}`}>{band.label}</span>
                   </div>
                   <p>{job.reason}</p>
+                  {job.eta_text && <p>{job.eta_text}</p>}
                   <p className="muted">เหตุผลที่พัก: {one.why}</p>
                   <form method="post" action="/overview/bring-back">
                     <input type="hidden" name="ref" value={one.ref} />
@@ -208,6 +210,7 @@ export default async function BoardPage({
                   <span className={`pill ${band.tone}`}>{band.label}</span>
                 </div>
                 <p>{job.reason}</p>
+                {job.eta_text && <p>{job.eta_text}</p>}
                 <p className="muted">ทำไมยังไม่ปล่อย: {one.why}</p>
                 <details>
                   <summary>ปล่อยงานนี้เลย</summary>
@@ -241,6 +244,7 @@ export default async function BoardPage({
                 </span>
               </div>
               <p>{one.reason}</p>
+              {one.eta_text && <p>{one.eta_text}</p>}
               <p className="muted">👷 {one.assignee_names.join(", ") || "ยังไม่มีคนรับ"}</p>
             </article>
           ))}

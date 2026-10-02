@@ -162,19 +162,35 @@ def reason_for(finding: Finding, wording: Wording = _PLAIN) -> str:
 
     Times are on the plant's clock. `reason` is written once and never
     corrected, so a UTC stamp here would stay wrong on the ticket for good.
+
+    **A prediction's crossing time is not in this sentence** (ADR-123). The
+    ticket follows the live forecast (ADR-115), and a sentence written once
+    printed the issue-time crossing beside it: the owner's third look at the
+    board read "18:34, ± 9 h" and "in about 41 minutes" on one card. The time
+    and its interval are rendered from the order's own fields, where the
+    screens show them, and are never shown without each other.
     """
     where = f"{wording.symptom(finding.symptom_code)} ที่เครื่อง {finding.machine_id}"
     unknown = " · ยังไม่ทราบว่าเป็นที่ชิ้นส่วนไหน ต้องไล่หาสาเหตุก่อน" if finding.component == "unknown" else ""
     if finding.kind is FindingKind.DETECTED:
         return f"{where} · ตรวจพบเมื่อ {wording.day_and_clock(finding.detected_at)}{unknown}"
 
-    # A predicted Finding always carries both (the contract refuses one without
-    # the other), so this cannot render half an interval.
-    assert finding.eta is not None and finding.eta_confidence is not None
+    return f"{where} · ยังไม่เกินเกณฑ์ แต่แนวโน้มชี้ว่าจะถึงเกณฑ์{unknown}"
+
+
+def when_expected(order: WorkOrder, wording: Wording = _PLAIN) -> str | None:
+    """The crossing a predicted ticket expects, from its live fields (ADR-123).
+
+    None for anything that is not a prediction. Both or nothing: the contract
+    refuses an ETA without its interval, and so does this (ADR-020).
+    """
+    if order.finding_kind is not FindingKind.PREDICTED:
+        return None
+    if order.eta is None or order.eta_confidence is None:
+        return None
     return (
-        f"{where} · ยังไม่เกินเกณฑ์ แต่คาดว่าจะถึงเกณฑ์ราว "
-        f"{wording.day_and_clock(finding.eta)} (คลาดเคลื่อนได้ ± {span(finding.eta_confidence)})"
-        f"{unknown}"
+        f"คาดว่าจะถึงเกณฑ์ราว {wording.day_and_clock(order.eta)} "
+        f"(คลาดเคลื่อนได้ ± {span(order.eta_confidence)})"
     )
 
 

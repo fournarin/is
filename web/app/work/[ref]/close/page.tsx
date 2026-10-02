@@ -44,6 +44,7 @@ export default async function ClosePage({
 
       <h1>✓ ปิดงาน</h1>
       <p className="muted">{job.reason}</p>
+      {job.eta_text && <p className="muted">{job.eta_text}</p>}
 
       {/* The path with no JavaScript comes back here with the reason in the
           URL, because a redirect cannot carry state any other way. It is the

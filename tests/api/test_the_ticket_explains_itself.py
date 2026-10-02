@@ -262,8 +262,10 @@ class TestTheTicketExplainsItself:
         predicted = client.get(f"/work-orders/{refs['predicted']}").json()
         reported = client.get(f"/work-orders/{refs['urgent']}").json()
 
-        assert "คาดว่าจะถึงเกณฑ์" in predicted["reason"]
-        assert "± 2 ชม." in predicted["reason"]
+        assert "จะถึงเกณฑ์" in predicted["reason"]
+        # The time and its interval come from the live fields (ADR-123).
+        assert "คาดว่าจะถึงเกณฑ์ราว" in predicted["eta_text"]
+        assert "± 2 ชม." in predicted["eta_text"]
         assert "expected to reach" not in reported["reason"]
 
     def test_a_ticket_nobody_has_ranked_says_nothing_rather_than_guessing(
