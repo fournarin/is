@@ -269,7 +269,7 @@ def main() -> None:
         time.sleep(2)
         overview = readable(get("/gaps"))
     expect(str(SYM) in overview, f"{SYM} is listed as having no playbook (ADR-060)")
-    expect("ให้ระบบร่างขั้นตอนจากคู่มือ" in overview, "and an engineer is offered a draft from that row")
+    expect("ขอร่างใหม่" in overview, "and an engineer is offered a draft from that row")
 
     print("\n3. asking in Thai, of manuals written in English (ADR-029)")
     # The row's own hidden fields rather than values typed here: what the check
