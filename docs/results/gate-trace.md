@@ -80,9 +80,9 @@ Scenario `line-a-one-shift` (quiet 06:00-10:00, busy 10:00-14:00) with 1 technic
 
 | job | machine | due | started | finished |
 |---|---|---|---|---|
-| PM-0001 | MC-001 | 06:00 | 07:00 | 07:30 |
+| PM-0001 | MC-001 | 06:00 | 06:00 | 06:30 |
 | PM-0002 | MC-004 | 06:00 | 06:30 | 07:00 |
-| PM-0003 | MC-012 | 06:00 | 06:00 | 06:30 |
+| PM-0003 | MC-012 | 06:00 | 07:00 | 07:30 |
 
 ### What a held PM job says, verbatim
 
@@ -92,7 +92,7 @@ Scenario `line-a-one-shift` (quiet 06:00-10:00, busy 10:00-14:00) with 1 technic
 
 - scheduled work placed in a round that was not light, seeds 0-19: **0**
 - condition work held in a round that was light: **0**
-- PM jobs started per run: 0 to 1 of 3
+- PM jobs started per run: 0 to 0 of 3
 
 ### Every round of seed 0
 

@@ -34,7 +34,15 @@ from datetime import date, datetime
 
 from ortools.sat.python import cp_model
 
-from pdm.contracts import Assignee, AssigneeRole, ShiftId, SkillId, Technician, UserId
+from pdm.contracts import (
+    Assignee,
+    AssigneeRole,
+    ShiftId,
+    SkillId,
+    Technician,
+    UserId,
+    WorkOrderOrigin,
+)
 from pdm.dispatch.domain import (
     Band,
     Placement,
@@ -227,6 +235,10 @@ def _job(item: Queued, score: float, config: Config) -> _Job:
     # machine costs nothing", and that is why the 3C score breaks the tie below
     # instead of the objective deciding by omission.
     rate = 0.0 if cost is None or minutes <= 0 else cost / minutes
+    # A scheduled job's machine runs while it waits: delaying it loses nothing,
+    # whatever doing it costs (ADR-127). Its place comes from the score alone.
+    if item.order.origin is WorkOrderOrigin.SCHEDULED:
+        rate = 0.0
     return _Job(
         ref=item.ref,
         minutes=minutes,

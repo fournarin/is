@@ -610,7 +610,8 @@ class TestTheScore:
 
     def test_scheduled_work_does_not_claim_waiting_stops_the_line(self) -> None:
         """ADR-104. A PM job's machine is running while it waits; the downtime
-        figure is what doing it costs, and the sentence says so."""
+        figure is what doing it costs, and the sentence still says so (ADR-127
+        keeps it as a stated fact after taking it out of the rank)."""
         queue = [
             _queued(
                 "WO-pm",
@@ -623,6 +624,53 @@ class TestTheScore:
         (placed,) = result.placed
         assert "ถ้างานนี้รอ" not in placed.priority_reason
         assert "ต้องหยุดเครื่อง" in placed.priority_reason
+
+
+class TestAWaitingPmJobCostsNothing:
+    """ADR-127. Ranking a PM job on the production its machine loses while it
+    is *done* put the job that stops the line longest first - the opposite of
+    what a shift lead would choose. Delaying it loses nothing, so the downtime
+    term ranks it at zero, in 3C's score and in 3D's objective alike."""
+
+    def test_the_downtime_term_is_zero_for_scheduled_work(self) -> None:
+        queue = [
+            _queued(
+                "WO-pm",
+                _order(machine_id=BOTTLENECK, origin=WorkOrderOrigin.SCHEDULED, skill=None),
+            ),
+            _queued("WO-fix", _order(machine_id=BUFFERED, skill=None)),
+        ]
+        result = _round(
+            queue, technicians=_people(ANA, BEN), roster=_roster((ANA, 300), (BEN, 300))
+        )
+        by_ref = {placed.ref: placed.terms for placed in result.placed}
+        assert by_ref["WO-pm"].downtime == 0.0
+        assert by_ref["WO-fix"].downtime == 1.0
+
+    def test_a_longer_stop_does_not_rank_a_pm_job_higher(self) -> None:
+        """Same severity, same age: the bottleneck PM used to win on downtime.
+        Now nothing separates them but the tie-break, which is the reference."""
+        queue = [
+            _queued(
+                "WO-a-buffered",
+                _order(machine_id=BUFFERED, origin=WorkOrderOrigin.SCHEDULED, skill=None),
+            ),
+            _queued(
+                "WO-b-bottleneck",
+                _order(machine_id=BOTTLENECK, origin=WorkOrderOrigin.SCHEDULED, skill=None),
+            ),
+        ]
+        result = _round(queue, technicians=_people(ANA), roster=_roster((ANA, 600)))
+        scores = {placed.ref: placed.priority_score for placed in result.placed}
+        assert scores["WO-a-buffered"] == scores["WO-b-bottleneck"]
+
+    def test_the_solver_prices_a_waiting_pm_job_at_zero(self) -> None:
+        from pdm.dispatch.solver import _job
+
+        pm = _queued("WO-pm", _order(machine_id=BOTTLENECK, origin=WorkOrderOrigin.SCHEDULED))
+        fix = _queued("WO-fix", _order(machine_id=BOTTLENECK))
+        assert _job(pm, 1.0, CONFIG).rate == 0.0
+        assert _job(fix, 1.0, CONFIG).rate > 0.0
 
 
 class TestAssignment:
