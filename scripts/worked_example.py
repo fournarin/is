@@ -37,7 +37,8 @@ from pdm.contracts import (
     UserId,
 )
 from pdm.contracts.work import Playbook, PlaybookStep
-from pdm.dispatch.domain import Queued, dispatch
+from pdm.dispatch.domain import Queued
+from pdm.dispatch.service import planner
 from pdm.llm.domain import DraftRequest, Evidence
 from pdm.llm.extractive import ExtractiveDrafter
 from pdm.platform.config import load_config
@@ -149,7 +150,8 @@ def main() -> int:
         wording=wording,
     )
     minutes = int(LINE_A_ONE_SHIFT.duration.total_seconds() // 60)
-    decided = dispatch(
+    # The deployed round's own planner (ADR-128), not a choice made here.
+    decided = planner(config)(
         [
             Queued(ref="WO-0001", order=order, created_at=now),
             Queued(ref="WO-0002", order=pm, created_at=now),

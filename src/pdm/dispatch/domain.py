@@ -406,7 +406,12 @@ def _reason(
         (
             # Zero for scheduled work, whose waiting stops nothing (ADR-127).
             weights.downtime * terms.downtime,
-            f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
+            # A predicted job's machine is still running: what waiting risks is
+            # the stop the forecast expects, not a stop already happening
+            # (ADR-128, the second examiner).
+            f"ถ้าเครื่องหยุดตามที่พยากรณ์ สายการผลิตจะเสียราว {downtime:,.0f} คัน"
+            if order.finding_kind is FindingKind.PREDICTED
+            else f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
         ),
         (
             weights.skill_match * terms.skill_match,

@@ -61,6 +61,12 @@ dispatch:
   # within 2% of what a budget of 1 found on 50 and 200 orders, at 1.4-8.6 s
   # of wall time, well inside the 300 s round.
   solver_budget: 0.5
+  # Which assignment the deployed round makes after the gate (ADR-128).
+  # Provenance: docs/results/seed-level-statistics.md in docs/results,
+  # technicians-2/ and technicians-1/ - with three technicians 3D and 3C give
+  # the same shifts; with one or two, 3D loses less production in all ten
+  # conditions, significantly in three, and significantly more in none.
+  planner: cp_sat
   # Who makes a round's decision real (ADR-071). Provenance: recorded decision -
   # the advisor was asked on 2026-08-23 who presses the button and answered that
   # a person should at first, and that automatic approval is something to

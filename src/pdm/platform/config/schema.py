@@ -372,6 +372,12 @@ class DispatchPolicy(BaseModel):
     # Unlike wall-clock seconds, the same budget gives the same plan on any
     # machine. `solver_seconds` stays as a safety cap and should not bind.
     solver_budget: float = Field(gt=0)
+    # Which assignment the deployed round makes after the gate (ADR-128).
+    # `cp_sat` is 3D: CP-SAT started from the greedy plan, so the round is never
+    # worse than greedy by the solver's own objective. `greedy` is 3C, kept for
+    # a plant that wants the assignment a person can redo by hand. Both rank,
+    # gate and explain the same way.
+    planner: Literal["cp_sat", "greedy"] = "cp_sat"
     # Who makes a round's decision real (ADR-071). `supervisor` writes proposals
     # a shift lead confirms; `automatic` writes assignments, which is what every
     # record before ADR-071 assumed. Not a boolean: the two are named because

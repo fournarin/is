@@ -539,7 +539,7 @@ def _round_from(
         _, score, terms, facts = ranks[ref]
         # Why this job at all is the score's answer and it is unchanged; why it
         # is at this minute is the plan's, and it goes in front (ADR-005).
-        because = reasons.get(ref, "admitted by the load gate, and nobody was free for it")
+        because = reasons.get(ref, "ผ่านประตูภาระงานแล้ว แต่ยังไม่มีช่างว่างรับ")
         placed.append(
             Placement(
                 ref=ref,
@@ -551,10 +551,14 @@ def _round_from(
                     for index, user in enumerate(crew)
                 ),
                 priority_score=score,
+                # In Thai, as everything a shift lead reads (ADR-093), and with
+                # no minute in it: the sentence is frozen when proposed and read
+                # for half an hour after (ADR-126). The minute is on the
+                # placement as `starts_in_minutes`.
                 priority_reason=(
-                    f"the shift plan starts this in {start} min; {because}"
+                    f"แผนของกะให้ทำงานนี้ต่อจากงานที่ช่างถืออยู่ · {because}"
                     if start
-                    else f"the shift plan starts this now; {because}"
+                    else f"แผนของกะให้เริ่มงานนี้ทันที · {because}"
                 ),
                 terms=terms,
                 facts=facts,
@@ -571,9 +575,12 @@ def _round_from(
         update={
             "placed": tuple(placed),
             "unassigned": tuple(unassigned),
+            # The solver's status (OPTIMAL, FEASIBLE) is for the log, not the
+            # board; what the shift lead needs is whether anything is waiting.
             "summary": (
-                f"{ranked.summary} plan: {len(placed)} scheduled, "
-                f"{len(unassigned)} left for the next round ({plan.status.lower()})"
-            ).strip(),
+                f"{ranked.summary} · อีก {len(unassigned)} ใบรอรอบถัดไป เพราะกะนี้เวลาไม่พอ"
+                if unassigned
+                else ranked.summary
+            ),
         }
     )

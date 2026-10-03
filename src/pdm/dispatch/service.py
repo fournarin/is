@@ -17,6 +17,7 @@ booking its successor.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -28,6 +29,7 @@ from pdm.contracts import Role, ShiftDefinition, UserId, WorkOrderStatus, shift_
 from pdm.dispatch import repo
 from pdm.dispatch.domain import Queued, Round, dispatch
 from pdm.dispatch.proposals import Proposal, ProposalState
+from pdm.dispatch.solver import schedule
 from pdm.platform.clock import Clock
 from pdm.platform.config.loader import Config
 from pdm.work import repo as work_repo
@@ -217,7 +219,10 @@ class DispatchRounds:
             else []
         )
 
-        return dispatch(
+        # 3D or 3C after the same gate and score (ADR-128). They take the same
+        # arguments and return the same Round, so nothing downstream - the
+        # proposals, the shift lead's board, the reasons - knows which ran.
+        return planner(self.config)(
             queue,
             technicians=repo.technicians(conn),
             assignments=[(one.technician, one.available_minutes) for one in assignments],
@@ -226,6 +231,14 @@ class DispatchRounds:
             shift_id=window.shift_id if window is not None else None,
             on_date=window.on_date if window is not None else None,
         )
+
+
+def planner(config: Config) -> Callable[..., Round]:
+    """The assignment the deployed round makes after the gate (ADR-128).
+
+    `schedule()` and `dispatch()` take the same arguments and return the same
+    Round, so this is the only place that knows which one runs."""
+    return schedule if config.policy.dispatch.planner == "cp_sat" else dispatch
 
 
 def describe(report: RoundReport) -> str:
