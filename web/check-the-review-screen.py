@@ -384,6 +384,7 @@ def main() -> None:
         ],
     )
     expect("คิวรีวิว" in readable(approved), "approving lands back on the queue")
+    expect("อนุมัติแล้ว" in readable(approved), "and says what the press did (fourth trial)")
 
     written = stored(ids["mixed"])
     expect(written["status"] == "applied", "the proposal is applied")
@@ -410,6 +411,7 @@ def main() -> None:
     back_page = get(f"/review/{ids['wrong']}")
     returned = submit(f"/review/{ids['wrong']}", form_with(back_page, ">ตีกลับ<"), [("note", note)])
     expect("คิวรีวิว" in readable(returned), "it lands back on the queue")
+    expect("ตีกลับแล้ว" in readable(returned), "and says so")
     sent_back = stored(ids["wrong"])
     expect(sent_back["status"] == "sent_back", "the proposal is sent back, not dismissed")
     expect(queued_question() == note, "and the note is the question the next draft is asked")
@@ -426,6 +428,7 @@ def main() -> None:
         [("note", "ซ้ำกับใบที่แก้ไปแล้วเมื่อวาน")],
     )
     expect("คิวรีวิว" in readable(dismissed), "with a reason it goes through")
+    expect("ปิดใบนี้แล้ว" in readable(dismissed), "and says the reason was kept")
     expect(stored(ids["objection"])["status"] == "dismissed", "and the row says who and why")
 
     print("\n8. the queue is empty and says so")

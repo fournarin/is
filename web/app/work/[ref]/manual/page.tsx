@@ -62,7 +62,10 @@ export default async function ManualPage({
   // line - the way the page itself sets it out - and nothing else is changed.
   const paragraphs = (read.text ?? "")
     .split(/\n{2,}/)
-    .flatMap((one) => one.split(/\s(?=\d{1,2}\.\s)/))
+    // Only after a sentence ends: "the lockout procedure on page 2. 2. Remove"
+    // is one item ending at "page 2." and the next starting at "2." (fourth
+    // trial), not three.
+    .flatMap((one) => one.split(/(?<=\.)\s(?=\d{1,2}\.\s)/))
     .filter((one) => one.trim() !== "");
 
   return (

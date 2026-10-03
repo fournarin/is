@@ -84,6 +84,8 @@ flag; a plant machine should not.
 | Sign in as | Password | Role | Offered |
 |---|---|---|---|
 | `tech-1` | `demo-technician` | สมชาย, technician | งานของฉัน · แจ้งซ่อม |
+| `tech-2` | `demo-technician-2` | วิชัย, technician | งานของฉัน · แจ้งซ่อม |
+| `tech-3` | `demo-technician-3` | พิมพ์ชนก, technician | งานของฉัน · แจ้งซ่อม |
 | `eng-1` | `demo-engineer` | ปราณี, engineer | อนุมัติขั้นตอน · ยังไม่มีขั้นตอน · สายการผลิต · ข้อเสนอปรับค่า |
 | `sup-1` | `demo-supervisor` | อนันต์, supervisor | กระดานงาน · สายการผลิต · แจ้งซ่อม |
 | `op-1` | `demo-operator` | มาลี, operator | แจ้งซ่อม |

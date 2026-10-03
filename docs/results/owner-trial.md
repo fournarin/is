@@ -69,3 +69,26 @@ Worked well and kept: the one-card technician screen, the no-steps screen's "do
 not guess" with a cited page, the engineer's figure check refusing a wrong Thai
 torque, set-aside with a reason and a way back, the operator's status line, and
 page times under 0.05 s.
+
+## Run 4 - 4 October 2026: failed narrowly (agent, not a person)
+
+An agent played every role through the real pages on a stack rehearsed 7/7 at
+`e666b23`, with the content path end to end: an engineer approved Thai steps and
+the technician's open job got them at once. No error page and no dead end. The
+verdict against `docs/trial-protocol.md` is fail on its third question - does
+anything actively mislead - for the first three rows. Not evidence that a person
+can work from the system (ADR-092).
+
+| # | Role | Screen | What happened | Outcome |
+|---|---|---|---|---|
+| 1 | shift lead, technician | cards | every card said "แผนของกะให้เริ่มงานนี้ทันที", three of them for one technician | fixed: the plan's clause is "จัดตามแผนทั้งกะ", no claim about when |
+| 2 | shift lead | board | a fan already past its threshold wore the pill "ปกติ" | fixed: "เกินเกณฑ์แล้ว · ความสำคัญปานกลาง", "แจ้งซ่อม · ..." for reports |
+| 3 | shift lead | overview | "MC-012 ไม่มีอะไรค้าง" beside an urgent open report | fixed: the panel says it counts sensor signals only |
+| 12 | technician | manual page | "page 2. 2. Remove" split into two "2." lines | fixed: a number starts an item only after a sentence ends |
+| 16 | engineer | review | approve and dismiss showed nothing afterwards | fixed: a line saying what the press did |
+| 21 | trial setup | roster | tech-2 and tech-3 had no published password | fixed: `docs/demo.md` lists them |
+| 4-11, 13-15, 17-20 | - | - | confusing or cosmetic: health ranking on hours of history, a stale "already open" list, the board's order, English tool names, a PM with no page to look at, the close form not counting unticked steps, the skill as free text, `/loops` not counting predicted jobs, the operator's report list | open |
+
+Worked well and kept: the figure check refusing a wrong Thai torque, the
+technician's card and its banners, the no-steps screen, set aside and bring back,
+the duplicate guard, the operator's status line, and no regression of run 3.

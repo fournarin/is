@@ -384,7 +384,7 @@ def main() -> None:
     # one list it has rather than a column of "too little data" (ADR-122).
     expect(
         ("เสียบ่อยที่สุดในช่วงที่นับ" in page) == (health["observed_from"] is not None)
-        and "มีเรื่องค้างอยู่ตอนนี้" in page,
+        and "สัญญาณผิดปกติที่ค้างอยู่ตอนนี้" in page,
         "two lists and never one (ADR-072 §2), the first only when anything has closed",
     )
     for row in health["by_history"]:
