@@ -38,6 +38,9 @@ export default async function StepsPage({
   }
   const total = job.steps.length;
   const close = `/work/${encodeURIComponent(job.ref)}/close`;
+  const manualPage = (doc: string, page: number, fromStep?: number) =>
+    `/work/${encodeURIComponent(job.ref)}/manual?doc=${encodeURIComponent(doc)}&page=${page}` +
+    (fromStep === undefined ? "" : `&step=${fromStep}`);
 
   if (total === 0) {
     return (
@@ -59,15 +62,20 @@ export default async function StepsPage({
               <h2>ดูที่นี่</h2>
               {(job.where_to_look ?? []).map((one) => (
                 <p key={`${one.document_id}#${one.page ?? 0}`}>
-                  <a
-                    className="button-link quiet"
-                    href={`/manual/${encodeURIComponent(one.document_id)}${one.page ? `#page=${one.page}` : ""}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    📖 {one.manual}
-                    {one.page ? ` หน้า ${one.page}` : ""}
-                  </a>
+                  {one.page ? (
+                    <Link className="button-link quiet" href={manualPage(one.document_id, one.page)}>
+                      📖 {one.manual} หน้า {one.page}
+                    </Link>
+                  ) : (
+                    <a
+                      className="button-link quiet"
+                      href={`/manual/${encodeURIComponent(one.document_id)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      📖 {one.manual}
+                    </a>
+                  )}
                   {/* ADR-118: a draft's page is a page to read, never a step. */}
                   {one.from_unapproved_draft && (
                     <span className="muted"> · หน้าที่ร่างขั้นตอนอ้างถึง ยังไม่ผ่านการอนุมัติของวิศวกร</span>
@@ -137,31 +145,21 @@ export default async function StepsPage({
             ต้นฉบับจากคู่มือ: <span lang="en">{current.text}</span>
           </p>
         )}
-        {/* Opens the manual at that page through this server, which forwards
-            the range request - not a whole-volume download (ADR-019, ADR-058). */}
-        <a
-          className="button-link quiet"
-          href={`/manual/${encodeURIComponent(current.source_doc)}#page=${current.page}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          📖 เปิดคู่มือหน้า {current.page}
-        </a>
+        {/* The cited page inside the job, one tap back to this step; the PDF
+            is a tap further from there (the third trial lost its place in a
+            new tab). */}
+        <Link className="button-link quiet" href={manualPage(current.source_doc, current.page, at)}>
+          📖 อ่านคู่มือหน้า {current.page}
+        </Link>
         {named.map(({ page, missing }) =>
           missing ? (
             <p className="warning" key={page}>
               ⚠️ หน้า {page} ที่ขั้นนี้อ้างถึง ไม่มีในคู่มือที่ระบบอ่านไว้ — ถามวิศวกรก่อนทำขั้นนี้
             </p>
           ) : (
-            <a
-              className="button-link quiet"
-              key={page}
-              href={`/manual/${encodeURIComponent(current.source_doc)}#page=${page}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              📖 เปิดหน้า {page} ที่ขั้นนี้อ้างถึง
-            </a>
+            <Link className="button-link quiet" key={page} href={manualPage(current.source_doc, page, at)}>
+              📖 อ่านหน้า {page} ที่ขั้นนี้อ้างถึง
+            </Link>
           ),
         )}
         {current.manual !== null && <p className="muted">จากคู่มือ {current.manual}</p>}

@@ -437,7 +437,13 @@ def main() -> None:
     # which was untrue - it was still pending.
     empty = seed_not_found()
     page = readable(get(f"/review/{empty}"))
-    expect("ร่างนี้ไม่มีขั้นตอนให้อนุมัติ" in page, "the screen says there is nothing to approve")
+    expect("ไม่มีขั้นตอนให้อนุมัติ" in page, "the screen says there is nothing to approve")
+    queue = readable(get("/review"))
+    # The third trial: a "not found" listed as awaiting approval.
+    expect("คู่มือไม่มีคำตอบ ต้องตัดสินใจ" in queue, "the queue lists it as a gap to decide on")
+    expect(
+        "รออนุมัติ (" not in queue, "and not under awaiting approval, where nothing else is waiting"
+    )
     expect(form_with_or_none(page, ">อนุมัติ<") is None, "and offers no approve button")
     expect(form_with_or_none(page, ">ปิดใบนี้<") is not None, "but can still be closed with a reason")
     expect(stored(empty)["status"] == "pending", "and it is still pending")

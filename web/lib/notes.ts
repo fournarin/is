@@ -8,6 +8,8 @@ export type FloorNote = {
   work_order_ref: string;
   machine_id: string;
   symptom_code: string | null;
+  // The plant's name for it (ADR-126); grouping stays on the code.
+  symptom_title?: string | null;
   playbook_ref: string | null;
   outcome: string | null;
   closed_at: string;

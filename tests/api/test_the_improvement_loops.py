@@ -400,6 +400,8 @@ class TestWhatTheFalseAlarmsPropose:
         assert line["proposal"] is None
         assert line["refusal"]["cause"] == "below_floor"
         assert line["refusal"]["observations"] == 0
+        # What the rule watches for, from rules.yaml, rather than its id alone.
+        assert line["title"] == "พัดลมระบายความร้อนตู้ควบคุมหมุนช้าเกินกำหนด"
 
     def test_every_configured_rule_appears_exactly_once(self, client: TestClient) -> None:
         _log_in(client, Role.ENGINEER)
@@ -439,6 +441,7 @@ class TestWhatTheFinishedJobsSay:
 
         assert len(line["proposal"]["evidence"]) == 6
         assert line["closed_orders"] == 6
+        assert line["symptom_title"] and "SYM" not in line["symptom_title"]
 
 
 @pytest.mark.db
@@ -505,6 +508,8 @@ class TestWhatTheTechniciansWrote:
         assert [row["machine_id"] for row in rows] == ["MC-902", "MC-901"]
         assert rows[0]["note"] == "ฝาครอบแน่นมาก ใช้เวลาถอดนาน"
         assert rows[1]["symptom_code"] == SYM
+        # The plant's name travels with the code (third trial: SYM codes only).
+        assert rows[1]["symptom_title"] and "SYM" not in rows[1]["symptom_title"]
 
     def test_blank_notes_and_open_jobs_are_not_listed(
         self, client: TestClient, conn: Connection[Any]
@@ -543,17 +548,26 @@ class TestWhoMayLook:
 
         assert client.get(path).status_code == 200
 
-    @pytest.mark.parametrize("path", ["/loops/estimates", "/loops/thresholds", "/loops/notes"])
+    @pytest.mark.parametrize(
+        ("path", "action"),
+        [
+            ("/loops/estimates", "read_estimate_proposals"),
+            ("/loops/thresholds", "read_threshold_proposals"),
+            ("/loops/notes", "read_technician_notes"),
+        ],
+    )
     def test_the_refusal_is_in_the_access_log(
-        self, client: TestClient, conn: Connection[Any], path: str
+        self, client: TestClient, conn: Connection[Any], path: str, action: str
     ) -> None:
+        """Each endpoint's own action. A pattern that matched two of the three
+        passed the third on whichever earlier case left a row behind."""
         _log_in(client, Role.TECHNICIAN)
 
         client.get(path)
 
         row = conn.execute(
-            "SELECT user_id, allowed FROM access_log WHERE action LIKE 'read_%_proposals' "
-            "ORDER BY id DESC LIMIT 1"
+            "SELECT user_id, allowed FROM access_log WHERE action = %s ORDER BY id DESC LIMIT 1",
+            (action,),
         ).fetchone()
         assert row == ("tech-1", False)
 

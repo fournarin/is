@@ -60,6 +60,9 @@ class EstimateLine(BaseModel):
     model_config = _FROZEN
 
     symptom_code: SymptomCode
+    # The symptom as the plant names it; the code alone was what the third
+    # trial's engineer read here (ADR-126).
+    symptom_title: str | None = None
     machine_model: MachineModel
     current_minutes: int
     # A needs_review playbook is still served, and still prices work (ADR-018),
@@ -77,6 +80,7 @@ class FloorNote(BaseModel):
     work_order_ref: str
     machine_id: str
     symptom_code: str | None
+    symptom_title: str | None = None
     playbook_ref: str | None
     outcome: str | None
     closed_at: datetime
@@ -104,6 +108,8 @@ class ThresholdLine(BaseModel):
     model_config = _FROZEN
 
     rule_id: RuleId
+    # What the rule watches for, in the plant's words (`rules.yaml` title).
+    title: str | None = None
     machine_model: MachineModel
     metric_name: str
     comparison: str
@@ -133,6 +139,7 @@ def estimates(
     finishes reading (ADR-060).
     """
     policy = plant.policy.estimates
+    wording = plant.wording()
     lines = []
     for pair in playbooks.priced_pairs(conn):
         jobs = work.closed_jobs_for(
@@ -141,6 +148,7 @@ def estimates(
         lines.append(
             EstimateLine(
                 symptom_code=pair.symptom_code,
+                symptom_title=wording.symptom(pair.symptom_code),
                 machine_model=pair.machine_model,
                 current_minutes=pair.estimated_minutes,
                 playbook_status=pair.status,
@@ -199,6 +207,7 @@ def thresholds(
         lines.append(
             ThresholdLine(
                 rule_id=rule.rule_id,
+                title=rule.title,
                 machine_model=rule.machine_model,
                 metric_name=rule.metric_name,
                 comparison=rule.comparison,
@@ -229,6 +238,7 @@ def notes(
     them. Nothing here changes a playbook: a note that should become a step goes
     through the review queue, which records who approved it (ADR-064).
     """
+    wording = plant.wording()
     return FloorNotes(
         timezone=plant.plant.timezone,
         notes=[
@@ -236,6 +246,9 @@ def notes(
                 work_order_ref=str(row["work_order_ref"]),
                 machine_id=str(row["machine_id"]),
                 symptom_code=row["symptom_code"],
+                symptom_title=(
+                    wording.symptom(row["symptom_code"]) if row["symptom_code"] else None
+                ),
                 playbook_ref=row["playbook_ref"],
                 outcome=row["outcome"],
                 closed_at=row["closed_at"],

@@ -80,33 +80,57 @@ export default async function ReviewQueuePage({
             ))}
           </nav>
 
-          {shown.proposals.map((one) => (
-            <article className="card" key={one.proposal_id}>
-              <div className="screen-head">
+          {/* A "not found" result has nothing to approve, and the third trial's
+              engineer read it as a draft waiting for a signature. It is a gap
+              in the manuals that needs a decision, so it is listed as one. */}
+          {[
+            {
+              title: "รออนุมัติ",
+              rows: shown.proposals.filter((one) => one.outcome !== "not_found"),
+              note: null,
+            },
+            {
+              title: "คู่มือไม่มีคำตอบ ต้องตัดสินใจ",
+              rows: shown.proposals.filter((one) => one.outcome === "not_found"),
+              note: "ไม่มีขั้นตอนให้อนุมัติ ระบบค้นคู่มือแล้วไม่พบเรื่องนี้ เปิดดูแล้วเลือก: ตีกลับพร้อมคำถามที่ชัดขึ้น (เช่น บอกหน้าที่น่าจะมี) หรือปิดใบพร้อมเหตุผลถ้าคู่มือไม่มีเรื่องนี้จริง ระหว่างนี้ช่างจะเห็นว่ายังไม่มีขั้นตอน ให้ดูคู่มือหรือถามวิศวกร",
+            },
+          ]
+            .filter((section) => section.rows.length > 0)
+            .map((section) => (
+              <section key={section.title}>
                 <h2>
-                  <Link href={`/review/${one.proposal_id}`}>
-                    {one.symptom_title ?? one.symptom_code}
-                  </Link>
+                  {section.title} ({section.rows.length})
                 </h2>
-                <span className="muted">
-                  {one.origin === "technician"
-                    ? "ช่างแย้ง"
-                    : `ร่าง · ${OUTCOME[one.outcome] ?? one.outcome}`}
-                </span>
-              </div>
-              <p className="muted">
-                {one.machine_model} · {one.symptom_code} · {one.reason}
-              </p>
-              <p className="muted">
-                {one.steps} ขั้นตอน
-                {/* Shown rather than hidden: a draft that lost three steps to
-                    the figure gate is a different thing from one that never had
-                    them, and only the reviewer can tell which (ADR-037). */}
-                {one.rejected > 0 && ` · ถูกกันออก ${one.rejected} ขั้นตอน`}
-                {one.created_by !== null && ` · โดย ${one.created_by}`}
-              </p>
-            </article>
-          ))}
+                {section.note !== null && <p className="muted">{section.note}</p>}
+                {section.rows.map((one) => (
+                <article className="card" key={one.proposal_id}>
+                  <div className="screen-head">
+                    <h3>
+                      <Link href={`/review/${one.proposal_id}`}>
+                        {one.symptom_title ?? one.symptom_code}
+                      </Link>
+                    </h3>
+                    <span className="muted">
+                      {one.origin === "technician"
+                        ? "ช่างแย้ง"
+                        : `ร่าง · ${OUTCOME[one.outcome] ?? one.outcome}`}
+                    </span>
+                  </div>
+                  <p className="muted">
+                    {one.machine_model} · {one.symptom_code} · {one.reason}
+                  </p>
+                  <p className="muted">
+                    {one.outcome === "not_found" ? "ไม่มีขั้นตอน" : `${one.steps} ขั้นตอน`}
+                    {/* Shown rather than hidden: a draft that lost three steps to
+                        the figure gate is a different thing from one that never had
+                        them, and only the reviewer can tell which (ADR-037). */}
+                    {one.rejected > 0 && ` · ถูกกันออก ${one.rejected} ขั้นตอน`}
+                    {one.created_by !== null && ` · โดย ${one.created_by}`}
+                  </p>
+                </article>
+                ))}
+              </section>
+            ))}
         </>
       )}
 
