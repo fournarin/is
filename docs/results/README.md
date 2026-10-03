@@ -12,8 +12,11 @@ PYTHONPATH=. uv run python scripts/measure_health.py   # the health ranking
 That claim was tested on 18 September 2026, on a clean checkout and a different
 machine, for the comparison as it stood then: [`reproducibility.md`](reproducibility.md)
 reports 1,439 of 1,440 rows back byte for byte. The comparison has been re-run
-twice since (ADR-110, ADR-124) and that check has not been repeated on the current
-figures.
+twice since (ADR-110, ADR-124). On 3 October 2026 all three current grids
+(`comparison.csv` here, in `technicians-2/` and in `technicians-1/`, 9,000 rows)
+were regenerated on a clean checkout of `b9e5800` and came back byte for byte -
+on the same machine, so it shows the run is deterministic, not that it travels;
+ADR-110's deterministic solver budget is what is meant to make it travel.
 
 The first writes `comparison.csv` - every run - and `comparison.md`, which is one
 reading of it. If you disagree with the reading, the rows are there to do your

@@ -404,13 +404,9 @@ def _reason(
             f"ความรุนแรงระดับ{SEVERITY_TH[order.severity.value]}",
         ),
         (
+            # Zero for scheduled work, whose waiting stops nothing (ADR-127).
             weights.downtime * terms.downtime,
-            # Scheduled work stops nothing by waiting: the machine is running.
-            # The same figure is then what doing the job costs the line, and
-            # saying "if this waits the line loses N" would be false (ADR-104).
-            f"งานนี้ต้องหยุดเครื่อง ถ้าทำระหว่างเดินสาย การผลิตจะหายราว {downtime:,.0f} คัน"
-            if order.origin is WorkOrderOrigin.SCHEDULED
-            else f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
+            f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
         ),
         (
             weights.skill_match * terms.skill_match,
@@ -434,6 +430,11 @@ def _reason(
     # no threshold here can move a score, an ordering or an assignment.
     strongest = [text for value, text in sorted(contributions, key=lambda c: -c[0]) if value > 0.05]
     sentence = " · ".join(strongest[:3]) if strongest else "งานนี้ไม่เร่งด่วน ได้คิวเพราะกะนี้ยังมีกำลังคนเหลือ"
+    if order.origin is WorkOrderOrigin.SCHEDULED and downtime > 0:
+        # Not a reason for the rank - it did not move it (ADR-127) - but what
+        # doing the job costs the line is what a shift lead weighs before
+        # releasing it, so it is stated as a fact (ADR-104).
+        sentence += f" · งานนี้ต้องหยุดเครื่อง ถ้าทำระหว่างเดินสาย การผลิตจะหายราว {downtime:,.0f} คัน"
     if terms.downtime_is_unknown:
         # ADR-005 wants the caveat where the job is, not in a log. A technician
         # reading this knows the ranking did not count the line stopping,
@@ -664,6 +665,7 @@ def _rank(
     horizon = config.policy.triggers.trend.max_horizon_hours
 
     raw_downtime: list[float] = []
+    delay_cost: list[float] = []
     raw_waiting: list[float] = []
     unpriced: list[bool] = []
     for item in placeable:
@@ -673,9 +675,15 @@ def _rank(
         # in this list, so leaving an order out would move every other order's
         # term (ADR-045 §1, ADR-048).
         raw_downtime.append(0.0 if cost is None else cost)
+        # What delaying the job costs, which is what the term ranks on. A
+        # scheduled job's machine is running while it waits, so delaying it
+        # costs nothing; its downtime figure is what *doing* it costs, and
+        # ranking on that put the PM that stops the line longest first (ADR-127).
+        scheduled = item.order.origin is WorkOrderOrigin.SCHEDULED
+        delay_cost.append(0.0 if scheduled else raw_downtime[-1])
         raw_waiting.append(max(0.0, (now - item.created_at).total_seconds() / 60.0))
 
-    downtime = _normalised(raw_downtime)
+    downtime = _normalised(delay_cost)
     waiting = _normalised(raw_waiting)
 
     scored: list[_Ranked] = []
