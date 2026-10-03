@@ -515,8 +515,21 @@ main:has(.board) {
 
 @media (min-width: 60rem) {
   .board {
-    /* Three columns, or four while the lead has something set aside (ADR-120). */
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    /* Three or four columns (ADR-120), and the first - the proposals waiting
+       for the lead - twice as wide as the rest: it is the one with buttons in
+       it, and at equal widths a 1366px screen squeezed it until "MC-001"
+       broke over two lines while three empty columns held the space. */
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .board > .column {
+    flex: 1 1 13rem;
+    min-width: 0;
+  }
+
+  .board > .column:first-child {
+    flex: 2 1 24rem;
   }
 }
 
@@ -578,6 +591,8 @@ main:has(.board) {
 .ticket .machine-small {
   font-size: 1.15rem;
   font-weight: 800;
+  /* A machine id is one word on the floor; it never breaks at its hyphen. */
+  white-space: nowrap;
 }
 
 .ticket p {
