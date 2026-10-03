@@ -188,12 +188,13 @@ class TestTheOptimum:
 
     def test_the_plan_says_when_and_the_score_still_says_why(self) -> None:
         """ADR-005 survives the change of policy: the reason on the ticket still
-        opens the five terms, with the start time in front of it."""
+        opens the five terms, with the plan's part in front of it - in Thai and
+        without a minute in it (ADR-093, ADR-126, ADR-128)."""
         queue, people, roster = self._shift()
         plan = _planned(queue, technicians=people, roster=roster)
 
         first = plan.placed[0]
-        assert first.priority_reason.startswith("the shift plan starts this now;")
+        assert first.priority_reason.startswith("แผนของกะให้เริ่มงานนี้ทันที · ")
         assert first.terms.downtime > 0
         assert first.facts.downtime_units > 0
 
