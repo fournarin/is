@@ -57,7 +57,13 @@ export default async function ManualPage({
   const steps = `/work/${encodeURIComponent(job.ref)}/steps`;
   const back = step === undefined ? steps : `${steps}?step=${encodeURIComponent(step)}`;
   const pdf = `/manual/${encodeURIComponent(doc)}#page=${at}`;
-  const paragraphs = (read.text ?? "").split(/\n{2,}/).filter((one) => one.trim() !== "");
+  // The index joins a page's lines, so a procedure arrives as one run of
+  // "... 1. Isolate ... 2. Remove ...". Each numbered item goes back on its own
+  // line - the way the page itself sets it out - and nothing else is changed.
+  const paragraphs = (read.text ?? "")
+    .split(/\n{2,}/)
+    .flatMap((one) => one.split(/\s(?=\d{1,2}\.\s)/))
+    .filter((one) => one.trim() !== "");
 
   return (
     <Shell account={account} current="/work">
@@ -67,9 +73,9 @@ export default async function ManualPage({
       </div>
 
       <section className="card manual-page">
-        <p className="machine">
-          {read.title} · หน้า {read.page}
-        </p>
+        <h2>
+          {read.title} <span className="muted">· หน้า {read.page}</span>
+        </h2>
         {read.withdrawn && <p className="warning">⚠️ คู่มือฉบับนี้ถูกถอนแล้ว ให้ถามวิศวกรว่าฉบับที่ใช้อยู่คือฉบับไหน</p>}
         {paragraphs.length > 0 ? (
           <div lang="en">

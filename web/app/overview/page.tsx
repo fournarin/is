@@ -79,7 +79,9 @@ export default async function OverviewPage() {
 
       {overview.lines.map((line) => (
         <section key={line.line_id}>
-          <h2>ผังสาย {line.line_id}</h2>
+          <h2>
+            ผังสายการผลิต <span className="muted">({line.line_id})</span>
+          </h2>
           <LineDiagram line={line} />
           <LineFaults line={line} timezone={overview.timezone} />
         </section>
