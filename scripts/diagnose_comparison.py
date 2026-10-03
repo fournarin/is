@@ -71,7 +71,7 @@ DOWNTIME_BUFFERS: tuple[int | None, ...] = (0, 5, None, 20, 40)
 # is the other half of every load ratio in this file" - and the committed sweep
 # does not vary it. Three is in the list so the shipped scenario is a row rather
 # than a reference point off the side of the table.
-ROSTER_SWEEP: tuple[int, ...] = (2, 3, 4, 6, 8)
+ROSTER_SWEEP: tuple[int, ...] = (1, 2, 3, 4, 6, 8)
 
 
 @dataclass(frozen=True)
@@ -382,12 +382,14 @@ def measure(
     )
 
 
-def account(config: Config, seeds: Sequence[int]) -> Accounting:
+def account(
+    config: Config, seeds: Sequence[int], scenario: SimScenario = LINE_A_ONE_SHIFT
+) -> Accounting:
     """The shipped 3C over the seeds, with its books kept."""
     total = Accounting()
     for seed in seeds:
         policy = Instrumented(config)
-        run(LINE_A_ONE_SHIFT, policy=policy, config=config, seed=seed)
+        run(scenario, policy=policy, config=config, seed=seed)
         books = policy.books
         total.rounds += books.rounds
         total.placements_produced += books.placements_produced
@@ -400,7 +402,11 @@ def account(config: Config, seeds: Sequence[int]) -> Accounting:
 
 
 def per_machine(
-    factory: Callable[[], Any], *, config: Config, seeds: Sequence[int]
+    factory: Callable[[], Any],
+    *,
+    config: Config,
+    seeds: Sequence[int],
+    scenario: SimScenario = LINE_A_ONE_SHIFT,
 ) -> dict[MachineId, MachineProfile]:
     """Where each machine's downtime went, under one policy.
 
@@ -417,7 +423,7 @@ def per_machine(
     raised: dict[MachineId, list[float]] = defaultdict(list)
 
     for seed in seeds:
-        result = run(LINE_A_ONE_SHIFT, policy=factory(), config=config, seed=seed)
+        result = run(scenario, policy=factory(), config=config, seed=seed)
         run_lost: dict[MachineId, float] = defaultdict(float)
         run_down: dict[MachineId, float] = defaultdict(float)
         run_wait: dict[MachineId, float] = defaultdict(float)
@@ -481,6 +487,7 @@ class Diagnosis:
     a test can read the same values."""
 
     seeds: tuple[int, ...]
+    technicians: int
     fifo: Measure
     matrix: Measure
     shipped: Measure
@@ -493,43 +500,50 @@ class Diagnosis:
     machines: tuple[tuple[str, MachineProfile, MachineProfile], ...]
 
 
-def diagnose(*, seeds: Sequence[int], config: Config) -> Diagnosis:
-    """The whole diagnosis. Deterministic: same arguments, same answer."""
+def diagnose(*, seeds: Sequence[int], config: Config, technicians: int | None = None) -> Diagnosis:
+    """The whole diagnosis. Deterministic: same arguments, same answer.
+
+    `technicians` diagnoses the same shift with a different roster - the one the
+    roster sweeps of `compare_policies.py --technicians` ran (ADR-124). With the
+    shipped three the policies barely differ, so a diagnosis of why they differ
+    is most informative where they do. Sections 1 to 4 run on that roster;
+    section 5 sweeps the roster itself and does not depend on it.
+    """
     seeds = tuple(seeds)
+    shift = LINE_A_ONE_SHIFT if technicians is None else with_roster(LINE_A_ONE_SHIFT, technicians)
 
-    fifo = measure(FirstComeFirstServed, config=config, seeds=seeds)
-    matrix = measure(PriorityMatrix, config=config, seeds=seeds)
-    shipped = measure(_gate_and_score(config), config=config, seeds=seeds)
-    filled = measure(lambda: FillTheRound(config), config=config, seeds=seeds)
+    def on_shift(factory: Callable[[], Any], variant: Config) -> Measure:
+        return measure(factory, config=variant, seeds=seeds, scenario=shift)
+
+    fifo = on_shift(FirstComeFirstServed, config)
+    matrix = on_shift(PriorityMatrix, config)
+    shipped = on_shift(_gate_and_score(config), config)
+    filled = on_shift(lambda: FillTheRound(config), config)
     with without_the_gate():
-        ungated = measure(_gate_and_score(config), config=config, seeds=seeds)
+        ungated = on_shift(_gate_and_score(config), config)
 
-    books = account(config, seeds)
+    books = account(config, seeds, shift)
 
     waiting: list[tuple[float, Measure]] = []
     for weight in (0.0, config.policy.weights.waiting, 1.0, 3.0, 10.0, 30.0):
         variant = with_weights(config, waiting=weight)
-        waiting.append((weight, measure(_gate_and_score(variant), config=variant, seeds=seeds)))
+        waiting.append((weight, on_shift(_gate_and_score(variant), variant)))
 
     downtime: list[tuple[int | None, str, Measure]] = []
     for units in DOWNTIME_BUFFERS:
         shaped = with_uniform_buffers(config, units)
-        downtime.append((units, "3A", measure(FirstComeFirstServed, config=shaped, seeds=seeds)))
+        downtime.append((units, "3A", on_shift(FirstComeFirstServed, shaped)))
         for weight in (0.0, shaped.policy.weights.downtime, 4.0):
             variant = with_weights(shaped, downtime=weight)
             downtime.append(
-                (
-                    units,
-                    f"w_downtime={weight:g}",
-                    measure(_gate_and_score(variant), config=variant, seeds=seeds),
-                )
+                (units, f"w_downtime={weight:g}", on_shift(_gate_and_score(variant), variant))
             )
 
     roster: list[tuple[int, str, Measure]] = []
     for size in ROSTER_SWEEP:
-        shift = with_roster(LINE_A_ONE_SHIFT, size)
+        sized = with_roster(LINE_A_ONE_SHIFT, size)
         roster.append(
-            (size, "3A", measure(FirstComeFirstServed, config=config, seeds=seeds, scenario=shift))
+            (size, "3A", measure(FirstComeFirstServed, config=config, seeds=seeds, scenario=sized))
         )
         without_w2 = with_weights(config, downtime=0.0)
         roster.append(
@@ -540,7 +554,7 @@ def diagnose(*, seeds: Sequence[int], config: Config) -> Diagnosis:
                     _gate_and_score(without_w2),
                     config=without_w2,
                     seeds=seeds,
-                    scenario=shift,
+                    scenario=sized,
                 ),
             )
         )
@@ -548,12 +562,14 @@ def diagnose(*, seeds: Sequence[int], config: Config) -> Diagnosis:
             (
                 size,
                 "3C shipped",
-                measure(_gate_and_score(config), config=config, seeds=seeds, scenario=shift),
+                measure(_gate_and_score(config), config=config, seeds=seeds, scenario=sized),
             )
         )
 
-    fifo_machines = per_machine(FirstComeFirstServed, config=config, seeds=seeds)
-    shipped_machines = per_machine(_gate_and_score(config), config=config, seeds=seeds)
+    fifo_machines = per_machine(FirstComeFirstServed, config=config, seeds=seeds, scenario=shift)
+    shipped_machines = per_machine(
+        _gate_and_score(config), config=config, seeds=seeds, scenario=shift
+    )
     machines = tuple(
         (_station_label(config, machine), fifo_machines[machine], shipped_machines[machine])
         for machine in _machines(config)
@@ -561,6 +577,7 @@ def diagnose(*, seeds: Sequence[int], config: Config) -> Diagnosis:
 
     return Diagnosis(
         seeds=seeds,
+        technicians=len(shift.technicians),
         fifo=fifo,
         matrix=matrix,
         shipped=shipped,
@@ -581,20 +598,50 @@ def _row(label: str, measured: Measure) -> str:
     )
 
 
-def write_markdown(found: Diagnosis, path: Path) -> None:
-    books = found.books
-    dropped_share = (
-        books.placements_dropped / books.placements_produced * 100
-        if books.placements_produced
-        else 0.0
+def _percent(change: float, base: float) -> float:
+    return change / base * 100 if base else 0.0
+
+
+def _shipped_roster(found: Diagnosis) -> str:
+    shipped = len(LINE_A_ONE_SHIFT.technicians)
+    note = " (the shipped roster)" if found.technicians == shipped else f" (shipped: {shipped})"
+    people = "technician" if found.technicians == 1 else "technicians"
+    return f"{found.technicians} {people}{note}"
+
+
+def _verdict_on_both(first: str, a: Measure, second: str, b: Measure) -> str:
+    """Which of two policies is better on units lost and on response, said once."""
+    units = a.units_lost - b.units_lost
+    response = a.response_minutes - b.response_minutes
+    if abs(_percent(units, b.units_lost)) < 0.5 and abs(response) < 0.1:
+        return f"**{first} and {second} are indistinguishable here on both measures.**"
+    if units < 0 and response <= 0:
+        return f"**{first} is better than {second} on both measures here.**"
+    if units > 0 and response >= 0:
+        return f"**{second} is better than {first} on both measures here.**"
+    cheaper = first if units < 0 else second
+    faster = first if response < 0 else second
+    return (
+        f"**{cheaper} loses less production and {faster} reaches machines sooner: "
+        "the two measures trade against each other here and neither policy "
+        "dominates.**"
     )
+
+
+def write_markdown(found: Diagnosis, path: Path) -> None:
+    """The write-up. Every sentence that draws a conclusion is computed from the
+    table above it; the earlier version argued a mechanism in fixed prose, and
+    ADR-124 left that prose describing a model that no longer existed."""
+    books = found.books
+    dropped_share = _percent(books.placements_dropped, books.placements_produced)
 
     lines = [
         "# Why the comparison came out the way it did",
         "",
         "**Generated by `scripts/diagnose_comparison.py`. Do not edit by hand.**",
         "",
-        f"- scenario: `{LINE_A_ONE_SHIFT.name}`, the shipped layout, arrival multiplier 1.0",
+        f"- scenario: `{LINE_A_ONE_SHIFT.name}` with {_shipped_roster(found)}, "
+        "the shipped layout, arrival multiplier 1.0",
         f"- seeds: {', '.join(str(seed) for seed in found.seeds)} "
         f"({len(found.seeds)} runs behind every number)",
         "",
@@ -603,7 +650,13 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
         "running the same shifts again. No weight in `config/policy.yaml` is",
         "changed by any of it (issue #27 put tuning out of scope).",
         "",
-        "## 1. The adapter is not what is being measured",
+        "Since ADR-124 a machine that is already stopped does not fail again. The",
+        "mechanism earlier versions of this file argued - a critical station",
+        "failing again before a faster response could be banked - was a property",
+        "of the old model and is withdrawn. Every sentence below that draws a",
+        "conclusion is now computed from the table above it.",
+        "",
+        "## 1. Is the comparison measuring its own adapter?",
         "",
         "`GateAndScore._starting_now` keeps each technician's highest-ranked",
         "placement and drops the rest, because `dispatch()` answers *who is this",
@@ -623,12 +676,24 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
         f"**{books.rounds_that_dropped_while_idle}** of those rounds was there a "
         "technician left idle who could have taken one of them.",
         "",
-        "`_assign` sorts its candidates by most free capacity first, so it fills",
-        "every free person before it stacks a second job on anyone. What the",
-        "adapter drops is therefore the queue in front of somebody already",
-        "working, which is what a shift looks like rather than a loss.",
-        "",
-        "## 2. The gate is not what costs 3C the production",
+    ]
+    if books.rounds_that_dropped_while_idle == 0:
+        lines += [
+            "What the adapter drops is therefore the queue in front of somebody",
+            "already working, which is what a shift looks like rather than a loss.",
+            "",
+        ]
+    else:
+        lines += [
+            "So the adapter does leave somebody idle who could have worked, and the",
+            "filled row above is what that costs.",
+            "",
+        ]
+
+    gate_change = found.ungated.units_lost - found.shipped.units_lost
+    gate_share = _percent(gate_change, found.shipped.units_lost)
+    lines += [
+        "## 2. Does the gate cost 3C production?",
         "",
         "The gate removed entirely - admitting everything, ranking and assigning",
         "unchanged:",
@@ -641,11 +706,31 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
         "",
         f"{books.rounds_that_held} rounds held something, and in "
         f"**{books.rounds_that_held_while_idle}** of them was a technician left "
-        "idle who could have taken a held ticket. The gate holds work when",
-        "everybody is already under a machine, which is the case ADR-011",
-        "describes.",
+        "idle who could have taken a held ticket.",
+    ]
+    if books.rounds_that_held == 0:
+        lines.append("The gate never held anything on this roster, so the two rows cannot differ.")
+    elif abs(gate_share) < 1.0:
+        lines.append(
+            f"Removing it moves units lost by {gate_change:+.1f} ({gate_share:+.1f}%): "
+            "**the gate is not what separates 3C from 3A.**"
+        )
+    elif gate_change < 0:
+        lines.append(
+            f"Removing it lowers units lost by {-gate_change:.1f} ({gate_share:.1f}%): "
+            "**on this roster holding work back costs production.**"
+        )
+    else:
+        lines.append(
+            f"Removing it raises units lost by {gate_change:.1f} ({gate_share:+.1f}%): "
+            "**on this roster holding work back pays.**"
+        )
+
+    shipped_weight = found.shipped
+    heaviest_weight, heaviest = found.waiting_sweep[-1]
+    lines += [
         "",
-        "## 3. The gap lives in the waiting term",
+        "## 3. The waiting term",
         "",
         "One weight moved at a time, everything else at its shipped value:",
         "",
@@ -657,31 +742,40 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
     lines += [
         _row("*3A, for reference*", found.fifo),
         "",
-        "As the score is made more oldest-first it acquires 3A's production and",
-        "loses its own response. **The two measures trade against each other on",
-        "this scenario and neither policy dominates** - which is a different",
-        'sentence from "first-come-first-served wins", and the one the numbers',
-        "support. No value in the column above is a recommendation: 3E is the",
-        "tool for setting these, and guessing again is what ADR-045 declined to do.",
+        f"From the shipped weight to {heaviest_weight:g}, units lost go from "
+        f"{shipped_weight.units_lost:.1f} to {heaviest.units_lost:.1f} (3A "
+        f"{found.fifo.units_lost:.1f}) and response from "
+        f"{shipped_weight.response_minutes:.2f} to {heaviest.response_minutes:.2f} "
+        f"minutes (3A {found.fifo.response_minutes:.2f}).",
+        _verdict_on_both("3C", found.shipped, "3A", found.fifo),
+        "No value in the column above is a recommendation: 3E is the tool for",
+        "setting these, and guessing again is what ADR-045 declined to do.",
         "",
-        "## 4. ADR-021's downtime term barely moves the outcome",
+        "## 4. ADR-021's downtime term",
         "",
         "Units lost, by uniform buffer setting:",
         "",
         "| buffer | policy | units lost | response (min) |",
         "|---|---|---:|---:|",
     ]
+    spread_by_layout: dict[int | None, list[float]] = defaultdict(list)
     for units, label, measured in found.downtime_sweep:
         buffer_label = "as configured" if units is None else f"{units} units"
         lines.append(
             f"| {buffer_label} | {label} | {measured.units_lost:.1f} "
             f"| {measured.response_minutes:.2f} |"
         )
+        if label != "3A":
+            spread_by_layout[units].append(measured.units_lost)
+    widest = max(
+        _percent(max(values) - min(values), statistics.fmean(values))
+        for values in spread_by_layout.values()
+    )
     lines += [
         "",
-        "Turning w2 off and turning it up to four moves units lost by well under",
-        "a percent at every layout, including the unbuffered one. Where the lost",
-        "production actually sits says why:",
+        f"Turning w2 off and turning it up to four moves units lost by at most "
+        f"{widest:.1f}% at any layout, the unbuffered one included. Where the lost",
+        "production sits:",
         "",
         "| station | 3A units lost | 3C units lost | 3A down-min | 3C down-min |",
         "|---|---:|---:|---:|---:|",
@@ -693,22 +787,19 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
             f"| {under_fifo.down_minutes:.1f} | {under_gate.down_minutes:.1f} |"
         )
     total_shipped = sum(one[2].units_lost for one in found.machines)
-    share = worst[2].units_lost / total_shipped * 100 if total_shipped else 0.0
+    share = _percent(worst[2].units_lost, total_shipped)
+    worst_gap = worst[2].units_lost - worst[1].units_lost
+    total_gap = sum(one[2].units_lost - one[1].units_lost for one in found.machines)
     lines += [
         "",
-        f"`{worst[0]}` is {share:.0f}% of everything lost, and both policies lose "
-        f"the same amount there ({worst[1].units_lost:.1f} against "
-        f"{worst[2].units_lost:.1f}). The gap between them is at the *buffered*",
-        "stations: 3C is paying where a buffer was already absorbing the outage",
-        "and buying nothing where none was.",
+        f"`{worst[0]}` is {share:.0f}% of everything 3C loses. Of the "
+        f"{total_gap:+.1f}-unit gap between 3C and 3A, {worst_gap:+.1f} is at that "
+        f"station and {total_gap - worst_gap:+.1f} at the others. Total down-minutes: "
+        f"{found.fifo.down_minutes:.1f} under 3A against "
+        f"{found.shipped.down_minutes:.1f} under 3C.",
         "",
-        f"Total down-minutes barely move either - {found.fifo.down_minutes:.1f} "
-        f"under 3A against {found.shipped.down_minutes:.1f} under 3C. The repairs",
-        "are the repairs; the only lever a policy has is *which* machine is down.",
-        "",
-        "**But it is not that 3C failed to prioritise the critical station.** Split",
-        "each machine's shift into the time its tickets spent waiting and the time",
-        "they spent being repaired:",
+        "Each machine's tickets split into the time they waited and the time they",
+        "were repaired, with the failures each machine raised per shift:",
         "",
         "| station | 3A waiting | 3C waiting | 3A repair | 3C repair | failures |",
         "|---|---:|---:|---:|---:|---:|",
@@ -719,33 +810,20 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
             f"| {under_gate.waiting_minutes:.1f} | {under_fifo.repair_minutes:.1f} "
             f"| {under_gate.repair_minutes:.1f} | {under_gate.tickets:.2f} |"
         )
+    sooner = worst[2].waiting_minutes < worst[1].waiting_minutes
     lines += [
         "",
-        f"The w2 term does exactly what ADR-021 designed it to do. At `{worst[0]}` "
-        f"3C cuts waiting from {worst[1].waiting_minutes:.1f} minutes to "
-        f"{worst[2].waiting_minutes:.1f} and puts "
-        f"{worst[2].repair_minutes - worst[1].repair_minutes:+.1f} more",
-        "technician-minutes into the machine that matters most. The ranking is not",
-        "the problem.",
+        f"At `{worst[0]}` 3C's tickets waited {worst[2].waiting_minutes:.1f} minutes "
+        f"against 3A's {worst[1].waiting_minutes:.1f}: "
+        + (
+            "3C does reach the critical station sooner."
+            if sooner
+            else "3C does not reach the critical station sooner on this roster."
+        ),
         "",
-        f"**The outcome does not move because that station fails "
-        f"{worst[2].tickets:.2f} times a shift.** A machine is down while any",
-        "unfinished ticket names it, so being reached sooner cannot be banked: it",
-        "has failed again before the benefit shows up in an outage that already",
-        "merged with the next one. Being twice as fast to a machine that stops",
-        "every half hour buys nothing the cost function can see.",
+        "## 5. The roster",
         "",
-    ]
-    lines += [
-        "## 5. It is not that the shift is short of people",
-        "",
-        "The reading above says the outcome is set by how often the critical",
-        "station fails. The obvious competing reading is that the shift is simply",
-        "under-staffed, and `sim/scenarios.py` says of its three technicians that",
-        'the roster size is "the other half of every load ratio in this file" and',
-        "that 7.3 is expected to vary it. The committed sweep does not, so here it",
-        "is: if staffing were the constraint, adding people would give the w2 term",
-        "room, and the first column below would open up.",
+        "The same shift with more or fewer people, everything else held:",
         "",
         "| technicians | policy | units lost | response (min) | unfinished |",
         "|---:|---|---:|---:|---:|",
@@ -762,51 +840,56 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
     lines += [
         "",
         "What w2 is worth at each roster size, and what the whole score is worth",
-        "against first-come-first-served:",
+        "against first-come-first-served (positive: 3C is better):",
         "",
-        "| technicians | w2 off - w2 on | 3A - 3C shipped | 3C response gain |",
+        "| technicians | w2 off - w2 on (units) | 3A - 3C (units) | 3A - 3C (response, min) |",
         "|---:|---:|---:|---:|",
     ]
+    w2_worth: list[float] = []
     for size in sorted(by_size):
         cell = by_size[size]
-        if not {"3A", "3C shipped", "3C w_downtime=0"} <= cell.keys():
-            continue
         w2 = cell["3C w_downtime=0"].units_lost - cell["3C shipped"].units_lost
         against = cell["3A"].units_lost - cell["3C shipped"].units_lost
         faster = cell["3A"].response_minutes - cell["3C shipped"].response_minutes
-        lines.append(f"| {size} | {w2:+.1f} | {against:+.1f} | {faster:+.1f} min |")
+        w2_worth.append(_percent(abs(w2), cell["3C shipped"].units_lost))
+        lines.append(f"| {size} | {w2:+.1f} | {against:+.1f} | {faster:+.1f} |")
 
-    biggest = max(by_size)
-    smallest = min(by_size)
+    smallest, biggest = min(by_size), max(by_size)
     thin = (
         by_size[smallest]["3A"].response_minutes - by_size[smallest]["3C shipped"].response_minutes
     )
     thick = (
         by_size[biggest]["3A"].response_minutes - by_size[biggest]["3C shipped"].response_minutes
     )
+    costlier = [
+        size
+        for size in sorted(by_size)
+        if by_size[size]["3C shipped"].units_lost > by_size[size]["3A"].units_lost * 1.005
+    ]
     lines += [
         "",
-        "**It does not open up.** The downtime term is worth a few units at every",
-        f"roster size from {smallest} technicians to {biggest}, and the shift with "
-        f"{biggest} of them - where response is down to "
-        f"{by_size[biggest]['3C shipped'].response_minutes:.1f} minutes and almost",
-        "nothing waits at all - is where it is worth least. Staffing is not the",
-        "constraint, which leaves the arrival rate: the critical station stops",
-        "faster than any number of people can keep it running.",
+        f"The downtime term is worth at most {max(w2_worth):.1f}% of units lost at "
+        f"any roster size from {smallest} to {biggest}. 3C's response advantage over "
+        f"first-come-first-served is {thin:+.1f} minutes with {smallest} "
+        f"technician{'s' if smallest != 1 else ''} and {thick:+.1f} with {biggest}"
+        + (
+            ": **scheduling is worth most when there are not enough people**, which "
+            "is the condition a plant installs one for."
+            if thin > thick + 1.0
+            else "."
+        ),
+        (
+            "3C loses more production than first-come-first-served (by more than "
+            f"half a percent) with {', '.join(str(size) for size in costlier)} "
+            "technicians: reaching machines sooner is not the same as stopping the "
+            "line for less time."
+            if costlier
+            else "3C loses no more production than first-come-first-served at any roster size."
+        ),
         "",
-        "That lands the finding on `mean_hours_between_failures`, which ADR-046 §4",
-        "already names as the one number in this project with no measurement behind",
-        "it. What this experiment shows is not that buffer-aware ranking fails; it",
-        "is that whether it pays depends entirely on a parameter nobody has",
-        "measured yet.",
-        "",
-        "The other column is worth reading while it is here. 3C's response",
-        f"advantage over first-come-first-served is {thin:.1f} minutes at "
-        f"{smallest} technicians and {thick:.1f} at {biggest}: "
-        "**scheduling is worth most exactly",
-        "when there are not enough people**, which is the condition a plant",
-        "installs one for. So is first-come-first-served's advantage on units, and",
-        "the two shrink together.",
+        "Every figure here is at the one arrival rate the shipped scenario assumes,",
+        "and `mean_hours_between_failures` has no measurement behind it (ADR-046",
+        "§4); `comparison.md` sweeps it.",
         "",
     ]
 
@@ -817,11 +900,17 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Diagnose the policy comparison.")
     parser.add_argument("--seeds", type=int, default=20, help="how many seeds per cell")
+    parser.add_argument(
+        "--technicians",
+        type=int,
+        default=None,
+        help="diagnose the shift with this many people (default: the scenario's own)",
+    )
     parser.add_argument("--out", type=Path, default=RESULTS, help="where to write the results")
     args = parser.parse_args(argv)
 
     config = load_config(REPO / "config")
-    found = diagnose(seeds=range(args.seeds), config=config)
+    found = diagnose(seeds=range(args.seeds), config=config, technicians=args.technicians)
     write_markdown(found, args.out / "diagnosis.md")
 
     print(f"3A first-come-first-served   units lost {found.fifo.units_lost:8.1f}")

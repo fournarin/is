@@ -35,12 +35,14 @@ from scripts.diagnose_comparison import (  # noqa: E402
     Diagnosis,
     FillTheRound,
     Instrumented,
+    Measure,
     diagnose,
     measure,
     with_roster,
     with_weights,
     without_the_gate,
 )
+from scripts.diagnose_comparison import _verdict_on_both as verdict  # noqa: E402
 
 CONFIG = load_config(REPO / "config")
 SEEDS = (0, 1)
@@ -231,3 +233,37 @@ class TestTheMachineProfile:
             assert under_fifo.waiting_minutes >= 0
             assert under_gate.waiting_minutes >= 0
             assert under_gate.repair_minutes > 0
+
+
+def _measured(units: float, response: float) -> Measure:
+    return Measure(units_lost=units, response_minutes=response, unfinished=0.0, down_minutes=0.0)
+
+
+class TestTheConclusionsFollowTheNumbers:
+    """Until ADR-124 the write-up argued its mechanism in fixed prose, and a
+    re-run under a corrected model left that prose describing a shift that no
+    longer happened. The verdicts are computed now; these pin which way."""
+
+    def test_better_on_both_is_said_to_be_better(self) -> None:
+        assert "**3C is better than 3A" in verdict(
+            "3C", _measured(900, 3.0), "3A", _measured(950, 4.0)
+        )
+        assert "**3A is better than 3C" in verdict(
+            "3C", _measured(950, 4.0), "3A", _measured(900, 3.0)
+        )
+
+    def test_a_trade_is_called_a_trade(self) -> None:
+        said = verdict("3C", _measured(980, 21.0), "3A", _measured(946, 29.0))
+        assert "3A loses less production and 3C reaches machines sooner" in said
+        assert "neither policy dominates" in said
+
+    def test_a_difference_inside_the_noise_is_not_a_verdict(self) -> None:
+        said = verdict("3C", _measured(859.0, 3.77), "3A", _measured(856.6, 3.70))
+        assert "indistinguishable" in said
+
+    def test_the_roster_it_diagnosed_is_recorded(self, found: Diagnosis) -> None:
+        assert found.technicians == len(LINE_A_ONE_SHIFT.technicians)
+
+    def test_a_smaller_roster_is_a_row_in_the_sweep(self) -> None:
+        """ADR-124: one technician is where the policies differ at all."""
+        assert 1 in ROSTER_SWEEP

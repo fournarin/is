@@ -143,7 +143,7 @@ model and is withdrawn. ADR-124 records the change and both sets of numbers.
 | `comparison.md` | means over the seeds, arranged for reading |
 | `seed-level-statistics.md` | the same comparison with the seed as the unit: sign and Wilcoxon tests, Holm-adjusted (ADR-124) |
 | `technicians-1/`, `technicians-2/` | the whole grid with one and two technicians, and its seed-level statistics |
-| `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn |
+| `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn; `technicians-1/diagnosis.md` asks the same of the one-technician shift, where the policies actually differ |
 | `confirmations.md` | how far the shift lead and the scheduler agree, and how much nobody answers - the method and the endpoint, with no figures until a trial has been run |
 | `health.md` | whether the history half of a health reading ranks the machines a generator degraded above the ones it left alone, and which half of the reading it says nothing about |
 | `reproducibility.md` | whether the figures above come back on another machine, which of them are exact, and why one column of 3D's is not |
