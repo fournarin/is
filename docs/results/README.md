@@ -10,11 +10,10 @@ PYTHONPATH=. uv run python scripts/measure_health.py   # the health ranking
 ```
 
 That claim was tested on 18 September 2026, on a clean checkout and a different
-machine from the one that produced the committed figures.
-[`reproducibility.md`](reproducibility.md) is the result: 1,439 of the 1,440 rows
-in `comparison.csv` came back byte for byte, `units_lost` moved nowhere at all,
-and the single cell that did move is 3D's mean response, for a reason worth
-knowing before quoting that column.
+machine, for the comparison as it stood then: [`reproducibility.md`](reproducibility.md)
+reports 1,439 of 1,440 rows back byte for byte. The comparison has been re-run
+twice since (ADR-110, ADR-124) and that check has not been repeated on the current
+figures.
 
 The first writes `comparison.csv` - every run - and `comparison.md`, which is one
 reading of it. If you disagree with the reading, the rows are there to do your
@@ -49,7 +48,8 @@ long job at a well-buffered station outweighs a short one at the bottleneck.
 
 One eight-hour shift on line A, three technicians, four machines, a quiet
 four-hour window followed by a deliberately harsh one. Twenty seeds behind every
-number, six buffer settings, and three arrival rates - 1,440 runs, a few minutes.
+number, six buffer settings, five arrival rates and an oracle - 3,000 runs per
+roster size, under a minute.
 
 ## What this is not
 
@@ -72,91 +72,68 @@ Specifically, and in decreasing order of how much it should worry a reader:
 4. **Skill matching is not exercised.** Simulated tickets carry no required
    skill (ADR-046 §2), so the w3 term of the score does nothing here. Any claim
    about that term is outside what this measures.
-5. **One line, one shift, one roster size.** Three technicians against four
-   machines is a scenario parameter, not a fact.
+5. **One line, one shift.** Three technicians against four machines is a
+   scenario parameter, not a fact; one and two are swept beside it.
+6. **Repair times are deterministic** and failures are exponential. Both are
+   the simplest choices, not measurements.
 
 ## What the numbers say, as of the run committed here
 
-**3C responds fastest and 3A loses the least production.** The gate and score
-reach a machine in about half the time first-come-first-served takes, and
-first-come-first-served nevertheless comes out slightly ahead on units lost, by
-roughly one percent. 3C beats the priority matrix on both.
+**Since ADR-124 a stopped machine does not fail again.** Until then, failures
+were drawn in calendar time and every one raised a ticket, so a machine already
+down kept "failing" and stacking tickets - st-03 failed 7.35 times a shift, and
+every earlier version of this section explained its result by exactly that.
+An examiner pointed out that the deployed system does the opposite (one open
+Finding per machine and rule, invariant 8) and that serial-line models count
+failures in operating time. Arrivals that land while the machine is stopped are
+now dropped, which for exponential gaps is the same as a failure clock that
+only runs while the machine does. Everything below was measured with that model;
+`failures_while_down=True` on `SimScenario` reproduces the old one.
 
-That is a real result and it is not the one the design predicts, so it is worth
-saying plainly rather than burying: **on this scenario, ranking work well does
-not by itself save production.**
+Two further changes came with it: an **oracle** row (`0`, the same shift with
+thirty technicians, so every ticket starts at the next round: the bound no
+ordering of the real crew can beat), and a **roster sweep** (`technicians-1/`,
+`technicians-2/`), because on a four-machine line three technicians are almost
+never all busy. Five arrival multipliers now, 0.125 (eight times the failure
+rate) to 2.0; twenty seeds; six buffer settings.
 
-When this file was first written it offered two explanations and chose neither.
-`diagnosis.md` has since taken the system apart one piece at a time, and the
-choice can now be made from measurement rather than argument (ADR-053):
+Grid-wide means, every buffer and multiplier:
 
-- **it is not the gate.** With the load gate removed entirely - admitting
-  everything, ranking and assignment untouched - units lost is 1204.0 against
-  1204.0, and of the 185 rounds that held something, 2 had a technician left
-  idle who could have taken a held ticket. The explanation this file used to
-  offer, that `load_ratio` counting everything open as committed lets the gate
-  hold work while somebody is free, is withdrawn: the mechanism is real and on
-  this scenario it costs nothing.
-- **it is not the harness either.** `GateAndScore._starting_now` drops 60% of
-  the placements `dispatch()` produces, and in none of those rounds could an
-  idle technician have taken one. An adapter that re-dispatches until the round
-  is full returns identical numbers.
-- **it is the waiting term, and it is a trade rather than a defeat.** Raising w4
-  alone walks 3C's units lost down to 1176.8 - past first-come-first-served -
-  while its response climbs from 18.2 minutes to 32.9, back towards
-  first-come-first-served's 37.4. **The two measures trade against each other
-  here and neither policy dominates**, which is the sentence this result
-  supports.
+| technicians | policy | units lost | response (min) |
+|---|---|---:|---:|
+| 3 (shipped) | 3A first come first served | 1081.7 | 6.14 |
+| 3 | 3B priority matrix | 1081.0 | 6.18 |
+| 3 | 3C gate + score | 1081.2 | 6.16 |
+| 3 | 3D gate + CP-SAT | 1080.5 | 6.12 |
+| 2 | 3A / 3B / 3C / 3D | 1189.4 / 1193.3 / 1194.1 / 1181.5 | 20.00 / 19.12 / 17.44 / 17.98 |
+| 1 | 3A / 3B / 3C / 3D | 1427.8 / 1454.2 / 1445.6 / 1408.3 | 63.03 / 51.90 / 38.25 / 43.13 |
+| any | oracle: nobody waits | 1050.8 | 2.61 |
 
-Nothing has been tuned. `policy.yaml` says the weights are starting values and
-they still are; no number in `diagnosis.md` is a recommendation, and 3E is the
-tool for setting them.
+What it supports, tested at the level of the seed with a Holm correction
+(`seed-level-statistics.md` in each directory):
 
-One further finding, and it is the one worth carrying into the report:
-**ADR-021's downtime term ranks correctly and still changes nothing here.**
-Moving w2 between zero and four shifts units lost by well under a percent at
-every buffer setting. That looks like a broken term until the shift is split
-into waiting and repairing: at st-03 - no buffer, bottleneck multiplier 3.0, the
-case the record exists for - 3C cuts waiting from 189.7 minutes to 101.9 and
-spends a hundred more technician-minutes there than first-come-first-served
-does. The ranking works. The outcome does not move because **st-03 fails 7.35
-times a shift**, and a machine is down while any unfinished ticket names it, so
-arriving sooner cannot be banked before the next failure merges with the outage.
+1. **With the shipped roster there is almost nothing for dispatch to recover.**
+   The oracle loses about 3% less than any policy, and no policy differs from
+   another at any multiplier after correction. Most of the loss is the repair
+   itself, which no ordering shortens.
+2. **With one technician the headroom is large and the policies still do not
+   capture it.** The oracle loses 26% less than first come first served, yet no
+   policy beats first come first served significantly at any multiplier.
+3. **Ranking by severity can cost production.** With one technician the
+   priority matrix loses significantly more than first come first served at the
+   nominal rate (+44.2 units, 14 of 20 seeds worse, Holm p = 0.024), and 3C,
+   which reaches machines in about two-thirds of the time, also loses more on
+   most seeds. Responding sooner to the most severe job is not the same as
+   stopping the line for less time.
+4. **CP-SAT is better than the greedy score where it matters.** With one
+   technician 3D loses significantly less than 3C at multipliers 0.125 and 1.0
+   (18 of 20 seeds better in both, Holm p of 0.001 or less), because it
+   optimises lost production directly; against first come first served it is
+   ahead on average and not significantly.
 
-It is not that the shift is short of people: `diagnosis.md` varies the roster
-from two technicians to eight and the term is worth a few units at every size,
-least of all at eight. What is left is `mean_hours_between_failures` - the one
-number in this project with no measurement behind it (ADR-046 §4). So this
-directory does not show that buffer-aware ranking saves production, and it does
-not show that it fails: **it shows that whether it pays depends on a parameter
-nobody has measured yet**, which is a question for the plant rather than for
-another sweep. ADR-053 records all of it.
-
-### What 3D changes
-
-The fourth policy is the one that moves the picture. Over the whole grid:
-
-| | units lost | response (min) | unfinished |
-|---|---:|---:|---:|
-| 3A first come first served | 1106.4 | 35.04 | 20.32 |
-| 3B priority matrix | 1121.4 | 19.39 | 22.27 |
-| 3C gate + score | 1117.0 | 17.21 | 22.03 |
-| **3D gate + CP-SAT** | **1101.3** | 17.59 | **20.88** |
-
-**3D loses less production than 3C in all eighteen cells of the sweep** - every
-buffer setting crossed with every arrival rate - and finishes more work, for 0.4
-of a minute of mean response. Against first-come-first-served it wins on units in
-eleven of the eighteen and responds in half the time; where it loses it loses
-narrowly. So the trade-off above **narrows sharply and does not disappear**: 3D
-comes close to dominating first-come-first-served rather than doing it, and the
-cells it loses are the busy shifts with thick buffers - which is the same reading
-as before, that when the bottleneck stops faster than anybody can reach it, no
-plan helps either.
-
-One more thing that table says, in passing: 3C's response advantage over
-first-come-first-served is 28.1 minutes at two technicians and 0.5 at eight.
-Scheduling is worth most exactly when there are not enough people, which is the
-condition a plant installs one for.
+The earlier reading, that the scheduler's benefit was cancelled by a machine
+failing again before the gain could be banked, was an artefact of the old
+model and is withdrawn. ADR-124 records the change and both sets of numbers.
 
 ## Files
 
@@ -164,6 +141,8 @@ condition a plant installs one for.
 |---|---|
 | `comparison.csv` | every run: policy, buffer, arrival rate, seed, and the measures |
 | `comparison.md` | means over the seeds, arranged for reading |
+| `seed-level-statistics.md` | the same comparison with the seed as the unit: sign and Wilcoxon tests, Holm-adjusted (ADR-124) |
+| `technicians-1/`, `technicians-2/` | the whole grid with one and two technicians, and its seed-level statistics |
 | `diagnosis.md` | why the table came out that way: the gate, the harness and two weights, each removed in turn |
 | `confirmations.md` | how far the shift lead and the scheduler agree, and how much nobody answers - the method and the endpoint, with no figures until a trial has been run |
 | `health.md` | whether the history half of a health reading ranks the machines a generator degraded above the ones it left alone, and which half of the reading it says nothing about |

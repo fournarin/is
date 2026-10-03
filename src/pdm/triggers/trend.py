@@ -196,6 +196,53 @@ def fit(readings: Sequence[tuple[datetime, float]]) -> Fit | None:
     )
 
 
+# Hampel filter (ADR-125): a reading is a spike when it sits further from the
+# median of its neighbours than this many robust standard deviations of those
+# neighbours. Three is the textbook value; the half-width of seven readings is
+# wide enough that a run of two adjacent spikes cannot vote itself normal.
+_HAMPEL_HALF_WIDTH = 3
+_HAMPEL_SIGMAS = 3.0
+# MAD to standard deviation for normal noise.
+_MAD_TO_SIGMA = 1.4826
+
+
+def without_spikes(
+    readings: Sequence[tuple[datetime, float]],
+) -> list[tuple[datetime, float]]:
+    """The readings with isolated spikes removed, before a line is fitted (ADR-125).
+
+    The detection rule ignores a spike because it has to persist for
+    `for_seconds`; the fit had no such protection. Three +25 degree glitches in
+    forty-nine readings turned a 3.0 degree-per-hour drift into 7.35, and the
+    forecast landed four and a half hours early with an interval that excluded
+    the truth - the report's worked example. A Hampel filter compares each
+    reading with the median of its neighbours, so a drift (every reading moves
+    together) survives and a glitch (one reading leaves its neighbours) does not.
+
+    Linear in the window and deterministic. Where the neighbours do not vary at
+    all, any departure from them is a spike.
+    """
+    values = [value for _, value in readings]
+    kept: list[tuple[datetime, float]] = []
+    for index, reading in enumerate(readings):
+        low = max(0, index - _HAMPEL_HALF_WIDTH)
+        high = min(len(values), index + _HAMPEL_HALF_WIDTH + 1)
+        neighbours = sorted(values[low:high])
+        middle = _median(neighbours)
+        spread = _MAD_TO_SIGMA * _median(sorted(abs(one - middle) for one in neighbours))
+        departure = abs(reading[1] - middle)
+        if departure > _HAMPEL_SIGMAS * spread and departure > 0.0:
+            continue
+        kept.append(reading)
+    return kept
+
+
+def _median(ordered: Sequence[float]) -> float:
+    count = len(ordered)
+    half = count // 2
+    return ordered[half] if count % 2 else (ordered[half - 1] + ordered[half]) / 2.0
+
+
 def _resolution(readings: Sequence[tuple[datetime, float]]) -> timedelta:
     """The typical gap between readings: how finely this channel is observed.
 
@@ -241,6 +288,7 @@ def crossing(
     forecast too far out - and no significance multiplier had to be invented to
     say so (ADR-043 section 2).
     """
+    readings = without_spikes(readings)
     if len(readings) < min_samples:
         return None
 

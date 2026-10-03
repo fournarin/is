@@ -104,11 +104,11 @@ triggers:
     # scripts/calibrate_eta.py). A property of the synthetic curves, not of the
     # plant: recalibrate from the plant's closed forecasts.
     eta_error:
-      - {ahead_below_hours: 1, fraction: 0.433}
-      - {ahead_below_hours: 3, fraction: 0.336}
-      - {ahead_below_hours: 6, fraction: 0.397}
-      - {ahead_below_hours: 12, fraction: 0.549}
-      - {ahead_below_hours: 8760, fraction: 0.666}
+      - {ahead_below_hours: 1, fraction: 0.384}
+      - {ahead_below_hours: 3, fraction: 0.32}
+      - {ahead_below_hours: 6, fraction: 0.243}
+      - {ahead_below_hours: 12, fraction: 0.542}
+      - {ahead_below_hours: 8760, fraction: 0.667}
 
 # ── what the finished jobs say the estimate should be (ADR-006, ADR-066) ───
 # Provenance: recorded decision, both of them, and neither is a measurement -

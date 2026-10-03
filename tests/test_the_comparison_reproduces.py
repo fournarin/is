@@ -32,6 +32,7 @@ from compare_policies import (  # type: ignore[import-not-found]  # noqa: E402
     _policies,
     compare,
     summarise,
+    with_roster,
     with_arrival_multiplier,
     with_uniform_buffers,
     write_csv,
@@ -61,8 +62,9 @@ class TestItReproduces:
     def test_every_cell_of_the_grid_is_present(self, rows: list[Row]) -> None:
         policies = len(_policies(CONFIG))
         assert policies == 4, "3A, 3B, 3C and 3D; a fifth needs a row in this file too"
-        assert len(rows) == len(SEEDS) * len(BUFFERS) * len(ARRIVALS) * policies
-        assert len({row.policy for row in rows}) == policies
+        # Plus the oracle, which is a bound rather than a policy (ADR-124).
+        assert len(rows) == len(SEEDS) * len(BUFFERS) * len(ARRIVALS) * (policies + 1)
+        assert len({row.policy for row in rows}) == policies + 1
 
 
 class TestTheGridVariesWhatItSaysItVaries:
@@ -116,10 +118,19 @@ class TestTheGateIsMeasuredAsWellAsRun:
                 assert row.held_rounds == 0
                 assert row.light_rounds == row.normal_rounds == row.heavy_rounds == 0
 
-    def test_the_shift_reaches_both_bands(self, rows: list[Row]) -> None:
+    def test_the_shift_reaches_both_bands(self) -> None:
         """ADR-011's claim is that behaviour changes between the bands. A
-        comparison run entirely in one of them could not show it."""
-        gate = [row for row in rows if row.policy.startswith("3C")]
+        comparison run entirely in one of them could not show it. Since ADR-124
+        the shipped three-technician shift stays light, so the claim is checked
+        on the one-technician grid, where it is exercised."""
+        thin = compare(
+            seeds=SEEDS,
+            buffers=BUFFERS,
+            arrivals=ARRIVALS,
+            config=CONFIG,
+            scenario=with_roster(LINE_A_ONE_SHIFT, 1),
+        )
+        gate = [row for row in thin if row.policy.startswith("3C")]
 
         assert any(row.light_rounds > 0 for row in gate)
         assert any(row.heavy_rounds > 0 for row in gate)

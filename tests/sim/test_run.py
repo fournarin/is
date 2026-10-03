@@ -530,13 +530,26 @@ class TestWhatTheEngineRecords:
         )
         assert result.mean_response_minutes == pytest.approx(3.0)
 
-    def test_a_machine_that_fails_twice_stays_down_until_both_are_done(
-        self, config: Config
-    ) -> None:
-        """One outage, not two. A machine with an unfinished ticket on it is not
-        producing, however many tickets it has."""
+    def test_a_stopped_machine_does_not_fail_again(self, config: Config) -> None:
+        """ADR-124. Its failure clock stops with it: the second arrival lands while
+        the first is still being waited on, and is not a second ticket."""
         result = run(
             _scenario(duration=timedelta(hours=4)),
+            policy=FirstComeFirstServed(),
+            config=config,
+            failures=(
+                _failure(BOTTLENECK, after=timedelta(minutes=12), minutes=30),
+                _failure(BOTTLENECK, after=timedelta(minutes=22), minutes=30),
+            ),
+        )
+        assert len(result.outages) == 1
+        assert result.tickets_finished == 1
+
+    def test_the_calendar_time_model_is_still_available(self, config: Config) -> None:
+        """One outage, not two, and two tickets: the model every result before
+        ADR-124 used, kept so those results can be reproduced."""
+        result = run(
+            _scenario(duration=timedelta(hours=4)).model_copy(update={"failures_while_down": True}),
             policy=FirstComeFirstServed(),
             config=config,
             failures=(

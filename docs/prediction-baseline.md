@@ -13,6 +13,31 @@ This is the answer to the advisor's first requirement - "monitor **and
 predict**" - and to ADR-020's promise that the accuracy would be measured before
 any plant data arrived.
 
+## After the spike filter - 3 October 2026
+
+ADR-125. An examiner re-fitted the report's worked example and found its
+forecast 4.5 hours early: three injected +25 degree glitches in 49 readings had
+pulled a 3.0 degree-per-hour drift to 7.35. The detection rule already ignored
+spikes (it needs `for_seconds` of persistence); the trend fit did not. A Hampel
+filter now drops a reading that departs from the median of its six neighbours by
+more than three robust standard deviations before the line is fitted. Same
+seeds, same baseline, `scripts/measure_prediction.py`:
+
+| horizon | n | signed mean | MAE | P90 of \|error\| | worst | baseline MAE | baseline P90 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0-1h | 3143 | +3.2 min | **5.4** | 14.0 | +28.3 | 13.5 | 29.0 |
+| 1-3h | 6503 | +6.9 min | **15.2** | 44.2 | −417.1 | 41.4 | 63.6 |
+| 3-6h | 9811 | +13.0 min | **35.4** | 115.5 | −352.0 | 94.3 | 156.5 |
+| 6-12h | 4827 | +138.2 min | **146.1** | 360.0 | +455.1 | 343.3 | 538.0 |
+| 12h+ | 2305 | +606.0 min | **606.0** | 810.1 | +917.0 | 1350.2 | 1965.9 |
+
+Predictions on a channel that never crosses: 517 (was 614), all
+`MC-018/R-cycle-time-drift`. Inside one hour the MAE falls from 9.1 to 5.4
+minutes and the worst case from 439 minutes early to 28 late; inside one to three
+hours from 22.3 to 15.2. What remains in the long buckets is the exponential
+channel, which a straight line reaches late by construction. The section below
+is the measurement before the filter, kept as it was.
+
 ## Across 21 seeds, in magnitude, against a baseline - 29 September 2026
 
 The table below this one is one seed and a signed mean, and "under three

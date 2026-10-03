@@ -51,7 +51,7 @@ BUFFER_SWEEP: tuple[int | None, ...] = (None, 0, 5, 10, 20, 40)
 # quieter plant than the scenario assumes, below it a busier one. ADR-046 §4
 # requires this column to exist; it does not say what the true value is, and
 # neither does this file.
-ARRIVAL_SWEEP: tuple[float, ...] = (0.5, 1.0, 2.0)
+ARRIVAL_SWEEP: tuple[float, ...] = (0.125, 0.25, 0.5, 1.0, 2.0)
 
 
 class GateAndScore:
@@ -277,6 +277,52 @@ def with_arrival_multiplier(scenario: SimScenario, multiplier: float) -> SimScen
     return scenario.model_copy(update={"windows": windows})
 
 
+ORACLE = "0 oracle: nobody waits"
+# Enough people that a ticket is started in the round after it is raised: on
+# this line no shift ever has more than about this many machines down at once.
+ORACLE_CREW = 30
+
+
+def with_unlimited_technicians(scenario: SimScenario) -> SimScenario:
+    """The bound no dispatch policy can beat (ADR-124).
+
+    Every ticket is started at the first round after it is raised, so what is
+    left of the loss is the repair itself and the five-minute cadence. The gap
+    between a policy and this is the most any ordering of the same crew could
+    recover; the reviewer asked for it, and a negative result is not readable
+    without it.
+    """
+    template = scenario.technicians[0]
+    shift = scenario.assignments[0]
+    crew = tuple(
+        template.model_copy(update={"user": UserId(f"oracle-{index + 1}")})
+        for index in range(ORACLE_CREW)
+    )
+    return scenario.model_copy(
+        update={
+            "technicians": crew,
+            "assignments": tuple(shift.model_copy(update={"technician": one.user}) for one in crew),
+        }
+    )
+
+
+def with_roster(scenario: SimScenario, size: int) -> SimScenario:
+    """The same shift with `size` people on it, each with the first one's skills
+    and minutes. On a four-machine line three technicians are almost never all
+    busy, so ordering cannot matter there; fewer people is where it can."""
+    template = scenario.technicians[0]
+    shift = scenario.assignments[0]
+    crew = tuple(
+        template.model_copy(update={"user": UserId(f"tech-{index + 1}")}) for index in range(size)
+    )
+    return scenario.model_copy(
+        update={
+            "technicians": crew,
+            "assignments": tuple(shift.model_copy(update={"technician": one.user}) for one in crew),
+        }
+    )
+
+
 def _row(
     policy_name: str,
     result: SimRun,
@@ -321,6 +367,7 @@ def compare(
         shaped = with_uniform_buffers(base, units)
         for multiplier in arrivals:
             variant = with_arrival_multiplier(scenario, multiplier)
+            unlimited = with_unlimited_technicians(variant)
             for seed in seeds:
                 for name, policy, gate in _policies(shaped):
                     result = run(variant, policy=policy, config=shaped, seed=seed)
@@ -334,6 +381,17 @@ def compare(
                             gate=gate,
                         )
                     )
+                oracle = run(unlimited, policy=FirstComeFirstServed(), config=shaped, seed=seed)
+                rows.append(
+                    _row(
+                        ORACLE,
+                        oracle,
+                        buffer_units=units,
+                        multiplier=multiplier,
+                        seed=seed,
+                        gate=None,
+                    )
+                )
     return rows
 
 
@@ -537,11 +595,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", type=int, default=20, help="how many seeds per cell")
     parser.add_argument("--out", type=Path, default=RESULTS, help="where to write the results")
+    parser.add_argument(
+        "--arrivals",
+        type=float,
+        nargs="+",
+        default=list(ARRIVAL_SWEEP),
+        help="arrival multipliers to sweep (below 1.0 is a busier plant)",
+    )
+    parser.add_argument(
+        "--technicians",
+        type=int,
+        default=None,
+        help="roster size, instead of the scenario's own three (ADR-124)",
+    )
     args = parser.parse_args(argv)
 
     seeds = list(range(args.seeds))
-    rows = compare(seeds=seeds)
+    scenario = (
+        LINE_A_ONE_SHIFT
+        if args.technicians is None
+        else with_roster(LINE_A_ONE_SHIFT, args.technicians)
+    )
+    rows = compare(seeds=seeds, arrivals=args.arrivals, scenario=scenario)
     write_csv(rows, args.out / "comparison.csv")
+    args.out.mkdir(parents=True, exist_ok=True)
     write_markdown(rows, args.out / "comparison.md", seeds=seeds)
 
     print(f"{len(rows)} runs -> {args.out / 'comparison.csv'} and comparison.md")
