@@ -56,9 +56,14 @@ class AlreadyOpen(Exception):
     section 3).
     """
 
-    def __init__(self, machine_id: MachineId, open_refs: Sequence[str]) -> None:
+    def __init__(
+        self, machine_id: MachineId, open_refs: Sequence[str], reasons: Sequence[str] = ()
+    ) -> None:
         self.machine_id = machine_id
         self.open_refs = tuple(open_refs)
+        # What each open ticket is about, so the reporter can tell "same fault"
+        # from "something else" without knowing a ticket number (ADR-126).
+        self.reasons = tuple(reasons)
         joined = ", ".join(self.open_refs)
         super().__init__(
             f"{machine_id} already has work open: {joined}. If what you are reporting is "
@@ -285,7 +290,12 @@ class WorkOrders:
         already_open = repo.open_for_machine(conn, machine_id)
         unaccounted = [ref for ref in already_open if ref not in set(distinct_from)]
         if unaccounted:
-            raise AlreadyOpen(machine_id, already_open)
+            found = [repo.get(conn, ref) for ref in already_open]
+            raise AlreadyOpen(
+                machine_id,
+                already_open,
+                [order.reason if order is not None else "" for order in found],
+            )
 
         playbook, warning = (
             self._playbook(conn, symptom_code, machine_model)

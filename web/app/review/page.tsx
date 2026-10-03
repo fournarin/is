@@ -41,7 +41,8 @@ export default async function ReviewQueuePage({
 
   const groups = groupByModel(await reviewQueue());
   const asked = (await searchParams).model;
-  const shown = groups.find((group) => group.machine_model === asked) ?? groups[0];
+  const shown =
+    groups.find((group) => group.machine_model === asked) ?? groups[0];
 
   return (
     <Shell account={account} current="/review">
@@ -63,8 +64,16 @@ export default async function ReviewQueuePage({
               <Link
                 key={group.machine_model}
                 href={`/review?model=${encodeURIComponent(group.machine_model)}`}
-                className={group.machine_model === shown.machine_model ? "tab current" : "tab"}
-                aria-current={group.machine_model === shown.machine_model ? "page" : undefined}
+                className={
+                  group.machine_model === shown.machine_model
+                    ? "tab current"
+                    : "tab"
+                }
+                aria-current={
+                  group.machine_model === shown.machine_model
+                    ? "page"
+                    : undefined
+                }
               >
                 {group.machine_model} ({group.proposals.length})
               </Link>
@@ -75,13 +84,19 @@ export default async function ReviewQueuePage({
             <article className="card" key={one.proposal_id}>
               <div className="screen-head">
                 <h2>
-                  <Link href={`/review/${one.proposal_id}`}>{one.symptom_code}</Link>
+                  <Link href={`/review/${one.proposal_id}`}>
+                    {one.symptom_title ?? one.symptom_code}
+                  </Link>
                 </h2>
                 <span className="muted">
-                  {one.origin === "technician" ? "ช่างแย้ง" : `ร่าง · ${OUTCOME[one.outcome] ?? one.outcome}`}
+                  {one.origin === "technician"
+                    ? "ช่างแย้ง"
+                    : `ร่าง · ${OUTCOME[one.outcome] ?? one.outcome}`}
                 </span>
               </div>
-              <p className="muted">{one.reason}</p>
+              <p className="muted">
+                {one.machine_model} · {one.symptom_code} · {one.reason}
+              </p>
               <p className="muted">
                 {one.steps} ขั้นตอน
                 {/* Shown rather than hidden: a draft that lost three steps to
@@ -98,7 +113,8 @@ export default async function ReviewQueuePage({
       {account.role === "supervisor" && (
         <p className="muted">
           {/* Invariant 6: the API refuses it, the button is not merely hidden. */}
-          หัวหน้ากะดูคิวได้เพื่อจะได้ถามว่าทำไมคิวไม่ขยับ แต่การอนุมัติเป็นของวิศวกรเท่านั้น
+          หัวหน้ากะดูคิวได้เพื่อจะได้ถามว่าทำไมคิวไม่ขยับ
+          แต่การอนุมัติเป็นของวิศวกรเท่านั้น
         </p>
       )}
     </Shell>

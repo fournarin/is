@@ -474,14 +474,18 @@ class TestAJobPutDown:
     ) -> None:
         """ADR-120. It used to become `handed_over`, which no round placed and no
         technician's screen listed: the owner's second trial put one down and it
-        was never seen again."""
-        _crew(conn, ANA)
+        was never seen again. Offered to somebody else (ADR-126): the third trial
+        saw it proposed straight back to the person who had put it down."""
+        _crew(conn, ANA, BEN)
         ref = _ticket(orders, conn)
         rounds.run(conn)
         confirming.confirm(conn, ref, by=SUP, role=Role.SUPERVISOR)
-        orders.accept(conn, ref, user=ANA)
-        orders.start(conn, ref, user=ANA)
-        orders.hand_over(conn, ref, user=ANA, note="cover off, waiting for the seal kit")
+        held_by = work_repo.get(conn, ref)
+        assert held_by is not None
+        first = held_by.assignees[0].user
+        orders.accept(conn, ref, user=first)
+        orders.start(conn, ref, user=first)
+        orders.hand_over(conn, ref, user=first, note="cover off, waiting for the seal kit")
 
         clock.advance(timedelta(seconds=CONFIG.policy.dispatch.round_seconds))
 
@@ -489,6 +493,29 @@ class TestAJobPutDown:
         order = work_repo.get(conn, ref)
         assert order is not None
         assert order.handover_note == "cover off, waiting for the seal kit"
+        assert [one.user for one in order.assignees] != [first]
+
+    def test_with_nobody_else_on_shift_it_waits_for_the_lead(
+        self,
+        conn: Connection[Any],
+        rounds: DispatchRounds,
+        confirming: Confirmations,
+        orders: WorkOrders,
+        clock: SimulatedClock,
+    ) -> None:
+        _crew(conn, ANA)
+        ref = _ticket(orders, conn)
+        rounds.run(conn)
+        confirming.confirm(conn, ref, by=SUP, role=Role.SUPERVISOR)
+        orders.accept(conn, ref, user=ANA)
+        orders.start(conn, ref, user=ANA)
+        orders.hand_over(conn, ref, user=ANA, note="waiting for the part")
+
+        clock.advance(timedelta(seconds=CONFIG.policy.dispatch.round_seconds))
+        report = rounds.run(conn)
+
+        assert report.proposed == ()
+        assert [one.ref for one in report.round.unassigned] == [ref]
 
 
 class TestAProposalHoldsItsCapacity:

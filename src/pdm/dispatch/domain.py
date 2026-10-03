@@ -420,13 +420,13 @@ def _reason(
         ),
         # A job that has waited under a minute has nothing to say about waiting,
         # whatever its normalised term came to against an equally fresh round.
-        (weights.waiting * terms.waiting if waited >= 1 else 0.0, f"รอมาแล้ว {_span(waited)}"),
-        (
-            weights.eta_urgency * terms.eta_urgency,
-            f"คาดว่าจะถึงเกณฑ์ในอีกราว {_span((order.eta - now).total_seconds() / 60.0)}"
-            if order.eta is not None
-            else "ใกล้ถึงเกณฑ์แล้ว",
-        ),
+        # Neither of these two prints a time (ADR-126). The sentence is frozen
+        # when the round proposes the job and read for up to half an hour after;
+        # "in about 41 minutes" beside a live "14:56" that had already passed
+        # was the third trial's first blocker. The live forecast is the card's
+        # own `eta_text`; how long a job has waited is the card's to compute.
+        (weights.waiting * terms.waiting if waited >= 1 else 0.0, "รอในคิวนานกว่างานอื่น"),
+        (weights.eta_urgency * terms.eta_urgency, "พยากรณ์ว่าใกล้ถึงเกณฑ์"),
     ]
     # 0.05 is presentational and its provenance is ADR-049 §2: it decides which
     # clauses appear in this sentence and nothing else. Every term is already in
@@ -828,6 +828,20 @@ def _released_demand(ranked: Sequence[_Ranked], *, capacity: int) -> float:
     )
 
 
+def put_down_by(order: WorkOrder) -> frozenset[UserId]:
+    """Who put this job down, if it is back in the queue after a handover.
+
+    A round does not offer it straight back to them (ADR-126). In the third
+    trial a technician handed a job over - "the belt is the wrong size, waiting
+    for the part" - and the next round proposed it to the same technician.
+    They put it down for a reason the round cannot read; the shift lead can
+    still send it to them by hand.
+    """
+    if order.handover_note is None or order.assignees:
+        return frozenset()
+    return frozenset(segment.user for segment in order.work_segments)
+
+
 def _assign(
     admitted: Sequence[_Ranked],
     *,
@@ -854,6 +868,7 @@ def _assign(
             for person in available
             if (order.required_skill is None or person.can_perform(order.required_skill))
             and left[person.user] >= order.estimated_minutes
+            and person.user not in put_down_by(order)
         ]
         # Most free capacity first, so a shift's work spreads rather than filling
         # one person; user id breaks the tie, because two people with the same
@@ -922,7 +937,9 @@ def _summary(
     """
     parts = [
         f"กะนี้ใช้กำลังคนไป {ratio:.0%} ({BAND_TH[band.value]})",
-        f"ปล่อยงาน {len(placed)} ใบ",
+        # What the next round would propose, said as that: "ปล่อยงาน 0 ใบ" beside
+        # four cards waiting read as a count of something already done (ADR-126).
+        f"รอบถัดไปจะเสนองานเพิ่ม {len(placed)} ใบ" if placed else "ไม่มีงานใหม่ที่จะเสนอ",
     ]
     if held:
         parts.append(f"กันไว้ก่อน {len(held)} ใบ")

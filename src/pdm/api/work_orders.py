@@ -234,7 +234,11 @@ def _translate(error: Exception) -> HTTPException:
         # regular expression over a message (ADR-077 section 3).
         return HTTPException(
             status.HTTP_409_CONFLICT,
-            {"message": str(error), "open_orders": list(error.open_refs)},
+            {
+                "message": str(error),
+                "open_orders": list(error.open_refs),
+                "open_reasons": list(error.reasons),
+            },
         )
     return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error))
 

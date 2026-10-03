@@ -23,6 +23,8 @@
 export type QueuedProposal = {
   proposal_id: number;
   symptom_code: string;
+  // The symptom as the plant names it (ADR-126).
+  symptom_title?: string | null;
   machine_model: string;
   origin: "drafted" | "technician";
   outcome: string;
@@ -52,6 +54,8 @@ export type DraftStep = {
 export type Proposal = {
   proposal_id: number;
   symptom_code: string;
+  // The symptom as the plant names it (ADR-126).
+  symptom_title?: string | null;
   machine_model: string;
   origin: "drafted" | "technician";
   outcome: string;

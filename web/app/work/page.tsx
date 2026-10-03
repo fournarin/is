@@ -20,10 +20,18 @@ import { currentRound, myWork, proposals, type Ticket } from "@/lib/work";
 export default async function WorkPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; done?: string; ref?: string }>;
 }) {
   const account = await requireAccount();
-  const { error } = await searchParams;
+  const { error, done, ref } = await searchParams;
+  // What the last button did, said once (ADR-126). The third trial closed and
+  // handed over jobs that simply vanished, with nothing to say it worked.
+  const doneLine =
+    done === "closed"
+      ? `✓ ปิดงาน ${ref ?? ""} แล้ว หัวหน้ากะเห็นผลและบันทึกของคุณแล้ว`
+      : done === "handed"
+        ? `↪ ส่งต่องาน ${ref ?? ""} แล้ว หัวหน้ากะจะส่งให้ช่างคนอื่น`
+        : null;
   if (account.role !== "technician") {
     return (
       <Shell account={account} current="/work">
@@ -40,6 +48,7 @@ export default async function WorkPage({
     const waiting = (await proposals()).filter((one) => one.assignees.includes(account.user));
     return (
       <Shell account={account} current="/work">
+        {doneLine && <p className="recorded">{doneLine}</p>}
         <div className="card empty">
           <span className="icon" aria-hidden="true">
             {waiting.length > 0 ? "⏳" : "☕"}
@@ -67,6 +76,7 @@ export default async function WorkPage({
 
   return (
     <Shell account={account} current="/work">
+      {doneLine && <p className="recorded">{doneLine}</p>}
       {error !== undefined && (
         <p className="error" role="alert">
           {error}

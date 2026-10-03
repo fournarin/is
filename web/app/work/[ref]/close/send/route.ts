@@ -84,5 +84,5 @@ export async function POST(
     return back(detail, response.status);
   }
 
-  return wantsJson ? new Response(null, { status: 204 }) : seeOther("/work");
+  return wantsJson ? new Response(null, { status: 204 }) : seeOther(`/work?done=closed&ref=${encoded}`);
 }

@@ -53,6 +53,9 @@ class ProposalSummary(BaseModel):
 
     proposal_id: int
     symptom_code: SymptomCode
+    # The symptom as the plant names it (ADR-126): the third trial's engineer
+    # saw only "SYM-014" and could not check the draft was about the right fault.
+    symptom_title: str | None = None
     machine_model: MachineModel
     origin: str
     outcome: str
@@ -98,6 +101,7 @@ class ProposalDetail(BaseModel):
 
     proposal_id: int
     symptom_code: SymptomCode
+    symptom_title: str | None = None
     machine_model: MachineModel
     origin: str
     outcome: str
@@ -238,6 +242,7 @@ def request_draft(
 def review_queue(
     conn: Db,
     playbooks: Store,
+    config: Plant,
     account: Annotated[Account, Depends(requires(*_MAY_REVIEW, action="list_review_queue"))],
     # Bounded on both sides. Unbounded it reaches LIMIT %s, where a negative
     # number is a PostgreSQL error the caller sees as a 500 and a large one is a
@@ -250,7 +255,13 @@ def review_queue(
     handler and a different check - seeing the queue is not authority over its
     contents, and a supervisor who cannot see it cannot ask why it is not moving.
     """
-    return [ProposalSummary.of(item) for item in playbooks.review_queue(conn, limit=limit)]
+    wording = config.wording()
+    return [
+        ProposalSummary.of(item).model_copy(
+            update={"symptom_title": wording.symptom(item.symptom_code)}
+        )
+        for item in playbooks.review_queue(conn, limit=limit)
+    ]
 
 
 @router.get("/playbooks/queue/{proposal_id}", response_model=ProposalDetail)
@@ -258,6 +269,7 @@ def proposal_detail(
     proposal_id: int,
     conn: Db,
     playbooks: Store,
+    config: Plant,
     account: Annotated[Account, Depends(requires(*_MAY_REVIEW, action="read_proposal"))],
 ) -> ProposalDetail:
     """One proposal, and the note that somebody has just opened it.
@@ -278,6 +290,7 @@ def proposal_detail(
     return ProposalDetail(
         proposal_id=found.proposal_id,
         symptom_code=found.symptom_code,
+        symptom_title=config.wording().symptom(found.symptom_code),
         machine_model=found.machine_model,
         origin=found.origin.value,
         outcome=found.outcome,

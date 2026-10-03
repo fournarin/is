@@ -96,7 +96,7 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
     const result = await post(workOrder, close);
     if (result === "sent") {
       settle(window.localStorage, workOrder);
-      router.push("/work");
+      router.push(`/work?done=closed&ref=${encodeURIComponent(workOrder)}`);
       router.refresh();
       return;
     }

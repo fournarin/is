@@ -412,7 +412,16 @@ def _current_of(
     if detected:
         clauses.append(f"เกินเกณฑ์แล้ว {len(detected)} เรื่อง")
     if predicted and soonest is not None and hours is not None:
-        clauses.append(f"คาดว่าจะเกินเกณฑ์ {len(predicted)} เรื่อง เร็วสุดในอีกราว {hours:.0f} ชั่วโมง")
+        clauses.append(
+            f"คาดว่าจะเกินเกณฑ์ {len(predicted)} เรื่อง "
+            + (
+                "เลยเวลาที่คาดไว้แล้ว ให้ตรวจเครื่อง"
+                if hours <= 0
+                else f"เร็วสุดในอีกราว {max(1, round(hours))} ชั่วโมง"
+                if hours >= 1
+                else f"เร็วสุดในอีกราว {max(1, round(hours * 60))} นาที"
+            )
+        )
     if acknowledged:
         clauses.append(f"รับทราบแล้ว {len(acknowledged)} เรื่อง แต่เครื่องยังไม่ได้รับการแก้")
     return CurrentContribution(
