@@ -106,17 +106,20 @@ production sits:
 
 `st-03 buf 0 x3` is 60% of everything 3C loses. Of the +2.5-unit gap between 3C and 3A, +0.0 is at that station and +2.5 at the others. Total down-minutes: 625.4 under 3A against 627.9 under 3C.
 
-Each machine's tickets split into the time they waited and the time they
-were repaired, with the failures each machine raised per shift:
+Each machine's tickets per shift: minutes waited and repaired, summed
+over the tickets that started; tickets raised; and tickets never started
+before the shift ended:
 
-| station | 3A waiting | 3C waiting | 3A repair | 3C repair | failures |
-|---|---:|---:|---:|---:|---:|
-| st-01 buf 20 | 9.3 | 9.3 | 157.5 | 159.0 | 2.65 |
-| st-02 buf 8 | 8.1 | 7.8 | 189.8 | 189.8 | 2.75 |
-| st-03 buf 0 x3 | 9.0 | 8.5 | 181.5 | 181.5 | 2.95 |
-| st-04 buf 12 | 17.4 | 18.9 | 117.8 | 117.8 | 3.75 |
+| station | 3A waiting | 3C waiting | 3A repair | 3C repair | 3A raised | 3C raised | 3A never started | 3C never started |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| st-01 buf 20 | 9.3 | 9.3 | 157.5 | 159.0 | 2.65 | 2.65 | 0.20 | 0.20 |
+| st-02 buf 8 | 8.1 | 7.8 | 189.8 | 189.8 | 2.75 | 2.75 | 0.00 | 0.00 |
+| st-03 buf 0 x3 | 9.0 | 8.5 | 181.5 | 181.5 | 2.95 | 2.95 | 0.10 | 0.10 |
+| st-04 buf 12 | 17.4 | 18.9 | 117.8 | 117.8 | 3.75 | 3.75 | 0.15 | 0.15 |
 
-At `st-03 buf 0 x3` 3C's tickets waited 8.5 minutes against 3A's 9.0: 3C does reach the critical station sooner.
+3C leaves no station's tickets unstarted more often than 3A does.
+
+At `st-03 buf 0 x3` a started ticket waited 3.0 minutes on average under 3C against 3.1 under 3A: 3C reaches the critical station about as soon as 3A does.
 
 ## 5. The roster
 

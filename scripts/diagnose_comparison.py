@@ -109,6 +109,10 @@ class MachineProfile:
     waiting_minutes: float
     repair_minutes: float
     tickets: float
+    # Raised and never started before the shift ended. The waiting column counts
+    # started tickets only, so without this a policy that leaves a station's
+    # work to the end of the shift reads as one that reaches it sooner.
+    unstarted: float = 0.0
 
 
 @dataclass
@@ -421,6 +425,7 @@ def per_machine(
     waiting: dict[MachineId, list[float]] = defaultdict(list)
     repairing: dict[MachineId, list[float]] = defaultdict(list)
     raised: dict[MachineId, list[float]] = defaultdict(list)
+    never: dict[MachineId, list[float]] = defaultdict(list)
 
     for seed in seeds:
         result = run(scenario, policy=factory(), config=config, seed=seed)
@@ -429,6 +434,7 @@ def per_machine(
         run_wait: dict[MachineId, float] = defaultdict(float)
         run_repair: dict[MachineId, float] = defaultdict(float)
         run_count: dict[MachineId, float] = defaultdict(float)
+        run_never: dict[MachineId, float] = defaultdict(float)
         for outage in result.outages:
             run_lost[outage.machine_id] += outage.units_lost
             run_down[outage.machine_id] += outage.down_minutes
@@ -438,12 +444,15 @@ def per_machine(
                 run_wait[ticket.machine_id] += ticket.response_minutes
             if ticket.started_at is not None:
                 run_repair[ticket.machine_id] += ticket.repair_minutes
+            else:
+                run_never[ticket.machine_id] += 1
         for machine in _machines(config):
             lost[machine].append(run_lost.get(machine, 0.0))
             down[machine].append(run_down.get(machine, 0.0))
             waiting[machine].append(run_wait.get(machine, 0.0))
             repairing[machine].append(run_repair.get(machine, 0.0))
             raised[machine].append(run_count.get(machine, 0.0))
+            never[machine].append(run_never.get(machine, 0.0))
 
     return {
         machine: MachineProfile(
@@ -452,6 +461,7 @@ def per_machine(
             waiting_minutes=statistics.fmean(waiting[machine]),
             repair_minutes=statistics.fmean(repairing[machine]),
             tickets=statistics.fmean(raised[machine]),
+            unstarted=statistics.fmean(never[machine]),
         )
         for machine in lost
     }
@@ -465,6 +475,12 @@ def _machines(config: Config) -> list[MachineId]:
         for station in line.stations
         for machine in station.machines
     )
+
+
+def _mean_wait(profile: MachineProfile) -> float:
+    """Minutes a started ticket waited, on average, at one machine."""
+    started = profile.tickets - profile.unstarted
+    return profile.waiting_minutes / started if started > 0 else 0.0
 
 
 def _station_label(config: Config, machine: MachineId) -> str:
@@ -798,25 +814,51 @@ def write_markdown(found: Diagnosis, path: Path) -> None:
         f"{found.fifo.down_minutes:.1f} under 3A against "
         f"{found.shipped.down_minutes:.1f} under 3C.",
         "",
-        "Each machine's tickets split into the time they waited and the time they",
-        "were repaired, with the failures each machine raised per shift:",
+        "Each machine's tickets per shift: minutes waited and repaired, summed",
+        "over the tickets that started; tickets raised; and tickets never started",
+        "before the shift ended:",
         "",
-        "| station | 3A waiting | 3C waiting | 3A repair | 3C repair | failures |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| station | 3A waiting | 3C waiting | 3A repair | 3C repair "
+        "| 3A raised | 3C raised | 3A never started | 3C never started |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for label, under_fifo, under_gate in found.machines:
         lines.append(
             f"| {label} | {under_fifo.waiting_minutes:.1f} "
             f"| {under_gate.waiting_minutes:.1f} | {under_fifo.repair_minutes:.1f} "
-            f"| {under_gate.repair_minutes:.1f} | {under_gate.tickets:.2f} |"
+            f"| {under_gate.repair_minutes:.1f} | {under_fifo.tickets:.2f} "
+            f"| {under_gate.tickets:.2f} | {under_fifo.unstarted:.2f} "
+            f"| {under_gate.unstarted:.2f} |"
         )
-    sooner = worst[2].waiting_minutes < worst[1].waiting_minutes
+    left = [
+        label
+        for label, under_fifo, under_gate in found.machines
+        if under_gate.unstarted > under_fifo.unstarted + 0.05
+    ]
     lines += [
         "",
-        f"At `{worst[0]}` 3C's tickets waited {worst[2].waiting_minutes:.1f} minutes "
-        f"against 3A's {worst[1].waiting_minutes:.1f}: "
+        (
+            f"3C leaves more tickets unstarted at the end of the shift than 3A at "
+            f"{', '.join(f'`{one}`' for one in left)}: work it ranks low is not "
+            "reached at all, which the waiting column, counting started tickets "
+            "only, cannot show."
+            if left
+            else "3C leaves no station's tickets unstarted more often than 3A does."
+        ),
+    ]
+    fifo_wait, gate_wait = _mean_wait(worst[1]), _mean_wait(worst[2])
+    sooner = gate_wait < fifo_wait
+    lines += [
+        "",
+        # Per started ticket, not the column's per-shift sum: a policy that
+        # starts more of a station's tickets sums more waiting there even when
+        # each of them waited less.
+        f"At `{worst[0]}` a started ticket waited {gate_wait:.1f} minutes on average "
+        f"under 3C against {fifo_wait:.1f} under 3A: "
         + (
-            "3C does reach the critical station sooner."
+            "3C reaches the critical station about as soon as 3A does."
+            if abs(gate_wait - fifo_wait) < 1.0
+            else "3C does reach the critical station sooner."
             if sooner
             else "3C does not reach the critical station sooner on this roster."
         ),
