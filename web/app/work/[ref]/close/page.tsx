@@ -19,11 +19,11 @@ export default async function ClosePage({
   searchParams,
 }: {
   params: Promise<{ ref: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reached?: string }>;
 }) {
   const account = await requireAccount();
   const { ref } = await params;
-  const { error } = await searchParams;
+  const { error, reached } = await searchParams;
   const job = await ticketAt(decodeURIComponent(ref));
   if (job === null) {
     return (
@@ -54,6 +54,21 @@ export default async function ClosePage({
           {error}
         </p>
       )}
+
+      {/* Closing from step 1 of 6 said nothing about the five never reached
+          (fourth trial). Not a refusal - the technician may have done them
+          from memory, or found the fault was elsewhere - but said, so that a
+          close is a decision rather than a slip. */}
+      {(() => {
+        const at = Number(reached);
+        const left = job.steps.length - at;
+        return Number.isInteger(at) && at >= 1 && left > 0 ? (
+          <p className="warning">
+            คุณเปิดถึงขั้นที่ {at} จาก {job.steps.length} ยังเหลืออีก {left} ขั้นที่ยังไม่ได้เปิดดู
+            ถ้าทำครบแล้วหรือไม่ต้องทำ ปิดงานได้เลย
+          </p>
+        ) : null;
+      })()}
 
       <CloseForm workOrder={job.ref} />
 

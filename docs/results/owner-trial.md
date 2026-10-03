@@ -87,7 +87,10 @@ can work from the system (ADR-092).
 | 12 | technician | manual page | "page 2. 2. Remove" split into two "2." lines | fixed: a number starts an item only after a sentence ends |
 | 16 | engineer | review | approve and dismiss showed nothing afterwards | fixed: a line saying what the press did |
 | 21 | trial setup | roster | tech-2 and tech-3 had no published password | fixed: `docs/demo.md` lists them |
-| 4-11, 13-15, 17-20 | - | - | confusing or cosmetic: health ranking on hours of history, a stale "already open" list, the board's order, English tool names, a PM with no page to look at, the close form not counting unticked steps, the skill as free text, `/loops` not counting predicted jobs, the operator's report list | open |
+| 7 | shift lead | board | an urgent report losing 180 units sat third, under a medium job losing 37 | fixed: proposals listed by priority score |
+| 14 | technician | close | closing at step 1 of 6 said nothing about the rest | fixed: the close screen says how many steps were never reached |
+| 15 | engineer | gaps | a "not found" counted as a draft waiting for approval | fixed: counted and named apart |
+| 4-6, 8-11, 13, 17-20 | - | - | confusing or cosmetic: health ranking on hours of history, a stale "already open" list, English tool names, a PM with no page to look at, the skill as free text, `/loops` not counting predicted jobs, the operator's report list | open |
 
 Worked well and kept: the figure check refusing a wrong Thai torque, the
 technician's card and its banners, the no-steps screen, set aside and bring back,

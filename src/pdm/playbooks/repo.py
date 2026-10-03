@@ -336,7 +336,8 @@ def pending_by_pair(conn: Connection[Any]) -> list[PendingForPair]:
         cur.execute(
             """
             SELECT symptom_code, machine_model,
-                   count(*) AS waiting, min(created_at) AS oldest
+                   count(*) AS waiting, min(created_at) AS oldest,
+                   count(*) FILTER (WHERE outcome = 'not_found') AS not_found
               FROM playbook_proposal
              WHERE status = 'pending'
              GROUP BY symptom_code, machine_model

@@ -68,7 +68,12 @@ export default async function GapsPage({
               เครื่องรุ่น {row.machine_model} · รหัส {row.symptom_code} · เกิดแล้ว {row.findings} ครั้ง
             </p>
             {row.proposals_waiting > 0 ? (
-              <p className="pending">มีร่างรอวิศวกรดู {row.proposals_waiting} ฉบับ (ที่หน้า “อนุมัติขั้นตอน”)</p>
+              <p className="pending">
+                {/* A "not found" is a decision, not a draft (fourth trial). */}
+                {row.proposals_waiting - (row.proposals_not_found ?? 0) > 0
+                  ? `มีร่างรอวิศวกรดู ${row.proposals_waiting - (row.proposals_not_found ?? 0)} ฉบับ (ที่หน้า “อนุมัติขั้นตอน”)`
+                  : "ระบบค้นคู่มือแล้วไม่พบเรื่องนี้ รอวิศวกรตัดสินใจที่หน้า “อนุมัติขั้นตอน”"}
+              </p>
             ) : (
               account.role === "engineer" && (
                 <details>
@@ -104,7 +109,8 @@ export default async function GapsPage({
         <ul className="gaps card">
           {unanswered.awaiting_review.rows.map((row) => (
             <li key={row.machine_model}>
-              <strong>{row.machine_model}</strong> · {row.waiting} ฉบับ · เก่าสุด{" "}
+              <strong>{row.machine_model}</strong> · {row.waiting - (row.not_found ?? 0)} ฉบับรออนุมัติ
+              {(row.not_found ?? 0) > 0 && ` · ${row.not_found} เรื่องที่คู่มือไม่มีคำตอบ`} · เก่าสุด{" "}
               {plantTime(row.oldest, round.timezone)} น.
             </li>
           ))}

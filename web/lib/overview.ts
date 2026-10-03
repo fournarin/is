@@ -69,11 +69,13 @@ export type SymptomGap = {
   first_seen: string;
   last_seen: string;
   proposals_waiting: number;
+  proposals_not_found?: number;
 };
 
 export type ModelQueue = {
   machine_model: string;
   waiting: number;
+  not_found?: number;
   oldest: string;
 };
 

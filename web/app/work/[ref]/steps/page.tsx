@@ -206,7 +206,7 @@ export default async function StepsPage({
 
       {!last && (
         <p>
-          <Link href={close}>ทำเสร็จก่อนครบทุกขั้น? ปิดงาน</Link>
+          <Link href={`${close}?reached=${at}`}>ทำเสร็จก่อนครบทุกขั้น? ปิดงาน</Link>
         </p>
       )}
       <HandoverForm workOrder={job.ref} />
