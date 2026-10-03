@@ -6,19 +6,19 @@ Scenario `line-a-twelve-hours`. Fractions learned on seeds 0-9, coverage measure
 
 | horizon | fraction of lead time | held-out n | slope interval covers | calibrated interval covers | median printed ± before | after |
 |---|---:|---:|---:|---:|---:|---:|
-| 0-1h | 0.433 | 1619 | 16% | **74%** | 1.5 min | 13.6 min |
-| 1-3h | 0.336 | 3540 | 36% | **80%** | 7.4 min | 40.6 min |
-| 3-6h | 0.397 | 4781 | 50% | **81%** | 16.2 min | 107.0 min |
-| 6-12h | 0.549 | 2445 | 44% | **77%** | 49.4 min | 251.5 min |
-| 12h+ | 0.666 | 1188 | 2% | **74%** | 101.3 min | 623.6 min |
+| 0-1h | 0.384 | 1710 | 19% | **85%** | 1.0 min | 12.5 min |
+| 1-3h | 0.320 | 3412 | 31% | **83%** | 3.6 min | 38.2 min |
+| 3-6h | 0.243 | 5161 | 41% | **80%** | 10.2 min | 67.7 min |
+| 6-12h | 0.542 | 2482 | 39% | **76%** | 38.9 min | 239.6 min |
+| 12h+ | 0.667 | 1207 | 2% | **77%** | 98.0 min | 626.5 min |
 
 For `config/policy.yaml`, under `triggers.trend`:
 
 ```yaml
     eta_error:
-      - {ahead_below_hours: 1, fraction: 0.433}
-      - {ahead_below_hours: 3, fraction: 0.336}
-      - {ahead_below_hours: 6, fraction: 0.397}
-      - {ahead_below_hours: 12, fraction: 0.549}
-      - {ahead_below_hours: 8760, fraction: 0.666}
+      - {ahead_below_hours: 1, fraction: 0.384}
+      - {ahead_below_hours: 3, fraction: 0.32}
+      - {ahead_below_hours: 6, fraction: 0.243}
+      - {ahead_below_hours: 12, fraction: 0.542}
+      - {ahead_below_hours: 8760, fraction: 0.667}
 ```

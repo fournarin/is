@@ -114,6 +114,13 @@ class SimScenario(BaseModel):
     # work a quiet shift is meant to absorb (ADR-010, ADR-011). Empty by default,
     # so the policy comparison runs on failures alone, as it always has.
     maintenance: tuple[PMTask, ...] = ()
+    # Whether a machine that is already stopped can fail again (ADR-124). It
+    # cannot: a stopped machine is not running, so its failure clock is not
+    # running either, and in the deployed system a second firing of the same
+    # fault is a repeat of the open Finding (invariant 8), not a second ticket.
+    # True reproduces the calendar-time model every result before ADR-124 used,
+    # in which a machine down for an hour kept "failing" and raising tickets.
+    failures_while_down: bool = False
 
     @model_validator(mode="after")
     def _time_is_timezone_aware_and_moves_forward(self) -> SimScenario:

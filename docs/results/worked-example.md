@@ -5,8 +5,8 @@
 ## 1. The signal and the Finding (layer 1)
 
 - scenario `line-a-twelve-hours`, seed 20260813, `MC-001` `SYM-014`
-- first forecast at 13:48 น.: ETA 16:09 น.
-- decision: motor_temp_c is trending at +7.35 per hour and is expected to reach 85.0 at 2026-03-03 09:09 UTC, give or take 2.4 hours, fitted over 49 readings
+- first forecast at 13:10 น.: ETA 17:56 น.
+- decision: motor_temp_c is trending at +4.73 per hour and is expected to reach 85.0 at 2026-03-03 10:56 UTC, give or take 4.4 hours, fitted over 10 readings
 
 ## 2. The playbook (layer 2)
 
@@ -23,7 +23,7 @@ Tools: torque wrench 5-60 Nm, belt tension gauge, 10 mm socket · estimate 45 mi
 
 ## 3. The work order
 
-- `reason` (why this job exists): มอเตอร์สายพานร้อนเกินกำหนด ที่เครื่อง MC-001 · ยังไม่เกินเกณฑ์ แต่คาดว่าจะถึงเกณฑ์ราว 3 มี.ค. 16:09 น. (คลาดเคลื่อนได้ ± 2 ชม. 22 นาที)
+- `reason` (why this job exists): มอเตอร์สายพานร้อนเกินกำหนด ที่เครื่อง MC-001 · ยังไม่เกินเกณฑ์ แต่แนวโน้มชี้ว่าจะถึงเกณฑ์
 - severity `high`, estimate 45 min, skill `robot_mechanical`
 
 ## 4. The dispatch round (layer 3)
@@ -31,7 +31,7 @@ Tools: torque wrench 5-60 Nm, belt tension gauge, 10 mm socket · estimate 45 mi
 - load 3%, band `light`
 - summary: กะนี้ใช้กำลังคนไป 3% (งานเบา) · ปล่อยงาน 2 ใบ
 
-- **WO-0001** -> tech-1: `priority_reason` = ถ้างานนี้รอ สายการผลิตจะเสียราว 25 คัน · ความรุนแรงระดับสูง · คาดว่าจะถึงเกณฑ์ในอีกราว 2 ชม. 21 นาที
+- **WO-0001** -> tech-1: `priority_reason` = ถ้างานนี้รอ สายการผลิตจะเสียราว 25 คัน · ความรุนแรงระดับสูง · คาดว่าจะถึงเกณฑ์ในอีกราว 4 ชม. 46 นาที
 - **WO-0002** -> tech-2: `priority_reason` = งานนี้ต้องหยุดเครื่อง ถ้าทำระหว่างเดินสาย การผลิตจะหายราว 22 คัน · งานนี้ไม่ต้องใช้ทักษะเฉพาะ ใครว่างก็รับได้
 
 ## Not shown here

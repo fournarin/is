@@ -20,7 +20,7 @@ import pytest
 
 from pdm.contracts import MachineId
 from pdm.signals import LINE_A_TWELVE_HOURS, SyntheticSource
-from pdm.triggers.trend import Window, crossing, describe, fit
+from pdm.triggers.trend import Window, crossing, describe, fit, without_spikes
 
 NOW = datetime(2026, 3, 3, 8, 0, tzinfo=UTC)
 MOTOR = MachineId("MC-001")
@@ -530,3 +530,49 @@ class TestThePrintedInterval:
         assert printed_interval(timedelta(0), timedelta(hours=10000), self.BANDS) == timedelta(
             hours=6000
         )
+
+
+class TestASpikeDoesNotSteerTheForecast:
+    """ADR-125. The examiner found the report's worked example forecasting
+    4.5 hours early: three +25 degree glitches pulled a 3.0 degree-per-hour
+    drift to 7.35. Detection already ignored spikes; the fit did not."""
+
+    def _with_glitches(self) -> list[tuple[datetime, float]]:
+        clean = _rising(per_hour=3.0, start_value=64.0, count=49, every=timedelta(minutes=1))
+        glitched = list(clean)
+        for index in (40, 44, 47):
+            moment, value = glitched[index]
+            glitched[index] = (moment, value + 25.0)
+        return glitched
+
+    def test_isolated_spikes_are_removed_and_the_drift_is_kept(self) -> None:
+        readings = self._with_glitches()
+
+        kept = without_spikes(readings)
+
+        assert len(kept) == len(readings) - 3
+        line = fit(kept)
+        assert line is not None
+        assert line.slope_per_hour == pytest.approx(3.0, abs=0.01)
+
+    def test_a_clean_drift_loses_nothing(self) -> None:
+        readings = _rising(per_hour=3.0, start_value=64.0, count=49, every=timedelta(minutes=1))
+
+        assert without_spikes(readings) == readings
+
+    def test_the_forecast_is_the_drifts_not_the_glitches(self) -> None:
+        readings = self._with_glitches()
+        last = readings[-1][0]
+
+        forecast = crossing(
+            readings,
+            threshold=85.0,
+            comparison="above",
+            now=last,
+            horizon=HORIZON,
+            min_samples=10,
+        )
+
+        assert forecast is not None
+        # 64 + 3 * (48/60) = 66.4 now; 85 is (85 - 66.4) / 3 = 6.2 hours away.
+        assert (forecast.at - last) == pytest.approx(timedelta(hours=6.2), abs=timedelta(minutes=5))

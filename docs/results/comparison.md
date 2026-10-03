@@ -5,98 +5,186 @@
 - scenario: `line-a-one-shift`, 8 hours, 3 technicians
 - seeds: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 (20 runs behind every number below)
 - buffer settings: as configured, 0 units, 5 units, 10 units, 20 units, 40 units
-- arrival multipliers: 0.5, 1.0, 2.0 (multiplies the mean time *between* failures, so above 1.0 is a quieter plant)
+- arrival multipliers: 0.125, 0.25, 0.5, 1.0, 2.0 (multiplies the mean time *between* failures, so above 1.0 is a quieter plant)
 
 Every figure is a mean over the seeds. `docs/results/comparison.csv` holds each run, so the reading below can be checked rather than taken.
 
 Read `README.md` in this directory first. It says what this is not.
 
+## Arrival multiplier 0.125
+
+| buffer | policy | units lost | unfinished | mean response (min) | rounds held | light / normal / heavy |
+|---|---|---:|---:|---:|---:|---|
+| as configured | 3A first-come-first-served | 1899.9 | 3.6 | 9.4 | 0 | - |
+| as configured | 3B priority matrix | 1902.1 | 3.5 | 9.6 | 0 | - |
+| as configured | 3C gate + score | 1904.8 | 3.5 | 9.6 | 0 | 48 / 6 / 0 |
+| as configured | 3D gate + CP-SAT | 1903.1 | 3.5 | 9.6 | 0 | - |
+| as configured | 0 oracle: nobody waits | 1850.7 | 3.5 | 2.9 | 0 | - |
+| 0 units | 3A first-come-first-served | 2140.4 | 3.6 | 9.4 | 0 | - |
+| 0 units | 3B priority matrix | 2141.6 | 3.5 | 9.6 | 0 | - |
+| 0 units | 3C gate + score | 2143.1 | 3.5 | 9.6 | 0 | 48 / 6 / 0 |
+| 0 units | 3D gate + CP-SAT | 2142.5 | 3.5 | 9.6 | 0 | - |
+| 0 units | 0 oracle: nobody waits | 2113.6 | 3.5 | 2.9 | 0 | - |
+| 5 units | 3A first-come-first-served | 1962.8 | 3.6 | 9.4 | 0 | - |
+| 5 units | 3B priority matrix | 1964.4 | 3.5 | 9.6 | 0 | - |
+| 5 units | 3C gate + score | 1965.6 | 3.5 | 9.6 | 0 | 48 / 6 / 0 |
+| 5 units | 3D gate + CP-SAT | 1965.7 | 3.5 | 9.6 | 0 | - |
+| 5 units | 0 oracle: nobody waits | 1924.0 | 3.5 | 2.9 | 0 | - |
+| 10 units | 3A first-come-first-served | 1787.7 | 3.6 | 9.4 | 0 | - |
+| 10 units | 3B priority matrix | 1789.7 | 3.5 | 9.6 | 0 | - |
+| 10 units | 3C gate + score | 1790.6 | 3.5 | 9.6 | 0 | 48 / 6 / 0 |
+| 10 units | 3D gate + CP-SAT | 1790.9 | 3.5 | 9.6 | 0 | - |
+| 10 units | 0 oracle: nobody waits | 1737.1 | 3.5 | 2.9 | 0 | - |
+| 20 units | 3A first-come-first-served | 1443.7 | 3.6 | 9.4 | 0 | - |
+| 20 units | 3B priority matrix | 1447.5 | 3.5 | 9.6 | 0 | - |
+| 20 units | 3C gate + score | 1448.1 | 3.5 | 9.6 | 0 | 48 / 6 / 0 |
+| 20 units | 3D gate + CP-SAT | 1446.9 | 3.8 | 9.5 | 0 | - |
+| 20 units | 0 oracle: nobody waits | 1365.3 | 3.5 | 2.9 | 0 | - |
+| 40 units | 3A first-come-first-served | 804.0 | 3.6 | 9.4 | 0 | - |
+| 40 units | 3B priority matrix | 809.2 | 3.5 | 9.6 | 0 | - |
+| 40 units | 3C gate + score | 807.7 | 3.5 | 9.6 | 0 | 48 / 6 / 0 |
+| 40 units | 3D gate + CP-SAT | 806.2 | 3.5 | 9.6 | 0 | - |
+| 40 units | 0 oracle: nobody waits | 700.7 | 3.5 | 2.9 | 0 | - |
+
+## Arrival multiplier 0.25
+
+| buffer | policy | units lost | unfinished | mean response (min) | rounds held | light / normal / heavy |
+|---|---|---:|---:|---:|---:|---|
+| as configured | 3A first-come-first-served | 1586.1 | 3.6 | 7.9 | 0 | - |
+| as configured | 3B priority matrix | 1581.5 | 3.5 | 7.8 | 0 | - |
+| as configured | 3C gate + score | 1581.5 | 3.5 | 7.8 | 0 | 40 / 1 / 0 |
+| as configured | 3D gate + CP-SAT | 1581.2 | 3.5 | 7.8 | 0 | - |
+| as configured | 0 oracle: nobody waits | 1545.9 | 3.2 | 2.7 | 0 | - |
+| 0 units | 3A first-come-first-served | 1794.4 | 3.6 | 7.9 | 0 | - |
+| 0 units | 3B priority matrix | 1789.6 | 3.5 | 7.8 | 0 | - |
+| 0 units | 3C gate + score | 1789.6 | 3.5 | 7.8 | 0 | 40 / 1 / 0 |
+| 0 units | 3D gate + CP-SAT | 1786.0 | 3.4 | 7.7 | 0 | - |
+| 0 units | 0 oracle: nobody waits | 1767.8 | 3.2 | 2.7 | 0 | - |
+| 5 units | 3A first-come-first-served | 1640.8 | 3.6 | 7.9 | 0 | - |
+| 5 units | 3B priority matrix | 1635.3 | 3.5 | 7.8 | 0 | - |
+| 5 units | 3C gate + score | 1635.3 | 3.5 | 7.8 | 0 | 40 / 1 / 0 |
+| 5 units | 3D gate + CP-SAT | 1632.2 | 3.4 | 7.7 | 0 | - |
+| 5 units | 0 oracle: nobody waits | 1604.7 | 3.2 | 2.7 | 0 | - |
+| 10 units | 3A first-come-first-served | 1489.0 | 3.6 | 7.9 | 0 | - |
+| 10 units | 3B priority matrix | 1482.9 | 3.5 | 7.8 | 0 | - |
+| 10 units | 3C gate + score | 1482.9 | 3.5 | 7.8 | 0 | 40 / 1 / 0 |
+| 10 units | 3D gate + CP-SAT | 1480.2 | 3.4 | 7.7 | 0 | - |
+| 10 units | 0 oracle: nobody waits | 1443.0 | 3.2 | 2.7 | 0 | - |
+| 20 units | 3A first-come-first-served | 1194.7 | 3.6 | 7.9 | 0 | - |
+| 20 units | 3B priority matrix | 1187.0 | 3.5 | 7.8 | 0 | - |
+| 20 units | 3C gate + score | 1187.0 | 3.5 | 7.8 | 0 | 40 / 1 / 0 |
+| 20 units | 3D gate + CP-SAT | 1184.9 | 3.3 | 7.7 | 0 | - |
+| 20 units | 0 oracle: nobody waits | 1128.9 | 3.2 | 2.7 | 0 | - |
+| 40 units | 3A first-come-first-served | 662.0 | 3.6 | 7.9 | 0 | - |
+| 40 units | 3B priority matrix | 652.1 | 3.5 | 7.8 | 0 | - |
+| 40 units | 3C gate + score | 652.1 | 3.5 | 7.8 | 0 | 40 / 1 / 0 |
+| 40 units | 3D gate + CP-SAT | 652.1 | 3.5 | 7.8 | 0 | - |
+| 40 units | 0 oracle: nobody waits | 575.0 | 3.2 | 2.7 | 0 | - |
+
 ## Arrival multiplier 0.5
 
 | buffer | policy | units lost | unfinished | mean response (min) | rounds held | light / normal / heavy |
 |---|---|---:|---:|---:|---:|---|
-| as configured | 3A first-come-first-served | 1610.0 | 42.5 | 54.5 | 0 | - |
-| as configured | 3B priority matrix | 1618.1 | 46.0 | 26.5 | 0 | - |
-| as configured | 3C gate + score | 1616.1 | 45.5 | 20.5 | 458 | 16 / 7 / 30 |
-| as configured | 3D gate + CP-SAT | 1612.5 | 43.3 | 23.6 | 397 | - |
-| 0 units | 3A first-come-first-served | 1688.4 | 42.5 | 54.5 | 0 | - |
-| 0 units | 3B priority matrix | 1693.7 | 46.0 | 26.5 | 0 | - |
-| 0 units | 3C gate + score | 1693.7 | 45.4 | 22.7 | 458 | 16 / 7 / 30 |
-| 0 units | 3D gate + CP-SAT | 1686.4 | 43.1 | 23.3 | 388 | - |
-| 5 units | 3A first-come-first-served | 1630.7 | 42.5 | 54.5 | 0 | - |
-| 5 units | 3B priority matrix | 1637.0 | 46.0 | 26.5 | 0 | - |
-| 5 units | 3C gate + score | 1637.0 | 45.4 | 22.8 | 458 | 16 / 7 / 30 |
-| 5 units | 3D gate + CP-SAT | 1626.5 | 43.1 | 23.9 | 389 | - |
-| 10 units | 3A first-come-first-served | 1572.9 | 42.5 | 54.5 | 0 | - |
-| 10 units | 3B priority matrix | 1580.2 | 46.0 | 26.5 | 0 | - |
-| 10 units | 3C gate + score | 1576.7 | 45.4 | 22.9 | 458 | 16 / 7 / 30 |
-| 10 units | 3D gate + CP-SAT | 1573.3 | 43.3 | 24.1 | 397 | - |
-| 20 units | 3A first-come-first-served | 1457.4 | 42.5 | 54.5 | 0 | - |
-| 20 units | 3B priority matrix | 1466.7 | 46.0 | 26.5 | 0 | - |
-| 20 units | 3C gate + score | 1466.7 | 45.5 | 23.4 | 458 | 16 / 7 / 30 |
-| 20 units | 3D gate + CP-SAT | 1459.1 | 43.7 | 24.0 | 410 | - |
-| 40 units | 3A first-come-first-served | 1235.7 | 42.5 | 54.5 | 0 | - |
-| 40 units | 3B priority matrix | 1248.5 | 46.0 | 26.5 | 0 | - |
-| 40 units | 3C gate + score | 1248.5 | 45.9 | 23.3 | 460 | 16 / 7 / 30 |
-| 40 units | 3D gate + CP-SAT | 1245.9 | 45.4 | 19.5 | 454 | - |
+| as configured | 3A first-come-first-served | 1265.7 | 3.0 | 6.9 | 0 | - |
+| as configured | 3B priority matrix | 1261.4 | 2.9 | 6.9 | 0 | - |
+| as configured | 3C gate + score | 1258.1 | 2.9 | 6.7 | 0 | 28 / 0 / 0 |
+| as configured | 3D gate + CP-SAT | 1265.6 | 2.9 | 6.8 | 0 | - |
+| as configured | 0 oracle: nobody waits | 1228.7 | 2.8 | 2.5 | 0 | - |
+| 0 units | 3A first-come-first-served | 1427.0 | 3.0 | 6.9 | 0 | - |
+| 0 units | 3B priority matrix | 1424.4 | 2.9 | 6.9 | 0 | - |
+| 0 units | 3C gate + score | 1425.2 | 2.8 | 6.9 | 0 | 29 / 0 / 0 |
+| 0 units | 3D gate + CP-SAT | 1425.4 | 3.0 | 6.8 | 0 | - |
+| 0 units | 0 oracle: nobody waits | 1405.3 | 2.8 | 2.5 | 0 | - |
+| 5 units | 3A first-come-first-served | 1308.1 | 3.0 | 6.9 | 0 | - |
+| 5 units | 3B priority matrix | 1306.0 | 2.9 | 6.9 | 0 | - |
+| 5 units | 3C gate + score | 1306.5 | 2.8 | 6.9 | 0 | 29 / 0 / 0 |
+| 5 units | 3D gate + CP-SAT | 1306.2 | 3.0 | 6.8 | 0 | - |
+| 5 units | 0 oracle: nobody waits | 1280.4 | 2.8 | 2.5 | 0 | - |
+| 10 units | 3A first-come-first-served | 1191.5 | 3.0 | 6.9 | 0 | - |
+| 10 units | 3B priority matrix | 1189.7 | 2.9 | 6.9 | 0 | - |
+| 10 units | 3C gate + score | 1190.1 | 2.8 | 6.9 | 0 | 29 / 0 / 0 |
+| 10 units | 3D gate + CP-SAT | 1190.1 | 3.0 | 6.8 | 0 | - |
+| 10 units | 0 oracle: nobody waits | 1158.1 | 2.8 | 2.5 | 0 | - |
+| 20 units | 3A first-come-first-served | 962.2 | 3.0 | 6.9 | 0 | - |
+| 20 units | 3B priority matrix | 961.1 | 2.9 | 6.9 | 0 | - |
+| 20 units | 3C gate + score | 960.9 | 2.8 | 6.9 | 0 | 29 / 0 / 0 |
+| 20 units | 3D gate + CP-SAT | 957.1 | 3.0 | 6.7 | 0 | - |
+| 20 units | 0 oracle: nobody waits | 917.2 | 2.8 | 2.5 | 0 | - |
+| 40 units | 3A first-come-first-served | 542.2 | 3.0 | 6.9 | 0 | - |
+| 40 units | 3B priority matrix | 541.5 | 2.9 | 6.9 | 0 | - |
+| 40 units | 3C gate + score | 541.8 | 2.8 | 6.9 | 0 | 29 / 0 / 0 |
+| 40 units | 3D gate + CP-SAT | 543.0 | 2.9 | 6.9 | 0 | - |
+| 40 units | 0 oracle: nobody waits | 489.5 | 2.8 | 2.5 | 0 | - |
 
 ## Arrival multiplier 1.0
 
 | buffer | policy | units lost | unfinished | mean response (min) | rounds held | light / normal / heavy |
 |---|---|---:|---:|---:|---:|---|
-| as configured | 3A first-come-first-served | 1178.9 | 14.3 | 37.4 | 0 | - |
-| as configured | 3B priority matrix | 1207.9 | 16.4 | 20.3 | 0 | - |
-| as configured | 3C gate + score | 1204.0 | 16.0 | 18.2 | 80 | 25 / 8 / 9 |
-| as configured | 3D gate + CP-SAT | 1180.0 | 14.4 | 22.1 | 60 | - |
-| 0 units | 3A first-come-first-served | 1247.0 | 14.3 | 37.4 | 0 | - |
-| 0 units | 3B priority matrix | 1273.5 | 16.4 | 20.3 | 0 | - |
-| 0 units | 3C gate + score | 1269.3 | 16.1 | 18.0 | 81 | 25 / 8 / 9 |
-| 0 units | 3D gate + CP-SAT | 1239.4 | 14.2 | 22.7 | 56 | - |
-| 5 units | 3A first-come-first-served | 1194.5 | 14.3 | 37.4 | 0 | - |
-| 5 units | 3B priority matrix | 1222.0 | 16.4 | 20.3 | 0 | - |
-| 5 units | 3C gate + score | 1217.0 | 16.1 | 18.0 | 81 | 25 / 8 / 9 |
-| 5 units | 3D gate + CP-SAT | 1185.4 | 14.3 | 22.4 | 57 | - |
-| 10 units | 3A first-come-first-served | 1142.2 | 14.3 | 37.4 | 0 | - |
-| 10 units | 3B priority matrix | 1170.7 | 16.4 | 20.3 | 0 | - |
-| 10 units | 3C gate + score | 1165.2 | 16.0 | 18.4 | 82 | 25 / 8 / 9 |
-| 10 units | 3D gate + CP-SAT | 1131.6 | 14.3 | 22.3 | 57 | - |
-| 20 units | 3A first-come-first-served | 1038.1 | 14.3 | 37.4 | 0 | - |
-| 20 units | 3B priority matrix | 1068.5 | 16.4 | 20.3 | 0 | - |
-| 20 units | 3C gate + score | 1065.3 | 16.0 | 18.7 | 82 | 25 / 8 / 9 |
-| 20 units | 3D gate + CP-SAT | 1044.0 | 15.1 | 20.9 | 58 | - |
-| 40 units | 3A first-come-first-served | 840.0 | 14.3 | 37.4 | 0 | - |
-| 40 units | 3B priority matrix | 873.7 | 16.4 | 20.3 | 0 | - |
-| 40 units | 3C gate + score | 874.2 | 16.4 | 18.3 | 83 | 25 / 8 / 9 |
-| 40 units | 3D gate + CP-SAT | 857.0 | 15.8 | 18.7 | 77 | - |
+| as configured | 3A first-come-first-served | 856.6 | 2.5 | 3.7 | 0 | - |
+| as configured | 3B priority matrix | 859.0 | 2.5 | 3.8 | 0 | - |
+| as configured | 3C gate + score | 859.0 | 2.5 | 3.8 | 0 | 14 / 0 / 0 |
+| as configured | 3D gate + CP-SAT | 856.9 | 2.6 | 3.7 | 0 | - |
+| as configured | 0 oracle: nobody waits | 847.7 | 2.5 | 2.4 | 0 | - |
+| 0 units | 3A first-come-first-served | 971.4 | 2.5 | 3.7 | 0 | - |
+| 0 units | 3B priority matrix | 973.9 | 2.5 | 3.8 | 0 | - |
+| 0 units | 3C gate + score | 973.9 | 2.5 | 3.8 | 0 | 14 / 0 / 0 |
+| 0 units | 3D gate + CP-SAT | 972.2 | 2.6 | 3.7 | 0 | - |
+| 0 units | 0 oracle: nobody waits | 964.2 | 2.5 | 2.4 | 0 | - |
+| 5 units | 3A first-come-first-served | 882.0 | 2.5 | 3.7 | 0 | - |
+| 5 units | 3B priority matrix | 884.4 | 2.5 | 3.8 | 0 | - |
+| 5 units | 3C gate + score | 884.4 | 2.5 | 3.8 | 0 | 14 / 0 / 0 |
+| 5 units | 3D gate + CP-SAT | 882.6 | 2.6 | 3.7 | 0 | - |
+| 5 units | 0 oracle: nobody waits | 874.1 | 2.5 | 2.4 | 0 | - |
+| 10 units | 3A first-come-first-served | 794.3 | 2.5 | 3.7 | 0 | - |
+| 10 units | 3B priority matrix | 796.8 | 2.5 | 3.8 | 0 | - |
+| 10 units | 3C gate + score | 796.8 | 2.5 | 3.8 | 0 | 14 / 0 / 0 |
+| 10 units | 3D gate + CP-SAT | 794.7 | 2.6 | 3.7 | 0 | - |
+| 10 units | 0 oracle: nobody waits | 785.7 | 2.5 | 2.4 | 0 | - |
+| 20 units | 3A first-come-first-served | 624.2 | 2.5 | 3.7 | 0 | - |
+| 20 units | 3B priority matrix | 626.7 | 2.5 | 3.8 | 0 | - |
+| 20 units | 3C gate + score | 626.7 | 2.5 | 3.8 | 0 | 14 / 0 / 0 |
+| 20 units | 3D gate + CP-SAT | 626.7 | 2.5 | 3.8 | 0 | - |
+| 20 units | 0 oracle: nobody waits | 614.4 | 2.5 | 2.4 | 0 | - |
+| 40 units | 3A first-come-first-served | 325.7 | 2.5 | 3.7 | 0 | - |
+| 40 units | 3B priority matrix | 327.6 | 2.5 | 3.8 | 0 | - |
+| 40 units | 3C gate + score | 327.6 | 2.5 | 3.8 | 0 | 14 / 0 / 0 |
+| 40 units | 3D gate + CP-SAT | 327.6 | 2.5 | 3.8 | 0 | - |
+| 40 units | 0 oracle: nobody waits | 317.4 | 2.5 | 2.4 | 0 | - |
 
 ## Arrival multiplier 2.0
 
 | buffer | policy | units lost | unfinished | mean response (min) | rounds held | light / normal / heavy |
 |---|---|---:|---:|---:|---:|---|
-| as configured | 3A first-come-first-served | 732.2 | 4.2 | 13.2 | 0 | - |
-| as configured | 3B priority matrix | 740.6 | 4.5 | 11.4 | 0 | - |
-| as configured | 3C gate + score | 732.4 | 4.6 | 10.8 | 2 | 21 / 1 / 0 |
-| as configured | 3D gate + CP-SAT | 715.7 | 4.3 | 11.3 | 0 | - |
-| 0 units | 3A first-come-first-served | 795.3 | 4.2 | 13.2 | 0 | - |
-| 0 units | 3B priority matrix | 803.7 | 4.5 | 11.4 | 0 | - |
-| 0 units | 3C gate + score | 795.5 | 4.5 | 10.8 | 2 | 21 / 1 / 0 |
-| 0 units | 3D gate + CP-SAT | 773.8 | 4.2 | 10.6 | 0 | - |
-| 5 units | 3A first-come-first-served | 752.1 | 4.2 | 13.2 | 0 | - |
-| 5 units | 3B priority matrix | 759.8 | 4.5 | 11.4 | 0 | - |
-| 5 units | 3C gate + score | 751.6 | 4.5 | 10.8 | 2 | 21 / 1 / 0 |
-| 5 units | 3D gate + CP-SAT | 729.5 | 4.2 | 10.6 | 0 | - |
-| 10 units | 3A first-come-first-served | 709.3 | 4.2 | 13.2 | 0 | - |
-| 10 units | 3B priority matrix | 716.3 | 4.5 | 11.4 | 0 | - |
-| 10 units | 3C gate + score | 706.6 | 4.5 | 10.7 | 2 | 21 / 1 / 0 |
-| 10 units | 3D gate + CP-SAT | 691.3 | 4.3 | 11.2 | 0 | - |
-| 20 units | 3A first-come-first-served | 624.3 | 4.2 | 13.2 | 0 | - |
-| 20 units | 3B priority matrix | 631.3 | 4.5 | 11.4 | 0 | - |
-| 20 units | 3C gate + score | 621.6 | 4.5 | 10.8 | 2 | 21 / 1 / 0 |
-| 20 units | 3D gate + CP-SAT | 606.5 | 4.3 | 11.0 | 0 | - |
-| 40 units | 3A first-come-first-served | 466.6 | 4.2 | 13.2 | 0 | - |
-| 40 units | 3B priority matrix | 473.0 | 4.5 | 11.4 | 0 | - |
-| 40 units | 3C gate + score | 465.1 | 4.5 | 10.5 | 2 | 21 / 1 / 0 |
-| 40 units | 3D gate + CP-SAT | 459.9 | 4.4 | 11.4 | 2 | - |
+| as configured | 3A first-come-first-served | 556.6 | 1.6 | 2.8 | 0 | - |
+| as configured | 3B priority matrix | 556.6 | 1.6 | 2.8 | 0 | - |
+| as configured | 3C gate + score | 556.6 | 1.6 | 2.8 | 0 | 8 / 0 / 0 |
+| as configured | 3D gate + CP-SAT | 556.6 | 1.6 | 2.8 | 0 | - |
+| as configured | 0 oracle: nobody waits | 555.2 | 1.6 | 2.6 | 0 | - |
+| 0 units | 3A first-come-first-served | 630.1 | 1.6 | 2.8 | 0 | - |
+| 0 units | 3B priority matrix | 630.1 | 1.6 | 2.8 | 0 | - |
+| 0 units | 3C gate + score | 630.1 | 1.6 | 2.8 | 0 | 8 / 0 / 0 |
+| 0 units | 3D gate + CP-SAT | 630.1 | 1.6 | 2.8 | 0 | - |
+| 0 units | 0 oracle: nobody waits | 628.7 | 1.6 | 2.6 | 0 | - |
+| 5 units | 3A first-come-first-served | 573.1 | 1.6 | 2.8 | 0 | - |
+| 5 units | 3B priority matrix | 573.1 | 1.6 | 2.8 | 0 | - |
+| 5 units | 3C gate + score | 573.1 | 1.6 | 2.8 | 0 | 8 / 0 / 0 |
+| 5 units | 3D gate + CP-SAT | 573.1 | 1.6 | 2.8 | 0 | - |
+| 5 units | 0 oracle: nobody waits | 571.7 | 1.6 | 2.6 | 0 | - |
+| 10 units | 3A first-come-first-served | 517.0 | 1.6 | 2.8 | 0 | - |
+| 10 units | 3B priority matrix | 517.0 | 1.6 | 2.8 | 0 | - |
+| 10 units | 3C gate + score | 517.0 | 1.6 | 2.8 | 0 | 8 / 0 / 0 |
+| 10 units | 3D gate + CP-SAT | 517.0 | 1.6 | 2.8 | 0 | - |
+| 10 units | 0 oracle: nobody waits | 515.6 | 1.6 | 2.6 | 0 | - |
+| 20 units | 3A first-come-first-served | 408.0 | 1.6 | 2.8 | 0 | - |
+| 20 units | 3B priority matrix | 408.0 | 1.6 | 2.8 | 0 | - |
+| 20 units | 3C gate + score | 408.0 | 1.6 | 2.8 | 0 | 8 / 0 / 0 |
+| 20 units | 3D gate + CP-SAT | 408.0 | 1.6 | 2.8 | 0 | - |
+| 20 units | 0 oracle: nobody waits | 406.6 | 1.6 | 2.6 | 0 | - |
+| 40 units | 3A first-come-first-served | 210.6 | 1.6 | 2.8 | 0 | - |
+| 40 units | 3B priority matrix | 210.6 | 1.6 | 2.8 | 0 | - |
+| 40 units | 3C gate + score | 210.6 | 1.6 | 2.8 | 0 | 8 / 0 / 0 |
+| 40 units | 3D gate + CP-SAT | 210.6 | 1.6 | 2.8 | 0 | - |
+| 40 units | 0 oracle: nobody waits | 208.4 | 1.6 | 2.6 | 0 | - |
 
 ## The gap, and what closes it
 
@@ -104,11 +192,11 @@ The column worth reading is not any single number but how the distance between t
 
 | buffer | 3A - 3C units lost | 3B - 3C units lost |
 |---|---:|---:|
-| as configured | -10.5 | +4.7 |
-| 0 units | -9.3 | +4.1 |
-| 5 units | -9.4 | +4.4 |
-| 10 units | -8.1 | +6.2 |
-| 20 units | -11.3 | +4.3 |
-| 40 units | -15.2 | +2.5 |
+| as configured | +1.0 | +0.1 |
+| 0 units | +0.3 | -0.5 |
+| 5 units | +0.3 | -0.3 |
+| 10 units | +0.4 | -0.2 |
+| 20 units | +0.4 | -0.1 |
+| 40 units | +1.0 | +0.2 |
 
 A positive number means the baseline lost more production than the gate and score did; a negative one means it lost less. Averaged across the arrival multipliers, so this table is coarser than the ones above it and is a shape rather than a result.

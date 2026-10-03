@@ -20,10 +20,10 @@ tickets removed, until the round adds nothing.
 
 | | units lost | response (min) | unfinished |
 |---|---:|---:|---:|
-| 3C as shipped | 1204.0 | 18.23 | 16.00 |
-| 3C, round filled by re-dispatching | 1204.0 | 18.23 | 16.00 |
+| 3C as shipped | 859.0 | 3.77 | 2.55 |
+| 3C, round filled by re-dispatching | 859.0 | 3.77 | 2.55 |
 
-Across 20 shifts the adapter dropped 416 of the 690 placements `dispatch()` produced (60%), in 146 rounds of 849 - and in **0** of those rounds was there a technician left idle who could have taken one of them.
+Across 20 shifts the adapter dropped 5 of the 238 placements `dispatch()` produced (2%), in 5 rounds of 287 - and in **0** of those rounds was there a technician left idle who could have taken one of them.
 
 `_assign` sorts its candidates by most free capacity first, so it fills
 every free person before it stacks a second job on anyone. What the
@@ -37,11 +37,11 @@ unchanged:
 
 | | units lost | response (min) | unfinished |
 |---|---:|---:|---:|
-| 3C as shipped | 1204.0 | 18.23 | 16.00 |
-| 3C with the gate removed | 1204.0 | 18.63 | 16.00 |
-| 3A first-come-first-served | 1178.9 | 37.38 | 14.30 |
+| 3C as shipped | 859.0 | 3.77 | 2.55 |
+| 3C with the gate removed | 859.0 | 3.77 | 2.55 |
+| 3A first-come-first-served | 856.6 | 3.70 | 2.55 |
 
-185 rounds held something, and in **2** of them was a technician left idle who could have taken a held ticket. The gate holds work when
+0 rounds held something, and in **0** of them was a technician left idle who could have taken a held ticket. The gate holds work when
 everybody is already under a machine, which is the case ADR-011
 describes.
 
@@ -51,13 +51,13 @@ One weight moved at a time, everything else at its shipped value:
 
 | w_waiting | units lost | response (min) | unfinished |
 |---:|---:|---:|---:|
-| 0 | 1204.0 | 17.57 | 16.05 |
-| 0.3 | 1204.0 | 18.23 | 16.00 |
-| 1 | 1202.7 | 21.20 | 16.00 |
-| 3 | 1181.6 | 30.56 | 15.45 |
-| 10 | 1179.3 | 32.50 | 15.05 |
-| 30 | 1176.8 | 32.85 | 14.90 |
-| *3A, for reference* | 1178.9 | 37.38 | 14.30 |
+| 0 | 859.0 | 3.77 | 2.55 |
+| 0.3 | 859.0 | 3.77 | 2.55 |
+| 1 | 859.0 | 3.77 | 2.55 |
+| 3 | 856.8 | 3.73 | 2.55 |
+| 10 | 856.8 | 3.73 | 2.55 |
+| 30 | 856.8 | 3.73 | 2.55 |
+| *3A, for reference* | 856.6 | 3.70 | 2.55 |
 
 As the score is made more oldest-first it acquires 3A's production and
 loses its own response. **The two measures trade against each other on
@@ -72,26 +72,26 @@ Units lost, by uniform buffer setting:
 
 | buffer | policy | units lost | response (min) |
 |---|---|---:|---:|
-| 0 units | 3A | 1247.0 | 37.38 |
-| 0 units | w_downtime=0 | 1273.5 | 19.58 |
-| 0 units | w_downtime=1 | 1269.3 | 18.03 |
-| 0 units | w_downtime=4 | 1268.6 | 18.60 |
-| 5 units | 3A | 1194.5 | 37.38 |
-| 5 units | w_downtime=0 | 1222.0 | 19.58 |
-| 5 units | w_downtime=1 | 1217.0 | 18.03 |
-| 5 units | w_downtime=4 | 1215.6 | 18.60 |
-| as configured | 3A | 1178.9 | 37.38 |
-| as configured | w_downtime=0 | 1207.9 | 19.58 |
-| as configured | w_downtime=1 | 1204.0 | 18.23 |
-| as configured | w_downtime=4 | 1203.1 | 18.58 |
-| 20 units | 3A | 1038.1 | 37.38 |
-| 20 units | w_downtime=0 | 1068.5 | 19.58 |
-| 20 units | w_downtime=1 | 1065.3 | 18.70 |
-| 20 units | w_downtime=4 | 1062.3 | 17.50 |
-| 40 units | 3A | 840.0 | 37.38 |
-| 40 units | w_downtime=0 | 873.7 | 19.58 |
-| 40 units | w_downtime=1 | 874.2 | 18.33 |
-| 40 units | w_downtime=4 | 874.2 | 18.49 |
+| 0 units | 3A | 971.4 | 3.70 |
+| 0 units | w_downtime=0 | 973.9 | 3.79 |
+| 0 units | w_downtime=1 | 973.9 | 3.79 |
+| 0 units | w_downtime=4 | 973.9 | 3.79 |
+| 5 units | 3A | 882.0 | 3.70 |
+| 5 units | w_downtime=0 | 884.4 | 3.79 |
+| 5 units | w_downtime=1 | 884.4 | 3.79 |
+| 5 units | w_downtime=4 | 884.4 | 3.79 |
+| as configured | 3A | 856.6 | 3.70 |
+| as configured | w_downtime=0 | 859.0 | 3.79 |
+| as configured | w_downtime=1 | 859.0 | 3.77 |
+| as configured | w_downtime=4 | 859.0 | 3.77 |
+| 20 units | 3A | 624.2 | 3.70 |
+| 20 units | w_downtime=0 | 626.7 | 3.79 |
+| 20 units | w_downtime=1 | 626.7 | 3.79 |
+| 20 units | w_downtime=4 | 626.7 | 3.79 |
+| 40 units | 3A | 325.7 | 3.70 |
+| 40 units | w_downtime=0 | 327.6 | 3.79 |
+| 40 units | w_downtime=1 | 327.6 | 3.79 |
+| 40 units | w_downtime=4 | 327.6 | 3.79 |
 
 Turning w2 off and turning it up to four moves units lost by well under
 a percent at every layout, including the unbuffered one. Where the lost
@@ -99,16 +99,16 @@ production actually sits says why:
 
 | station | 3A units lost | 3C units lost | 3A down-min | 3C down-min |
 |---|---:|---:|---:|---:|
-| st-01 buf 20 | 163.2 | 169.8 | 192.9 | 198.5 |
-| st-02 buf 8 | 197.6 | 194.6 | 210.0 | 207.8 |
-| st-03 buf 0 x3 | 648.4 | 647.7 | 216.1 | 215.9 |
-| st-04 buf 12 | 169.6 | 191.9 | 195.6 | 215.0 |
+| st-01 buf 20 | 99.4 | 100.4 | 148.5 | 149.4 |
+| st-02 buf 8 | 149.9 | 149.9 | 171.8 | 171.8 |
+| st-03 buf 0 x3 | 518.9 | 518.9 | 173.0 | 173.0 |
+| st-04 buf 12 | 88.3 | 89.8 | 132.1 | 133.6 |
 
-`st-03 buf 0 x3` is 54% of everything lost, and both policies lose the same amount there (648.4 against 647.7). The gap between them is at the *buffered*
+`st-03 buf 0 x3` is 60% of everything lost, and both policies lose the same amount there (518.9 against 518.9). The gap between them is at the *buffered*
 stations: 3C is paying where a buffer was already absorbing the outage
 and buying nothing where none was.
 
-Total down-minutes barely move either - 814.7 under 3A against 837.2 under 3C. The repairs
+Total down-minutes barely move either - 625.4 under 3A against 627.9 under 3C. The repairs
 are the repairs; the only lever a policy has is *which* machine is down.
 
 **But it is not that 3C failed to prioritise the critical station.** Split
@@ -117,16 +117,16 @@ they spent being repaired:
 
 | station | 3A waiting | 3C waiting | 3A repair | 3C repair | failures |
 |---|---:|---:|---:|---:|---:|
-| st-01 buf 20 | 107.9 | 51.7 | 174.0 | 157.5 | 6.00 |
-| st-02 buf 8 | 138.3 | 74.4 | 252.8 | 258.0 | 6.75 |
-| st-03 buf 0 x3 | 189.7 | 101.9 | 285.8 | 387.0 | 7.35 |
-| st-04 buf 12 | 147.9 | 19.5 | 138.0 | 73.0 | 6.80 |
+| st-01 buf 20 | 9.3 | 9.3 | 157.5 | 159.0 | 2.65 |
+| st-02 buf 8 | 8.1 | 7.8 | 189.8 | 189.8 | 2.75 |
+| st-03 buf 0 x3 | 9.0 | 8.5 | 181.5 | 181.5 | 2.95 |
+| st-04 buf 12 | 17.4 | 18.9 | 117.8 | 117.8 | 3.75 |
 
-The w2 term does exactly what ADR-021 designed it to do. At `st-03 buf 0 x3` 3C cuts waiting from 189.7 minutes to 101.9 and puts +101.2 more
+The w2 term does exactly what ADR-021 designed it to do. At `st-03 buf 0 x3` 3C cuts waiting from 9.0 minutes to 8.5 and puts +0.0 more
 technician-minutes into the machine that matters most. The ranking is not
 the problem.
 
-**The outcome does not move because that station fails 7.35 times a shift.** A machine is down while any
+**The outcome does not move because that station fails 2.95 times a shift.** A machine is down while any
 unfinished ticket names it, so being reached sooner cannot be banked: it
 has failed again before the benefit shows up in an outage that already
 merged with the next one. Being twice as fast to a machine that stops
@@ -144,35 +144,35 @@ room, and the first column below would open up.
 
 | technicians | policy | units lost | response (min) | unfinished |
 |---:|---|---:|---:|---:|
-| 2 | 3A | 1220.5 | 49.28 | 17.75 |
-| 2 | 3C w_downtime=0 | 1241.3 | 24.29 | 19.70 |
-| 2 | 3C shipped | 1239.0 | 21.21 | 19.20 |
-| 3 | 3A | 1178.9 | 37.38 | 14.30 |
-| 3 | 3C w_downtime=0 | 1207.9 | 19.58 | 16.35 |
-| 3 | 3C shipped | 1204.0 | 18.23 | 16.00 |
-| 4 | 3A | 1148.9 | 24.12 | 12.15 |
-| 4 | 3C w_downtime=0 | 1160.5 | 15.40 | 13.20 |
-| 4 | 3C shipped | 1158.1 | 14.30 | 13.35 |
-| 6 | 3A | 1094.0 | 10.06 | 8.70 |
-| 6 | 3C w_downtime=0 | 1101.2 | 8.05 | 9.25 |
-| 6 | 3C shipped | 1097.5 | 7.53 | 9.25 |
-| 8 | 3A | 1071.1 | 4.62 | 7.45 |
-| 8 | 3C w_downtime=0 | 1073.3 | 4.40 | 7.45 |
-| 8 | 3C shipped | 1073.3 | 4.16 | 7.45 |
+| 2 | 3A | 918.9 | 14.50 | 2.70 |
+| 2 | 3C w_downtime=0 | 929.3 | 15.10 | 2.75 |
+| 2 | 3C shipped | 927.3 | 14.52 | 2.95 |
+| 3 | 3A | 856.6 | 3.70 | 2.55 |
+| 3 | 3C w_downtime=0 | 859.0 | 3.79 | 2.55 |
+| 3 | 3C shipped | 859.0 | 3.77 | 2.55 |
+| 4 | 3A | 847.7 | 2.41 | 2.45 |
+| 4 | 3C w_downtime=0 | 847.7 | 2.41 | 2.45 |
+| 4 | 3C shipped | 847.7 | 2.41 | 2.45 |
+| 6 | 3A | 847.7 | 2.41 | 2.45 |
+| 6 | 3C w_downtime=0 | 847.7 | 2.41 | 2.45 |
+| 6 | 3C shipped | 847.7 | 2.41 | 2.45 |
+| 8 | 3A | 847.7 | 2.41 | 2.45 |
+| 8 | 3C w_downtime=0 | 847.7 | 2.41 | 2.45 |
+| 8 | 3C shipped | 847.7 | 2.41 | 2.45 |
 
 What w2 is worth at each roster size, and what the whole score is worth
 against first-come-first-served:
 
 | technicians | w2 off - w2 on | 3A - 3C shipped | 3C response gain |
 |---:|---:|---:|---:|
-| 2 | +2.3 | -18.5 | +28.1 min |
-| 3 | +3.9 | -25.2 | +19.2 min |
-| 4 | +2.3 | -9.2 | +9.8 min |
-| 6 | +3.7 | -3.5 | +2.5 min |
-| 8 | +0.0 | -2.2 | +0.5 min |
+| 2 | +2.0 | -8.5 | -0.0 min |
+| 3 | +0.0 | -2.5 | -0.1 min |
+| 4 | +0.0 | +0.0 | +0.0 min |
+| 6 | +0.0 | +0.0 | +0.0 min |
+| 8 | +0.0 | +0.0 | +0.0 min |
 
 **It does not open up.** The downtime term is worth a few units at every
-roster size from 2 technicians to 8, and the shift with 8 of them - where response is down to 4.2 minutes and almost
+roster size from 2 technicians to 8, and the shift with 8 of them - where response is down to 2.4 minutes and almost
 nothing waits at all - is where it is worth least. Staffing is not the
 constraint, which leaves the arrival rate: the critical station stops
 faster than any number of people can keep it running.
@@ -184,7 +184,7 @@ is that whether it pays depends entirely on a parameter nobody has
 measured yet.
 
 The other column is worth reading while it is here. 3C's response
-advantage over first-come-first-served is 28.1 minutes at 2 technicians and 0.5 at 8: **scheduling is worth most exactly
+advantage over first-come-first-served is -0.0 minutes at 2 technicians and 0.0 at 8: **scheduling is worth most exactly
 when there are not enough people**, which is the condition a plant
 installs one for. So is first-come-first-served's advantage on units, and
 the two shrink together.

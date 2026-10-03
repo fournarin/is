@@ -212,6 +212,12 @@ def run(
 
         elif priority == _FAILED:
             failure = arrivals[int(payload)]
+            if failure.machine_id in down_since and not scenario.failures_while_down:
+                # The arrival times are drawn in calendar time. Dropping the ones
+                # that land while the machine is stopped is exactly an
+                # operating-time failure process, because the gaps are
+                # exponential and so memoryless (ADR-124).
+                continue
             ref = f"WO-{int(payload) + 1:04d}"
             job = _Job(
                 ticket=Ticket(

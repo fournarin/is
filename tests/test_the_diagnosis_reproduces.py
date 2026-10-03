@@ -76,22 +76,23 @@ class TestTheAblationAblates:
     def test_the_gate_holds_nothing_while_it_is_removed(self) -> None:
         policy = GateAndScore(CONFIG)
         with without_the_gate():
-            run(LINE_A_ONE_SHIFT, policy=policy, config=CONFIG, seed=0)
+            run(with_roster(LINE_A_ONE_SHIFT, 1), policy=policy, config=CONFIG, seed=0)
         assert policy.rounds, "the shift decided no rounds at all"
         assert policy.held == 0
 
     def test_the_gate_holds_something_when_it_is_not(self) -> None:
         """The other half, and the one that gives the test above its meaning: a
-        shift where nothing was ever held would satisfy it for free."""
+        shift where nothing was ever held would satisfy it for free. One
+        technician, because since ADR-124 the shipped shift never holds."""
         policy = GateAndScore(CONFIG)
-        run(LINE_A_ONE_SHIFT, policy=policy, config=CONFIG, seed=0)
+        run(with_roster(LINE_A_ONE_SHIFT, 1), policy=policy, config=CONFIG, seed=0)
         assert policy.held > 0
 
     def test_the_seam_is_restored_afterwards(self) -> None:
         with without_the_gate():
             pass
         policy = GateAndScore(CONFIG)
-        run(LINE_A_ONE_SHIFT, policy=policy, config=CONFIG, seed=0)
+        run(with_roster(LINE_A_ONE_SHIFT, 1), policy=policy, config=CONFIG, seed=0)
         assert policy.held > 0
 
 
