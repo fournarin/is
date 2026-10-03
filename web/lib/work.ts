@@ -188,3 +188,18 @@ export type Active = {
 export async function activeWork(): Promise<Active[]> {
   return read<Active[]>("/work-orders/active");
 }
+
+/** A job closed this shift, as the board's last column shows it (ADR-126). */
+export type Finished = {
+  ref: string;
+  machine_id: string;
+  reason: string;
+  closed_when: string;
+  outcome: string;
+  by_names: string[];
+  note: string | null;
+};
+
+export async function finishedThisShift(): Promise<Finished[]> {
+  return read<Finished[]>("/work-orders/finished");
+}

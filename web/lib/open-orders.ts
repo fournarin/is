@@ -15,3 +15,13 @@ export function openOrdersIn(body: unknown): string[] {
   if (!Array.isArray(open)) return [];
   return open.filter((ref): ref is string => typeof ref === "string");
 }
+
+/** What each open ticket is about, aligned with `openOrdersIn` (ADR-126). */
+export function openReasonsIn(body: unknown): string[] {
+  if (typeof body !== "object" || body === null) return [];
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail !== "object" || detail === null) return [];
+  const reasons = (detail as { open_reasons?: unknown }).open_reasons;
+  if (!Array.isArray(reasons)) return [];
+  return reasons.map((one) => (typeof one === "string" ? one : ""));
+}

@@ -85,7 +85,7 @@ export async function handOver(
     return { error: `ระบบตอบกลับผิดปกติ (${response.status})` };
   }
 
-  redirect("/work");
+  redirect(`/work?done=handed&ref=${encodeURIComponent(ref)}`);
 }
 
 export type ObjectionState = { error: string | null; recordedAt: string | null };

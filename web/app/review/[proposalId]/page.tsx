@@ -60,16 +60,25 @@ export default async function ProposalPage({
   }
   const steps = flagSteps(draft.steps);
   const asked = Number((await searchParams).step ?? 0);
-  const chosen = Number.isInteger(asked) && asked >= 0 && asked < steps.length ? asked : 0;
+  const chosen =
+    Number.isInteger(asked) && asked >= 0 && asked < steps.length ? asked : 0;
   const step = steps[chosen];
-  const page = step === undefined ? null : await evidence(step.source_doc, step.page);
-  const found = page?.text != null && step !== undefined ? locate(page.text, step.text) : null;
+  const page =
+    step === undefined ? null : await evidence(step.source_doc, step.page);
+  const found =
+    page?.text != null && step !== undefined
+      ? locate(page.text, step.text)
+      : null;
 
   return (
     <Shell account={account} current="/review">
       <div className="who">
         <span>
-          <Link href={`/review?model=${encodeURIComponent(draft.machine_model)}`}>คิวรีวิว</Link>
+          <Link
+            href={`/review?model=${encodeURIComponent(draft.machine_model)}`}
+          >
+            คิวรีวิว
+          </Link>
           <span className="muted">
             {" "}
             · {draft.machine_model} · {ROLE_NAMES[account.role]}
@@ -78,10 +87,18 @@ export default async function ProposalPage({
       </div>
 
       <h1>
-        {draft.symptom_code}
-        <span className="muted"> · {draft.origin === "technician" ? "ช่างแย้ง" : (OUTCOME[draft.outcome] ?? draft.outcome)}</span>
+        {draft.symptom_title ?? draft.symptom_code}
+        <span className="muted">
+          {" "}
+          ·{" "}
+          {draft.origin === "technician"
+            ? "ช่างแย้ง"
+            : (OUTCOME[draft.outcome] ?? draft.outcome)}
+        </span>
       </h1>
-      <p className="muted">{draft.reason}</p>
+      <p className="muted">
+        {draft.machine_model} · {draft.symptom_code} · {draft.reason}
+      </p>
 
       {draft.status !== "pending" && (
         <p className="warning">
@@ -99,14 +116,19 @@ export default async function ProposalPage({
           ) : (
             <ol className="draft">
               {steps.map((one, index) => (
-                <li key={index} className={index === chosen ? "current" : undefined}>
+                <li
+                  key={index}
+                  className={index === chosen ? "current" : undefined}
+                >
                   <Link href={`?step=${index}`} scroll={false}>
                     <span className="step-body">{one.text}</span>
                     <span className="cite">
                       หน้า {one.page}
                       {/* At page level a mixed draft looks ordinary; at step
                           level it reports itself (ADR-015). */}
-                      {one.odd_document && <strong className="pending"> คนละเอกสาร</strong>}
+                      {one.odd_document && (
+                        <strong className="pending"> คนละเอกสาร</strong>
+                      )}
                     </span>
                   </Link>
                 </li>
@@ -131,7 +153,9 @@ export default async function ProposalPage({
             </details>
           )}
 
-          {draft.tools.length > 0 && <p className="muted">เครื่องมือ: {draft.tools.join(", ")}</p>}
+          {draft.tools.length > 0 && (
+            <p className="muted">เครื่องมือ: {draft.tools.join(", ")}</p>
+          )}
         </section>
 
         <section className="card evidence">
@@ -140,7 +164,8 @@ export default async function ProposalPage({
             <p className="muted">ไม่มีขั้นตอนให้เทียบ</p>
           ) : page === null ? (
             <p className="muted">
-              ไม่พบเอกสารที่ขั้นตอนนี้อ้างถึงในระบบแล้ว — ตรวจกับคู่มือฉบับจริงก่อนอนุมัติ
+              ไม่พบเอกสารที่ขั้นตอนนี้อ้างถึงในระบบแล้ว —
+              ตรวจกับคู่มือฉบับจริงก่อนอนุมัติ
             </p>
           ) : (
             <>
@@ -152,10 +177,15 @@ export default async function ProposalPage({
                   machine model is labelled, never mixed in silently. */}
               {page.machine_model !== draft.machine_model && (
                 <p className="warning">
-                  หน้านี้มาจากคู่มือของรุ่น {page.machine_model} ไม่ใช่ {draft.machine_model}
+                  หน้านี้มาจากคู่มือของรุ่น {page.machine_model} ไม่ใช่{" "}
+                  {draft.machine_model}
                 </p>
               )}
-              {page.withdrawn && <p className="warning">คู่มือฉบับนี้ถูกถอนออกจากการใช้งานแล้ว</p>}
+              {page.withdrawn && (
+                <p className="warning">
+                  คู่มือฉบับนี้ถูกถอนออกจากการใช้งานแล้ว
+                </p>
+              )}
 
               {page.text === null ? (
                 <p className="muted">
@@ -166,7 +196,8 @@ export default async function ProposalPage({
               ) : found === null ? (
                 <>
                   <p className="warning">
-                    หาข้อความของขั้นตอนนี้ในหน้าดังกล่าวไม่พบ — ตรวจกับคู่มือก่อนอนุมัติ
+                    หาข้อความของขั้นตอนนี้ในหน้าดังกล่าวไม่พบ —
+                    ตรวจกับคู่มือก่อนอนุมัติ
                   </p>
                   <pre className="page">{page.text}</pre>
                 </>

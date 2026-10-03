@@ -44,6 +44,11 @@ export type Band = { label: string; tone: "urgent" | "planned" | "normal" | "low
  */
 export function bandFor(one: Ticket): Band {
   if (one.finding_kind === "predicted") {
+    // Past its expected crossing with no detection yet: no longer something to
+    // plan for, but not yet a confirmed fault either (ADR-126).
+    if (one.eta !== null && Date.parse(one.eta) <= Date.now()) {
+      return { label: "เลยเวลาที่คาด · ตรวจเครื่อง", tone: "urgent" };
+    }
     return { label: "ยังไม่เสีย · วางแผนซ่อม", tone: "planned" };
   }
   if (one.severity === "critical" || one.severity === "high") {

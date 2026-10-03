@@ -41,3 +41,31 @@ decisions behind it should be looked at again for a better way.
 | 6 | engineer's review | "drafting is not automatic, I have to write it myself - must the engineer know more than the technician?" | the engineer asks for each draft, and types the Thai for each step | partly: ADR-121 - the system asks for the draft and the engineer only checks it against the page; the Thai for each step is still typed |
 | 7 | reporting a fault | "I reported it - where did it go?" | the report screen forgets the report once sent; it reached the shift lead's board as a proposal | fixed: ADR-122 - "เรื่องที่คุณแจ้งไว้" under the form, each with where it is |
 
+
+## Run 3 - 3 October 2026: failed (agent, not a person)
+
+An agent played each role through the real pages on a stack rehearsed 7/7 at
+`a9df639`. This is a usability pass by software, not evidence that a person can
+work from the system (ADR-092). Verdict against `docs/trial-protocol.md`: fail.
+The pre-check found no live ticket carrying approved steps.
+
+| # | Role | Screen | What happened | Outcome |
+|---|---|---|---|---|
+| 1 | shift lead, technician | cards | a live "14:56" beside a frozen "in about 41 minutes", and "not yet failed" after the time had passed | fixed: ADR-126 |
+| 2 | shift lead | line vs board | the line's worst fault (MC-018 fan) had no ticket - a Finding the content-path check seeded without one | fixed: ADR-126, the check issues the ticket |
+| 3 | technician, shift lead | handover | the job came straight back to the technician who had put it down | fixed: ADR-126 |
+| 4 | operator | report | "ยังไม่เคยแจ้ง" directly under "รับเรื่องแล้ว" | fixed |
+| 5 | operator | duplicate warning | only a ticket number | fixed |
+| 6 | shift lead | board summary | "ปล่อยงาน 0 ใบ" beside four waiting cards | fixed |
+| 7 | shift lead | board vs overview | queued work invisible until a round | fixed: a line under the waiting column |
+| 8 | shift lead | board | a closed job vanished with no outcome or note | fixed: "เสร็จแล้วกะนี้" |
+| 9 | engineer | review | "SYM-014" with no Thai name | fixed |
+| 10 | engineer | review, gaps | a "not found" result listed as awaiting approval | partly: the gaps wording |
+| 12 | everyone | after an action | no confirmation | fixed for close and handover |
+| 13 | technician | steps | PDF in a new tab; PM called a symptom | partly: the PM wording |
+| 11, 14-16 | - | - | cosmetic | open |
+
+Worked well and kept: the one-card technician screen, the no-steps screen's "do
+not guess" with a cited page, the engineer's figure check refusing a wrong Thai
+torque, set-aside with a reason and a way back, the operator's status line, and
+page times under 0.05 s.

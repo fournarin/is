@@ -156,6 +156,16 @@ class TestOneJobEndToEnd:
         assert body["actual_minutes"] == 40, "twenty-five and fifteen, not six and a half hours"
         assert body["repair_minutes"] == 35
 
+        # The shift lead sees it done, with the outcome, rather than watching it
+        # vanish from the board (ADR-126).
+        client.cookies.clear()
+        _signed_in(client, Role.SUPERVISOR)
+        finished = client.get("/work-orders/finished")
+        assert finished.status_code == 200, finished.text
+        (done,) = finished.json()
+        assert done["ref"] == ref
+        assert done["outcome"] == "ช่างซ่อมเสร็จแล้ว"
+
     def test_the_ticket_view_shows_the_work_as_it_happens(
         self, client: TestClient, world: dict[str, Any]
     ) -> None:

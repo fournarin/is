@@ -41,6 +41,7 @@ import re
 import sys
 import time
 import urllib.request
+from pathlib import Path
 
 from psycopg import connect
 
@@ -57,11 +58,13 @@ from pdm.contracts import (
 )
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SystemClock
+from pdm.platform.config import load_config
 from pdm.platform.documents import DocumentLibrary
 from pdm.platform.jobs import JobClass, JobKind
 from pdm.platform.jobs import repo as jobs
 from pdm.platform.objects import FilesystemObjectStore, storage_root
 from pdm.triggers import repo as findings_repo
+from pdm.work import WorkOrders
 
 WEB = os.environ.get("PDM_WEB_URL", "http://localhost:3000")
 
@@ -144,17 +147,28 @@ def seed() -> None:
                 payload={"document_id": row.document_id},
                 now=now,
             )
-        findings_repo.raise_finding(
-            conn,
-            Finding(
-                machine_id=MACHINE,
-                component=COMPONENT,
-                symptom_code=SYM,
-                severity=Severity.MEDIUM,
-                rule_id=RULE,
-                detected_at=now,
-                evidence={"value": 1080.0, "threshold": 1200.0, "for_seconds": 240},
-            ),
+        finding = Finding(
+            machine_id=MACHINE,
+            component=COMPONENT,
+            symptom_code=SYM,
+            severity=Severity.MEDIUM,
+            rule_id=RULE,
+            detected_at=now,
+            evidence={"value": 1080.0, "threshold": 1200.0, "for_seconds": 240},
+        )
+        finding_ref = findings_repo.raise_finding(conn, finding)
+        # And its ticket, as the trigger loop would issue it. Without one the
+        # check left a Finding no ticket answered on the demo stack, and the
+        # third trial read the line's worst fault as one nobody was sent to.
+        config = load_config(Path(os.environ.get("CONFIG_DIR", "config")))
+        WorkOrders(
+            clock,
+            fallback_minutes={
+                str(model): dict(rows) for model, rows in config.policy.fallback_minutes.items()
+            },
+            wording=config.wording(),
+        ).from_finding(
+            conn, finding, finding_ref=finding_ref, machine_model=config.model_of(MACHINE)
         )
         conn.commit()
 
@@ -371,6 +385,17 @@ def main() -> None:
     expect(
         [step.get("text_th") for step in book_steps] == THAI,
         "and the approver's Thai for each step, beside the manual's words (ADR-095)",
+    )
+
+    with connect(os.environ["DATABASE_URL"]) as conn:
+        ticket = conn.execute(
+            "SELECT jsonb_array_length(playbook_snapshot) FROM work_order "
+            "WHERE machine_id = %s AND finding_ref IS NOT NULL",
+            (str(MACHINE),),
+        ).fetchone()
+    expect(
+        ticket is not None and int(ticket[0]) == len(book_steps),
+        "the ticket waiting on this symptom now carries the approved steps (ADR-102)",
     )
 
     print("\n6. nothing here was approved by anything but a person")

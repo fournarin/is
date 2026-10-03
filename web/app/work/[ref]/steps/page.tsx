@@ -47,7 +47,11 @@ export default async function StepsPage({
         </p>
         <section className="card job normal">
           <p className="machine">{job.machine_id}</p>
-          <h1>ยังไม่มีขั้นตอนซ่อมที่อนุมัติแล้วสำหรับอาการนี้</h1>
+          <h1>
+            {job.origin === "scheduled"
+              ? "ยังไม่มีขั้นตอนที่อนุมัติแล้วสำหรับงานนี้"
+              : "ยังไม่มีขั้นตอนซ่อมที่อนุมัติแล้วสำหรับอาการนี้"}
+          </h1>
           {/* Principle 5: saying so beats inventing a procedure. */}
           <p>ให้ดูคู่มือของเครื่อง หรือโทรถามวิศวกร อย่าเดาขั้นตอนเอง</p>
           {(job.where_to_look ?? []).length > 0 && (

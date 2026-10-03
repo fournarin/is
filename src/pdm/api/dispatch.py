@@ -524,6 +524,52 @@ _ON_SOMEBODY = frozenset(
 )
 
 
+class Finished(BaseModel):
+    """A job closed this shift, for the board's last column (ADR-126)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    machine_id: str
+    reason: str
+    closed_when: str
+    outcome: str
+    by_names: tuple[str, ...] = ()
+    note: str | None = None
+
+
+@router.get("/work-orders/finished", response_model=list[Finished])
+def finished_this_shift(
+    conn: Db,
+    rounds: Rounds,
+    account: Annotated[
+        Account, Depends(requires(*_MAY_READ_THE_RECORD, action="read_finished_work"))
+    ],
+) -> list[Finished]:
+    """What was closed since the current shift began, newest first.
+
+    Registered before `/work-orders/{work_order_ref}` for the reason `mine` is.
+    In the third trial a closed job simply vanished from the board: the shift
+    lead could not see that it was done, how, or what the technician wrote.
+    """
+    since = rounds.shift_started_at()
+    if since is None:
+        return []
+    wording = rounds.config.wording()
+    return [
+        Finished(
+            ref=ref,
+            machine_id=str(order.machine_id),
+            reason=order.reason,
+            closed_when=wording.clock(closed_at),
+            outcome=_where(order, ()),
+            by_names=_names(conn, dict.fromkeys(segment.user for segment in order.work_segments)),
+            note=order.technician_feedback,
+        )
+        for ref, closed_at, order in work.closed_since(conn, since)
+    ]
+
+
 @router.get("/work-orders/active", response_model=list[Active])
 def active_work(
     conn: Db,
@@ -545,7 +591,7 @@ def active_work(
             assignees=tuple(str(who.user) for who in order.assignees),
             assignee_names=_names(conn, (who.user for who in order.assignees)),
             reason=order.reason,
-            eta_text=when_expected(order, rounds.config.wording()),
+            eta_text=when_expected(order, rounds.config.wording(), now=rounds.clock.now()),
         )
         for ref, order, _ in work.open_orders(conn)
         if order.status in _ON_SOMEBODY
@@ -840,6 +886,7 @@ def ticket(
     work_order_ref: str,
     conn: Db,
     config: Plant,
+    clock: Time,
     account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_work_order"))],
 ) -> TicketView:
     """One ticket, with both of its reasons.
@@ -875,7 +922,7 @@ def ticket(
         playbook_warning=order.playbook_warning,
         handover_note=order.handover_note,
         finding_kind=order.finding_kind,
-        eta_text=when_expected(order, config.wording()),
+        eta_text=when_expected(order, config.wording(), now=clock.now()),
         eta=order.eta,
         eta_confidence_minutes=(
             None

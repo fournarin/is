@@ -68,7 +68,7 @@ export default async function GapsPage({
               เครื่องรุ่น {row.machine_model} · รหัส {row.symptom_code} · เกิดแล้ว {row.findings} ครั้ง
             </p>
             {row.proposals_waiting > 0 ? (
-              <p className="pending">มีร่างรออนุมัติ {row.proposals_waiting} ฉบับ</p>
+              <p className="pending">มีร่างรอวิศวกรดู {row.proposals_waiting} ฉบับ (ที่หน้า “อนุมัติขั้นตอน”)</p>
             ) : (
               account.role === "engineer" && (
                 <details>

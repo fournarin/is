@@ -3,7 +3,14 @@ import { NotYours, Shell } from "@/app/ui/shell";
 import { bandFor } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { activeWork, currentRound, proposals, ticket, type Ticket } from "@/lib/work";
+import {
+  activeWork,
+  currentRound,
+  finishedThisShift,
+  proposals,
+  ticket,
+  type Ticket,
+} from "@/lib/work";
 
 const STATUS: Record<string, string> = {
   assigned: "มอบหมายแล้ว",
@@ -38,45 +45,63 @@ export default async function BoardPage({
   if (account.role !== "supervisor" && account.role !== "engineer") {
     return (
       <Shell account={account} current="/board">
-        <NotYours home={homeFor(account.role)} what="กระดานงานเป็นของหัวหน้ากะ" />
+        <NotYours
+          home={homeFor(account.role)}
+          what="กระดานงานเป็นของหัวหน้ากะ"
+        />
       </Shell>
     );
   }
   const { released, confirmed, rejected, brought, error } = await searchParams;
 
-  const [round, waiting, active] = await Promise.all([currentRound(), proposals(), activeWork()]);
+  const [round, waiting, active, finished] = await Promise.all([
+    currentRound(),
+    proposals(),
+    activeWork(),
+    finishedThisShift(),
+  ]);
   const tickets = new Map<string, Ticket>(
     await Promise.all(
       [
         ...waiting.map((one) => one.ref),
         ...round.held.map((one) => one.ref),
         ...round.set_aside.map((one) => one.ref),
-      ].map(
-        async (ref) => [ref, await ticket(ref)] as const,
-      ),
+      ].map(async (ref) => [ref, await ticket(ref)] as const),
     ),
   );
-  const load = round.load_ratio === null ? null : Math.round(round.load_ratio * 100);
+  const load =
+    round.load_ratio === null ? null : Math.round(round.load_ratio * 100);
 
   return (
     <Shell account={account} current="/board">
       <KeepFresh />
       <h1>กระดานงานกะนี้</h1>
       <p className="muted">
-        ระบบเลือกช่างให้แต่ละงานแล้ว กด “ยืนยัน” เพื่อส่งงานถึงช่าง หรือ “พักไว้ก่อน” ถ้ายังไม่ควรทำตอนนี้
+        ระบบเลือกช่างให้แต่ละงานแล้ว กด “ยืนยัน” เพื่อส่งงานถึงช่าง หรือ
+        “พักไว้ก่อน” ถ้ายังไม่ควรทำตอนนี้
       </p>
 
-      {confirmed !== undefined && <p className="recorded">✓ ยืนยัน {confirmed} แล้ว งานถูกส่งถึงช่างแล้ว</p>}
+      {confirmed !== undefined && (
+        <p className="recorded">
+          ✓ ยืนยัน {confirmed} แล้ว งานถูกส่งถึงช่างแล้ว
+        </p>
+      )}
       {rejected !== undefined && (
         <p className="recorded">
-          ⏸ พัก {rejected} ไว้แล้ว ระบบจะไม่เสนองานนี้อีกในกะนี้ จนกว่าคุณจะกด “นำกลับมา”
+          ⏸ พัก {rejected} ไว้แล้ว ระบบจะไม่เสนองานนี้อีกในกะนี้ จนกว่าคุณจะกด
+          “นำกลับมา”
         </p>
       )}
       {brought !== undefined && (
-        <p className="recorded">↩ นำ {brought} กลับมาแล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5 นาที)</p>
+        <p className="recorded">
+          ↩ นำ {brought} กลับมาแล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5
+          นาที)
+        </p>
       )}
       {released !== undefined && (
-        <p className="recorded">✓ ปล่อย {released} แล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5 นาที)</p>
+        <p className="recorded">
+          ✓ ปล่อย {released} แล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5 นาที)
+        </p>
       )}
       {error !== undefined && (
         <p className="error" role="alert">
@@ -97,7 +122,7 @@ export default async function BoardPage({
           <div className="big-number">{waiting.length}</div>
         </div>
         <div className="stat">
-          <div className="label">ช่างกำลังทำ</div>
+          <div className="label">ส่งถึงช่างแล้ว</div>
           <div className="big-number">{active.length}</div>
         </div>
       </div>
@@ -109,6 +134,13 @@ export default async function BoardPage({
             รอคุณยืนยัน <span className="count">{waiting.length}</span>
           </h2>
           {waiting.length === 0 && <p className="muted">ไม่มีงานรอยืนยัน</p>}
+          {round.placed.length > 0 && (
+            // Queued work the next round will propose, so a new report or a job
+            // brought back is on the board before the round runs (ADR-126).
+            <p className="muted">
+              รอบถัดไป (ไม่เกิน 5 นาที) ระบบจะเสนออีก {round.placed.length} งาน
+            </p>
+          )}
           {waiting.map((one) => {
             const job = tickets.get(one.ref)!;
             const band = bandFor(job);
@@ -124,7 +156,9 @@ export default async function BoardPage({
                   👷 ส่งให้ <strong>{one.assignee_names.join(", ")}</strong>
                 </p>
                 {job.handover_note && (
-                  <p className="warning">↪ ช่างคนก่อนส่งต่อไว้: {job.handover_note}</p>
+                  <p className="warning">
+                    ↪ ช่างคนก่อนส่งต่อไว้: {job.handover_note}
+                  </p>
                 )}
                 <p className="muted">ทำไมก่อน: {one.priority_reason}</p>
                 <div className="actions">
@@ -138,10 +172,18 @@ export default async function BoardPage({
                     <summary>⏸ พักไว้ก่อน</summary>
                     <form method="post" action="/overview/reject">
                       <input type="hidden" name="ref" value={one.ref} />
-                      <p className="muted">งานจะไปอยู่ในช่อง “คุณพักไว้” และไม่ถูกเสนออีกจนจบกะ หรือจนกว่าคุณจะนำกลับมา</p>
+                      <p className="muted">
+                        งานจะไปอยู่ในช่อง “คุณพักไว้” และไม่ถูกเสนออีกจนจบกะ
+                        หรือจนกว่าคุณจะนำกลับมา
+                      </p>
                       <label className="field">
                         <span>ทำไมยังไม่ควรทำตอนนี้</span>
-                        <textarea name="reason" rows={2} required placeholder="เช่น รอหยุดสายตอนพักเที่ยง" />
+                        <textarea
+                          name="reason"
+                          rows={2}
+                          required
+                          placeholder="เช่น รอหยุดสายตอนพักเที่ยง"
+                        />
                       </label>
                       <button type="submit" className="danger">
                         พักไว้ พร้อมเหตุผลนี้
@@ -163,7 +205,10 @@ export default async function BoardPage({
               const job = tickets.get(one.ref)!;
               const band = bandFor(job);
               return (
-                <article className={`ticket ${band.tone}`} key={`aside-${one.ref}`}>
+                <article
+                  className={`ticket ${band.tone}`}
+                  key={`aside-${one.ref}`}
+                >
                   <div className="ticket-head">
                     <span className="machine-small">{job.machine_id}</span>
                     <span className={`pill ${band.tone}`}>{band.label}</span>
@@ -184,7 +229,9 @@ export default async function BoardPage({
         <section className="column">
           <h2>
             ระบบกันไว้ก่อน{" "}
-            <span className="count">{round.held.length + round.unassigned.length}</span>
+            <span className="count">
+              {round.held.length + round.unassigned.length}
+            </span>
           </h2>
           {round.unassigned.map((one) => (
             // Admitted by the gate with nobody free to take it (ADR-102): on a
@@ -220,7 +267,12 @@ export default async function BoardPage({
                     <input type="hidden" name="ref" value={one.ref} />
                     <label className="field">
                       <span>ทำไมต้องปล่อยตอนนี้</span>
-                      <textarea name="reason" rows={2} required placeholder="เช่น สาย A หยุดรอชิ้นนี้อยู่" />
+                      <textarea
+                        name="reason"
+                        rows={2}
+                        required
+                        placeholder="เช่น สาย A หยุดรอชิ้นนี้อยู่"
+                      />
                     </label>
                     <button type="submit">ปล่อยงาน พร้อมเหตุผลนี้</button>
                   </form>
@@ -232,20 +284,48 @@ export default async function BoardPage({
 
         <section className="column">
           <h2>
-            ช่างกำลังทำ <span className="count">{active.length}</span>
+            ส่งถึงช่างแล้ว <span className="count">{active.length}</span>
           </h2>
-          {active.length === 0 && <p className="muted">ยังไม่มีงานที่ส่งถึงช่าง</p>}
+          {active.length === 0 && (
+            <p className="muted">ยังไม่มีงานที่ส่งถึงช่าง</p>
+          )}
           {active.map((one) => (
             <article className="ticket" key={one.ref}>
               <div className="ticket-head">
                 <span className="machine-small">{one.machine_id}</span>
-                <span className={`pill ${one.status === "in_progress" ? "done" : ""}`}>
+                <span
+                  className={`pill ${one.status === "in_progress" ? "done" : ""}`}
+                >
                   {STATUS[one.status] ?? one.status}
                 </span>
               </div>
               <p>{one.reason}</p>
               {one.eta_text && <p>{one.eta_text}</p>}
-              <p className="muted">👷 {one.assignee_names.join(", ") || "ยังไม่มีคนรับ"}</p>
+              <p className="muted">
+                👷 {one.assignee_names.join(", ") || "ยังไม่มีคนรับ"}
+              </p>
+            </article>
+          ))}
+        </section>
+
+        <section className="column">
+          <h2>
+            เสร็จแล้วกะนี้ <span className="count">{finished.length}</span>
+          </h2>
+          {finished.length === 0 && (
+            <p className="muted">ยังไม่มีงานที่ปิดในกะนี้</p>
+          )}
+          {finished.map((one) => (
+            <article className="ticket" key={`done-${one.ref}`}>
+              <div className="ticket-head">
+                <span className="machine-small">{one.machine_id}</span>
+                <span className="pill done">{one.outcome}</span>
+              </div>
+              <p>{one.reason}</p>
+              <p className="muted">
+                👷 {one.by_names.join(", ")} · ปิดเมื่อ {one.closed_when}
+              </p>
+              {one.note && <p className="muted">บันทึก: {one.note}</p>}
             </article>
           ))}
         </section>

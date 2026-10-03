@@ -47,6 +47,7 @@ from pdm.dispatch.domain import (
     capacity_left,
     dispatch,
     downtime_or_unknown,
+    put_down_by,
     ranking,
 )
 from pdm.platform.config.loader import Config
@@ -212,6 +213,9 @@ class _Job:
     required_skill: SkillId | None
     rate: float
     score: float
+    # Who put this job down after a handover; the solver does not hand it back
+    # to them (ADR-126), as greedy does not.
+    excluded: frozenset[UserId] = frozenset()
 
 
 def _job(item: Queued, score: float, config: Config) -> _Job:
@@ -230,6 +234,7 @@ def _job(item: Queued, score: float, config: Config) -> _Job:
         required_skill=item.order.required_skill,
         rate=rate,
         score=score,
+        excluded=put_down_by(item.order),
     )
 
 
@@ -313,7 +318,8 @@ def _build(
         can = [
             person
             for person in available
-            if job.required_skill is None or person.can_perform(job.required_skill)
+            if (job.required_skill is None or person.can_perform(job.required_skill))
+            and person.user not in job.excluded
         ]
         skilled[job.ref] = tuple(person.user for person in can)
 

@@ -748,6 +748,21 @@ def close(
         return cur.rowcount == 1
 
 
+def closed_since(conn: Connection[Any], since: datetime) -> list[tuple[str, datetime, WorkOrder]]:
+    """Orders closed at or after `since`, newest first (ADR-126)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT work_order_ref, closed_at, {_COLUMNS} FROM work_order
+             WHERE status = 'closed' AND closed_at >= %s
+             ORDER BY closed_at DESC, work_order_ref DESC
+            """,
+            (since,),
+        )
+        rows = cur.fetchall()
+    return [(str(row["work_order_ref"]), row["closed_at"], _to_order(dict(row))) for row in rows]
+
+
 def notes_from_the_floor(conn: Connection[Any], *, limit: int) -> list[dict[str, Any]]:
     """The notes technicians wrote when they closed a job, newest first (ADR-117).
 

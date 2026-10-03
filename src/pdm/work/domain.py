@@ -178,7 +178,9 @@ def reason_for(finding: Finding, wording: Wording = _PLAIN) -> str:
     return f"{where} · ยังไม่เกินเกณฑ์ แต่แนวโน้มชี้ว่าจะถึงเกณฑ์{unknown}"
 
 
-def when_expected(order: WorkOrder, wording: Wording = _PLAIN) -> str | None:
+def when_expected(
+    order: WorkOrder, wording: Wording = _PLAIN, *, now: datetime | None = None
+) -> str | None:
     """The crossing a predicted ticket expects, from its live fields (ADR-123).
 
     None for anything that is not a prediction. Both or nothing: the contract
@@ -188,6 +190,10 @@ def when_expected(order: WorkOrder, wording: Wording = _PLAIN) -> str | None:
         return None
     if order.eta is None or order.eta_confidence is None:
         return None
+    if now is not None and order.eta <= now:
+        # The expected crossing has passed with no detection yet. Saying it is
+        # "about" a time already gone was the third trial's first blocker.
+        return f"เลยเวลาที่คาดว่าจะถึงเกณฑ์แล้ว ({wording.day_and_clock(order.eta)}) ให้ตรวจเครื่องโดยเร็ว"
     return (
         f"คาดว่าจะถึงเกณฑ์ราว {wording.day_and_clock(order.eta)} "
         f"(คลาดเคลื่อนได้ ± {span(order.eta_confidence)})"
