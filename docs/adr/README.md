@@ -5,7 +5,7 @@ forced it, the decision, the reasoning, and what followed. Read in order, they
 are the design rationale for the system; read individually, each answers "why is
 this part shaped this way".
 
-057 was reserved for a record that was never written and the number was left unused. No count is written here: it went stale every time a record landed (ADR-090).
+057 was reserved for a record that was never written, and 111 to 114 were never merged; those numbers are left unused. No count is written here: it went stale every time a record landed (ADR-090).
 
 **These are append-only.** An ADR is never edited after the fact. Changing your
 mind means writing a new one that references the old, so the record shows what
@@ -115,7 +115,27 @@ entries replace parts of earlier ones, and both are kept.
 | [100](0100-a-procedure-that-runs-over-a-page-is-drafted-whole.md) | A procedure that runs over a page is drafted whole | 097 |
 | [101](0101-what-a-plant-install-needs-before-real-work.md) | **What a plant install needs before real work depends on it** | 011, 036, 071 |
 | [102](0102-what-the-floor-trial-found.md) | **What the floor audit found, and an empty snapshot filled once** | 018, 041 |
+| [103](0103-drafts-that-must-not-become-repairs.md) | Drafts that must not become repairs | |
+| [104](0104-numbers-the-report-can-stand-on.md) | Numbers the report can stand on | |
 | [105](0105-one-fault-one-ticket-while-the-shift-lead-decides.md) | **One fault, one ticket, while the shift lead decides** | 023, 071 |
+| [106](0106-a-printed-eta-says-how-far-to-trust-it.md) | A printed ETA says how far to trust it | |
+| [107](0107-dispatch-at-its-edges.md) | Dispatch at its edges, and what CP-SAT reaches in five seconds | |
+| [108](0108-what-a-draft-must-keep.md) | What a draft must keep | |
+| [109](0109-scheduled-work-stays-under-its-ceiling.md) | Scheduled work stays under its ceiling | |
+| [110](0110-cp-sat-starts-from-greedy.md) | CP-SAT starts from the greedy plan, on a budget every machine agrees on | |
+| [115](0115-a-ticket-carries-the-live-forecast.md) | A ticket carries the live forecast | |
+| [116](0116-a-failure-rate-needs-a-week.md) | A failure rate needs a week of history | |
+| [117](0117-what-the-technicians-wrote-reaches-the-engineer.md) | What the technicians wrote reaches the engineer | |
+| [118](0118-a-ticket-without-steps-names-where-to-look.md) | A ticket without steps names where to look | |
+| [119](0119-a-finished-job-ends-its-finding.md) | A finished job ends its Finding | |
+| [120](0120-the-shift-leads-board-after-the-second-trial.md) | The shift lead's board after the second trial | |
+| [121](0121-drafting-starts-by-itself-and-must-be-about-the-symptom.md) | Drafting starts by itself, and a draft must be about the symptom | |
+| [122](0122-a-reporter-sees-their-reports-and-the-line-reads-in-thai.md) | A reporter sees their reports, and the line reads in Thai | |
+| [123](0123-a-card-shows-one-crossing-time.md) | A card shows one crossing time | |
+| [124](0124-a-stopped-machine-does-not-fail-again.md) | A stopped machine does not fail again | |
+| [125](0125-a-spike-does-not-steer-a-forecast.md) | A spike does not steer a forecast | |
+| [126](0126-what-the-third-trial-found.md) | What the third trial found | |
+| [127](0127-a-waiting-pm-job-costs-nothing.md) | A waiting PM job costs nothing | |
 
 ## The invariants these records cite
 
