@@ -267,3 +267,12 @@ class TestTheConclusionsFollowTheNumbers:
     def test_a_smaller_roster_is_a_row_in_the_sweep(self) -> None:
         """ADR-124: one technician is where the policies differ at all."""
         assert 1 in ROSTER_SWEEP
+
+    def test_unstarted_tickets_are_counted_and_never_exceed_those_raised(
+        self, found: Diagnosis
+    ) -> None:
+        """The waiting column sums started tickets only; the unstarted count is
+        what keeps work never reached from reading as work reached sooner."""
+        for _, under_fifo, under_gate in found.machines:
+            assert 0 <= under_fifo.unstarted <= under_fifo.tickets
+            assert 0 <= under_gate.unstarted <= under_gate.tickets
