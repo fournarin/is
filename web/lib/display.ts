@@ -51,16 +51,21 @@ export function bandFor(one: Ticket): Band {
     }
     return { label: "ยังไม่เสีย · วางแผนซ่อม", tone: "planned" };
   }
+  // What kind of trouble first, then how much it matters. A bare "ปกติ" on a
+  // fan already past its threshold read as "the machine is fine" (fourth
+  // trial); the label never describes the machine as normal.
+  const what =
+    one.origin === "manual" ? "แจ้งซ่อม" : one.finding_kind === "detected" ? "เกินเกณฑ์แล้ว" : null;
   if (one.severity === "critical" || one.severity === "high") {
-    return { label: "ด่วน", tone: "urgent" };
+    return { label: what ? `${what} · ด่วน` : "ด่วน", tone: "urgent" };
   }
   if (one.origin === "scheduled") {
     return { label: "บำรุงรักษาตามแผน", tone: "low" };
   }
   if (one.severity === "medium") {
-    return { label: "ปกติ", tone: "normal" };
+    return { label: what ? `${what} · ความสำคัญปานกลาง` : "ความสำคัญปานกลาง", tone: "normal" };
   }
-  return { label: "ไม่เร่ง", tone: "low" };
+  return { label: what ? `${what} · ไม่เร่ง` : "ไม่เร่ง", tone: "low" };
 }
 
 /** "เห็นมาแล้ว 34 ครั้ง ตั้งแต่ 08:12", or null when there is nothing to count. */

@@ -137,6 +137,7 @@ entries replace parts of earlier ones, and both are kept.
 | [126](0126-what-the-third-trial-found.md) | What the third trial found | |
 | [127](0127-a-waiting-pm-job-costs-nothing.md) | A waiting PM job costs nothing | |
 | [128](0128-the-round-plans-the-shift.md) | The round plans the shift | |
+| [129](0129-a-plan-makes-no-claim-about-when.md) | A plan makes no claim about when | |
 
 ## The invariants these records cite
 

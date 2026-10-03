@@ -395,7 +395,10 @@ def _current_of(
     ]
     if not standing:
         return CurrentContribution(
-            reason=f"ตอนนี้ {machine_id} ไม่มีเรื่องค้าง",
+            # Findings only: a report or a PM job on this machine is not in
+            # this half of the reading, and "nothing pending" beside an open
+            # urgent report was the fourth trial's third blocker.
+            reason=f"ตอนนี้ {machine_id} ไม่มีสัญญาณผิดปกติจากเซนเซอร์ค้างอยู่",
         )
 
     acknowledged = [f for f in standing if f.status is FindingStatus.ACKNOWLEDGED]

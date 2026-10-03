@@ -194,7 +194,7 @@ class TestTheOptimum:
         plan = _planned(queue, technicians=people, roster=roster)
 
         first = plan.placed[0]
-        assert first.priority_reason.startswith("แผนของกะให้เริ่มงานนี้ทันที · ")
+        assert first.priority_reason.startswith("จัดตามแผนทั้งกะ · ")
         assert first.terms.downtime > 0
         assert first.facts.downtime_units > 0
 

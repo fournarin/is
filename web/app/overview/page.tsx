@@ -142,14 +142,15 @@ export default async function OverviewPage() {
           )}
 
           <div className="card">
-            <h3>มีเรื่องค้างอยู่ตอนนี้</h3>
+            <h3>สัญญาณผิดปกติที่ค้างอยู่ตอนนี้</h3>
+            <p className="muted">นับเฉพาะสิ่งที่เซนเซอร์ตรวจพบ งานจากการแจ้งซ่อมและงานตามแผนดูที่กระดานงาน</p>
             <ol className="health-list">
               {health.by_now.map((row) => (
                 <li key={`now-${row.machine_id}`}>
                   <strong>{row.machine_id}</strong>{" "}
                   <span className="muted">
                     {row.now.open_findings === 0
-                      ? "ไม่มีอะไรค้าง"
+                      ? "ไม่มีสัญญาณผิดปกติ"
                       : `${row.now.open_findings} เรื่อง · หนักสุดระดับ${SEVERITY[row.now.highest_severity ?? ""] ?? "-"}`}
                   </span>
                   <br />

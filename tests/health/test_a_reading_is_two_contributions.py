@@ -286,7 +286,7 @@ class TestWhatTheMachineIsSayingNow:
         current = assess((MC,), now=NOW)[0].now
         assert current.open_findings == 0
         assert current.highest_severity is None
-        assert "ไม่มีเรื่องค้าง" in current.reason
+        assert "ไม่มีสัญญาณผิดปกติ" in current.reason
 
     def test_acknowledged_findings_still_stand(self) -> None:
         """Somebody having seen it does not make the machine well."""

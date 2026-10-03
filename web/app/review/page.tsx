@@ -28,7 +28,7 @@ const OUTCOME: Record<string, string> = {
 export default async function ReviewQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ model?: string }>;
+  searchParams: Promise<{ model?: string; done?: string }>;
 }) {
   const account = await requireAccount();
   if (account.role !== "engineer" && account.role !== "supervisor") {
@@ -40,7 +40,17 @@ export default async function ReviewQueuePage({
   }
 
   const groups = groupByModel(await reviewQueue());
-  const asked = (await searchParams).model;
+  const { model: asked, done } = await searchParams;
+  // What the last press did, said once on the page it lands on: the fourth
+  // trial's engineer approved and dismissed and was shown nothing either time.
+  const doneLine =
+    done === "approved"
+      ? "อนุมัติแล้ว ใบงานที่เปิดอยู่ของอาการนี้ซึ่งยังไม่มีขั้นตอนจะได้ขั้นตอนชุดนี้"
+      : done === "returned"
+        ? "ตีกลับแล้ว ระบบจะร่างใหม่โดยใช้สิ่งที่คุณเขียนเป็นคำถาม"
+        : done === "dismissed"
+          ? "ปิดใบนี้แล้ว เหตุผลของคุณถูกบันทึกไว้"
+          : null;
   const shown =
     groups.find((group) => group.machine_model === asked) ?? groups[0];
 
@@ -52,6 +62,8 @@ export default async function ReviewQueuePage({
           <span className="muted"> · {ROLE_NAMES[account.role]}</span>
         </span>
       </div>
+
+      {doneLine && <p className="recorded">{doneLine}</p>}
 
       {groups.length === 0 ? (
         <p className="card">

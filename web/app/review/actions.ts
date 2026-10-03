@@ -95,7 +95,7 @@ export async function approve(
     // rendering the engineer typed (ADR-102).
     return { error: await refusal(response), thai: form.getAll("thai").map(String) };
   }
-  redirect("/review");
+  redirect("/review?done=approved");
 }
 
 /**
@@ -125,7 +125,7 @@ export async function sendBack(
     // rendering the engineer typed (ADR-102).
     return { error: await refusal(response), thai: form.getAll("thai").map(String) };
   }
-  redirect("/review");
+  redirect("/review?done=returned");
 }
 
 /**
@@ -154,5 +154,5 @@ export async function dismiss(
     // rendering the engineer typed (ADR-102).
     return { error: await refusal(response), thai: form.getAll("thai").map(String) };
   }
-  redirect("/review");
+  redirect("/review?done=dismissed");
 }
