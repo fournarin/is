@@ -459,6 +459,11 @@ def main() -> None:
     ref = ref_from(steps)
     close_page = get(f"/work/{ref}/close")
     expect("ปิดงาน" in close_page, "the close screen is reachable from the steps")
+    early = readable(get(f"/work/{ref}/close?reached=1"))
+    expect(
+        "ยังเหลืออีก 2 ขั้น" in early,
+        "closing from step 1 of 3 says two were never reached (fourth trial)",
+    )
     expect("ไม่พบปัญหา" in close_page, "and offers the false-alarm outcome (ADR-022)")
     expect(
         "ไม่ต้องกรอกเวลาที่ใช้" in readable(close_page),

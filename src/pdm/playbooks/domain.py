@@ -199,6 +199,9 @@ class PendingForPair(BaseModel):
     machine_model: MachineModel
     waiting: int = Field(ge=1)
     oldest: datetime
+    # Of those, how many found nothing in the manuals: a decision for the
+    # engineer, not a draft to approve (fourth trial).
+    not_found: int = Field(default=0, ge=0)
 
 
 def primary_source(steps: tuple[PlaybookStep, ...]) -> tuple[DocumentId, int]:

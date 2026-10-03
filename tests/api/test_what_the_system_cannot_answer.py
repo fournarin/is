@@ -208,6 +208,28 @@ class TestWhatIsRankedAndWhy:
         assert [row.symptom_code for row in ranked] == [DRAFTED_ONLY]
         assert ranked[0].proposals_waiting == 2
 
+    def test_a_not_found_result_is_counted_apart_from_drafts(self) -> None:
+        """Fourth trial: a "not found" counted among drafts waiting read as
+        something to approve. It is carried separately, on the gap and on the
+        model's queue, so the screen can say which it is."""
+        pending = [
+            PendingForPair(
+                symptom_code=DRAFTED_ONLY,
+                machine_model=R2000IC,
+                waiting=3,
+                oldest=START,
+                not_found=1,
+            )
+        ]
+        ranked, _ = rank_gaps(
+            [seen(DRAFTED_ONLY, MC_012)], model_of=model_of, served=set(), pending=pending
+        )
+
+        assert ranked[0].proposals_waiting == 3
+        assert ranked[0].proposals_not_found == 1
+        (queue,) = group_by_model(pending)
+        assert (queue.waiting, queue.not_found) == (3, 1)
+
     def test_a_machine_that_left_the_layout_is_named_not_dropped(self) -> None:
         """ADR-048 section 3: an unknown machine is counted and reported.
 

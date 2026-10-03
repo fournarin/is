@@ -141,7 +141,12 @@ export default async function BoardPage({
               รอบถัดไป (ไม่เกิน 5 นาที) ระบบจะเสนออีก {round.placed.length} งาน
             </p>
           )}
-          {waiting.map((one) => {
+          {/* Most important first, by the score that ranked them. In arrival
+              order an urgent report losing 180 units sat third, under a
+              medium job losing 37, with nothing saying why (fourth trial). */}
+          {[...waiting]
+            .sort((a, b) => b.priority_score - a.priority_score || a.ref.localeCompare(b.ref))
+            .map((one) => {
             const job = tickets.get(one.ref)!;
             const band = bandFor(job);
             return (

@@ -112,6 +112,9 @@ class SymptomGap(BaseModel):
     # as "nobody has done anything", and the button posts a second drafting job
     # for work that is already queued behind the one GPU (ADR-029, ADR-040).
     proposals_waiting: int = 0
+    # Of those, how many found nothing in the manuals (fourth trial: counted
+    # as drafts waiting, they read as something to approve).
+    proposals_not_found: int = 0
 
 
 class ModelQueue(BaseModel):
@@ -127,6 +130,8 @@ class ModelQueue(BaseModel):
     machine_model: MachineModel
     waiting: int
     oldest: datetime
+    # Of `waiting`, how many are "not found" results with nothing to approve.
+    not_found: int = 0
 
 
 class FlaggedPlaybook(BaseModel):
@@ -234,6 +239,7 @@ def rank_gaps(
     worth four events, not four gaps - the playbook that answers it is one row.
     """
     waiting = {(row.symptom_code, row.machine_model): row.waiting for row in pending}
+    nothing = {(row.symptom_code, row.machine_model): row.not_found for row in pending}
     folded: dict[tuple[SymptomCode, MachineModel], _Fold] = {}
     unplaced: set[MachineId] = set()
 
@@ -272,6 +278,7 @@ def rank_gaps(
             first_seen=gathered.first_seen,
             last_seen=gathered.last_seen,
             proposals_waiting=waiting.get((symptom_code, model), 0),
+            proposals_not_found=nothing.get((symptom_code, model), 0),
         )
         for (symptom_code, model), gathered in folded.items()
     ]
@@ -298,13 +305,17 @@ def group_by_model(pending: Iterable[PendingForPair]) -> list[ModelQueue]:
         current = counted.get(row.machine_model)
         if current is None:
             counted[row.machine_model] = ModelQueue(
-                machine_model=row.machine_model, waiting=row.waiting, oldest=row.oldest
+                machine_model=row.machine_model,
+                waiting=row.waiting,
+                oldest=row.oldest,
+                not_found=row.not_found,
             )
             continue
         counted[row.machine_model] = ModelQueue(
             machine_model=row.machine_model,
             waiting=current.waiting + row.waiting,
             oldest=min(current.oldest, row.oldest),
+            not_found=current.not_found + row.not_found,
         )
     # Oldest queue first: the model nobody has looked at for three weeks is the
     # one the screen should name, not the one whose name sorts first.
