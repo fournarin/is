@@ -75,8 +75,8 @@ def sign_test(differences: list[float]) -> float:
     count = positive + negative
     if count == 0:
         return 1.0
-    tail = sum(math.comb(count, k) for k in range(min(positive, negative) + 1)) / 2**count
-    return min(1.0, 2 * tail)
+    tail: float = sum(math.comb(count, k) for k in range(min(positive, negative) + 1)) / 2**count
+    return min(1.0, 2.0 * tail)
 
 
 def wilcoxon(differences: list[float]) -> float:
@@ -114,7 +114,8 @@ def wilcoxon(differences: list[float]) -> float:
     centre = total / 2
     distance = abs(observed - centre)
     extreme = sum(count for value, count in enumerate(ways) if abs(value - centre) >= distance)
-    return min(1.0, extreme / combinations)
+    share: float = extreme / combinations
+    return min(1.0, share)
 
 
 def holm(p_values: list[float]) -> list[float]:

@@ -29,7 +29,7 @@ from pdm.contracts import UserId  # noqa: E402
 from pdm.platform.config import load_config  # noqa: E402
 from pdm.sim import run  # noqa: E402
 from pdm.sim.scenarios import LINE_A_ONE_SHIFT  # noqa: E402
-from scripts.compare_policies import GateAndScore, compare, with_roster  # noqa: E402
+from scripts.compare_policies import GateAndScore, compare  # noqa: E402
 from scripts.diagnose_comparison import (  # noqa: E402
     ROSTER_SWEEP,
     Diagnosis,
