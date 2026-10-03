@@ -163,3 +163,19 @@ What it says:
 - **It costs three correct drafts when the description is in another language**
   (EV-104, EV-105, EV-134 in English with a Thai description): they become "not
   found", the safe failure. The dev split shows no cost, so no floor was tuned.
+
+## The real manuals under the symptom check - 4 October 2026
+
+The shipped drafting tests a page against the symptom as well as the question
+(ADR-121), and the real manuals had only been measured before it. Re-run with
+`scripts/measure_rag.py realdocs --rerank --symptom` on `e666b23`, the
+description being the other language's query as in the section above:
+
+| run | test en | test th | unsafe drafts | answer page in top 3 (en / th) |
+|---|---:|---:|---:|---|
+| question only (re-run the same day) | 8/9 | 7/9 | 0 | 4/7 / 6/7 |
+| question + symptom description | **8/9** | **7/9** | **0** | 4/7 / 6/7 |
+
+Every outcome is the same, entry for entry: the second relevance test costs the
+real manuals nothing, unlike three English entries of the synthetic test split.
+The misses are still RD-03 in both languages and RD-01 in Thai, all "not found".
