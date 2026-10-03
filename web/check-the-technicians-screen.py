@@ -535,7 +535,12 @@ def main() -> None:
     expect("งานของฉัน" in handed, "with a note it goes through")
 
     print("\n8. the manual opens at a page rather than downloading whole")
-    document = re.search(r'href="/manual/([^"#]+)#page=(\d+)"', steps)
+    # The PDF link is on the in-job manual page now, one tap past the step
+    # (the third trial); the range behaviour behind it is unchanged.
+    reading = re.search(r'href="(/work/[^"]+/manual\?doc=[^"]+?page=142[^"]*)"', steps)
+    assert reading is not None
+    on_the_page = get(htmllib.unescape(reading.group(1)))
+    document = re.search(r'href="/manual/([^"#]+)#page=(\d+)"', on_the_page)
     assert document is not None
     request = urllib.request.Request(f"{WEB}/manual/{document.group(1)}")
     request.add_header("range", "bytes=0-99")
