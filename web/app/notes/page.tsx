@@ -54,7 +54,11 @@ export default async function NotesPage() {
         groups.map(([symptom, list]) => (
           <article className="card" key={symptom}>
             <h2>
-              {symptom} <span className="muted">· {list.length} บันทึก</span>
+              {list[0]?.symptom_title ?? symptom}{" "}
+              <span className="muted">
+                · {list[0]?.symptom_title ? `${symptom} · ` : ""}
+                {list.length} บันทึก
+              </span>
             </h2>
             <ul>
               {list.map((one) => (

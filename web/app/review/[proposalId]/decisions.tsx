@@ -43,8 +43,8 @@ export function Decisions({
         // Nothing to approve: the API refuses it (409), and the screen then
         // said "ใบนี้ถูกตัดสินไปแล้ว", which was untrue (2026-09-29).
         <section className="card">
-          <h2>อนุมัติ</h2>
-          <p>ร่างนี้ไม่มีขั้นตอนให้อนุมัติ — ตีกลับพร้อมคำถามใหม่ หรือปิดใบนี้พร้อมเหตุผล</p>
+          <h2>ไม่มีขั้นตอนให้อนุมัติ</h2>
+          <p>ระบบค้นคู่มือแล้วไม่พบเรื่องนี้ ตีกลับพร้อมคำถามที่ชัดขึ้น หรือปิดใบนี้พร้อมเหตุผลถ้าคู่มือไม่มีเรื่องนี้จริง</p>
         </section>
       ) : (
         <section className="card">

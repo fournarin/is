@@ -71,7 +71,7 @@ export default async function LoopsPage() {
             <article className="card" key={`${line.symptom_code}/${line.machine_model}`}>
               <div className="screen-head">
                 <h2>
-                  {line.symptom_code} · {line.machine_model}
+                  {line.symptom_title ?? line.symptom_code} · {line.machine_model}
                 </h2>
                 <span className="muted">
                   {one.current_minutes} → {one.proposed_minutes} นาที
@@ -114,7 +114,7 @@ export default async function LoopsPage() {
           <ul>
             {quiet.map((line) => (
               <li key={`${line.symptom_code}/${line.machine_model}`}>
-                {line.symptom_code} · {line.machine_model} — ตั้งไว้ {line.current_minutes} นาที ·
+                {line.symptom_title ?? line.symptom_code} · {line.machine_model} — ตั้งไว้ {line.current_minutes} นาที ·
                 ปิดแล้ว {line.closed_orders} ใบ
               </li>
             ))}
@@ -136,7 +136,7 @@ export default async function LoopsPage() {
           return (
             <article className="card" key={line.rule_id}>
               <div className="screen-head">
-                <h2>{line.rule_id}</h2>
+                <h2>{line.title ?? line.rule_id}</h2>
                 <span className="muted">
                   {one.current_threshold} → {one.proposed_threshold}
                 </span>
@@ -171,11 +171,11 @@ export default async function LoopsPage() {
       {refused.map((line) => (
         <article className="card" key={line.rule_id}>
           <div className="screen-head">
-            <h2>{line.rule_id}</h2>
+            <h2>{line.title ?? line.rule_id}</h2>
             <span className="pending">{causeName(line)}</span>
           </div>
           <p className="muted">
-            {line.metric_name} · ยิงเมื่อ{line.comparison === "above" ? "เกิน" : "ต่ำกว่า"}{" "}
+            {line.machine_model} · {line.rule_id} · {line.metric_name} · ยิงเมื่อ{line.comparison === "above" ? "เกิน" : "ต่ำกว่า"}{" "}
             {line.current_threshold}
           </p>
           <p className={line.safety_critical ? "warning" : "reason"}>{line.refusal!.reason}</p>

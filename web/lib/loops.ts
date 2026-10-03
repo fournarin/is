@@ -30,6 +30,8 @@ export type EstimateProposal = {
 };
 
 export type EstimateLine = {
+  // The plant's name for the symptom (ADR-126); the code alone is not a name.
+  symptom_title?: string | null;
   symptom_code: string;
   machine_model: string;
   current_minutes: number;
@@ -66,6 +68,8 @@ export type NoProposal = {
 };
 
 export type ThresholdLine = {
+  // What the rule watches for, from rules.yaml.
+  title?: string | null;
   rule_id: string;
   machine_model: string;
   metric_name: string;

@@ -60,10 +60,10 @@ The pre-check found no live ticket carrying approved steps.
 | 7 | shift lead | board vs overview | queued work invisible until a round | fixed: a line under the waiting column |
 | 8 | shift lead | board | a closed job vanished with no outcome or note | fixed: "เสร็จแล้วกะนี้" |
 | 9 | engineer | review | "SYM-014" with no Thai name | fixed |
-| 10 | engineer | review, gaps | a "not found" result listed as awaiting approval | partly: the gaps wording |
+| 10 | engineer | review, gaps | a "not found" result listed as awaiting approval | fixed: its own section, "คู่มือไม่มีคำตอบ ต้องตัดสินใจ" |
 | 12 | everyone | after an action | no confirmation | fixed for close and handover |
-| 13 | technician | steps | PDF in a new tab; PM called a symptom | partly: the PM wording |
-| 11, 14-16 | - | - | cosmetic | open |
+| 13 | technician | steps | PDF in a new tab; PM called a symptom | fixed: the cited page reads inside the job, one tap back to the step |
+| 11, 14-16 | engineer | loops, notes | rule ids and SYM codes where names belong | fixed: names from `rules.yaml`, codes kept beside them |
 
 Worked well and kept: the one-card technician screen, the no-steps screen's "do
 not guess" with a cited page, the engineer's figure check refusing a wrong Thai

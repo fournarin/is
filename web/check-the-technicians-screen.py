@@ -426,8 +426,14 @@ def main() -> None:
     steps = submit("/work", form_with(queue, "รับงานและเริ่มทำ"))
     expect("ขั้นที่ 1 จาก 3" in readable(steps), "the first step of three")
     expect(STEPS[0] in steps, "and it is the first step of the playbook that was snapshotted")
-    expect("เปิดคู่มือหน้า 142" in readable(steps), "with the page it came from")
-    expect("/manual/" in steps, "opened through this server, not straight at the API (ADR-058)")
+    expect("อ่านคู่มือหน้า 142" in readable(steps), "with the page it came from")
+    cited = re.search(r'href="(/work/[^"]+/manual\?doc=[^"]+?page=142[^"]*)"', steps)
+    expect(cited is not None, "read inside the job, not in another tab (third trial)")
+    if cited is not None:
+        page = get(htmllib.unescape(cited.group(1)))
+        expect("หน้า 142" in readable(page), "the cited page opens with its number")
+        expect("กลับไปขั้นที่ 1" in readable(page), "one tap back to the step it came from")
+        expect("/manual/" in page, "and the PDF is still there, through this server (ADR-058)")
 
     print("\n3. stepping through")
     second = get("/work/" + ref_from(steps) + "/steps?step=2")
@@ -438,12 +444,13 @@ def main() -> None:
 
     print("\n3b. a step that names another page lets the technician open it")
     expect(
-        re.search(r'href="/manual/[^"#]+#page=2"', second) is not None,
+        re.search(r'href="/work/[^"]+/manual\?doc=[^"]+?page=2(&amp;|&)step=2"', second)
+        is not None,
         "step two says page 2, and page 2 of the same manual is one tap away",
     )
-    expect("เปิดหน้า 2 ที่ขั้นนี้อ้างถึง" in readable(second), "labelled as the page the step names")
+    expect("อ่านหน้า 2 ที่ขั้นนี้อ้างถึง" in readable(second), "labelled as the page the step names")
     expect(
-        re.search(r'href="/manual/[^"#]+#page=900"', last) is None,
+        re.search(r"page=900", last) is None,
         "page 900 was never read from the manual, so it is not offered as a link",
     )
     expect("หน้า 900 ที่ขั้นนี้อ้างถึง ไม่มีในคู่มือที่ระบบอ่านไว้" in readable(last), "and the screen says so")
