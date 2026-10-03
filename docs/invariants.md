@@ -39,7 +39,7 @@ trusting this page for.
 | 7 | A rule naming a `component` label its machine model does not declare stops the configuration loading | [ADR-016](adr/0016-component-is-a-config-label-not-a-database-entity.md) | validation at boot, `platform/config/loader.py` |
 | 8 | One rule firing repeatedly does not create a second Finding: one live record per (machine, rule), updated | [ADR-023](adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md) | `triggers/domain.py`, and a partial unique index, `one_live_finding_per_machine_and_rule` in `migrations/versions/0007_findings.py`, that refuses a second live Finding whoever writes it; tested by firing a hundred times and requiring one record |
 | 9 | A rule of **higher** severity is not suppressed while a repair is open | [ADR-023](adr/0023-findings-have-a-lifecycle-and-a-suppression-window.md) | suppression is keyed by rule rather than by machine, so a different rule was never suppressed; `tests/triggers/test_rule_evaluation.py::TestSuppressionDuringRepair` |
-| 10 | `dispatch()` - the runtime round, and **not** `schedule()`, the CP-SAT planner beside it - returns the same answer for the same input and touches no database | design note 7 | `.importlinter`: *domain.py must not reach the database or a repo*; `contracts/` is frozen; `now` is an argument. The planner's budget is wall-clock seconds and is outside the invariant, stated rather than fixed ([ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) §6); see [Known gaps](#known-gaps) |
+| 10 | `dispatch()` (3C) returns the same answer for the same input and touches no database. `schedule()` (3D), the deployed round since [ADR-128](adr/0128-the-round-plans-the-shift.md), starts from `dispatch()`'s answer and searches on a deterministic budget, so it returns the same answer as long as that budget finishes inside the wall-clock safety cap | design note 7 | `.importlinter`: *domain.py must not reach the database or a repo*; `contracts/` is frozen; `now` is an argument. The planner's search is bounded by deterministic time, not the clock ([ADR-110](adr/0110-cp-sat-starts-from-greedy.md)); a round that hits the 30 s cap is the one case outside the invariant, stated rather than fixed ([ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) §6); see [Known gaps](#known-gaps) |
 | 11 | No improvement loop may propose that a safety-linked threshold be loosened, however many false alarms it counted | [ADR-022](adr/0022-every-improvement-loop-proposes-rather-than-changes.md), [ADR-073](adr/0073-what-a-false-alarm-may-propose-about-a-threshold.md) | `work/thresholds.py::propose` refuses a rule marked safety-critical and names `SAFETY_CRITICAL`, tested at the function. `GET /loops/thresholds` (`api/loops.py`, ADR-087) calls it with `rule.safety_critical` from `rules.yaml`, and nothing writes a proposal back |
 | 12 | `worker-runtime` cannot pick up an authoring job at all | [ADR-026](adr/0026-split-the-worker-into-two-roles.md) | a `job_class` filter in the claim query, `platform/jobs/repo.py`, rather than a convention |
 | 13 | Every skill label a playbook or technician names is in the vocabulary, and every machine a rule can fire on is in the topology | [ADR-027](adr/0027-operational-data-contracts.md) | **Three mechanisms, none of them at boot** ([ADR-084](adr/0084-two-invariants-get-a-mechanism-and-two-get-narrower-wording.md) §§3-4). A playbook's skill is checked when it is drafted (`authoring/drafting.py`) and when it is approved (`playbooks/service.py`, which stands down when no vocabulary is configured). A technician's skills are checked where a technician is written: `dispatch/repo.py::add_technician` takes the vocabulary and raises `SkillNotInTheVocabulary`, broken on purpose in `tests/dispatch/test_a_technician_holds_a_skill_the_plant_declares.py`. The machine half is held by the shape of `plant.yaml` - a machine is declared inside a station and nowhere else - together with the loader refusing a rule whose model no machine uses; the boot check that could never fire is gone, and two tests in `tests/platform/test_config.py` stand in its place |
@@ -140,20 +140,20 @@ this list; what remains below is what is still true.
   `datetime.today()`, `time.time_ns()`, `time.monotonic_ns()` and aliased
   imports such as `from datetime import datetime as dt`. None of these appear
   in `src/` today.
-- **Invariant 10 covers `dispatch()`, not `schedule()`.** The runtime round
-  calls `dispatch()` only. The CP-SAT planner in `dispatch/solver.py`, which the
-  explainer and `scripts/compare_policies.py` call, is outside the invariant -
-  now asserted rather than described, by
+- **Invariant 10's import contract covers `dispatch()`, not `schedule()`.**
+  Since [ADR-128](adr/0128-the-round-plans-the-shift.md) the runtime round calls
+  `schedule()` (CP-SAT, `dispatch/solver.py`) by default, chosen by
+  `policy.dispatch.planner`. The solver module is still outside the import
+  contract - asserted rather than described, by
   `test_schedule_is_outside_the_invariant_10_contract`, which plants
   `import psycopg` in a mirrored `dispatch/solver.py` and requires the contract
-  to stay green. The day somebody widens the contract, that test fails and this
-  paragraph is what has to change.
-  Its time budget is wall-clock seconds, which is why one row of the comparison
-  changed between machines
-  ([reproducibility](results/reproducibility.md), entry 28 of
-  [decisions-to-defend](decisions-to-defend.md)). The first note above holds for
-  the simulator's use of `dispatch()`, but it does not make the comparison
-  byte-reproducible on its own.
+  to stay green. Its search has been bounded by deterministic time since
+  [ADR-110](adr/0110-cp-sat-starts-from-greedy.md), and on 3 October 2026 all
+  9,000 rows of the three comparison grids came back byte for byte on a clean
+  checkout ([results README](results/README.md)). What remains outside the
+  invariant is a round that hits the 30-second wall-clock safety cap before the
+  budget is spent: its plan depends on the machine. Nothing measured so far has
+  come near it (1.4 to 8.6 s at 10 to 200 orders, `results/solver-budget.md`).
 
 ## Where a claim here should be checked
 
