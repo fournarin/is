@@ -409,6 +409,31 @@ class TestWhatTheCodeReviewFound:
         assert "ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ" in response.json()["detail"]
         assert playbooks.get(conn, SYM, R2000IC) is None
 
+    def test_the_approver_can_give_each_tool_in_thai_and_pick_the_skill_by_name(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        """ADR-130: the tools beside the manual's words, and the skill offered as
+        the plant names it rather than typed as an id."""
+        _log_in(client, Role.ENGINEER)
+        pending = client.get(f"/playbooks/queue/{setup['proposal_id']}").json()
+        assert {"skill": "robot_mechanical", "name": "ช่างกลหุ่นยนต์"} in pending["skills"]
+        tools = pending["tools"]
+        if not tools:
+            pytest.skip("this fixture's draft lists no tools")
+        thai = ["" for _ in tools]
+        thai[0] = "เครื่องมือ " + " ".join(re.findall(r"\d[\d.\-]*\s*(?:Nm|mm|N)?", tools[0]))
+
+        response = client.post(
+            f"/playbooks/queue/{setup['proposal_id']}/approve",
+            json={"thai_tools": thai},
+        )
+
+        assert response.status_code == 200, response.text
+        served = playbooks.get(conn, SYM, R2000IC)
+        assert served is not None
+        assert served[0].tools_th == tuple(thai)
+        assert served[0].tools == tuple(tools)
+
 
 class TestAskingForADraft:
     """The other half of the gap: nothing used to enqueue anything."""

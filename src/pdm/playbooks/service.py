@@ -125,6 +125,7 @@ class PlaybookStore:
         note: str | None = None,
         rewritten_steps: tuple[str, ...] | None = None,
         thai_steps: tuple[str, ...] | None = None,
+        thai_tools: tuple[str, ...] | None = None,
     ) -> Playbook:
         """Apply a pending proposal to the served row.
 
@@ -173,6 +174,7 @@ class PlaybookStore:
         steps = apply_edits(pending.steps, edits)
         if thai_steps is not None:
             steps = in_thai(steps, thai_steps)
+        tools_th = tools_in_thai(pending.tools, thai_tools) if thai_tools is not None else ()
 
         skill = required_skill or pending.proposed_skill
         minutes = estimated_minutes or pending.proposed_minutes
@@ -217,6 +219,7 @@ class PlaybookStore:
             machine_model=pending.machine_model,
             steps=steps,
             tools=pending.tools,
+            tools_th=tools_th,
             estimated_minutes=minutes,
             required_skill=skill,
             # Not carried on the proposal: nothing drafts it yet, and ADR-025
@@ -344,22 +347,49 @@ def in_thai(steps: tuple[PlaybookStep, ...], thai: tuple[str, ...]) -> tuple[Pla
         if not text:
             rendered.append(step)
             continue
-        wanted, got = figures(step.text), figures(text)
-        if wanted != got:
-            missing = ", ".join(sorted(f"{one:f}" for one in wanted - got)) or "-"
-            extra = ", ".join(sorted(f"{one:f}" for one in got - wanted)) or "-"
-            raise ValueError(
-                f"ขั้นที่ {number}: ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ "
-                f"(ขาด {missing} · เกิน {extra}) ตรวจค่าแรงบิดและตัวเลขอีกครั้ง"
-            )
-        # A unit the manual states must come through unchanged (ADR-108): the
-        # figure check alone passed a torque of 3 Nm rendered as 3 มม.
-        lost = quantities(step.text) - quantities(text)
-        if lost:
-            named = ", ".join(sorted(f"{figure:f} {unit}" for figure, unit in lost))
-            raise ValueError(
-                f"ขั้นที่ {number}: หน่วยในคำแปลไม่ตรงกับต้นฉบับ ({named}) "
-                "ใส่ตัวเลขพร้อมหน่วยเดิม เช่น Nm หรือ นิวตันเมตร"
-            )
+        _same_figures(step.text, text, where=f"ขั้นที่ {number}")
         rendered.append(step.model_copy(update={"text_th": text}))
     return tuple(rendered)
+
+
+def tools_in_thai(tools: tuple[str, ...], thai: tuple[str, ...]) -> tuple[str, ...]:
+    """The approver's Thai for each tool, position for position (ADR-130).
+
+    The same rule as a step's Thai: "torque wrench 5-60 Nm" rendered as a
+    wrench of 5-50 is a technician fetching the wrong tool, so every figure and
+    every stated unit must come through. A blank keeps the manual's words.
+    """
+    if len(thai) != len(tools):
+        raise ValueError(
+            f"มีชื่อเครื่องมือภาษาไทย {len(thai)} รายการ แต่เครื่องมือมี {len(tools)} รายการ "
+            "ต้องใส่ตามลำดับให้ครบ (รายการไหนไม่แปลให้เว้นว่างไว้)"
+        )
+    rendered = []
+    for number, (tool, text) in enumerate(zip(tools, thai, strict=True), start=1):
+        text = text.strip()
+        if text:
+            _same_figures(tool, text, where=f"เครื่องมือรายการที่ {number}")
+        rendered.append(text)
+    # All blank is no rendering at all, not a list of blanks to carry around.
+    return tuple(rendered) if any(rendered) else ()
+
+
+def _same_figures(original: str, text: str, *, where: str) -> None:
+    """Every figure in the Thai is a figure in the original and the other way
+    round, and every unit the original states comes through (ADR-095, ADR-108)."""
+    wanted, got = figures(original), figures(text)
+    if wanted != got:
+        missing = ", ".join(sorted(f"{one:f}" for one in wanted - got)) or "-"
+        extra = ", ".join(sorted(f"{one:f}" for one in got - wanted)) or "-"
+        raise ValueError(
+            f"{where}: ตัวเลขในคำแปลไม่ตรงกับต้นฉบับ "
+            f"(ขาด {missing} · เกิน {extra}) ตรวจค่าแรงบิดและตัวเลขอีกครั้ง"
+        )
+    # A unit the manual states must come through unchanged (ADR-108): the
+    # figure check alone passed a torque of 3 Nm rendered as 3 มม.
+    lost = quantities(original) - quantities(text)
+    if lost:
+        named = ", ".join(sorted(f"{figure:f} {unit}" for figure, unit in lost))
+        raise ValueError(
+            f"{where}: หน่วยในคำแปลไม่ตรงกับต้นฉบับ ({named}) ใส่ตัวเลขพร้อมหน่วยเดิม เช่น Nm หรือ นิวตันเมตร"
+        )

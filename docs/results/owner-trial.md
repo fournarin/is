@@ -90,7 +90,9 @@ can work from the system (ADR-092).
 | 7 | shift lead | board | an urgent report losing 180 units sat third, under a medium job losing 37 | fixed: proposals listed by priority score |
 | 14 | technician | close | closing at step 1 of 6 said nothing about the rest | fixed: the close screen says how many steps were never reached |
 | 15 | engineer | gaps | a "not found" counted as a draft waiting for approval | fixed: counted and named apart |
-| 4-6, 8-11, 13, 17-20 | - | - | confusing or cosmetic: health ranking on hours of history, a stale "already open" list, English tool names, a PM with no page to look at, the skill as free text, `/loops` not counting predicted jobs, the operator's report list | open |
+| 10 | technician | card | tool names in English on an otherwise Thai card | fixed: ADR-130, tools rendered in Thai under the figure check |
+| 17 | engineer | review | the skill typed as an id | fixed: ADR-130, chosen by its Thai name |
+| 4-6, 8, 9, 11, 13, 18-20 | - | - | confusing or cosmetic: health ranking on hours of history, a stale "already open" list, a PM with no page to look at, `/loops` not counting predicted jobs, the operator's report list | open |
 
 Worked well and kept: the figure check refusing a wrong Thai torque, the
 technician's card and its banners, the no-steps screen, set aside and bring back,

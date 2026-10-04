@@ -27,11 +27,15 @@ export function Decisions({
   steps,
   proposedSkill,
   proposedMinutes,
+  tools,
+  skills,
 }: {
   proposalId: number;
   steps: string[];
   proposedSkill: string | null;
   proposedMinutes: number | null;
+  tools: string[];
+  skills: { skill: string; name: string }[];
 }) {
   const [approval, approveAction, approving] = useActionState(approve, UNDECIDED);
   const [returned, sendBackAction, sending] = useActionState(sendBack, UNDECIDED);
@@ -107,17 +111,36 @@ export function Decisions({
                 the approver is the only person who can say, and a value invented
                 anywhere else would carry the authority of the manual and the
                 provenance of nothing (ADR-037 section 8). */}
+            {/* ADR-130: the tools a technician fetches, in Thai, under the same
+                figure check as the steps - "5-60 Nm" must survive the rendering. */}
+            {tools.length > 0 && (
+              <fieldset>
+                <legend>ชื่อเครื่องมือภาษาไทยสำหรับช่าง</legend>
+                <p className="muted">ตัวเลขและหน่วยต้องตรงกับต้นฉบับ รายการไหนไม่แปลให้เว้นว่าง</p>
+                {tools.map((tool, index) => (
+                  <label className="field" key={index} style={{ padding: "0 0.75rem" }}>
+                    <span>
+                      <small className="muted">{tool}</small>
+                    </span>
+                    <input name="thai_tool" placeholder="ชื่อภาษาไทย" />
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {/* A choice from the plant's vocabulary, by its Thai name: the
+                fourth trial's engineer was asked to type an id like
+                "robot_mechanical", and anything else is refused (invariant 13). */}
             <label className="field">
-              <span>
-                ทักษะที่ต้องใช้
-                {proposedSkill !== null && <span className="muted"> · ร่างเสนอ {proposedSkill}</span>}
-              </span>
-              <input
-                name="required_skill"
-                defaultValue={proposedSkill ?? ""}
-                required={proposedSkill === null}
-                placeholder="เช่น robot_mechanical"
-              />
+              <span>ทักษะที่ต้องใช้</span>
+              <select name="required_skill" defaultValue={proposedSkill ?? ""} required>
+                {proposedSkill === null && <option value="">เลือกทักษะ</option>}
+                {skills.map((one) => (
+                  <option key={one.skill} value={one.skill}>
+                    {one.name}
+                    {one.skill === proposedSkill ? " (ร่างเสนอ)" : ""}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="field">
               <span>

@@ -6,7 +6,7 @@ import { NotYours, Shell } from "@/app/ui/shell";
 import { bandFor, minutesText, seenLine } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { currentRound, myWork, proposals, type Ticket } from "@/lib/work";
+import { currentRound, myWork, proposals, toolNames, type Ticket } from "@/lib/work";
 
 /**
  * One job, not a menu - the way a ride-hailing app hands a driver one trip
@@ -125,7 +125,7 @@ export default async function WorkPage({
           {now.tools.length > 0 && (
             <div className="fact" style={{ gridColumn: "1 / -1" }}>
               <span className="label">เครื่องมือที่ต้องเตรียม</span>
-              <span className="value">{now.tools.join(" · ")}</span>
+              <span className="value">{toolNames(now).join(" · ")}</span>
             </div>
           )}
           <div className="fact">

@@ -80,6 +80,8 @@ export type Ticket = {
   required_skill_name: string | null;
   station: string | null;
   tools: string[];
+  // The approver's Thai for each tool; "" where the manual's words stand (ADR-130).
+  tools_th?: string[];
   required_technicians: number;
   assignees: string[];
   playbook_warning: string | null;
@@ -202,4 +204,9 @@ export type Finished = {
 
 export async function finishedThisShift(): Promise<Finished[]> {
   return read<Finished[]>("/work-orders/finished");
+}
+
+/** Each tool in the approver's Thai where there is one, else as the manual wrote it. */
+export function toolNames(job: { tools: string[]; tools_th?: string[] }): string[] {
+  return job.tools.map((tool, index) => job.tools_th?.[index] || tool);
 }
