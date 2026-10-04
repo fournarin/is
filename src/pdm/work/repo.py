@@ -263,8 +263,9 @@ def assigned_to(conn: Connection[Any], user: UserId) -> list[tuple[str, WorkOrde
     so this ordering is the ranking as it was decided and not as it would be
     decided now. That is deliberate (design.md 6.2): a queue that re-ranked on
     every page load would re-order itself under a technician already walking to a
-    machine. `created_at` breaks ties so two jobs scored the same never swap
-    places between refreshes.
+    machine. The reference breaks ties so two jobs scored the same never swap
+    places between refreshes, and it is the board's tie-break too: the shift
+    lead and the technician see one order (ADR-131).
 
     `proposed` is absent, and that is the second half of ADR-071 §7: work nobody
     has confirmed is not this person's, and the query that fixes the disappearing
@@ -279,7 +280,7 @@ def assigned_to(conn: Connection[Any], user: UserId) -> list[tuple[str, WorkOrde
             SELECT work_order_ref, {_COLUMNS} FROM work_order
              WHERE status IN ('assigned', 'in_progress', 'handed_over')
                AND assignees @> %s
-             ORDER BY priority_score DESC, created_at, work_order_ref
+             ORDER BY priority_score DESC, work_order_ref
             """,
             (Jsonb([{"user": str(user)}]),),
         )
