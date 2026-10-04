@@ -87,11 +87,21 @@ export type FlaggedPlaybook = {
   review_reason: string | null;
 };
 
+export type PmGap = {
+  symptom_code: string;
+  machine_model: string;
+  title: string | null;
+  machines: string[];
+  proposals_waiting: number;
+};
+
 export type Gaps = {
   at: string;
   no_playbook: { count: number; rows: SymptomGap[] };
   awaiting_review: { count: number; rows: ModelQueue[] };
   manual_changed: { count: number; rows: FlaggedPlaybook[] };
+  // Scheduled tasks with nothing approved (fourth trial, finding 11).
+  pm_without_steps?: PmGap[];
 };
 
 async function read<T>(path: string): Promise<T> {

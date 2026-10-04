@@ -31,11 +31,12 @@ from pdm.api.deps import Db, Plant, requires
 from pdm.contracts import MachineModel, PlaybookStatus, Role, RuleId, SymptomCode
 from pdm.platform.auth.domain import Account
 from pdm.playbooks import repo as playbooks
+from pdm.triggers.domain import trend_rule_id
 from pdm.work import repo as work
 from pdm.work.domain import playbook_ref_for
 from pdm.work.estimates import EstimateProposal
 from pdm.work.estimates import propose as propose_estimate
-from pdm.work.thresholds import NoProposal, ThresholdProposal
+from pdm.work.thresholds import NoProposal, ThresholdProposal, together
 from pdm.work.thresholds import propose as propose_threshold
 
 router = APIRouter(tags=["loops"])
@@ -188,10 +189,16 @@ def thresholds(
 
     lines = []
     for rule in plant.rules.rules:
-        firings = behind.get(rule.rule_id)
+        # The rule's forecasts are filed under their own id (ADR-043 section 4)
+        # and are evidence the arithmetic sets aside - counted, not lost.
+        firings = together(
+            rule.rule_id, [behind.get(rule.rule_id), behind.get(trend_rule_id(rule))]
+        )
         outcome = propose_threshold(
-            firings.firings if firings else (),
+            firings.firings,
             rule_id=rule.rule_id,
+            title=rule.title,
+            predictions_without_a_reading=firings.predictions_without_a_reading,
             comparison=rule.comparison,
             current_threshold=rule.threshold,
             safety_critical=rule.safety_critical,
@@ -213,7 +220,7 @@ def thresholds(
                 comparison=rule.comparison,
                 current_threshold=rule.threshold,
                 safety_critical=rule.safety_critical,
-                without_a_reading=firings.without_a_reading if firings else 0,
+                without_a_reading=firings.without_a_reading,
                 proposal=proposal,
                 refusal=refusal,
             )

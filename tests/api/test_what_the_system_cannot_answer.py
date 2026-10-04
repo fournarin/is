@@ -26,7 +26,7 @@ from psycopg import connect
 from psycopg_pool import ConnectionPool
 
 from pdm.api.app import create_app
-from pdm.api.overview import group_by_model, rank_gaps
+from pdm.api.overview import group_by_model, pm_without_steps, rank_gaps
 from pdm.contracts import (
     ComponentLabel,
     DocumentId,
@@ -275,6 +275,54 @@ class TestTheQueueIsGroupedTheWayItIsWorked:
             (M710IC, 1),
         ]
         assert groups[0].oldest == START
+
+
+class TestScheduledWorkWithoutSteps:
+    """Fourth trial, finding 11: a PM ticket had no steps and this screen did
+    not list it, because scheduled work raises no Finding to be seen."""
+
+    BELT = SymptomCode("PM-toothed-belt")
+    TITLE = "เปลี่ยนสายพานฟัน (ครบรอบบำรุงรักษา)"
+
+    def test_a_pm_task_with_nothing_served_is_listed_once_per_model(self) -> None:
+        gaps = pm_without_steps(
+            [
+                (self.BELT, MC_004, self.TITLE),
+                (self.BELT, MC_012, self.TITLE),
+                (self.BELT, MC_018, self.TITLE),
+            ],
+            model_of=model_of,
+            served=set(),
+        )
+
+        assert [(gap.machine_model, gap.machines) for gap in gaps] == [
+            (M710IC, (MC_018,)),
+            (R2000IC, (MC_004, MC_012)),
+        ]
+        assert {gap.title for gap in gaps} == {self.TITLE}
+
+    def test_a_served_pair_is_not_a_gap(self) -> None:
+        gaps = pm_without_steps(
+            [(self.BELT, MC_004, self.TITLE), (self.BELT, MC_018, self.TITLE)],
+            model_of=model_of,
+            served={(self.BELT, R2000IC)},
+        )
+
+        assert [gap.machine_model for gap in gaps] == [M710IC]
+
+    def test_a_draft_already_waiting_is_counted(self) -> None:
+        gaps = pm_without_steps(
+            [(self.BELT, MC_004, self.TITLE)],
+            model_of=model_of,
+            served=set(),
+            pending=[
+                PendingForPair(
+                    symptom_code=self.BELT, machine_model=R2000IC, waiting=1, oldest=START
+                )
+            ],
+        )
+
+        assert gaps[0].proposals_waiting == 1
 
 
 # ─────────────────────────────────────────────────────────────

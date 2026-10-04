@@ -84,6 +84,9 @@ export default async function StepsPage({
               ))}
             </>
           )}
+          {/* Finding 11: a PM task records no page, so the screen says where
+              in the manual to look rather than leaving a bare title. */}
+          {job.where_to_look_note && <p className="warning">{job.where_to_look_note}</p>}
           <p className="muted">{job.reason}</p>
           {job.eta_text && <p className="muted">{job.eta_text}</p>}
           {job.handover_note && <p className="warning">↪ ช่างคนก่อนทำไว้ถึงตรงนี้: {job.handover_note}</p>}

@@ -257,6 +257,9 @@ class TicketView(BaseModel):
     steps: tuple[Step, ...] = ()
     # Filled only when `steps` is empty (ADR-118).
     where_to_look: tuple[WhereToLook, ...] = ()
+    # A scheduled job with no steps and no page on record says where in the
+    # manual to look instead of a bare title (fourth trial, finding 11).
+    where_to_look_note: str | None = None
     recurrence: Recurrence | None = None
 
 
@@ -851,6 +854,34 @@ def _where_to_look(
     return tuple(found)
 
 
+def pm_page_note(origin: WorkOrderOrigin, *, has_steps: bool, task_title: str | None) -> str | None:
+    """Where a scheduled job with no approved steps sends the technician.
+
+    A PM task in `plant.yaml` records an interval, not a manual page, so the
+    ticket has a manual and no page to open it at. Principle 5: the screen says
+    which part of the manual to read and that no page is on record, rather than
+    showing a bare title or guessing a page (fourth trial, finding 11).
+    """
+    if origin is not WorkOrderOrigin.SCHEDULED or has_steps:
+        return None
+    note = (
+        "งานบำรุงรักษาตามรอบนี้ยังไม่ได้บันทึกเลขหน้าในคู่มือไว้ ระบบจึงไม่ชี้หน้าให้ "
+        "ให้เปิดหัวข้อตารางบำรุงรักษาตามรอบ (maintenance schedule) ในคู่มือของเครื่อง"
+    )
+    if task_title:
+        note += f" แล้วหารายการ “{task_title}”"
+    return note
+
+
+def _pm_title(config: Config, order: WorkOrder) -> str | None:
+    if order.pm_task_ref is None:
+        return None
+    for task in config.pm_tasks:
+        if task.pm_task_ref == order.pm_task_ref:
+            return task.title
+    return None
+
+
 def _symptom_of(conn: Connection[Any], order: WorkOrder) -> SymptomCode | None:
     """What the order is about, from whatever raised it."""
     if order.finding_ref is not None:
@@ -951,6 +982,11 @@ def ticket(
         tools=tools,
         tools_th=tools_th,
         where_to_look=() if order.playbook_snapshot else _where_to_look(conn, config, order),
+        where_to_look_note=pm_page_note(
+            order.origin,
+            has_steps=bool(order.playbook_snapshot),
+            task_title=_pm_title(config, order),
+        ),
         recurrence=_recurrence(conn, order),
     )
 

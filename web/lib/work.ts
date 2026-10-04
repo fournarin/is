@@ -95,6 +95,9 @@ export type Ticket = {
   steps: Step[];
   // Filled only when `steps` is empty (ADR-118).
   where_to_look?: WhereToLook[];
+  // A scheduled job with no steps: which part of the manual, and that no page
+  // is on record (fourth trial, finding 11).
+  where_to_look_note?: string | null;
   recurrence: Recurrence | null;
 };
 
