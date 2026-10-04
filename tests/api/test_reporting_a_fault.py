@@ -312,6 +312,10 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
         second = _report(client, description="same noise as before")
         assert second.status_code == 409
         assert second.json()["detail"]["open_orders"] == [first]
+        # By machine and what it is, one line each on the screen (finding 20).
+        assert second.json()["detail"]["open_titles"] == [
+            f"{MACHINE} แจ้งว่า “oil under the base plate, about a hand's width”"
+        ]
 
     def test_another_machine_is_not_refused(self, client: TestClient) -> None:
         _signed_in(client, Role.TECHNICIAN)
@@ -330,7 +334,7 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             distinct_from=[first],
         )
         assert second.status_code == 201, second.text
-        assert f"เครื่องนี้มีใบงานเปิดอยู่แล้ว: {first}" in second.json()["reason"]
+        assert first not in second.json()["reason"]
 
     def test_a_ticket_that_appeared_since_the_refusal_refuses_the_retry_too(
         self, client: TestClient
@@ -360,6 +364,32 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
 
         assert _report(client).status_code == 201
 
+    def test_the_ticket_names_what_else_is_open_only_while_it_is(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        """Read with the ticket, not written into it: the board went on naming a
+        ticket as open after it had closed (fourth trial, finding 5)."""
+        _signed_in(client, Role.TECHNICIAN)
+        first = _report(client).json()["ref"]
+        second = _report(
+            client, description="the guard interlock is not latching", distinct_from=[first]
+        ).json()["ref"]
+
+        view = client.get(f"/work-orders/{second}").json()
+        assert view["title"] == f"{MACHINE} แจ้งว่า “the guard interlock is not latching”"
+        assert view["also_open"] == [
+            f"{MACHINE} แจ้งว่า “oil under the base plate, about a hand's width”"
+        ]
+
+        orders = WorkOrders(world["clock"], fallback_minutes=FALLBACK)
+        with connect(world["database_url"]) as conn:
+            orders.accept(conn, released(conn, first), user=UserId("tech-1"))
+            orders.start(conn, first, user=UserId("tech-1"))
+            orders.close(conn, first, user=UserId("tech-1"), outcome=WorkOutcome.FIXED)
+            conn.commit()
+
+        assert client.get(f"/work-orders/{second}").json()["also_open"] == []
+
 
 class TestWhatIReported:
     """ADR-122. In the owner's second trial a report could not be found again
@@ -377,6 +407,8 @@ class TestWhatIReported:
         assert one["where"] == "รอหัวหน้ากะจัดช่าง"
         assert one["finished"] is False
         assert one["reported_when"] == "3 มี.ค. 15:00 น."
+        # What they wrote, so two reports on one machine differ (finding 19).
+        assert one["what"] == "oil under the base plate, about a hand's width"
 
     def test_somebody_else_does_not_see_it(self, client: TestClient) -> None:
         _signed_in(client, Role.OPERATOR)

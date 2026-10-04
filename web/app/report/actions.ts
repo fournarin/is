@@ -1,13 +1,15 @@
 "use server";
 
 import { callApi } from "@/lib/api";
-import { openOrdersIn, openReasonsIn } from "@/lib/open-orders";
+import { openOrdersIn, openReasonsIn, openTitlesIn } from "@/lib/open-orders";
 import { revalidatePath } from "next/cache";
 
 export type ReportState = {
   error: string | null;
   /** Tickets already open on that machine. Empty unless the API refused with them. */
   openOrders: string[];
+  /** One line per open ticket, aligned with `openOrders`, for the warning. */
+  openLines: string[];
   /** The ticket this report became, once it has become one. */
   created: string | null;
   /**
@@ -48,6 +50,7 @@ export async function reportFault(_previous: ReportState, form: FormData): Promi
   const nothing: ReportState = {
     error: null,
     openOrders: [],
+    openLines: [],
     created: null,
     values: { machineId, severity, description },
   };
@@ -80,18 +83,20 @@ export async function reportFault(_previous: ReportState, form: FormData): Promi
   const body = await response.json().catch(() => null);
   if (response.status === 409) {
     const open = openOrdersIn(body);
+    const titles = openTitlesIn(body);
     const reasons = openReasonsIn(body);
     // The ticket number alone told the operator nothing; what it is about lets
-    // them judge "same fault or not" (ADR-126).
-    const described = open
-      .map((ref, index) => (reasons[index] ? `${ref} (${reasons[index]})` : ref))
-      .join(", ");
+    // them judge "same fault or not" (ADR-126). One line each, by machine and
+    // symptom: the reasons run together were unreadable (finding 20).
+    const lines = open.map((ref, index) => {
+      const about = titles[index] || reasons[index];
+      return about ? `${ref} · ${about}` : ref;
+    });
     return {
       ...nothing,
-      error:
-        `เครื่องนี้มีงานค้างอยู่แล้ว: ${described} — ` +
-        "ถ้าเป็นเรื่องเดียวกัน ไม่ต้องแจ้งซ้ำ ถ้าคนละเรื่อง กดยืนยันด้านล่าง",
+      error: "เครื่องนี้มีงานค้างอยู่แล้ว:",
       openOrders: open,
+      openLines: lines,
     };
   }
   if (response.status === 422) {

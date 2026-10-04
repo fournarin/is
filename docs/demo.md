@@ -109,8 +109,9 @@ The web app is at **http://localhost:3000**, the API at
    described.
 
    Report the same machine twice to see the third refusal: the second is turned
-   back naming the ticket already open, with one button to say it is a different
-   fault. That is what stops four people seeing one stopped line from producing
+   back naming the fault already open - machine and what it is, one line each; a
+   PM due on the machine does not count - with one button to say it is a
+   different fault. That is what stops four people seeing one stopped line from producing
    four tickets.
 2. **Sign in as `eng-1`** → tab **สายการผลิต** (`/overview`). The line drawn in
    station order with its buffers to scale, a marker per station, what the shift

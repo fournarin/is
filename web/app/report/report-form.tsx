@@ -11,6 +11,7 @@ import type { Machine } from "@/lib/report";
 const NOTHING_REPORTED: ReportState = {
   error: null,
   openOrders: [],
+  openLines: [],
   created: null,
   values: { machineId: "", severity: "medium", description: "" },
 };
@@ -49,7 +50,9 @@ export function ReportForm({ machines }: { machines: Machine[] }) {
           ระบบจะเลือกช่างภายในไม่กี่นาที แล้วหัวหน้ากะยืนยันก่อนส่งถึงช่าง ดูความคืบหน้าได้ที่ “เรื่องที่คุณแจ้งไว้” ด้านล่าง
         </p>
         <p>
-          <Link href="/">กลับหน้าแรก</Link>
+          {/* A plain link, so the page is drawn again with an empty form: a
+              second fault seen on the same walk is common (finding 19). */}
+          <a href="/report">📣 แจ้งเรื่องอื่น</a> · <Link href="/">กลับหน้าแรก</Link>
         </p>
       </div>
     );
@@ -58,9 +61,19 @@ export function ReportForm({ machines }: { machines: Machine[] }) {
   return (
     <form action={action} key={attempt}>
       {state.error !== null && (
-        <p className="error" role="alert">
-          {state.error}
-        </p>
+        <div className="error" role="alert">
+          <p>{state.error}</p>
+          {state.openLines.length > 0 && (
+            <>
+              <ul>
+                {state.openLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p>ถ้าเป็นเรื่องเดียวกัน ไม่ต้องแจ้งซ้ำ ถ้าคนละเรื่อง กดยืนยันด้านล่าง</p>
+            </>
+          )}
+        </div>
       )}
 
       {/* Carried back into the next submission, so "this is something else" is

@@ -518,9 +518,60 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             )
         assert refused.value.open_refs == (issued.ref,)
 
-    def test_naming_the_open_tickets_writes_the_order_and_says_so_in_the_reason(
+    def test_the_refusal_names_each_open_ticket_by_machine_and_what_it_is(
         self, conn: Connection[Any], orders: WorkOrders
     ) -> None:
+        """A ticket number told the operator nothing (fourth trial, finding 20)."""
+        orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="oil under the base plate",
+        )
+        with pytest.raises(AlreadyOpen) as refused:
+            orders.from_report(
+                conn,
+                machine_id=MOTOR,
+                machine_model=R2000IC,
+                severity=Severity.MEDIUM,
+                reported_by=TECHNICIAN,
+                description="the guard interlock is not latching",
+            )
+        assert refused.value.titles == (f"{MOTOR} แจ้งว่า “oil under the base plate”",)
+
+    def test_a_pm_due_on_the_machine_does_not_refuse_a_report(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        """A lubrication round is not the fault somebody is standing in front of,
+        and asking the operator to rule it out was noise (fourth trial, finding 20)."""
+        orders.from_pm_task(
+            conn,
+            PMTask(
+                pm_task_ref=PMTaskRef("PM-1"),
+                machine_id=MOTOR,
+                symptom_code=SymptomCode("PM-grease-axis-1"),
+                interval=timedelta(days=30),
+                due_at=NOW,
+            ),
+            machine_model=R2000IC,
+        )
+        issued = orders.from_report(
+            conn,
+            machine_id=MOTOR,
+            machine_model=R2000IC,
+            severity=Severity.MEDIUM,
+            reported_by=TECHNICIAN,
+            description="oil under the base plate",
+        )
+        assert issued.order.origin is WorkOrderOrigin.MANUAL
+
+    def test_naming_the_open_tickets_writes_the_order_without_them_in_the_reason(
+        self, conn: Connection[Any], orders: WorkOrders
+    ) -> None:
+        """A reason is written once (ADR-005); the open tickets change, so the
+        ticket view reads them when it is read (fourth trial, finding 5)."""
         first = orders.from_report(
             conn,
             machine_id=MOTOR,
@@ -539,7 +590,8 @@ class TestASecondReportOnAMachineAlreadyBeingWorked:
             distinct_from=[first.ref],
         )
 
-        assert f"เครื่องนี้มีใบงานเปิดอยู่แล้ว: {first.ref}" in second.order.reason
+        assert first.ref not in second.order.reason
+        assert second.order.reason.endswith("separate: the guard interlock is not latching")
 
     def test_a_reference_that_has_closed_since_is_not_named_on_the_new_order(
         self, conn: Connection[Any], orders: WorkOrders
