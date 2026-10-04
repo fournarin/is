@@ -20,6 +20,7 @@ holds the rule rather than this docstring: `pdm.health` cannot reach `pdm.work`,
 
 from pdm.health.domain import (
     AGE_AGAINST_ITS_CLASS_IS_ABSENT,
+    MINIMUM_OBSERVED_DAYS,
     ClosedRepair,
     CurrentContribution,
     HistoryContribution,
@@ -27,10 +28,12 @@ from pdm.health.domain import (
     assess,
     by_history,
     by_now,
+    history_too_short,
 )
 
 __all__ = [
     "AGE_AGAINST_ITS_CLASS_IS_ABSENT",
+    "MINIMUM_OBSERVED_DAYS",
     "ClosedRepair",
     "CurrentContribution",
     "HistoryContribution",
@@ -38,4 +41,5 @@ __all__ = [
     "assess",
     "by_history",
     "by_now",
+    "history_too_short",
 ]
