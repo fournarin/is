@@ -238,6 +238,7 @@ def _translate(error: Exception) -> HTTPException:
                 "message": str(error),
                 "open_orders": list(error.open_refs),
                 "open_reasons": list(error.reasons),
+                "open_titles": list(error.titles),
             },
         )
     return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error))

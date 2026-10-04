@@ -1,5 +1,6 @@
 import { KeepFresh } from "@/app/ui/keep-fresh";
 import { NotYours, Shell } from "@/app/ui/shell";
+import { bannerFor, type Pressed } from "@/lib/banners";
 import { bandFor } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
@@ -9,6 +10,7 @@ import {
   finishedThisShift,
   proposals,
   ticket,
+  ticketAt,
   type Ticket,
 } from "@/lib/work";
 
@@ -17,6 +19,26 @@ const STATUS: Record<string, string> = {
   in_progress: "กำลังทำ",
   handed_over: "ส่งต่อรอคนรับ",
 };
+
+/**
+ * The other work open on this machine as the board is drawn, by machine and
+ * symptom. Read with the ticket rather than kept in its reason, where it went on
+ * naming a job that had closed (fourth trial, finding 5).
+ */
+function AlsoOpen({ job }: { job: Ticket }) {
+  const others = job.also_open ?? [];
+  if (others.length === 0) return null;
+  return (
+    <div className="muted">
+      เครื่องนี้มีงานอื่นเปิดอยู่:
+      <ul>
+        {others.map((one) => (
+          <li key={one}>{one}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * The shift lead's whiteboard (ADR-093): what is waiting for them, what the
@@ -72,6 +94,27 @@ export default async function BoardPage({
       ].map(async (ref) => [ref, await ticket(ref)] as const),
     ),
   );
+  // What was just pressed, named by machine and symptom rather than by ticket
+  // number (fourth trial, finding 8). Read after the press, so a confirmed job
+  // is already in `active` with the names of the people it went to.
+  const pressed = (
+    [
+      ["confirmed", confirmed],
+      ["rejected", rejected],
+      ["brought", brought],
+      ["released", released],
+    ] as const
+  ).filter((one): one is readonly [Pressed, string] => one[1] !== undefined);
+  const banners = await Promise.all(
+    pressed.map(async ([what, ref]) =>
+      bannerFor(
+        what,
+        ref,
+        (await ticketAt(ref))?.title,
+        active.find((one) => one.ref === ref)?.assignee_names ?? [],
+      ),
+    ),
+  );
   const load =
     round.load_ratio === null ? null : Math.round(round.load_ratio * 100);
 
@@ -85,31 +128,14 @@ export default async function BoardPage({
         ถ้ายังไม่ควรทำตอนนี้
       </p>
 
-      {confirmed !== undefined && (
-        <p className="recorded">
-          ✓ ยืนยัน {confirmed} แล้ว งานถูกส่งถึงช่างแล้ว
+      {banners.map((said) => (
+        <p className="recorded" key={said}>
+          {said}
         </p>
-      )}
+      ))}
       {given !== undefined && (
         <p className="recorded">
           ✓ ส่งงาน {given} ให้ {to ?? "ช่างที่คุณเลือก"} แล้ว
-        </p>
-      )}
-      {rejected !== undefined && (
-        <p className="recorded">
-          ⏸ พัก {rejected} ไว้แล้ว ระบบจะไม่เสนองานนี้อีกในกะนี้ จนกว่าคุณจะกด
-          “นำกลับมา”
-        </p>
-      )}
-      {brought !== undefined && (
-        <p className="recorded">
-          ↩ นำ {brought} กลับมาแล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5
-          นาที)
-        </p>
-      )}
-      {released !== undefined && (
-        <p className="recorded">
-          ✓ ปล่อย {released} แล้ว ระบบจะเลือกช่างให้ในรอบถัดไป (ไม่เกิน 5 นาที)
         </p>
       )}
       {error !== undefined && (
@@ -173,6 +199,7 @@ export default async function BoardPage({
                 </div>
                 <p>{job.reason}</p>
                 {job.eta_text && <p>{job.eta_text}</p>}
+                <AlsoOpen job={job} />
                 <p>
                   👷 ส่งให้ <strong>{one.assignee_names.join(", ")}</strong>
                 </p>
@@ -262,6 +289,7 @@ export default async function BoardPage({
                   </div>
                   <p>{job.reason}</p>
                   {job.eta_text && <p>{job.eta_text}</p>}
+                  <AlsoOpen job={job} />
                   <p className="muted">เหตุผลที่พัก: {one.why}</p>
                   <form method="post" action="/overview/bring-back">
                     <input type="hidden" name="ref" value={one.ref} />
@@ -305,6 +333,7 @@ export default async function BoardPage({
                 </div>
                 <p>{job.reason}</p>
                 {job.eta_text && <p>{job.eta_text}</p>}
+                <AlsoOpen job={job} />
                 <p className="muted">ทำไมยังไม่ปล่อย: {one.why}</p>
                 <details>
                   <summary>ปล่อยงานนี้เลย</summary>

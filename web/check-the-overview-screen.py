@@ -358,7 +358,12 @@ def main() -> None:
         [],
         [("ref", first), ("reason", "สาย A หยุดรอชิ้นนี้อยู่")],
     )
-    expect(f"ปล่อย {first} แล้ว" in readable(released), "with a reason the screen names what it did")
+    # Named by machine and symptom, not by ticket number (fourth trial, finding 8).
+    title = json.loads(get(f"/work-orders/{first}", where=API))["title"]
+    expect(
+        f"ปล่อยงาน {title} แล้ว" in readable(released),
+        "with a reason the screen names what it did, by machine and symptom",
+    )
     expect(
         "รอบถัดไป" in readable(released),
         "and says the next round places it, rather than pretending the queue moved",

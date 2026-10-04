@@ -189,6 +189,10 @@ def main() -> None:
     print("\n3. the same machine again is refused, naming what is already open")
     again = report(readable(get("/report")), SOMETHING_ELSE)
     expect(first.group(0) in again, "the refusal names the open ticket (ADR-077 §3)")
+    expect(
+        f"{MACHINE} แจ้งว่า" in again,
+        "by machine and what was seen, not by number alone (fourth trial, finding 20)",
+    )
     expect("มีงานค้างอยู่แล้ว" in again, "and says why it is refused")
     # Without JavaScript the page comes back rendered from scratch, so a refusal
     # that dropped the fields would ask somebody standing at a machine to type it
@@ -199,6 +203,12 @@ def main() -> None:
     print("\n4. saying it is something else gets through, and the ticket says so")
     different = report(again, SOMETHING_ELSE)
     second = re.search(r"WO-\d+", different)
+    expect("แจ้งเรื่องอื่น" in different, "and offers an empty form for the next fault (finding 19)")
+    listed = readable(get("/report"))
+    expect(
+        SEEN in listed and SOMETHING_ELSE in listed,
+        "and the list of reports shows what was written for each (finding 19)",
+    )
     expect(second is not None, "a second ticket is written")
     assert second is not None
     expect(
@@ -216,7 +226,9 @@ def main() -> None:
     expect(SEEN in reasons[0], "the description is on the ticket unrewritten (ADR-005)")
     # The reason names them as the board does; the record keeps the sign-in (ADR-122).
     expect(rows[0][3] == str(OPERATOR), "with who reported it")
-    expect(first.group(0) in reasons[1], "and the second names the ticket it was raised beside")
+    # What else is open is read with the ticket, not written into it: written
+    # once, it went on naming a closed ticket (fourth trial, finding 5).
+    expect(first.group(0) not in reasons[1], "and the second's reason is only its reporter's words")
     expect(
         all(row[1] == "manual" and row[2] == "queued" for row in rows),
         "both are manual work, queued for a round to propose (ADR-010, ADR-071)",

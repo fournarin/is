@@ -16,6 +16,20 @@ export function openOrdersIn(body: unknown): string[] {
   return open.filter((ref): ref is string => typeof ref === "string");
 }
 
+/**
+ * Each open ticket as machine and symptom, aligned with `openOrdersIn`: one
+ * short line each, where the full reasons ran together into one paragraph
+ * (fourth trial, finding 20).
+ */
+export function openTitlesIn(body: unknown): string[] {
+  if (typeof body !== "object" || body === null) return [];
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail !== "object" || detail === null) return [];
+  const titles = (detail as { open_titles?: unknown }).open_titles;
+  if (!Array.isArray(titles)) return [];
+  return titles.map((one) => (typeof one === "string" ? one : ""));
+}
+
 /** What each open ticket is about, aligned with `openOrdersIn` (ADR-126). */
 export function openReasonsIn(body: unknown): string[] {
   if (typeof body !== "object" || body === null) return [];

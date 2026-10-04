@@ -346,6 +346,37 @@ def pm_task_was_done(outcome: WorkOutcome) -> bool:
     return outcome is WorkOutcome.FIXED
 
 
+def reported_words(order: WorkOrder) -> str:
+    """What the reporter wrote, out of the reason `from_report` built around it.
+
+    The reason is the one place the words are kept (ADR-005), in a shape this
+    module writes, so this reads back our own sentence. An order that is not a
+    report, or a reason in some other shape, comes back whole.
+    """
+    marker = f"ที่เครื่อง {order.machine_id}: "
+    if order.origin is not WorkOrderOrigin.MANUAL or marker not in order.reason:
+        return order.reason
+    words = order.reason.split(marker, 1)[1]
+    # Reports written before the fourth trial carried the tickets open at that
+    # moment on the end; those are not the reporter's words.
+    return words.split(" (เครื่องนี้มีใบงานเปิดอยู่แล้ว:", 1)[0]
+
+
+def title(order: WorkOrder, symptom: str | None, wording: Wording = _PLAIN) -> str:
+    """A ticket named the way the floor names it: the machine and the symptom.
+
+    "MC-001 มอเตอร์สายพานร้อนเกินกำหนด" rather than "WO-000011", which the fourth
+    trial found told a shift lead nothing (findings 5 and 8). A report with no
+    symptom is named by what its reporter wrote, since that is all anybody knows
+    about it yet.
+    """
+    if symptom is not None:
+        return f"{order.machine_id} {wording.symptom(symptom)}"
+    if order.origin is WorkOrderOrigin.MANUAL:
+        return f"{order.machine_id} แจ้งว่า “{reported_words(order)}”"
+    return f"{order.machine_id} {order.reason}"
+
+
 def from_report(
     *,
     machine_id: MachineId,
@@ -357,7 +388,6 @@ def from_report(
     machine_model: str,
     fallback_minutes: dict[str, dict[Severity, int]],
     now: datetime,
-    alongside: Sequence[str] = (),
     wording: Wording = _PLAIN,
     reporter_name: str | None = None,
 ) -> WorkOrder:
@@ -367,11 +397,10 @@ def from_report(
     Rewriting it into the system's phrasing would lose the only account of the
     machine that came from somebody standing next to it.
 
-    `alongside` names the tickets that were already open on this machine when the
-    reporter said this was something else. It goes in the reason because that is
-    the sentence read by whoever picks the job up, and the question they will
-    have - "isn't somebody already on this machine?" - is one the ticket should
-    answer before they ask it (ADR-077 section 3).
+    What else is open on the machine is not written here. It used to be, and a
+    reason is written once (ADR-005), so the board went on naming a ticket as
+    open after it had closed (fourth trial, finding 5). The ticket view reads it
+    at the moment the ticket is read instead.
     """
     minutes, is_fallback, playbook_ref = _priced(
         playbook,
@@ -397,6 +426,5 @@ def from_report(
             f"แจ้งโดย {reporter_name or reported_by} เมื่อ {wording.day_and_clock(now)} "
             f"ที่เครื่อง {machine_id}: "
             f"{description}"
-            + (f" (เครื่องนี้มีใบงานเปิดอยู่แล้ว: {', '.join(alongside)})" if alongside else "")
         ),
     )

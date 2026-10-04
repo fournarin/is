@@ -71,7 +71,11 @@ export type Ticket = {
   severity: "low" | "medium" | "high" | "critical";
   status: "queued" | "assigned" | "in_progress" | "handed_over" | "closed" | "cancelled";
   origin: "condition" | "scheduled" | "manual";
+  // Machine and symptom, as the floor names the job (fourth trial).
+  title?: string;
   reason: string;
+  // Other work open on this machine as the ticket was read (finding 5).
+  also_open?: string[];
   priority_reason: string;
   priority_score: number;
   estimated_minutes: number;

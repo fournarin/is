@@ -93,9 +93,13 @@ can work from the system (ADR-092).
 | 10 | technician | card | tool names in English on an otherwise Thai card | fixed: ADR-130, tools rendered in Thai under the figure check |
 | 17 | engineer | review | the skill typed as an id | fixed: ADR-130, chosen by its Thai name |
 | 4 | shift lead | overview | "เสียบ่อยที่สุด MC-001 · เสีย 1 ครั้ง" for a predicted job closed before anything failed, over "0.0 วัน" of history | fixed: a prediction repaired before its detection counts as prevented, not failed; under a week the panel shows one sentence and no ranking |
+| 5 | shift lead | board | "(เครื่องนี้มีใบงานเปิดอยู่แล้ว: WO-000011, WO-000014)" stayed after WO-000011 closed, and named numbers only | fixed: read with the ticket from what is still open, each named by machine and symptom |
+| 6, 9, 13 | - | - | cosmetic: the remaining run-4 wording items | open |
+| 8 | shift lead | board | banners said "ยืนยัน WO-000011 แล้ว" | fixed: "ยืนยันงาน MC-001 <symptom> แล้ว → <technician>", and the same for set aside, bring back and release |
 | 11 | technician, engineer | no-steps screen, gaps | a PM job with no steps named the manual with no page, and `/gaps` never listed PM tasks | fixed: the ticket says to open the manual's maintenance schedule section and that no page is recorded for the task; `/gaps` lists PM tasks with nothing approved |
 | 18 | engineer | loops | "ใบงานที่ปิดแล้วของ R-motor-temp-high มี 0 ใบ" after a predicted job for it closed | fixed: forecast jobs filed under `<rule>/trend` are gathered to their rule and named as not counted, and the sentence uses the rule's Thai title |
-| 5, 6, 8, 9, 13, 19, 20 | - | - | confusing or cosmetic: a stale "already open" list, the operator's report list | open |
+| 19 | operator | report | two reports on one machine looked the same in "เรื่องที่คุณแจ้งไว้"; no way to a fresh form after sending | fixed: each shows what was written; "แจ้งเรื่องอื่น" opens an empty form |
+| 20 | operator | report | the duplicate warning listed a scheduled PM and ran the tickets into one paragraph | fixed: faults only, one line each by machine and symptom; a PM no longer refuses a report |
 
 Worked well and kept: the figure check refusing a wrong Thai torque, the
 technician's card and its banners, the no-steps screen, set aside and bring back,

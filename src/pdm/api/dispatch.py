@@ -77,7 +77,7 @@ from pdm.sinks import repo as deliveries
 # assemble a screen.
 from pdm.triggers import repo as findings
 from pdm.work import repo as work
-from pdm.work.domain import when_expected
+from pdm.work.domain import reported_words, title, when_expected
 
 router = APIRouter(tags=["dispatch"])
 
@@ -221,10 +221,14 @@ class TicketView(BaseModel):
 
     ref: str
     machine_id: str
+    # Machine and symptom, the name a person gives the job (fourth trial).
+    title: str = ""
     severity: Severity
     status: WorkOrderStatus
     origin: WorkOrderOrigin
     reason: str
+    # The other work open on this machine as the ticket is read (finding 5).
+    also_open: tuple[str, ...] = ()
     priority_reason: str
     priority_score: float
     estimated_minutes: int
@@ -436,6 +440,9 @@ class Reported(BaseModel):
     # The same moment on the plant's clock, as people say it (ADR-093).
     reported_when: str
     reason: str
+    # What the reporter wrote, so two reports on one machine can be told apart
+    # in their list (fourth trial, finding 19).
+    what: str = ""
     status: WorkOrderStatus
     # Where it is, in a sentence the reporter reads. Written here rather than by
     # the screen: every sentence a person reads comes from the backend (ADR-063).
@@ -491,6 +498,7 @@ def reported_by_me(
             reported_at=created_at,
             reported_when=plant.wording().day_and_clock(created_at),
             reason=order.reason,
+            what=reported_words(order),
             status=order.status,
             where=_where(order, _names(conn, (one.user for one in order.assignees))),
             finished=order.status in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED),
@@ -931,7 +939,7 @@ def _where_to_look(
         model = config.model_of(order.machine_id)
     except KeyError:
         return ()
-    symptom = _symptom_of(conn, order)
+    symptom = work.symptom_of(conn, order)
     found: list[WhereToLook] = []
     if symptom is not None:
         waiting = playbooks_repo.awaiting_review(conn, symptom_code=symptom, machine_model=model)
@@ -1002,6 +1010,26 @@ def _symptom_of(conn: Connection[Any], order: WorkOrder) -> SymptomCode | None:
         return SymptomCode(row[0]) if row else None
     return None
 
+def _title(conn: Connection[Any], config: Config, order: WorkOrder) -> str:
+    """ "MC-001 มอเตอร์สายพานร้อนเกินกำหนด": machine and symptom (fourth trial)."""
+    return title(order, work.symptom_of(conn, order), config.wording())
+
+
+def _also_open(
+    conn: Connection[Any], config: Config, ref: str, order: WorkOrder
+) -> tuple[str, ...]:
+    """The other work open on this machine now, by title.
+
+    Read with the ticket rather than written into its reason: written once, it
+    went on naming a ticket that had closed (fourth trial, finding 5)."""
+    if order.status.value not in work.OPEN_STATUSES:
+        return ()
+    return tuple(
+        _title(conn, config, other)
+        for other_ref, other in work.open_for_machine(conn, order.machine_id)
+        if other_ref != ref
+    )
+
 
 def _tools(
     conn: Connection[Any], playbook_ref: str | None
@@ -1050,10 +1078,12 @@ def ticket(
     return TicketView(
         ref=work_order_ref,
         machine_id=str(order.machine_id),
+        title=_title(conn, config, order),
         severity=order.severity,
         status=order.status,
         origin=order.origin,
         reason=order.reason,
+        also_open=_also_open(conn, config, work_order_ref, order),
         priority_reason=order.priority_reason,
         priority_score=order.priority_score,
         estimated_minutes=order.estimated_minutes,

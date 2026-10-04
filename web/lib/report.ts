@@ -31,6 +31,8 @@ export type Reported = {
   reported_at: string;
   reported_when: string;
   reason: string;
+  // What the reporter wrote, so two reports on one machine differ (finding 19).
+  what?: string;
   status: string;
   where: string;
   finished: boolean;

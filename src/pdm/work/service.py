@@ -32,6 +32,7 @@ from pdm.contracts import (
     SymptomCode,
     UserId,
     WorkOrder,
+    WorkOrderOrigin,
     WorkOrderStatus,
     WorkOutcome,
 )
@@ -57,13 +58,19 @@ class AlreadyOpen(Exception):
     """
 
     def __init__(
-        self, machine_id: MachineId, open_refs: Sequence[str], reasons: Sequence[str] = ()
+        self,
+        machine_id: MachineId,
+        open_refs: Sequence[str],
+        reasons: Sequence[str] = (),
+        titles: Sequence[str] = (),
     ) -> None:
         self.machine_id = machine_id
         self.open_refs = tuple(open_refs)
         # What each open ticket is about, so the reporter can tell "same fault"
         # from "something else" without knowing a ticket number (ADR-126).
         self.reasons = tuple(reasons)
+        # The same, as machine and symptom: one short line each (finding 20).
+        self.titles = tuple(titles)
         joined = ", ".join(self.open_refs)
         super().__init__(
             f"{machine_id} already has work open: {joined}. If what you are reporting is "
@@ -277,7 +284,7 @@ class WorkOrders:
         or the system quietly requires a diagnosis before it will accept a
         problem.
 
-        Refused while the machine has work open, unless the reporter names those
+        Refused while the machine has fault work open, unless the reporter names those
         tickets in `distinct_from` - which is how they say "I have seen them and
         this is something else". The check reads the queue on the caller's
         connection, so a second report arriving in the same moment either sees
@@ -287,14 +294,25 @@ class WorkOrders:
         `symptom_code` is not stored on an order at all, because the scheduler
         does not need it (ADR-041), so there is nothing finer to key on yet.
         """
-        already_open = repo.open_for_machine(conn, machine_id)
-        unaccounted = [ref for ref in already_open if ref not in set(distinct_from)]
+        # Faults only. A PM due on the machine is not the fault somebody is
+        # standing in front of, and listing it beside one sent the operator to
+        # decide whether a lubrication round was what they saw (fourth trial,
+        # finding 20).
+        already_open = [
+            (ref, order)
+            for ref, order in repo.open_for_machine(conn, machine_id)
+            if order.origin is not WorkOrderOrigin.SCHEDULED
+        ]
+        unaccounted = [ref for ref, _ in already_open if ref not in set(distinct_from)]
         if unaccounted:
-            found = [repo.get(conn, ref) for ref in already_open]
             raise AlreadyOpen(
                 machine_id,
-                already_open,
-                [order.reason if order is not None else "" for order in found],
+                [ref for ref, _ in already_open],
+                [order.reason for _, order in already_open],
+                [
+                    domain.title(order, repo.symptom_of(conn, order), self.wording)
+                    for _, order in already_open
+                ],
             )
 
         playbook, warning = (
@@ -314,10 +332,6 @@ class WorkOrders:
             machine_model=machine_model,
             fallback_minutes=self.fallback_minutes,
             now=now,
-            # Only the tickets that were still open when this was written. A
-            # reference the reporter named that has since closed is not a fact
-            # about this order, and a reason is written once (ADR-005).
-            alongside=already_open,
             wording=self.wording,
         )
         return Issued(repo.issue(conn, order, now=now), order)

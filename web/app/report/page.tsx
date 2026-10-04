@@ -39,6 +39,9 @@ export default async function ReportPage() {
               <span className="machine-small">{one.machine_id}</span>
               <span className={`pill ${one.finished ? "done" : ""}`}>{one.where}</span>
             </div>
+            {/* What they wrote: two reports on one machine looked identical
+                without it (fourth trial, finding 19). */}
+            {one.what && <p>“{one.what}”</p>}
             <p className="muted">
               {one.ref} · แจ้งเมื่อ {one.reported_when}
             </p>

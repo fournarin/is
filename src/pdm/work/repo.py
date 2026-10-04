@@ -302,11 +302,13 @@ def for_finding(conn: Connection[Any], finding_ref: FindingRef) -> list[tuple[st
     return [(str(row["work_order_ref"]), _to_order(dict(row))) for row in rows]
 
 
-def open_for_machine(conn: Connection[Any], machine_id: MachineId) -> list[str]:
-    """Open tickets on one machine, for the caller deciding whether to raise
-    another. Cheap deliberately: only the references, because the question is
-    "is there one" rather than "what does it say"."""
-    with conn.cursor() as cur:
+def open_for_machine(conn: Connection[Any], machine_id: MachineId) -> list[tuple[str, WorkOrder]]:
+    """Open tickets on one machine, oldest first, read when somebody asks.
+
+    Read rather than remembered: the board's "this machine already has work
+    open" used to be written into a reason once and went on naming a ticket
+    after it closed (fourth trial, finding 5)."""
+    with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             # Ordered by the reference as well as the moment, so the list is
             # total. Two orders written in the same instant - which a simulated
@@ -314,11 +316,32 @@ def open_for_machine(conn: Connection[Any], machine_id: MachineId) -> list[str]:
             # otherwise come back in whatever order the scan found them, and this
             # list is read by a person deciding whether their fault is already
             # known (ADR-077 section 3).
-            "SELECT work_order_ref FROM work_order "
+            f"SELECT work_order_ref, {_COLUMNS} FROM work_order "
             "WHERE machine_id = %s AND status = ANY(%s) ORDER BY created_at, work_order_ref",
             (machine_id, list(OPEN_STATUSES)),
         )
-        return [str(row[0]) for row in cur.fetchall()]
+        rows = cur.fetchall()
+    return [(str(row["work_order_ref"]), _to_order(dict(row))) for row in rows]
+
+
+def symptom_of(conn: Connection[Any], order: WorkOrder) -> SymptomCode | None:
+    """What the order is about, from whatever raised it.
+
+    A report names no symptom of its own (ADR-041); one whose reporter gave a
+    code is bound to that code's playbook, and the reference says which."""
+    if order.finding_ref is not None:
+        row = conn.execute(
+            "SELECT symptom_code FROM finding WHERE finding_ref = %s", (order.finding_ref,)
+        ).fetchone()
+        return SymptomCode(row[0]) if row else None
+    if order.pm_task_ref is not None:
+        row = conn.execute(
+            "SELECT symptom_code FROM pm_task WHERE pm_task_ref = %s", (order.pm_task_ref,)
+        ).fetchone()
+        return SymptomCode(row[0]) if row else None
+    if order.playbook_ref is not None and "/" in order.playbook_ref:
+        return SymptomCode(str(order.playbook_ref).split("/", 1)[0])
+    return None
 
 
 class CannotCloseThisWay(Exception):
