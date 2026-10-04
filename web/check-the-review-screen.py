@@ -422,16 +422,16 @@ def main() -> None:
     print("\n7. an objection is dismissed with a reason, never silently")
     objection_page = get(f"/review/{ids['objection']}")
     blank = submit(
-        f"/review/{ids['objection']}", form_with(objection_page, ">ปิดใบนี้<"), [("note", "   ")]
+        f"/review/{ids['objection']}", form_with(objection_page, ">ปิดร่างนี้<"), [("note", "   ")]
     )
     expect("เขียนสั้น ๆ" in readable(blank), "a dismissal with no reason is refused (ADR-038)")
     dismissed = submit(
         f"/review/{ids['objection']}",
-        form_with(objection_page, ">ปิดใบนี้<"),
+        form_with(objection_page, ">ปิดร่างนี้<"),
         [("note", "ซ้ำกับใบที่แก้ไปแล้วเมื่อวาน")],
     )
     expect("คิวรีวิว" in readable(dismissed), "with a reason it goes through")
-    expect("ปิดใบนี้แล้ว" in readable(dismissed), "and says the reason was kept")
+    expect("ปิดร่างนี้แล้ว" in readable(dismissed), "and says the reason was kept")
     expect(stored(ids["objection"])["status"] == "dismissed", "and the row says who and why")
 
     print("\n8. the queue is empty and says so")
@@ -451,7 +451,7 @@ def main() -> None:
         "รออนุมัติ (" not in queue, "and not under awaiting approval, where nothing else is waiting"
     )
     expect(form_with_or_none(page, ">อนุมัติ<") is None, "and offers no approve button")
-    expect(form_with_or_none(page, ">ปิดใบนี้<") is not None, "but can still be closed with a reason")
+    expect(form_with_or_none(page, ">ปิดร่างนี้<") is not None, "but can still be closed with a reason")
     expect(stored(empty)["status"] == "pending", "and it is still pending")
 
     print("\n8c. a link to a proposal that is not there says so")

@@ -49,7 +49,7 @@ export default async function ReviewQueuePage({
       : done === "returned"
         ? "ตีกลับแล้ว ระบบจะร่างใหม่โดยใช้สิ่งที่คุณเขียนเป็นคำถาม"
         : done === "dismissed"
-          ? "ปิดใบนี้แล้ว เหตุผลของคุณถูกบันทึกไว้"
+          ? "ปิดร่างนี้แล้ว เหตุผลของคุณถูกบันทึกไว้"
           : null;
   const shown =
     groups.find((group) => group.machine_model === asked) ?? groups[0];

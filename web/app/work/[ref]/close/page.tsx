@@ -37,7 +37,14 @@ export default async function ClosePage({
     <Shell account={account} current="/work">
       <div className="who">
         <span>
-          <Link href={`/work/${encodeURIComponent(job.ref)}/steps`}>‹ {job.machine_id}</Link>
+          {/* Back to the step the technician left, not step 1 (trial 5). */}
+          <Link
+            href={`/work/${encodeURIComponent(job.ref)}/steps${
+              reached !== undefined && reached !== "" ? `?step=${encodeURIComponent(reached)}` : ""
+            }`}
+          >
+            ‹ {job.machine_id}
+          </Link>
         </span>
         <span className="muted">{job.ref}</span>
       </div>

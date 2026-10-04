@@ -126,7 +126,14 @@ export default async function BoardPage({
           <div className="big-number">{active.length}</div>
         </div>
       </div>
-      <p className="muted">{round.summary}</p>
+      {/* The round's summary is about what the next round would add; it cannot
+          see the cards already waiting here, and "nothing new" beside three
+          waiting cards read as a contradiction (trial 5). */}
+      <p className="muted">
+        {waiting.length > 0 && round.summary.includes("ไม่มีงานใหม่ที่จะเสนอ")
+          ? `${round.summary} นอกจากที่รอคุณยืนยันอยู่`
+          : round.summary}
+      </p>
 
       <div className="board">
         <section className="column">

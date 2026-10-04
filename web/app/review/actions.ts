@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { callApi } from "@/lib/api";
 
-export type DecisionState = { error: string | null; thai?: string[] };
+export type DecisionState = { error: string | null; thai?: string[]; thaiTools?: string[] };
 
 /**
  * What the API said, turned into something a reviewer can act on.
@@ -97,7 +97,11 @@ export async function approve(
   if (!response.ok) {
     // Handed back so a refusal over one figure does not wipe every other
     // rendering the engineer typed (ADR-102).
-    return { error: await refusal(response), thai: form.getAll("thai").map(String) };
+    return {
+      error: await refusal(response),
+      thai: form.getAll("thai").map(String),
+      thaiTools: form.getAll("thai_tool").map(String),
+    };
   }
   redirect("/review?done=approved");
 }

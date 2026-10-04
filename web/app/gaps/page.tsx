@@ -30,6 +30,10 @@ export default async function GapsPage({
   const { drafting, already, error } = await searchParams;
   const [unanswered, round] = await Promise.all([gaps(), currentRound()]);
   const scheduled = unanswered.pm_without_steps ?? [];
+  const drafts = unanswered.awaiting_review.rows
+    .map((row) => ({ ...row, drafts: row.waiting - (row.not_found ?? 0) }))
+    .filter((row) => row.drafts > 0);
+  const notFound = unanswered.awaiting_review.rows.filter((row) => (row.not_found ?? 0) > 0);
 
   return (
     <Shell account={account} current="/gaps">
@@ -107,19 +111,36 @@ export default async function GapsPage({
         ))
       )}
 
-      <h2>ร่างที่รอวิศวกรอนุมัติ ({unanswered.awaiting_review.count})</h2>
-      {unanswered.awaiting_review.rows.length === 0 ? (
+      {/* Counted from the rows, not the API's total: that total includes the
+          "not found" results, which are a decision to make and not a draft to
+          approve (trial 5). */}
+      <h2>ร่างที่รอวิศวกรอนุมัติ ({drafts.reduce((sum, row) => sum + row.drafts, 0)})</h2>
+      {drafts.length === 0 ? (
         <p className="muted">ไม่มี</p>
       ) : (
         <ul className="gaps card">
-          {unanswered.awaiting_review.rows.map((row) => (
+          {drafts.map((row) => (
             <li key={row.machine_model}>
-              <strong>{row.machine_model}</strong> · {row.waiting - (row.not_found ?? 0)} ฉบับรออนุมัติ
-              {(row.not_found ?? 0) > 0 && ` · ${row.not_found} เรื่องที่คู่มือไม่มีคำตอบ`} · เก่าสุด{" "}
+              <strong>{row.machine_model}</strong> · {row.drafts} ฉบับรออนุมัติ · เก่าสุด{" "}
               {plantTime(row.oldest, round.timezone)} น.
             </li>
           ))}
         </ul>
+      )}
+      {notFound.length > 0 && (
+        <>
+          <h2>
+            คู่มือไม่มีคำตอบ ต้องตัดสินใจ ({notFound.reduce((sum, row) => sum + (row.not_found ?? 0), 0)})
+          </h2>
+          <ul className="gaps card">
+            {notFound.map((row) => (
+              <li key={row.machine_model}>
+                <strong>{row.machine_model}</strong> · {row.not_found} เรื่องที่ระบบค้นคู่มือแล้วไม่พบ
+                ตัดสินใจที่หน้า “อนุมัติขั้นตอน”
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <h2>ขั้นตอนที่คู่มือถูกเปลี่ยน ต้องตรวจใหม่ ({unanswered.manual_changed.count})</h2>
