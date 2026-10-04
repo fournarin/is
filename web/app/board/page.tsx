@@ -38,6 +38,8 @@ export default async function BoardPage({
     confirmed?: string;
     rejected?: string;
     brought?: string;
+    given?: string;
+    to?: string;
     error?: string;
   }>;
 }) {
@@ -52,7 +54,8 @@ export default async function BoardPage({
       </Shell>
     );
   }
-  const { released, confirmed, rejected, brought, error } = await searchParams;
+  const { released, confirmed, rejected, brought, given, to, error } =
+    await searchParams;
 
   const [round, waiting, active, finished] = await Promise.all([
     currentRound(),
@@ -77,13 +80,19 @@ export default async function BoardPage({
       <KeepFresh />
       <h1>กระดานงานกะนี้</h1>
       <p className="muted">
-        ระบบเลือกช่างให้แต่ละงานแล้ว กด “ยืนยัน” เพื่อส่งงานถึงช่าง หรือ
-        “พักไว้ก่อน” ถ้ายังไม่ควรทำตอนนี้
+        ระบบเลือกช่างให้แต่ละงานแล้ว กด “ยืนยัน” เพื่อส่งงานถึงช่าง
+        “ให้คนอื่น” ถ้างานนี้ควรเป็นของช่างอีกคน หรือ “พักไว้ก่อน”
+        ถ้ายังไม่ควรทำตอนนี้
       </p>
 
       {confirmed !== undefined && (
         <p className="recorded">
           ✓ ยืนยัน {confirmed} แล้ว งานถูกส่งถึงช่างแล้ว
+        </p>
+      )}
+      {given !== undefined && (
+        <p className="recorded">
+          ✓ ส่งงาน {given} ให้ {to ?? "ช่างที่คุณเลือก"} แล้ว
         </p>
       )}
       {rejected !== undefined && (
@@ -180,6 +189,32 @@ export default async function BoardPage({
                       ✓ ยืนยัน
                     </button>
                   </form>
+                  {one.others.length > 0 && (
+                    // The lead knows something the round does not - a handover
+                    // note asking for an electrician (trial 5, ADR-132).
+                    <details>
+                      <summary>👷 ให้คนอื่น</summary>
+                      <form method="post" action="/overview/confirm">
+                        <input type="hidden" name="ref" value={one.ref} />
+                        <label className="field">
+                          <span>ส่งงานนี้ให้</span>
+                          <select name="assignee" required defaultValue="">
+                            <option value="" disabled>
+                              เลือกช่างในกะนี้
+                            </option>
+                            {one.others.map((person) => (
+                              <option key={person.user} value={person.user}>
+                                {person.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button type="submit" className="ok">
+                          ✓ ส่งให้คนนี้
+                        </button>
+                      </form>
+                    </details>
+                  )}
                   <details>
                     <summary>⏸ พักไว้ก่อน</summary>
                     <form method="post" action="/overview/reject">

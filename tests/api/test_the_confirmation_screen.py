@@ -338,3 +338,139 @@ class TestTheBoard:
         _signed_in(client, Role.TECHNICIAN)
 
         assert client.get("/work-orders/active").status_code == 403
+
+
+ELECTRICIAN = UserId("tech-2")
+
+
+def _another(
+    database_url: str,
+    user: UserId,
+    *,
+    name: str,
+    skills: frozenset[SkillId],
+    rostered: bool = True,
+) -> None:
+    """Somebody the round did not choose, added after it ran so the proposal
+    in the fixture is still the one to `TECH`."""
+    with connect(database_url) as conn:
+        Authentication(LocalAccounts(), SimulatedClock(NOW)).create_account(
+            conn, user=user, display_name=name, role=Role.TECHNICIAN, password=PASSWORD
+        )
+        dispatch_repo.add_technician(
+            conn,
+            Technician(user=user, skills=skills),
+            known_skills={SkillId("electrical"), SkillId("robot_mechanical")},
+            now=NOW,
+        )
+        if rostered:
+            dispatch_repo.assign_to_shift(
+                conn,
+                ShiftAssignment(
+                    shift_id=AFTERNOON, on_date=NOW.date(), technician=user, available_minutes=480
+                ),
+            )
+
+
+def _needs(database_url: str, ref: str, skill: str) -> None:
+    with connect(database_url) as conn:
+        conn.execute(
+            "UPDATE work_order SET required_skill = %s WHERE work_order_ref = %s", (skill, ref)
+        )
+
+
+class TestGivingItToSomebodyElse:
+    """ADR-132: trial run 5's handover note asked for an electrician and the round
+    proposed somebody else; the lead had no way to send it to her."""
+
+    def test_the_board_is_told_who_else_could_take_it(
+        self, client: TestClient, world: dict[str, Any], database_url: str
+    ) -> None:
+        _another(
+            database_url, ELECTRICIAN, name="พิมพ์ชนก", skills=frozenset({SkillId("electrical")})
+        )
+        _another(database_url, UserId("tech-3"), name="ไม่อยู่กะ", skills=frozenset(), rostered=False)
+        _signed_in(client, Role.SUPERVISOR)
+
+        (waiting,) = client.get("/dispatch/proposals").json()
+
+        assert waiting["others"] == [{"user": str(ELECTRICIAN), "name": "พิมพ์ชนก"}]
+
+    def test_it_goes_to_the_chosen_person_and_is_recorded_as_a_disagreement(
+        self, client: TestClient, world: dict[str, Any], database_url: str
+    ) -> None:
+        _another(
+            database_url, ELECTRICIAN, name="พิมพ์ชนก", skills=frozenset({SkillId("electrical")})
+        )
+        _signed_in(client, Role.SUPERVISOR)
+
+        answered = client.post(
+            f"/dispatch/proposals/{world['ref']}/confirm", json={"assignee": str(ELECTRICIAN)}
+        )
+
+        assert answered.status_code == 201, answered.text
+        assert answered.json()["state"] == "reassigned"
+        assert answered.json()["given_to"] == ["พิมพ์ชนก"]
+        (active,) = client.get("/work-orders/active").json()
+        assert active["ref"] == world["ref"]
+        assert active["assignee_names"] == ["พิมพ์ชนก"]
+        (queued,) = _deliveries(database_url)
+        assert queued["work_order_ref"] == world["ref"]
+        record = client.get("/dispatch/confirmations").json()
+        assert record["overall"]["confirmed"] == 0
+        assert record["overall"]["reassigned"] == 1
+        assert record["overall"]["confirmed_share"] == 0.0
+        (one,) = record["reassignments"]
+        assert one["proposed_to"] == [str(TECH)]
+        assert one["given_to"] == [str(ELECTRICIAN)]
+
+    def test_naming_the_proposed_person_is_a_plain_confirmation(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        _signed_in(client, Role.SUPERVISOR)
+
+        answered = client.post(
+            f"/dispatch/proposals/{world['ref']}/confirm", json={"assignee": str(TECH)}
+        )
+
+        assert answered.json()["state"] == "confirmed"
+
+    def test_somebody_without_the_skill_is_refused_in_thai_and_nothing_changes(
+        self, client: TestClient, world: dict[str, Any], database_url: str
+    ) -> None:
+        _another(database_url, ELECTRICIAN, name="วิชัย", skills=frozenset())
+        _needs(database_url, world["ref"], "electrical")
+        _signed_in(client, Role.SUPERVISOR)
+
+        refused = client.post(
+            f"/dispatch/proposals/{world['ref']}/confirm", json={"assignee": str(ELECTRICIAN)}
+        )
+
+        assert refused.status_code == 422
+        assert "วิชัย" in refused.json()["detail"]
+        assert client.get(f"/work-orders/{world['ref']}").json()["status"] == "proposed"
+        assert _deliveries(database_url) == []
+
+    def test_somebody_off_the_shift_is_refused(
+        self, client: TestClient, world: dict[str, Any], database_url: str
+    ) -> None:
+        _another(database_url, ELECTRICIAN, name="พิมพ์ชนก", skills=frozenset(), rostered=False)
+        _signed_in(client, Role.SUPERVISOR)
+
+        refused = client.post(
+            f"/dispatch/proposals/{world['ref']}/confirm", json={"assignee": str(ELECTRICIAN)}
+        )
+
+        assert refused.status_code == 422
+        assert "ไม่ได้อยู่ในกะนี้" in refused.json()["detail"]
+
+    def test_only_a_supervisor_may_give_it_to_somebody_else(
+        self, client: TestClient, world: dict[str, Any]
+    ) -> None:
+        _signed_in(client, Role.TECHNICIAN)
+
+        refused = client.post(
+            f"/dispatch/proposals/{world['ref']}/confirm", json={"assignee": str(TECH)}
+        )
+
+        assert refused.status_code == 403
