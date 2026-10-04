@@ -98,8 +98,10 @@ export default async function OverviewPage() {
         <h2>สุขภาพเครื่องจักร</h2>
 
         <p className="muted">
-          {health.observed_from === null
-            ? "ยังไม่มีงานที่ปิดแล้ว จึงยังบอกไม่ได้ว่าเครื่องไหนเสียบ่อย ด้านล่างคือเรื่องที่ค้างอยู่ตอนนี้"
+          {/* Below a week no machine has a rate, and a list headed "fails
+            most" would be ordered by nothing (ADR-116, fourth trial, 4). */}
+          {health.history_too_short !== null || health.observed_from === null
+            ? `${health.history_too_short ?? ""} ด้านล่างคือเรื่องที่ค้างอยู่ตอนนี้`
             : `นับจากใบงานที่ปิดแล้วในช่วง ${plantDateTime(
                 health.observed_from,
                 overview.timezone,
@@ -109,7 +111,7 @@ export default async function OverviewPage() {
         </p>
 
         <div className="health">
-          {health.observed_from !== null && (
+          {health.observed_from !== null && health.history_too_short === null && (
             <div className="card">
               <h3>เสียบ่อยที่สุดในช่วงที่นับ</h3>
               <ol className="health-list">

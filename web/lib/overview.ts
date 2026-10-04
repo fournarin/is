@@ -123,6 +123,7 @@ export type HistoryContribution = {
   pm_overdue: number;
   pm_overdue_days: number | null;
   false_alarms: number;
+  prevented: number;
   absent: string[];
   reason: string;
 };
@@ -155,6 +156,9 @@ export type MachineHealthOverview = {
   observed_from: string | null;
   observed_to: string | null;
   observed_days: number;
+  minimum_observed_days: number;
+  /** Shown instead of the ranking while the window is too short (ADR-116). */
+  history_too_short: string | null;
   by_history: MachineHealth[];
   by_now: MachineHealth[];
   absent: string[];

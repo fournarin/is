@@ -89,6 +89,30 @@ class ClosedRepair(BaseModel):
     closed_at: datetime
     origin: WorkOrderOrigin
     outcome: WorkOutcome
+    # What the order was raised on, and whether the crossing it foresaw arrived
+    # before the job ended. Both default to "not a prediction", so a history
+    # written out without them reads as it always did.
+    finding_kind: FindingKind | None = None
+    came_true: bool = False
+
+    @property
+    def is_prevented(self) -> bool:
+        """A prediction acted on before the machine crossed its threshold.
+
+        The trend said the part would cross, somebody dealt with it first, and
+        no detection ever followed. That is the system doing its job, for the
+        reason a PM task done on time is: counting it as a failure ranked a
+        machine "fails most" on a job closed before anything failed, which was
+        the fourth trial's fourth finding. A prediction overtaken by its
+        detection while the job was still open (`came_true`) did fail, and is
+        counted (ADR-023 section 7, ADR-119).
+        """
+        return (
+            self.origin is WorkOrderOrigin.CONDITION
+            and self.finding_kind is FindingKind.PREDICTED
+            and not self.came_true
+            and self.outcome is not WorkOutcome.NO_PROBLEM_FOUND
+        )
 
     @property
     def is_failure(self) -> bool:
@@ -104,6 +128,7 @@ class ClosedRepair(BaseModel):
         return (
             self.origin is not WorkOrderOrigin.SCHEDULED
             and self.outcome is not WorkOutcome.NO_PROBLEM_FOUND
+            and not self.is_prevented
         )
 
     @property
@@ -124,6 +149,7 @@ class ClosedRepair(BaseModel):
         order: WorkOrder,
         *,
         closed_at: datetime,
+        came_true: bool = False,
     ) -> ClosedRepair:
         if order.status is not WorkOrderStatus.CLOSED or order.outcome is None:
             raise ValueError(
@@ -136,6 +162,8 @@ class ClosedRepair(BaseModel):
             closed_at=closed_at,
             origin=order.origin,
             outcome=order.outcome,
+            finding_kind=order.finding_kind,
+            came_true=came_true,
         )
 
 
@@ -176,6 +204,10 @@ class HistoryContribution(BaseModel):
 
     # Same footing, sharper reason: this is evidence about a rule (ADR-073).
     false_alarms: int = Field(default=0, ge=0)
+
+    # Predictions repaired before anything failed. Shown, never ranked on: they
+    # are the system working, not the machine failing.
+    prevented: int = Field(default=0, ge=0)
 
     # Figures ADR-072 asked for that could not be computed, named rather than
     # dropped. Never silently empty: section 5 of ADR-076 has one entry in it.
@@ -287,6 +319,7 @@ def _history_of(
 ) -> HistoryContribution:
     failures = [repair for repair in repairs if repair.is_failure]
     false_alarms = [repair for repair in repairs if repair.is_false_alarm]
+    prevented = [repair for repair in repairs if repair.is_prevented]
     pm_done = [repair for repair in repairs if repair.origin is WorkOrderOrigin.SCHEDULED]
 
     last_failure = max((repair.closed_at for repair in failures), default=None)
@@ -320,6 +353,7 @@ def _history_of(
         pm_overdue=len(overdue),
         pm_overdue_days=worst_overdue,
         false_alarms=len(false_alarms),
+        prevented=len(prevented),
         absent=(AGE_AGAINST_ITS_CLASS_IS_ABSENT,),
         reason=_history_reason(
             machine_id,
@@ -331,6 +365,7 @@ def _history_of(
             worst_overdue=worst_overdue,
             unrecorded=unrecorded,
             false_alarms=len(false_alarms),
+            prevented=len(prevented),
         ),
     )
 
@@ -346,6 +381,7 @@ def _history_reason(
     worst_overdue: float | None,
     unrecorded: int,
     false_alarms: int,
+    prevented: int = 0,
 ) -> str:
     """A sentence a supervisor can act on, and one they can check.
 
@@ -354,7 +390,7 @@ def _history_reason(
     """
     if rate is None and span_days > 0.0:
         head = (
-            f"ประวัติของ {machine_id} มีแค่ {span_days:.1f} วัน ยังสั้นเกินกว่าจะบอกอัตราการเสีย "
+            f"ประวัติของ {machine_id} มี{_span_in_days(span_days)} ยังสั้นเกินกว่าจะบอกอัตราการเสีย "
             f"(ต้องอย่างน้อย {MINIMUM_OBSERVED_DAYS:.0f} วัน) · เสีย {failures} ครั้งในช่วงนี้"
         )
     elif rate is None:
@@ -375,11 +411,37 @@ def _history_reason(
         if unrecorded:
             clause += f" ในนี้ {unrecorded} งานไม่เคยมีบันทึกว่าทำ จึงนับวันเลยกำหนดตั้งแต่วันที่ลงทะเบียนเข้าระบบ"
         clauses.append(clause)
+    if prevented:
+        clauses.append(f"ซ่อมก่อนเสียตามที่คาดการณ์ไว้ {prevented} ครั้ง ไม่นับเป็นการเสีย")
     if false_alarms:
         clauses.append(
             f"ปิดงานแบบไม่พบปัญหา {false_alarms} ครั้ง แปลว่าเกณฑ์แจ้งเตือนอาจไวเกินไป ไม่ได้แปลว่าเครื่องมีปัญหา"
         )
     return " · ".join(clauses)
+
+
+def _span_in_days(days: float) -> str:
+    """A span a supervisor reads, never "0.0 days" for a few minutes of records."""
+    if days < 1.0:
+        return "ไม่ถึง 1 วัน"
+    return f"แค่ {days:.0f} วัน"
+
+
+def history_too_short(observed_from: datetime | None, observed_days: float) -> str | None:
+    """The one sentence a screen shows instead of a ranking, or None to rank.
+
+    Below `MINIMUM_OBSERVED_DAYS` no machine has a rate, so a list ordered "fails
+    most" would be ordered by nothing, and the fourth trial read a machine at the
+    top of it as the one that fails most after two minutes of records (ADR-116).
+    """
+    if observed_from is None:
+        return "ยังไม่มีงานที่ปิดแล้ว จึงยังบอกไม่ได้ว่าเครื่องไหนเสียบ่อย"
+    if observed_days < MINIMUM_OBSERVED_DAYS:
+        return (
+            f"ประวัติงานที่ปิดแล้วยังน้อยเกินกว่าจะบอกว่าเครื่องไหนเสียบ่อย "
+            f"ต้องเก็บอย่างน้อย {MINIMUM_OBSERVED_DAYS:.0f} วัน ตอนนี้มี{_span_in_days(observed_days)}"
+        )
+    return None
 
 
 def _current_of(

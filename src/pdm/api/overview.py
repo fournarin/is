@@ -51,6 +51,7 @@ from pdm.contracts import (
     ComponentLabel,
     Finding,
     FindingKind,
+    FindingStatus,
     Line,
     MachineId,
     MachineModel,
@@ -64,7 +65,15 @@ from pdm.contracts import (
     WorkOrderRef,
 )
 from pdm.contracts.wording import Wording
-from pdm.health import ClosedRepair, MachineHealth, assess, by_history, by_now
+from pdm.health import (
+    MINIMUM_OBSERVED_DAYS,
+    ClosedRepair,
+    MachineHealth,
+    assess,
+    by_history,
+    by_now,
+    history_too_short,
+)
 from pdm.platform.auth.domain import Account
 from pdm.playbooks import repo as playbooks
 from pdm.playbooks.domain import PendingForPair
@@ -765,6 +774,12 @@ class HealthOverview(BaseModel):
     observed_from: datetime | None = None
     observed_to: datetime | None = None
     observed_days: float = 0.0
+    # The shortest window a ranking by failures is drawn over (ADR-116), and the
+    # sentence a screen shows instead of that ranking while the window is
+    # shorter. None means rank: below the minimum no machine has a rate, and a
+    # list headed "fails most" would be ordered by nothing (fourth trial, 4).
+    minimum_observed_days: float = MINIMUM_OBSERVED_DAYS
+    history_too_short: str | None = None
 
     by_history: tuple[MachineHealth, ...]
     by_now: tuple[MachineHealth, ...]
@@ -806,8 +821,19 @@ def machine_health(
     known = {
         machine_id for station in plant.stations.values() for machine_id in station.machine_ids
     }
+    # A prediction came true when its Finding was superseded by the detection
+    # it foresaw; one resolved with its job is a failure that was prevented and
+    # is not counted as one (ADR-023 section 7, ADR-119). One read per closed
+    # prediction, through layer 1's own function rather than a join (ADR-030).
     repairs = [
-        ClosedRepair.from_order(WorkOrderRef(ref), order, closed_at=closed_at)
+        ClosedRepair.from_order(
+            WorkOrderRef(ref),
+            order,
+            closed_at=closed_at,
+            came_true=order.finding_kind is FindingKind.PREDICTED
+            and order.finding_ref is not None
+            and triggers.status_of(conn, order.finding_ref) is FindingStatus.SUPERSEDED,
+        )
         for ref, order, closed_at in work.closed_orders(conn)
     ]
     findings = list(triggers.live(conn).values())
@@ -831,6 +857,10 @@ def machine_health(
         observed_from=span.observed_from if span is not None else None,
         observed_to=span.observed_to if span is not None else None,
         observed_days=span.observed_days if span is not None else 0.0,
+        history_too_short=history_too_short(
+            span.observed_from if span is not None else None,
+            span.observed_days if span is not None else 0.0,
+        ),
         by_history=by_history(readings),
         by_now=by_now(readings),
         absent=(*written, *_pm_absences(tasks, sorted(known))),

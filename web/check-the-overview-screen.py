@@ -382,12 +382,19 @@ def main() -> None:
     expect("สุขภาพเครื่องจักร" in page, "the panel is on the supervisor's overview")
     # With nothing closed there is no history to rank, and the screen shows the
     # one list it has rather than a column of "too little data" (ADR-122).
+    ranked = health["history_too_short"] is None
     expect(
-        ("เสียบ่อยที่สุดในช่วงที่นับ" in page) == (health["observed_from"] is not None)
-        and "สัญญาณผิดปกติที่ค้างอยู่ตอนนี้" in page,
-        "two lists and never one (ADR-072 §2), the first only when anything has closed",
+        ("เสียบ่อยที่สุดในช่วงที่นับ" in page) == ranked and "สัญญาณผิดปกติที่ค้างอยู่ตอนนี้" in page,
+        "two lists and never one (ADR-072 §2), the first only over a week of history",
     )
-    for row in health["by_history"]:
+    # Under a week the screen says so in one sentence, and never "0.0 วัน"
+    # (ADR-116, fourth trial, 4).
+    if not ranked:
+        expect(
+            health["history_too_short"] in page and "0.0 วัน" not in page,
+            "too little history is one sentence, not a ranking of minutes",
+        )
+    for row in health["by_history"] if ranked else ():
         expect(
             row["machine_id"] in page,
             f"{row['machine_id']} is on the panel",
@@ -396,7 +403,7 @@ def main() -> None:
     # beside it (ADR-081 §5).
     # Only when anything has closed: with nothing to rank, the screen draws no
     # history list at all and says why in one sentence (ADR-122).
-    if health["observed_from"] is not None:
+    if ranked:
         quoted = health["by_history"][0]["history"]["reason"]
         expect(quoted in page, "the sentence on screen is the one the backend wrote")
     for sentence in health["absent"]:
