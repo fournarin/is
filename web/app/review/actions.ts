@@ -72,6 +72,10 @@ export async function approve(
   if (thai.some((one) => one !== "")) {
     body.thai_steps = thai;
   }
+  const thaiTools = form.getAll("thai_tool").map((one) => String(one).trim());
+  if (thaiTools.some((one) => one !== "")) {
+    body.thai_tools = thaiTools;
+  }
   if (skill !== "") {
     body.required_skill = skill;
   }

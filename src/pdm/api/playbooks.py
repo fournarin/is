@@ -81,6 +81,15 @@ class ProposalSummary(BaseModel):
         )
 
 
+class SkillChoice(BaseModel):
+    """One skill the plant declares, as the approver picks it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    skill: SkillId
+    name: str
+
+
 class ProposalDetail(BaseModel):
     """Everything a person needs to decide, including what was refused.
 
@@ -112,6 +121,10 @@ class ProposalDetail(BaseModel):
     proposed_skill: SkillId | None
     proposed_minutes: int | None
     rejected: tuple[dict[str, object], ...]
+    # The plant's skill vocabulary with its Thai names, so the approver picks
+    # one rather than typing an id (fourth trial; invariant 13 refuses any
+    # other value anyway).
+    skills: tuple[SkillChoice, ...] = ()
     created_at: datetime
     created_by: str | None
 
@@ -130,6 +143,8 @@ class Approval(BaseModel):
     # The approver's Thai for each step, position for position; blank for none
     # (ADR-095).
     thai_steps: tuple[str, ...] | None = None
+    # The approver's Thai for each tool, position for position (ADR-130).
+    thai_tools: tuple[str, ...] | None = None
     required_skill: SkillId | None = None
     estimated_minutes: int | None = Field(default=None, gt=0)
     # ADR-025: a two-person job consumes twice the shift's capacity, and the
@@ -303,6 +318,10 @@ def proposal_detail(
         rejected=found.rejected,
         created_at=found.created_at,
         created_by=found.created_by,
+        skills=tuple(
+            SkillChoice(skill=one, name=config.wording().skill(one))
+            for one in sorted(config.skills)
+        ),
     )
 
 
@@ -334,6 +353,7 @@ def approve(
             note=approval.note,
             rewritten_steps=approval.steps,
             thai_steps=approval.thai_steps,
+            thai_tools=approval.thai_tools,
         )
         # The orders already waiting on this symptom get the steps now, rather
         # than a technician being told none exist (ADR-102).

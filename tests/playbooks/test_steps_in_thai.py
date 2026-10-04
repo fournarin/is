@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from pdm.contracts import DocumentId, PlaybookStep
-from pdm.playbooks.service import in_thai
+from pdm.playbooks.service import in_thai, tools_in_thai
 
 DOC = DocumentId("a" * 64)
 
@@ -91,3 +91,35 @@ class TestUnitsTravelWithTheirFigures:
         )
 
         assert rendered[2].text_th is not None
+
+
+# ADR-130: the tools a technician fetches, under the same rule as the steps.
+TOOLS = ("torque wrench 5-60 Nm", "belt tension gauge", "10 mm socket")
+
+
+def test_each_tool_carries_its_thai_and_a_blank_keeps_the_manuals_words() -> None:
+    assert tools_in_thai(TOOLS, ("ประแจวัดแรงบิด 5-60 Nm", "", "ลูกบ็อกซ์ 10 mm")) == (
+        "ประแจวัดแรงบิด 5-60 Nm",
+        "",
+        "ลูกบ็อกซ์ 10 mm",
+    )
+
+
+def test_all_blank_is_no_rendering() -> None:
+    assert tools_in_thai(TOOLS, ("", " ", "")) == ()
+
+
+def test_a_tool_whose_range_changed_is_refused() -> None:
+    """A wrench of 5-50 Nm is the wrong wrench."""
+    with pytest.raises(ValueError, match="เครื่องมือรายการที่ 1"):
+        tools_in_thai(TOOLS, ("ประแจวัดแรงบิด 5-50 Nm", "", ""))
+
+
+def test_a_tool_whose_unit_was_dropped_is_refused() -> None:
+    with pytest.raises(ValueError, match="หน่วย"):
+        tools_in_thai(TOOLS, ("", "", "ลูกบ็อกซ์ 10 นิ้ว"))
+
+
+def test_the_count_must_match() -> None:
+    with pytest.raises(ValueError, match="3 รายการ"):
+        tools_in_thai(TOOLS, ("ประแจ 5-60 Nm",))

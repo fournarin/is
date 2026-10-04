@@ -35,7 +35,7 @@ from pdm.playbooks.domain import (
 )
 
 _PLAYBOOK_COLUMNS = """
-    symptom_code, machine_model, steps, tools, parts, estimated_minutes,
+    symptom_code, machine_model, steps, tools, tools_th, parts, estimated_minutes,
     required_skill, required_technicians, source_doc, page, revision, status,
     review_reason, approved_by, approved_at, approver_role
 """
@@ -56,6 +56,7 @@ def _to_playbook(row: dict[str, Any]) -> tuple[Playbook, str | None]:
     review_reason = row.pop("review_reason")
     row["steps"] = tuple(PlaybookStep.model_validate(step) for step in row["steps"])
     row["tools"] = tuple(row["tools"])
+    row["tools_th"] = tuple(row["tools_th"])
     row["parts"] = tuple(row["parts"])
     return (Playbook.model_validate(row), review_reason)
 
@@ -182,16 +183,17 @@ def save_approved(
         cur.execute(
             """
             INSERT INTO playbook (
-                symptom_code, machine_model, steps, tools, parts,
+                symptom_code, machine_model, steps, tools, tools_th, parts,
                 estimated_minutes, required_skill, required_technicians,
                 source_doc, page, cited_documents, revision, status,
                 review_reason, approved_by, approved_at, approver_role
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 'approved',
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, 'approved',
                     NULL, %s, %s, %s)
             ON CONFLICT (symptom_code, machine_model) DO UPDATE SET
                 steps                = EXCLUDED.steps,
                 tools                = EXCLUDED.tools,
+                tools_th             = EXCLUDED.tools_th,
                 parts                = EXCLUDED.parts,
                 estimated_minutes    = EXCLUDED.estimated_minutes,
                 required_skill       = EXCLUDED.required_skill,
@@ -212,6 +214,7 @@ def save_approved(
                 playbook.machine_model,
                 Jsonb([step.model_dump(mode="json") for step in playbook.steps]),
                 list(playbook.tools),
+                list(playbook.tools_th),
                 list(playbook.parts),
                 playbook.estimated_minutes,
                 playbook.required_skill,

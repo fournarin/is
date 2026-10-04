@@ -176,6 +176,10 @@ class Playbook(BaseModel):
 
     steps: tuple[PlaybookStep, ...]
     tools: tuple[str, ...] = ()
+    # The approver's Thai for each tool, position for position; "" leaves that
+    # tool as the manual wrote it, and an empty tuple means none were rendered
+    # (ADR-130). The same figure check as the steps' Thai guards it.
+    tools_th: tuple[str, ...] = ()
     parts: tuple[str, ...] = ()
 
     estimated_minutes: int = Field(gt=0)

@@ -2,7 +2,7 @@ import { NotThere, Shell } from "@/app/ui/shell";
 import { bandFor, minutesText } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { ticketAt } from "@/lib/work";
+import { ticketAt, toolNames } from "@/lib/work";
 
 /**
  * The work order on one sheet of paper. The plant still runs on paper, and a
@@ -52,7 +52,7 @@ export default async function PrintPage({ params }: { params: Promise<{ ref: str
         </div>
         {job.tools.length > 0 && (
           <p>
-            <strong>เครื่องมือ:</strong> {job.tools.join(" · ")}
+            <strong>เครื่องมือ:</strong> {toolNames(job).join(" · ")}
           </p>
         )}
         {job.priority_reason !== "" && (

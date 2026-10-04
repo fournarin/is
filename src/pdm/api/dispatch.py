@@ -232,6 +232,9 @@ class TicketView(BaseModel):
     required_skill_name: str | None = None
     station: str | None = None
     tools: tuple[str, ...] = ()
+    # The approver's Thai for each tool, position for position; "" where the
+    # manual's words stand (ADR-130).
+    tools_th: tuple[str, ...] = ()
     required_technicians: int
     assignees: tuple[str, ...] = ()
     playbook_warning: str | None = None
@@ -863,14 +866,19 @@ def _symptom_of(conn: Connection[Any], order: WorkOrder) -> SymptomCode | None:
     return None
 
 
-def _tools(conn: Connection[Any], playbook_ref: str | None) -> tuple[str, ...]:
-    """The tools the approved playbook lists (ADR-102). The snapshot freezes the
-    steps; the tool list is read from the served playbook and shown as that."""
+def _tools(
+    conn: Connection[Any], playbook_ref: str | None
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The tools the approved playbook lists, and the approver's Thai for them
+    (ADR-102, ADR-130). The snapshot freezes the steps; the tool list is read
+    from the served playbook and shown as that."""
     if not playbook_ref or "/" not in playbook_ref:
-        return ()
+        return (), ()
     symptom, model = playbook_ref.split("/", 1)
     found = playbooks_repo.get(conn, SymptomCode(symptom), MachineModel(model))
-    return tuple(found[0].tools) if found is not None else ()
+    if found is None:
+        return (), ()
+    return tuple(found[0].tools), tuple(found[0].tools_th)
 
 
 def _station(config: Config, machine_id: MachineId) -> str | None:
@@ -901,6 +909,7 @@ def ticket(
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no work order {work_order_ref}")
     manuals = _manual_titles(conn, {str(step.source_doc) for step in order.playbook_snapshot})
+    tools, tools_th = _tools(conn, order.playbook_ref)
     return TicketView(
         ref=work_order_ref,
         machine_id=str(order.machine_id),
@@ -939,7 +948,8 @@ def ticket(
             )
             for step in order.playbook_snapshot
         ),
-        tools=_tools(conn, order.playbook_ref),
+        tools=tools,
+        tools_th=tools_th,
         where_to_look=() if order.playbook_snapshot else _where_to_look(conn, config, order),
         recurrence=_recurrence(conn, order),
     )

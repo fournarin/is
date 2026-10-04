@@ -230,6 +230,8 @@ export default async function ProposalPage({
           steps={draft.steps.map((one) => one.text)}
           proposedSkill={draft.proposed_skill}
           proposedMinutes={draft.proposed_minutes}
+          tools={draft.tools}
+          skills={draft.skills ?? []}
         />
       ) : (
         <p className="muted">

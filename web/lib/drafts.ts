@@ -68,6 +68,8 @@ export type Proposal = {
   rejected: Record<string, unknown>[];
   created_at: string;
   created_by: string | null;
+  // The plant's skills with their Thai names, for the approver to pick from.
+  skills?: { skill: string; name: string }[];
 };
 
 /** `/documents/{id}/pages/{page}` - the panel on the right. */
