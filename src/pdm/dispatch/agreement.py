@@ -71,6 +71,10 @@ class Counts(BaseModel):
     confirmed: int = Field(ge=0)
     rejected: int = Field(ge=0)
     expired: int = Field(ge=0)
+    # Sent out now, to somebody the scheduler did not choose (ADR-132). Answered,
+    # and not agreement: `confirmed_share` is over `answered`, so a reassignment
+    # lowers it exactly as a rejection does.
+    reassigned: int = Field(default=0, ge=0)
 
     answered: int = Field(ge=0)
     settled: int = Field(ge=0)
@@ -145,6 +149,29 @@ class Rejection(BaseModel):
     priority_reason: str
 
 
+class Reassigned(BaseModel):
+    """A shift lead sending the job out to somebody else (ADR-132).
+
+    Both crews are carried, because the disagreement is between them: who the
+    scheduler chose, and who the lead gave it to instead.
+    """
+
+    model_config = _FROZEN
+
+    work_order_ref: str
+    proposed_at: datetime
+    decided_at: datetime | None = None
+    minutes_to_decide: float | None = None
+    decided_by: UserId | None = None
+    proposed_to: tuple[UserId, ...]
+    given_to: tuple[UserId, ...]
+
+    band: Band | None = None
+    shift_id: ShiftId | None = None
+    priority_score: float
+    priority_reason: str
+
+
 class Expiry(BaseModel):
     """A proposal nobody answered, listed as loudly as a rejection.
 
@@ -177,6 +204,7 @@ class AgreementReport(BaseModel):
     by_shift: tuple[Segment, ...] = ()
     by_band: tuple[Segment, ...] = ()
     rejections: tuple[Rejection, ...] = ()
+    reassignments: tuple[Reassigned, ...] = ()
     expiries: tuple[Expiry, ...] = ()
     # Never empty, never a default a caller can talk it out of (ADR-073 §6).
     limitation: str = Field(default=WHAT_THE_RECORD_CANNOT_SAY, min_length=1)
@@ -197,6 +225,9 @@ def agreement(proposals: Sequence[Proposal]) -> AgreementReport:
         by_shift=_segments(ordered, key=lambda one: str(one.shift_id) if one.shift_id else None),
         by_band=_segments(ordered, key=lambda one: one.band.value if one.band else None),
         rejections=tuple(_rejection(one) for one in ordered if one.state is ProposalState.REJECTED),
+        reassignments=tuple(
+            _reassigned(one) for one in ordered if one.state is ProposalState.REASSIGNED
+        ),
         expiries=tuple(_expiry(one) for one in ordered if one.state is ProposalState.EXPIRED),
     )
 
@@ -208,7 +239,8 @@ def _counts(proposals: Sequence[Proposal]) -> Counts:
     confirmed = how_many(ProposalState.CONFIRMED)
     rejected = how_many(ProposalState.REJECTED)
     expired = how_many(ProposalState.EXPIRED)
-    answered = confirmed + rejected
+    reassigned = how_many(ProposalState.REASSIGNED)
+    answered = confirmed + rejected + reassigned
     settled = answered + expired
     return Counts(
         proposed=len(proposals),
@@ -216,6 +248,7 @@ def _counts(proposals: Sequence[Proposal]) -> Counts:
         confirmed=confirmed,
         rejected=rejected,
         expired=expired,
+        reassigned=reassigned,
         answered=answered,
         settled=settled,
         confirmed_share=confirmed / answered if answered else None,
@@ -227,7 +260,7 @@ def _decision_time(proposals: Sequence[Proposal]) -> DecisionTime:
     taken = [
         minutes
         for one in proposals
-        if one.state in (ProposalState.CONFIRMED, ProposalState.REJECTED)
+        if one.state in (ProposalState.CONFIRMED, ProposalState.REJECTED, ProposalState.REASSIGNED)
         and (minutes := _minutes_between(one)) is not None
     ]
     if not taken:
@@ -274,6 +307,22 @@ def _rejection(proposal: Proposal) -> Rejection:
         reason=proposal.reason,
         band=proposal.band,
         load_ratio=proposal.load_ratio,
+        shift_id=proposal.shift_id,
+        priority_score=proposal.priority_score,
+        priority_reason=proposal.priority_reason,
+    )
+
+
+def _reassigned(proposal: Proposal) -> Reassigned:
+    return Reassigned(
+        work_order_ref=proposal.work_order_ref,
+        proposed_at=proposal.proposed_at,
+        decided_at=proposal.decided_at,
+        minutes_to_decide=_minutes_between(proposal),
+        decided_by=proposal.decided_by,
+        proposed_to=tuple(one.user for one in proposal.assignees),
+        given_to=tuple(one.user for one in proposal.confirmed_assignees),
+        band=proposal.band,
         shift_id=proposal.shift_id,
         priority_score=proposal.priority_score,
         priority_reason=proposal.priority_reason,

@@ -140,6 +140,7 @@ entries replace parts of earlier ones, and both are kept.
 | [129](0129-a-plan-makes-no-claim-about-when.md) | A plan makes no claim about when | |
 | [130](0130-tools-in-thai-and-a-skill-picked-by-name.md) | Tools in Thai, and a skill picked by name | |
 | [131](0131-a-predicted-jobs-waiting-costs-less-than-a-stop-already-happening.md) | A predicted job's waiting costs less than a stop already happening | |
+| [132](0132-the-shift-lead-confirms-to-somebody-else.md) | The shift lead confirms to somebody else | |
 
 ## The invariants these records cite
 

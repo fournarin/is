@@ -155,6 +155,8 @@ export type Proposal = {
   load_ratio: number | null;
   shift_id: string | null;
   expires_at: string;
+  // Who else on this shift could take it, for "ให้คนอื่น" (ADR-132).
+  others: { user: string; name: string }[];
 };
 
 /**

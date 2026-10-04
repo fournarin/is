@@ -36,12 +36,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pdm.api.deps import Confirming, Db, Plant, Rounds, Time, requires
 from pdm.contracts import (
+    Assignee,
+    AssigneeRole,
     FindingKind,
     MachineId,
     MachineModel,
     Role,
     Severity,
     SymptomCode,
+    Technician,
     UserId,
     WorkOrder,
     WorkOrderOrigin,
@@ -53,7 +56,7 @@ from pdm.dispatch import Band
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.agreement import AgreementReport, agreement
 from pdm.dispatch.overrides import Override, OverrideKind
-from pdm.dispatch.proposals import Proposal, ProposalState
+from pdm.dispatch.proposals import Proposal, ProposalState, Reassignment, crew_with, why_not
 from pdm.dispatch.service import AlreadyAnswered, NoProposal, NotSetAside
 from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
@@ -274,6 +277,15 @@ class Mine(BaseModel):
     priority_reason: str
 
 
+class Candidate(BaseModel):
+    """One person the shift lead could give a proposed job to instead."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    user: str
+    name: str
+
+
 class ProposalView(BaseModel):
     """One decision waiting for a supervisor (ADR-071).
 
@@ -300,6 +312,10 @@ class ProposalView(BaseModel):
     # here rather than shown as a duration, because "expires at 14:32" is a
     # decision a person can make and "expires in a while" is not.
     expires_at: datetime
+    # Who else on this shift could take it, for the lead's "ให้คนอื่น" (ADR-132):
+    # active, rostered now, holding the skill the job asks for, and not already
+    # the proposed primary. Empty when nobody else could.
+    others: tuple[Candidate, ...] = ()
 
 
 class ProposalAnswered(BaseModel):
@@ -313,6 +329,8 @@ class ProposalAnswered(BaseModel):
     at: datetime
     by: str
     reason: str | None = None
+    # Who the job went to, by name, when the lead chose somebody else (ADR-132).
+    given_to: tuple[str, ...] = ()
 
 
 class Objection(BaseModel):
@@ -617,7 +635,43 @@ def _names(conn: Connection[Any], users: Iterable[UserId]) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _proposed(proposal: Proposal, config: Config, conn: Connection[Any]) -> ProposalView:
+def _others(
+    proposal: Proposal,
+    conn: Connection[Any],
+    *,
+    technicians: dict[UserId, Technician],
+    rostered: set[UserId],
+) -> tuple[Candidate, ...]:
+    """The shift's technicians who could take this job instead (ADR-132)."""
+    order = work.get(conn, proposal.work_order_ref)
+    skill = order.required_skill if order is not None else None
+    primary = next(
+        (one.user for one in proposal.assignees if one.role is AssigneeRole.PRIMARY), None
+    )
+    users = sorted(
+        user
+        for user in rostered
+        if user != primary
+        and why_not(
+            name=str(user),
+            technician=technicians.get(user),
+            rostered=True,
+            required_skill=skill,
+        )
+        is None
+    )
+    return tuple(
+        Candidate(user=str(user), name=name)
+        for user, name in zip(users, _names(conn, users), strict=True)
+    )
+
+
+def _proposed(
+    proposal: Proposal,
+    config: Config,
+    conn: Connection[Any],
+    others: tuple[Candidate, ...] = (),
+) -> ProposalView:
     return ProposalView(
         ref=proposal.work_order_ref,
         proposed_at=proposal.proposed_at,
@@ -629,6 +683,7 @@ def _proposed(proposal: Proposal, config: Config, conn: Connection[Any]) -> Prop
         load_ratio=proposal.load_ratio,
         shift_id=str(proposal.shift_id) if proposal.shift_id is not None else None,
         expires_at=_expires_at(proposal, config),
+        others=others,
     )
 
 
@@ -636,6 +691,7 @@ def _proposed(proposal: Proposal, config: Config, conn: Connection[Any]) -> Prop
 def proposals(
     conn: Db,
     config: Plant,
+    rounds: Rounds,
     account: Annotated[Account, Depends(requires(*_MAY_READ, action="read_proposals"))],
 ) -> list[ProposalView]:
     """What the scheduler is waiting to be told about, oldest first.
@@ -649,7 +705,17 @@ def proposals(
     `decide()` again would answer a different question - what a round would do
     now, with those orders already out of the queue.
     """
-    return [_proposed(one, config, conn) for one in dispatch_repo.pending_proposals(conn)]
+    technicians = {one.user: one for one in dispatch_repo.technicians(conn)}
+    rostered = rounds.rostered_now(conn)
+    return [
+        _proposed(
+            one,
+            config,
+            conn,
+            _others(one, conn, technicians=technicians, rostered=rostered),
+        )
+        for one in dispatch_repo.pending_proposals(conn)
+    ]
 
 
 @router.get("/dispatch/confirmations", response_model=AgreementReport)
@@ -689,8 +755,10 @@ def confirm_proposal(
     work_order_ref: str,
     conn: Db,
     clock: Time,
+    rounds: Rounds,
     confirming: Confirming,
     account: Annotated[Account, Depends(requires(*_MAY_CONFIRM, action="confirm_proposal"))],
+    reassignment: Reassignment | None = None,
 ) -> ProposalAnswered:
     """The press the advisor asked for: this goes out, to these people, now.
 
@@ -701,17 +769,55 @@ def confirm_proposal(
     somebody's job is this one (ADR-071 §5). Queued rather than sent: the worker
     drains the outstanding rows, so a destination that is down delays a ticket
     instead of failing a supervisor's button.
+
+    **With a body naming `assignee`, the job goes to that person instead**
+    (ADR-132): the lead agrees it should go now and disagrees about who. The
+    person must be an active technician on the shift running now and hold the
+    skill the job asks for - the conditions a round crews by - or the request is
+    refused with a sentence, before anything is written. It is recorded as
+    `reassigned`, so the agreement measure does not count it as agreement.
     """
+    crew: tuple[Assignee, ...] = ()
     try:
-        confirming.confirm(conn, work_order_ref, by=account.user, role=account.role)
+        if reassignment is not None:
+            crew = _crew_for(conn, rounds, work_order_ref, reassignment.assignee)
+        answered = confirming.confirm(
+            conn, work_order_ref, by=account.user, role=account.role, crew=crew
+        )
     except (NoProposal, AlreadyAnswered) as error:
         raise _answer(error) from error
 
     at = clock.now()
     deliveries.queue(conn, [WorkOrderRef(work_order_ref)], at=at)
     return ProposalAnswered(
-        ref=work_order_ref, state=ProposalState.CONFIRMED, at=at, by=str(account.user)
+        ref=work_order_ref,
+        state=answered.state,
+        at=at,
+        by=str(account.user),
+        given_to=_names(conn, (one.user for one in answered.confirmed_assignees)),
     )
+
+
+def _crew_for(
+    conn: Connection[Any], rounds: Rounds, ref: str, chosen: UserId
+) -> tuple[Assignee, ...]:
+    """The crew with `chosen` as primary, or a 422 saying why they cannot take it."""
+    proposal = dispatch_repo.pending_proposal(conn, ref)
+    if proposal is None:
+        raise NoProposal(f"{ref} ไม่ได้รอการยืนยันแล้ว อาจมีคนตอบไปก่อน ลองโหลดหน้าใหม่")
+    order = work.get(conn, ref)
+    skill = order.required_skill if order is not None else None
+    (name,) = _names(conn, [chosen])
+    refusal = why_not(
+        name=name,
+        technician={one.user: one for one in dispatch_repo.technicians(conn)}.get(chosen),
+        rostered=chosen in rounds.rostered_now(conn),
+        required_skill=skill,
+        skill_name=rounds.config.wording().skill(skill) if skill is not None else None,
+    )
+    if refusal is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, refusal)
+    return crew_with(proposal.assignees, chosen)
 
 
 @router.post(

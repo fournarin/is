@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 from psycopg import Connection
 
-from pdm.contracts import Role, ShiftDefinition, UserId, WorkOrderStatus, shift_at
+from pdm.contracts import Assignee, Role, ShiftDefinition, UserId, WorkOrderStatus, shift_at
 from pdm.dispatch import repo
 from pdm.dispatch.domain import Queued, Round, dispatch
 from pdm.dispatch.proposals import Proposal, ProposalState
@@ -180,6 +180,20 @@ class DispatchRounds:
         window = shift_at(self._shifts, self.clock.now(), self._zone)
         return window.starts_at if window is not None else None
 
+    def rostered_now(self, conn: Connection[Any]) -> set[UserId]:
+        """Who is on the shift running now; nobody outside every shift.
+
+        The same roster a round crews from, so the people a shift lead may give a
+        job to are the people the round could have chosen (ADR-132).
+        """
+        window = shift_at(self._shifts, self.clock.now(), self._zone)
+        if window is None:
+            return set()
+        return {
+            one.technician
+            for one in repo.roster(conn, shift_id=window.shift_id, on_date=window.on_date)
+        }
+
     def decide(self, conn: Connection[Any]) -> Round:
         """What a round would do, without doing any of it (ADR-050).
 
@@ -254,6 +268,10 @@ def describe(report: RoundReport) -> str:
     return "; ".join(parts)
 
 
+def _people(crew: tuple[Assignee, ...]) -> list[tuple[str, str]]:
+    return sorted((str(one.user), one.role.value) for one in crew)
+
+
 class NotSetAside(LookupError):
     """Nobody on this shift has set this order aside."""
 
@@ -295,20 +313,53 @@ class Confirmations:
     def __init__(self, clock: Clock) -> None:
         self.clock = clock
 
-    def confirm(self, conn: Connection[Any], ref: str, *, by: UserId, role: Role) -> Proposal:
-        """A supervisor agrees, and the job becomes the technician's."""
+    def confirm(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        *,
+        by: UserId,
+        role: Role,
+        crew: tuple[Assignee, ...] = (),
+    ) -> Proposal:
+        """A supervisor agrees, and the job becomes the technician's. Returns the
+        proposal as it was settled.
+
+        With `crew`, the lead sends it out now to somebody the round did not
+        choose (ADR-132). That is recorded as `reassigned`, not `confirmed`: the
+        lead agreed about the job and disagreed about the person, and the
+        agreement measure must not count it as agreement. A crew identical to the
+        proposed one is a plain confirmation. Whether the people in `crew` may
+        take the job is checked by the caller, which knows the shift.
+        """
         proposal = self._pending(conn, ref)
-        if not repo.confirm_placement(conn, ref):
+        changed = bool(crew) and _people(crew) != _people(proposal.assignees)
+        if not repo.confirm_placement(conn, ref, assignees=crew if changed else ()):
             # The proposal was open and the order is not `proposed` any more.
             # Reachable through a sweep committed between the two reads, and
             # refused rather than forced: confirming an order that has gone back
             # to the queue would assign somebody to a decision that no longer
             # has a crew on it.
             raise AlreadyAnswered(f"{ref} ไม่ได้รอการยืนยันแล้ว รอบถัดไปจะจัดลำดับใหม่")
-        repo.settle_proposal(
-            conn, ref, state=ProposalState.CONFIRMED, at=self.clock.now(), by=by, role=role
+        settled = proposal.model_copy(
+            update={
+                "state": ProposalState.REASSIGNED if changed else ProposalState.CONFIRMED,
+                "decided_at": self.clock.now(),
+                "decided_by": by,
+                "decided_role": role,
+                "confirmed_assignees": crew if changed else (),
+            }
         )
-        return proposal
+        repo.settle_proposal(
+            conn,
+            ref,
+            state=settled.state,
+            at=self.clock.now(),
+            by=by,
+            role=role,
+            confirmed_assignees=settled.confirmed_assignees,
+        )
+        return settled
 
     def reject(
         self, conn: Connection[Any], ref: str, *, by: UserId, role: Role, reason: str

@@ -20,10 +20,15 @@ readings come out of that (ADR-075):
 
 | | what it answers |
 |---|---|
-| **confirmed / (confirmed + rejected)** | how often the shift lead agreed with the scheduler |
-| **expired / (confirmed + rejected + expired)** | how much was never answered at all |
+| **confirmed / (confirmed + rejected + reassigned)** | how often the shift lead agreed with the scheduler |
+| **expired / (confirmed + rejected + reassigned + expired)** | how much was never answered at all |
 | **median, mean and longest decision time** | how long a decision took, over the proposals a person answered |
-| **every rejection and every expiry, in full** | what the disagreement was actually about |
+| **every rejection, reassignment and expiry, in full** | what the disagreement was actually about |
+
+A **reassignment** is the shift lead sending the job out now to somebody the
+scheduler did not choose (ADR-132). It counts as answered and not as agreement:
+the lead agreed about the job and overruled the choice of person, and the record
+keeps both crews.
 
 Each of the four is also produced per shift and per band, because "the shift
 lead disagrees on heavy shifts" and "the shift lead disagrees" are different

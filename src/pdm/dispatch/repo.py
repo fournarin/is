@@ -332,6 +332,7 @@ def settle_proposal(
     by: UserId | None = None,
     role: Role | None = None,
     reason: str | None = None,
+    confirmed_assignees: tuple[Assignee, ...] = (),
 ) -> bool:
     """Write down how a proposal ended. False if somebody got there first.
 
@@ -344,7 +345,7 @@ def settle_proposal(
             """
             UPDATE dispatch_proposal
                SET state = %s, decided_at = %s, decided_by = %s,
-                   decided_role = %s, reason = %s
+                   decided_role = %s, reason = %s, confirmed_assignees = %s
              WHERE work_order_ref = %s AND state = 'pending'
             """,
             (
@@ -353,6 +354,9 @@ def settle_proposal(
                 str(by) if by is not None else None,
                 role.value if role is not None else None,
                 reason,
+                Jsonb([_assignee(one) for one in confirmed_assignees])
+                if confirmed_assignees
+                else None,
                 work_order_ref,
             ),
         )
@@ -434,29 +438,52 @@ def return_to_queue(conn: Connection[Any], work_order_ref: str) -> bool:
         return cur.rowcount == 1
 
 
-def confirm_placement(conn: Connection[Any], work_order_ref: str) -> bool:
-    """A proposal becomes a technician's job. False if it is no longer proposed."""
+def confirm_placement(
+    conn: Connection[Any], work_order_ref: str, *, assignees: tuple[Assignee, ...] = ()
+) -> bool:
+    """A proposal becomes a technician's job. False if it is no longer proposed.
+
+    `assignees` is the crew the shift lead chose instead of the proposed one
+    (ADR-132); empty keeps the crew the round wrote.
+    """
     with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE work_order SET status = %s WHERE work_order_ref = %s AND status = %s",
-            (
-                WorkOrderStatus.ASSIGNED.value,
-                work_order_ref,
-                WorkOrderStatus.PROPOSED.value,
-            ),
-        )
+        if assignees:
+            cur.execute(
+                """
+                UPDATE work_order SET status = %s, assignees = %s
+                 WHERE work_order_ref = %s AND status = %s
+                """,
+                (
+                    WorkOrderStatus.ASSIGNED.value,
+                    Jsonb([_assignee(one) for one in assignees]),
+                    work_order_ref,
+                    WorkOrderStatus.PROPOSED.value,
+                ),
+            )
+        else:
+            cur.execute(
+                "UPDATE work_order SET status = %s WHERE work_order_ref = %s AND status = %s",
+                (
+                    WorkOrderStatus.ASSIGNED.value,
+                    work_order_ref,
+                    WorkOrderStatus.PROPOSED.value,
+                ),
+            )
         return cur.rowcount == 1
 
 
 _PROPOSAL_COLUMNS = """
     work_order_ref, proposed_at, assignees, priority_score, priority_reason,
     band, load_ratio, shift_id, on_date, state, decided_at, decided_by,
-    decided_role, reason
+    decided_role, reason, confirmed_assignees
 """
 
 
 def _to_proposal(row: dict[str, Any]) -> Proposal:
     row["assignees"] = tuple(Assignee.model_validate(one) for one in row["assignees"])
+    row["confirmed_assignees"] = tuple(
+        Assignee.model_validate(one) for one in row.get("confirmed_assignees") or ()
+    )
     return Proposal.model_validate(row)
 
 
