@@ -201,7 +201,7 @@ def seed() -> None:
                 description=description,
                 # Read again each time round, so the third report names the two
                 # before it as well as the Finding's own order.
-                distinct_from=work_repo.open_for_machine(conn, predicted_at),
+                distinct_from=[ref for ref, _ in work_repo.open_for_machine(conn, predicted_at)],
             )
         conn.commit()
 
