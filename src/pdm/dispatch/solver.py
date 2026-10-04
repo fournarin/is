@@ -37,6 +37,7 @@ from ortools.sat.python import cp_model
 from pdm.contracts import (
     Assignee,
     AssigneeRole,
+    FindingKind,
     ShiftId,
     SkillId,
     Technician,
@@ -238,6 +239,11 @@ def _job(item: Queued, score: float, config: Config) -> _Job:
     # A scheduled job's machine runs while it waits: delaying it loses nothing,
     # whatever doing it costs (ADR-127). Its place comes from the score alone.
     if item.order.origin is WorkOrderOrigin.SCHEDULED:
+        rate = 0.0
+    # A predicted job's machine is still running too: the stop is forecast, not
+    # happening, so waiting loses nothing yet. How near the forecast is reaches
+    # the objective through the score's ETA term (ADR-131).
+    if item.order.finding_kind is FindingKind.PREDICTED:
         rate = 0.0
     return _Job(
         ref=item.ref,

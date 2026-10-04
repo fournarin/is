@@ -404,14 +404,10 @@ def _reason(
             f"ความรุนแรงระดับ{SEVERITY_TH[order.severity.value]}",
         ),
         (
-            # Zero for scheduled work, whose waiting stops nothing (ADR-127).
+            # Zero for scheduled work, whose waiting stops nothing (ADR-127),
+            # and for predicted work, whose stop has not happened (ADR-131).
             weights.downtime * terms.downtime,
-            # A predicted job's machine is still running: what waiting risks is
-            # the stop the forecast expects, not a stop already happening
-            # (ADR-128, the second examiner).
-            f"ถ้าเครื่องหยุดตามที่พยากรณ์ สายการผลิตจะเสียราว {downtime:,.0f} คัน"
-            if order.finding_kind is FindingKind.PREDICTED
-            else f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
+            f"ถ้างานนี้รอ สายการผลิตจะเสียราว {downtime:,.0f} คัน",
         ),
         (
             weights.skill_match * terms.skill_match,
@@ -440,6 +436,12 @@ def _reason(
         # doing the job costs the line is what a shift lead weighs before
         # releasing it, so it is stated as a fact (ADR-104).
         sentence += f" · งานนี้ต้องหยุดเครื่อง ถ้าทำระหว่างเดินสาย การผลิตจะหายราว {downtime:,.0f} คัน"
+    if order.finding_kind is FindingKind.PREDICTED and downtime > 0:
+        # Not a reason for the rank either - the machine is still running, so
+        # the term is zero (ADR-131) - but the stop the forecast expects is
+        # what makes the job worth doing, so it is stated as a fact, in the
+        # words ADR-128 gave it.
+        sentence += f" · ถ้าเครื่องหยุดตามที่พยากรณ์ สายการผลิตจะเสียราว {downtime:,.0f} คัน"
     if terms.downtime_is_unknown:
         # ADR-005 wants the caveat where the job is, not in a log. A technician
         # reading this knows the ranking did not count the line stopping,
@@ -685,7 +687,12 @@ def _rank(
         # costs nothing; its downtime figure is what *doing* it costs, and
         # ranking on that put the PM that stops the line longest first (ADR-127).
         scheduled = item.order.origin is WorkOrderOrigin.SCHEDULED
-        delay_cost.append(0.0 if scheduled else raw_downtime[-1])
+        # A predicted job's machine is running too: the stop is forecast, not
+        # happening. Ranking it at the full stop cost put a running machine
+        # above one already stopped (trial run 5). How near the forecast is,
+        # the ETA term carries (ADR-131).
+        predicted = item.order.finding_kind is FindingKind.PREDICTED
+        delay_cost.append(0.0 if scheduled or predicted else raw_downtime[-1])
         raw_waiting.append(max(0.0, (now - item.created_at).total_seconds() / 60.0))
 
     downtime = _normalised(delay_cost)
