@@ -159,6 +159,8 @@ def propose(
     safety_critical: bool,
     min_observations: int,
     max_change_ratio: float,
+    title: str | None = None,
+    predictions_without_a_reading: int = 0,
 ) -> ThresholdProposal | NoProposal:
     """What the closed orders behind one rule say about its threshold.
 
@@ -172,13 +174,29 @@ def propose(
     They are **not** the estimate loop's two numbers, and ADR-073 section 4 says
     why a floor that is enough to reprice a job is not enough to loosen a
     threshold.
+
+    `title` is what the rule watches for in the plant's words, and the sentences
+    a person reads name the rule by it (ADR-093); the id is the fallback.
+    `predictions_without_a_reading` counts forecast jobs that carried a slope
+    rather than a reading: they are set aside like every prediction, and said so,
+    because a forecast job closed behind a rule that then reads "0 closed jobs"
+    is what the fourth trial's engineer could not reconcile with `/notes`.
     """
     if comparison not in ("above", "below"):
         raise ValueError(f"a rule fires above or below its threshold, not {comparison!r}")
     above = comparison == "above"
 
     usable = [firing for firing in firings if firing.finding_kind is FindingKind.DETECTED]
-    predictions = len(firings) - len(usable)
+    predictions = len(firings) - len(usable) + predictions_without_a_reading
+    name = title or rule_id
+    # Predictions are set aside (ADR-043, ADR-073 section 2), and a count that
+    # leaves them out has to say so, or it reads as work that never happened.
+    set_aside = (
+        f" (ไม่นับใบงานจากการพยากรณ์ล่วงหน้า {predictions} ใบ ข้อเสนอเรื่องเกณฑ์นับเฉพาะใบงาน"
+        f"ที่ตรวจพบจากค่าที่อ่านได้จริง เพราะการพยากรณ์บอกแนวโน้ม ไม่ได้บอกค่าที่อ่านได้)"
+        if predictions
+        else ""
+    )
     alarms = [firing for firing in usable if firing.outcome is WorkOutcome.NO_PROBLEM_FOUND]
     faults = [firing for firing in usable if firing.outcome is not WorkOutcome.NO_PROBLEM_FOUND]
 
@@ -190,14 +208,14 @@ def propose(
             false_alarms=len(alarms),
             faults_found=len(faults),
             excluded_predictions=predictions,
-            reason=reason,
+            reason=reason + set_aside,
         )
 
     if safety_critical:
         return refused(
             NoProposalCause.SAFETY_CRITICAL,
             # ADR-022. What a person reads is Thai and cites no record (ADR-093).
-            f"{rule_id} เกี่ยวกับความปลอดภัย ระบบไม่เสนอให้ผ่อนเกณฑ์ของกฎนี้ ไม่ว่าจะแจ้งเตือน"
+            f"“{name}” เกี่ยวกับความปลอดภัย ระบบไม่เสนอให้ผ่อนเกณฑ์ของกฎนี้ ไม่ว่าจะแจ้งเตือน"
             f"ผิดกี่ครั้ง ถ้าแจ้งเตือนผิดบ่อย ให้เพิ่มเงื่อนไขให้แม่นขึ้น ไม่ใช่ลดความไว",
         )
 
@@ -205,14 +223,14 @@ def propose(
         return refused(
             NoProposalCause.BELOW_FLOOR,
             # ADR-073.
-            f"ใบงานที่ปิดแล้วของ {rule_id} มี {len(usable)} ใบ ต้องมีอย่างน้อย "
+            f"ใบงานที่ปิดแล้วของ “{name}” ที่ตรวจพบจากค่าที่อ่านได้จริงมี {len(usable)} ใบ ต้องมีอย่างน้อย "
             f"{min_observations} ใบจึงจะบอกได้ว่าเกณฑ์ควรอยู่ตรงไหน",
         )
 
     if not alarms:
         return refused(
             NoProposalCause.NO_FALSE_ALARMS,
-            f"ใบงานที่ปิดแล้วของ {rule_id} ทั้ง {len(usable)} ใบ ไม่มีใบไหนปิดว่า "
+            f"ใบงานที่ปิดแล้วของ “{name}” ทั้ง {len(usable)} ใบ ไม่มีใบไหนปิดว่า "
             f"“ไม่พบปัญหา” แปลว่าเกณฑ์นี้ไม่ได้แจ้งเตือนผิด ซึ่งเป็นคำตอบ ไม่ใช่การไม่มีข้อมูล",
         )
 
@@ -220,7 +238,7 @@ def propose(
         return refused(
             NoProposalCause.NO_CONFIRMED_FAULT,
             # ADR-073.
-            f"ใบงานที่ปิดแล้วของ {rule_id} ทั้ง {len(usable)} ใบ ปิดว่า “ไม่พบปัญหา” ทั้งหมด "
+            f"ใบงานที่ปิดแล้วของ “{name}” ทั้ง {len(usable)} ใบ ปิดว่า “ไม่พบปัญหา” ทั้งหมด "
             f"ยังไม่มีครั้งไหนที่พบความเสียจริง เกณฑ์ที่เลยทุกค่านี้ไปจะทำให้กฎนี้เงียบ "
             f"ระบบไม่เสนอให้เลิกเฝ้าเครื่อง",
         )
@@ -238,7 +256,7 @@ def propose(
         return refused(
             NoProposalCause.NO_SEPARATING_THRESHOLD,
             # ADR-022.
-            f"การแจ้งเตือนผิดทั้ง {len(alarms)} ครั้งของ {rule_id} อ่านค่าเกินเกณฑ์มากกว่า"
+            f"การแจ้งเตือนผิดทั้ง {len(alarms)} ครั้งของ “{name}” อ่านค่าเกินเกณฑ์มากกว่า"
             f"ความเสียจริงที่เบาที่สุด ({mildest_fault}) จึงไม่มีเกณฑ์ใดแยกสองกลุ่มนี้ได้ "
             f"กฎนี้ต้องเพิ่มเงื่อนไข ไม่ใช่ผ่อนเกณฑ์",
         )
@@ -269,14 +287,14 @@ def propose(
         return refused(
             NoProposalCause.CAP_EXCLUDES_NOTHING,
             # ADR-073.
-            f"ข้อมูลของ {rule_id} แยกกันที่ {separating} แต่แต่ละรอบขยับเกณฑ์ได้ไม่เกิน "
+            f"ข้อมูลของ “{name}” แยกกันที่ {separating} แต่แต่ละรอบขยับเกณฑ์ได้ไม่เกิน "
             f"{round(max_change_ratio * 100)}% ของ {current_threshold} ซึ่งยังแจ้งเตือนผิด"
             f"ทุกครั้งอยู่ดี รอบนี้จึงไม่มีอะไรเสนอ",
         )
 
     fires = "เกิน" if above else "ต่ำกว่า"
     reason = (
-        f"ใบงานที่ปิดแล้วของ {rule_id} {len(usable)} ใบ มี {len(alarms)} ใบที่ไม่พบปัญหา "
+        f"ใบงานที่ปิดแล้วของ “{name}” {len(usable)} ใบ มี {len(alarms)} ใบที่ไม่พบปัญหา "
         f"กฎนี้แจ้งเตือนเมื่อค่า{fires} {current_threshold} ถ้าเปลี่ยนเป็น {bounded} จะไม่แจ้ง"
         f"เตือนผิด {len(excluded)} ครั้งในนั้น และยังแจ้งเตือนครบทั้ง {len(faults)} ใบที่พบ"
         f"ความเสียจริง ซึ่งค่าที่เบาที่สุดคือ {mildest_fault}"
@@ -286,6 +304,7 @@ def propose(
         reason += (
             f" ข้อมูลแยกกันที่ {separating} แต่แต่ละรอบขยับเกณฑ์ได้ไม่เกิน {round(max_change_ratio * 100)}%"
         )
+    reason += set_aside
 
     return ThresholdProposal(
         rule_id=rule_id,
@@ -319,3 +338,24 @@ class RuleFirings(BaseModel):
     rule_id: RuleId
     firings: tuple[RuleFiring, ...]
     without_a_reading: int = Field(default=0, ge=0)
+    # Forecast jobs whose Finding carried a slope rather than a reading - every
+    # trend Finding (`triggers.trend.evidence_for`). Not a gap in what layer 1
+    # wrote: a prediction is set aside whatever it carries (ADR-073 section 2).
+    predictions_without_a_reading: int = Field(default=0, ge=0)
+
+
+def together(rule_id: RuleId, groups: Sequence[RuleFirings | None]) -> RuleFirings:
+    """One rule's evidence gathered from every id its Findings were filed under.
+
+    A forecast is filed under `<rule_id>/trend` (ADR-043 section 4), so the
+    reader hands its closed jobs over as a group of their own. Left there, the
+    rule's row counted none of them and said "0 closed jobs" beside a job
+    `/notes` showed closed (fourth trial).
+    """
+    present = [group for group in groups if group is not None]
+    return RuleFirings(
+        rule_id=rule_id,
+        firings=tuple(firing for group in present for firing in group.firings),
+        without_a_reading=sum(group.without_a_reading for group in present),
+        predictions_without_a_reading=sum(group.predictions_without_a_reading for group in present),
+    )

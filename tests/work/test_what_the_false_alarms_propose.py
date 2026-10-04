@@ -27,8 +27,10 @@ from pdm.work.thresholds import (
     NoProposal,
     NoProposalCause,
     RuleFiring,
+    RuleFirings,
     ThresholdProposal,
     propose,
+    together,
 )
 
 RULE = RuleId("R-motor-temp-high")
@@ -76,6 +78,8 @@ def _propose(
     safety_critical: bool = False,
     min_observations: int = FLOOR,
     max_change_ratio: float = CAP,
+    title: str | None = None,
+    predictions_without_a_reading: int = 0,
 ) -> ThresholdProposal | NoProposal:
     return propose(
         firings,
@@ -85,6 +89,8 @@ def _propose(
         safety_critical=safety_critical,
         min_observations=min_observations,
         max_change_ratio=max_change_ratio,
+        title=title,
+        predictions_without_a_reading=predictions_without_a_reading,
     )
 
 
@@ -382,6 +388,49 @@ class TestNothingWritesAThreshold:
         interlock = next(r for r in rules["rules"] if r["rule_id"] == "R-safety-interlock-open")
 
         assert interlock["safety_critical"] is True
+
+
+class TestAForecastJobIsNotLost:
+    """Fourth trial, finding 18: a predicted job closed behind the belt-motor
+    rule, and `/loops` read "0 closed jobs of R-motor-temp-high" while `/notes`
+    showed it. The forecast was set aside correctly; the sentence did not say so,
+    and it named the rule by its id."""
+
+    TITLE = "มอเตอร์สายพานร้อนเกินกำหนด"
+
+    def test_a_forecast_without_a_reading_is_counted_as_set_aside(self) -> None:
+        result = _propose([], title=self.TITLE, predictions_without_a_reading=1)
+
+        assert isinstance(result, NoProposal)
+        assert result.cause is NoProposalCause.BELOW_FLOOR
+        assert result.observations == 0
+        assert result.excluded_predictions == 1
+        assert "ไม่นับใบงานจากการพยากรณ์ล่วงหน้า 1 ใบ" in result.reason
+
+    def test_the_sentence_names_the_rule_by_its_title(self) -> None:
+        result = _propose(_alarms([86.0, 87.0]), title=self.TITLE)
+
+        assert f"“{self.TITLE}”" in result.reason
+        assert str(RULE) not in result.reason
+
+    def test_the_floor_says_only_detected_jobs_count(self) -> None:
+        result = _propose(_alarms([86.0, 87.0]), title=self.TITLE)
+
+        assert "ที่ตรวจพบจากค่าที่อ่านได้จริง" in result.reason
+        assert "พยากรณ์" not in result.reason
+
+    def test_the_forecast_group_joins_its_rule(self) -> None:
+        trend = RuleFirings(
+            rule_id=RuleId(f"{RULE}/trend"), firings=(), predictions_without_a_reading=2
+        )
+        base = RuleFirings(rule_id=RULE, firings=tuple(_faults([92.0])), without_a_reading=1)
+
+        merged = together(RULE, [base, trend, None])
+
+        assert merged.rule_id == RULE
+        assert len(merged.firings) == 1
+        assert merged.without_a_reading == 1
+        assert merged.predictions_without_a_reading == 2
 
 
 class TestWhatTheEngineerReads:

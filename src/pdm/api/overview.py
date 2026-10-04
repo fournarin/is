@@ -161,6 +161,25 @@ class FlaggedPlaybook(BaseModel):
     review_reason: str | None = None
 
 
+class PmGap(BaseModel):
+    """One scheduled task, on one machine model, with no approved steps.
+
+    Scheduled work raises no Finding, so the symptom list above never sees it,
+    and the fourth trial's PM ticket said "no steps" while this screen said
+    every symptom had them (finding 11). Listed apart because it is ranked on
+    nothing that happened: a PM task is due by the calendar, not by a signal.
+    """
+
+    model_config = _FROZEN
+
+    symptom_code: SymptomCode
+    machine_model: MachineModel
+    title: str | None = None
+    machines: tuple[MachineId, ...]
+    # As on `SymptomGap`: a draft already asked for is not asked for twice.
+    proposals_waiting: int = 0
+
+
 class Unanswered(BaseModel):
     model_config = _FROZEN
 
@@ -204,6 +223,9 @@ class Gaps(BaseModel):
     # list that quietly discarded them would say the store covers work it does
     # not. Every round already counts the same drift.
     unplaced_machines: tuple[MachineId, ...] = ()
+
+    # Scheduled tasks nothing approved serves yet (fourth trial, finding 11).
+    pm_without_steps: tuple[PmGap, ...] = ()
 
 
 @dataclass
@@ -307,6 +329,45 @@ def rank_gaps(
     return rows, sorted(unplaced)
 
 
+def pm_without_steps(
+    tasks: Iterable[tuple[SymptomCode, MachineId, str | None]],
+    *,
+    model_of: Callable[[MachineId], MachineModel],
+    served: Container[tuple[SymptomCode, MachineModel]],
+    pending: Iterable[PendingForPair] = (),
+) -> list[PmGap]:
+    """The PM tasks in `plant.yaml` whose (symptom, model) pair serves nothing.
+
+    Pure, like `rank_gaps`. A task on a machine the layout no longer has is left
+    out: the configuration loader refuses that file, so it cannot reach here.
+    Ordered by model then code, so the same file always lists the same way.
+    """
+    waiting = {(row.symptom_code, row.machine_model): row.waiting for row in pending}
+    titles: dict[tuple[SymptomCode, MachineModel], str | None] = {}
+    machines: dict[tuple[SymptomCode, MachineModel], set[MachineId]] = {}
+    for symptom_code, machine_id, title in tasks:
+        try:
+            model = model_of(machine_id)
+        except KeyError:
+            continue
+        pair = (symptom_code, model)
+        if pair in served:
+            continue
+        machines.setdefault(pair, set()).add(machine_id)
+        if titles.get(pair) is None:
+            titles[pair] = title
+    return [
+        PmGap(
+            symptom_code=symptom_code,
+            machine_model=model,
+            title=titles[(symptom_code, model)],
+            machines=tuple(sorted(machines[(symptom_code, model)])),
+            proposals_waiting=waiting.get((symptom_code, model), 0),
+        )
+        for symptom_code, model in sorted(machines, key=lambda pair: (pair[1], pair[0]))
+    ]
+
+
 def group_by_model(pending: Iterable[PendingForPair]) -> list[ModelQueue]:
     """The pending proposals as the reviewer meets them: one model at a time."""
     counted: dict[MachineModel, ModelQueue] = {}
@@ -354,10 +415,11 @@ def gaps(
     is describing now or five minutes ago (ADR-050).
     """
     pending = playbooks.pending_by_pair(conn)
+    served = playbooks.served_pairs(conn)
     ranked, unplaced = rank_gaps(
         triggers.symptoms_seen(conn),
         model_of=plant.model_of,
-        served=playbooks.served_pairs(conn),
+        served=served,
         pending=pending,
     )
     wording = plant.wording()
@@ -373,6 +435,12 @@ def gaps(
         for playbook, review_reason in playbooks.needing_review(conn)
     ]
     by_model = group_by_model(pending)
+    scheduled = pm_without_steps(
+        ((task.symptom_code, task.machine_id, task.title) for task in plant.pm_tasks),
+        model_of=plant.model_of,
+        served=served,
+        pending=pending,
+    )
 
     return Gaps(
         at=clock.now(),
@@ -382,6 +450,7 @@ def gaps(
         ),
         manual_changed=ManualChanged(count=len(flagged), rows=tuple(flagged[:limit])),
         unplaced_machines=tuple(unplaced),
+        pm_without_steps=tuple(scheduled),
     )
 
 

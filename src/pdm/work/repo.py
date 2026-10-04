@@ -903,13 +903,20 @@ def firings_behind_rules(conn: Connection[Any]) -> list[RuleFirings]:
 
     firings: dict[RuleId, list[RuleFiring]] = {}
     missing: dict[RuleId, int] = {}
+    forecasts: dict[RuleId, int] = {}
     for row in rows:
         rule_id = RuleId(str(row["rule_id"]))
         firings.setdefault(rule_id, [])
         missing.setdefault(rule_id, 0)
+        forecasts.setdefault(rule_id, 0)
         reading = row["reading"]
         if not isinstance(reading, int | float) or isinstance(reading, bool):
-            missing[rule_id] += 1
+            # A trend Finding carries a slope, never a reading, so it is not a
+            # gap in what layer 1 wrote; it is a prediction, counted as one.
+            if FindingKind(str(row["kind"])) is FindingKind.PREDICTED:
+                forecasts[rule_id] += 1
+            else:
+                missing[rule_id] += 1
             continue
         firings[rule_id].append(
             RuleFiring(
@@ -925,6 +932,7 @@ def firings_behind_rules(conn: Connection[Any]) -> list[RuleFirings]:
             rule_id=rule_id,
             firings=tuple(firings[rule_id]),
             without_a_reading=missing[rule_id],
+            predictions_without_a_reading=forecasts[rule_id],
         )
         for rule_id in sorted(firings)
     ]

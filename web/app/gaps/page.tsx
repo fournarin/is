@@ -29,6 +29,7 @@ export default async function GapsPage({
   }
   const { drafting, already, error } = await searchParams;
   const [unanswered, round] = await Promise.all([gaps(), currentRound()]);
+  const scheduled = unanswered.pm_without_steps ?? [];
 
   return (
     <Shell account={account} current="/gaps">
@@ -76,26 +77,30 @@ export default async function GapsPage({
               </p>
             ) : (
               account.role === "engineer" && (
-                <details>
-                  <summary>📝 ขอร่างใหม่</summary>
-                  <form method="post" action="/overview/draft">
-                    <input type="hidden" name="symptom_code" value={row.symptom_code} />
-                    <input type="hidden" name="machine_model" value={row.machine_model} />
-                    <label className="field">
-                      <span>คำที่ใช้ค้นคู่มือ</span>
-                      <input type="text" name="question" required defaultValue={row.title ?? ""} />
-                      {/* The rule's own words are the default, and drafting also
-                          checks every page against them (ADR-121). The old hint
-                          asked for figures, and "85 องศา" typed for the safety
-                          interlock drafted the belt-motor page. */}
-                      <small className="muted">
-                        ระบบใส่ชื่ออาการไว้ให้แล้ว เติมคำที่คู่มือน่าจะใช้ได้ ขั้นตอนที่ร่างต้องเกี่ยวกับอาการนี้เสมอ
-                        ถ้าคู่มือไม่มีเรื่องนี้ ระบบจะบอกว่าไม่พบ ไม่เดา
-                      </small>
-                    </label>
-                    <button type="submit">ขอร่าง</button>
-                  </form>
-                </details>
+                <DraftRequest symptomCode={row.symptom_code} machineModel={row.machine_model} title={row.title} />
+              )
+            )}
+          </article>
+        ))
+      )}
+
+      {/* Fourth trial, finding 11: scheduled work raises no symptom, so a PM
+          task with no steps never reached the list above. */}
+      <h2>งานบำรุงรักษาตามรอบ (PM) ที่ยังไม่มีขั้นตอน ({scheduled.length})</h2>
+      {scheduled.length === 0 ? (
+        <p className="muted">ไม่มี</p>
+      ) : (
+        scheduled.map((row) => (
+          <article className="card" key={`${row.symptom_code}-${row.machine_model}`}>
+            <h2 style={{ marginTop: 0 }}>{row.title ?? row.symptom_code}</h2>
+            <p className="muted">
+              เครื่องรุ่น {row.machine_model} · รหัส {row.symptom_code} · เครื่อง {row.machines.join(", ")}
+            </p>
+            {row.proposals_waiting > 0 ? (
+              <p className="pending">มีร่างรอวิศวกรดูที่หน้า “อนุมัติขั้นตอน”</p>
+            ) : (
+              account.role === "engineer" && (
+                <DraftRequest symptomCode={row.symptom_code} machineModel={row.machine_model} title={row.title} />
               )
             )}
           </article>
@@ -131,5 +136,39 @@ export default async function GapsPage({
         </ul>
       )}
     </Shell>
+  );
+}
+
+/** Ask for a draft of one symptom or PM task (ADR-003, ADR-040). */
+function DraftRequest({
+  symptomCode,
+  machineModel,
+  title,
+}: {
+  symptomCode: string;
+  machineModel: string;
+  title: string | null;
+}) {
+  return (
+    <details>
+      <summary>📝 ขอร่างใหม่</summary>
+      <form method="post" action="/overview/draft">
+        <input type="hidden" name="symptom_code" value={symptomCode} />
+        <input type="hidden" name="machine_model" value={machineModel} />
+        <label className="field">
+          <span>คำที่ใช้ค้นคู่มือ</span>
+          <input type="text" name="question" required defaultValue={title ?? ""} />
+          {/* The rule's own words are the default, and drafting also
+              checks every page against them (ADR-121). The old hint
+              asked for figures, and "85 องศา" typed for the safety
+              interlock drafted the belt-motor page. */}
+          <small className="muted">
+            ระบบใส่ชื่ออาการไว้ให้แล้ว เติมคำที่คู่มือน่าจะใช้ได้ ขั้นตอนที่ร่างต้องเกี่ยวกับอาการนี้เสมอ
+            ถ้าคู่มือไม่มีเรื่องนี้ ระบบจะบอกว่าไม่พบ ไม่เดา
+          </small>
+        </label>
+        <button type="submit">ขอร่าง</button>
+      </form>
+    </details>
   );
 }

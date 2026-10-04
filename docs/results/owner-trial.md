@@ -93,7 +93,9 @@ can work from the system (ADR-092).
 | 10 | technician | card | tool names in English on an otherwise Thai card | fixed: ADR-130, tools rendered in Thai under the figure check |
 | 17 | engineer | review | the skill typed as an id | fixed: ADR-130, chosen by its Thai name |
 | 4 | shift lead | overview | "เสียบ่อยที่สุด MC-001 · เสีย 1 ครั้ง" for a predicted job closed before anything failed, over "0.0 วัน" of history | fixed: a prediction repaired before its detection counts as prevented, not failed; under a week the panel shows one sentence and no ranking |
-| 5, 6, 8, 9, 11, 13, 18-20 | - | - | confusing or cosmetic: a stale "already open" list, a PM with no page to look at, `/loops` not counting predicted jobs, the operator's report list | open |
+| 11 | technician, engineer | no-steps screen, gaps | a PM job with no steps named the manual with no page, and `/gaps` never listed PM tasks | fixed: the ticket says to open the manual's maintenance schedule section and that no page is recorded for the task; `/gaps` lists PM tasks with nothing approved |
+| 18 | engineer | loops | "ใบงานที่ปิดแล้วของ R-motor-temp-high มี 0 ใบ" after a predicted job for it closed | fixed: forecast jobs filed under `<rule>/trend` are gathered to their rule and named as not counted, and the sentence uses the rule's Thai title |
+| 5, 6, 8, 9, 13, 19, 20 | - | - | confusing or cosmetic: a stale "already open" list, the operator's report list | open |
 
 Worked well and kept: the figure check refusing a wrong Thai torque, the
 technician's card and its banners, the no-steps screen, set aside and bring back,
