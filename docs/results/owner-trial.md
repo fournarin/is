@@ -104,3 +104,28 @@ can work from the system (ADR-092).
 Worked well and kept: the figure check refusing a wrong Thai torque, the
 technician's card and its banners, the no-steps screen, set aside and bring back,
 the duplicate guard, the operator's status line, and no regression of run 3.
+
+## Run 5 - 4 October 2026: failed narrowly (agent, not a person)
+
+An agent played every role on a stack rehearsed 7/7 from `main` after ADR-130.
+The content path passed end to end again, now with Thai tool names refused by
+the figure check when a range was wrong ("5-50 Nm") and a skill chosen by its
+Thai name. No fix of runs 1-4 regressed, except half of the `/gaps` count. The
+verdict is fail on the protocol's third question for the first two rows. Not
+evidence that a person can work from the system (ADR-092).
+
+| # | Role | Screen | What happened | Outcome |
+|---|---|---|---|---|
+| 1 | technician, shift lead | work, board | an urgent report on a machine already stopped ranked below a predicted job on a machine still running | fixed: ADR-131, a predicted job's delay costs nothing until the stop it forecasts |
+| 2 | shift lead | board | the handover note asked for an electrician; the lead could only confirm the proposed technician or set the job aside | fixed: ADR-132, "ให้คนอื่น" confirms to another rostered technician who holds the skill, recorded as a disagreement |
+| 3 | engineer | review | the Thai tool fields came back empty after a refusal | fixed |
+| 4 | engineer | gaps | the heading still counted a "not found" among drafts | fixed |
+| 6 | shift lead | overview | the health ranking on minutes of history, and a prevented prediction counted as a failure | fixed (#183) |
+| 10, 13 | engineer, technician | review, close | "ปิดใบนี้" ambiguous; the close screen's back link lost the step | fixed: "ปิดร่างนี้"; back to the step reached |
+| 11, 12 | shift lead | board | "ไม่มีงานใหม่ที่จะเสนอ" beside waiting cards; a pill spilling out of a narrow column | fixed |
+| 5, 7, 8, 9, 14 | - | - | a dismissal's note not shown to the technician, the line map ignoring open reports, the lockout page in English, an old playbook's English tools, machine codes on the report form | open |
+
+Worked well and kept: the duplicate guard naming the open ticket in words, the
+operator's status line following the job, the approval banner and the open job
+adopting its steps at once, set aside and bring back, the handover note on the
+receiver's screen, and no error page or dead end.
