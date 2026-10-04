@@ -48,7 +48,7 @@ export function Decisions({
         // said "ใบนี้ถูกตัดสินไปแล้ว", which was untrue (2026-09-29).
         <section className="card">
           <h2>ไม่มีขั้นตอนให้อนุมัติ</h2>
-          <p>ระบบค้นคู่มือแล้วไม่พบเรื่องนี้ ตีกลับพร้อมคำถามที่ชัดขึ้น หรือปิดใบนี้พร้อมเหตุผลถ้าคู่มือไม่มีเรื่องนี้จริง</p>
+          <p>ระบบค้นคู่มือแล้วไม่พบเรื่องนี้ ตีกลับพร้อมคำถามที่ชัดขึ้น หรือปิดร่างนี้พร้อมเหตุผลถ้าคู่มือไม่มีเรื่องนี้จริง</p>
         </section>
       ) : (
         <section className="card">
@@ -122,7 +122,14 @@ export function Decisions({
                     <span>
                       <small className="muted">{tool}</small>
                     </span>
-                    <input name="thai_tool" placeholder="ชื่อภาษาไทย" />
+                    <input
+                      name="thai_tool"
+                      placeholder="ชื่อภาษาไทย"
+                      // Keyed by what came back, as the step fields are, so a
+                      // refused figure does not wipe every tool name (trial 5).
+                      key={`thai-tool-${index}-${approval.thaiTools?.[index] ?? ""}`}
+                      defaultValue={approval.thaiTools?.[index] ?? ""}
+                    />
                   </label>
                 ))}
               </fieldset>
@@ -211,7 +218,7 @@ export function Decisions({
             <textarea name="note" rows={2} required placeholder="เช่น ซ้ำกับ SYM-012 ที่อนุมัติไปแล้ว" />
           </label>
           <button type="submit" className="quiet" disabled={dismissing}>
-            {dismissing ? "กำลังบันทึก..." : "ปิดใบนี้"}
+            {dismissing ? "กำลังบันทึก..." : "ปิดร่างนี้"}
           </button>
         </form>
       </section>

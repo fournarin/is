@@ -97,7 +97,13 @@ export default async function ProposalPage({
         </span>
       </h1>
       <p className="muted">
-        {draft.machine_model} · {draft.symptom_code} · {draft.reason}
+        {draft.machine_model} · {draft.symptom_code} ·{" "}
+        {/* The drafter's sentence names the code ("ไม่พบเรื่อง SYM-012 ..."),
+            which an engineer has to look up; the plant's name for it does not
+            (trial 5). */}
+        {draft.symptom_title
+          ? draft.reason.split(draft.symptom_code).join(draft.symptom_title)
+          : draft.reason}
       </p>
 
       {draft.status !== "pending" && (
