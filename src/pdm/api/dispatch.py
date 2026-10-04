@@ -1010,6 +1010,7 @@ def _symptom_of(conn: Connection[Any], order: WorkOrder) -> SymptomCode | None:
         return SymptomCode(row[0]) if row else None
     return None
 
+
 def _title(conn: Connection[Any], config: Config, order: WorkOrder) -> str:
     """ "MC-001 มอเตอร์สายพานร้อนเกินกำหนด": machine and symptom (fourth trial)."""
     return title(order, work.symptom_of(conn, order), config.wording())
