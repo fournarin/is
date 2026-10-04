@@ -367,7 +367,9 @@ def main() -> None:
 
     print("\n5. edit and approve")
     page = get(f"/review/{ids['mixed']}")
-    expect("ช่างกลหุ่นยนต์" in readable(page), "the skill is chosen by its Thai name, not typed as an id")
+    expect(
+        "ช่างกลหุ่นยนต์" in readable(page), "the skill is chosen by its Thai name, not typed as an id"
+    )
     corrected = "Isolate breaker CP-3 and apply your personal lock before opening any cover."
     approved = submit(
         f"/review/{ids['mixed']}",
