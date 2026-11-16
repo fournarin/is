@@ -5,6 +5,7 @@ import { type ReactNode, useActionState } from "react";
 import { Label, Radio, RadioGroup } from "react-aria-components";
 
 import { type ObjectionState, disagree } from "@/app/work/actions";
+import { SheetClose } from "@/app/ui/v2/sheet-close";
 import { plantTime } from "@/lib/display";
 
 // Here and not in `actions.ts`: a `"use server"` file may only export async
@@ -58,7 +59,11 @@ export function DisagreeForm({
           <small>ดูว่าทำไมต้องทำงานนี้ก่อน แล้วแตะเลือกเหตุผล</small>
         </span>
       </summary>
-      <h3>ทำไมต้องทำงานนี้ก่อน</h3>
+      <div className="panel">
+      <div className="grab">
+        <b>ทำไมต้องทำงานนี้ก่อน</b>
+        <SheetClose />
+      </div>
       <p>{priorityReason}</p>
       <form action={action} style={{ marginTop: 16 }}>
         <input type="hidden" name="ref" value={workOrder} />
@@ -81,6 +86,7 @@ export function DisagreeForm({
           {pending ? "กำลังบันทึก..." : "ส่งความเห็นให้หัวหน้ากะ"}
         </button>
       </form>
+      </div>
     </details>
   );
 }

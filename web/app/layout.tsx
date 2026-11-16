@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans_Thai, IBM_Plex_Sans_Thai_Looped } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans_Thai, IBM_Plex_Sans_Thai_Looped } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
@@ -22,6 +22,15 @@ const looped = IBM_Plex_Sans_Thai_Looped({
   display: "swap",
 });
 
+// Codes and figures in one mono weight (visual refresh, ADR-139): machine ids,
+// work orders and lock numbers read as identifiers, digits line up.
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "แจ้งซ่อมล่วงหน้า",
   description: "ใบงานซ่อมบำรุงที่บอกว่าซ่อมอะไร ทำไมต้องซ่อม และซ่อมอย่างไร",
@@ -39,7 +48,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="th" className={`${thai.variable} ${looped.variable}`}>
+    <html lang="th" className={`${thai.variable} ${looped.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   );

@@ -1,7 +1,8 @@
-import { ArrowRight, BookOpen, ChevronRight, CircleAlert, CircleCheck, Info, ListOrdered, Megaphone, Printer } from "lucide-react";
+import { ArrowRight, BookOpen, ChevronRight, CircleAlert, CircleCheck, History, Info, ListOrdered, Megaphone, Printer } from "lucide-react";
 import Link from "next/link";
 
 import { KeepFresh } from "@/app/ui/keep-fresh";
+import { SheetClose } from "@/app/ui/v2/sheet-close";
 import { NotYours, Shell } from "@/app/ui/shell";
 import { Approved, Clock, PhoneFrame, Plate, Prio, Row, Th, Who, signalsAreSynthetic } from "@/app/ui/v2/frame";
 import { startWork } from "@/app/work/actions";
@@ -226,25 +227,60 @@ export default async function WorkPage({
           {`ครั้งก่อนที่เครื่องนี้${signalsAreSynthetic() && history.length > 0 ? " · จำลอง" : ""}`}
         </h2>
         {history.length > 0 ? (
-          <ol className="hist">
+          // Two lines a job; what the last person wrote opens in a sheet (Q13, ADR-139).
+          <div className="rows">
             {history.map((past) => (
-              <li key={past.ref}>
-                <p className="h1">
-                  {past.page !== null && <span className="m w">{`คู่มือหน้า ${past.page}`}</span>}
-                  <span className="v-chip">{OUTCOME[past.outcome] ?? past.outcome}</span>{" "}
-                  <b className="w">{plantDay(past.closed_at, round.timezone)}</b>
-                  <span className="w">{` · ${minutesText(past.minutes)}${past.by.length > 0 ? ` · ${past.by.join(", ")}` : ""}`}</span>
-                </p>
-                {past.note && (
-                  <p>
-                    <q>
-                      <Th>{past.note}</Th>
-                    </q>
-                  </p>
-                )}
-              </li>
+              <details className="sheet" key={past.ref}>
+                <summary>
+                  <History size={24} aria-hidden />
+                  <span className="t">
+                    <span className="w">{`${OUTCOME[past.outcome] ?? past.outcome} · ${plantDay(past.closed_at, round.timezone)}`}</span>
+                    <small>{`${minutesText(past.minutes)}${past.by.length > 0 ? ` · ${past.by.join(", ")}` : ""}${past.note ? " · มีบันทึก" : ""}`}</small>
+                  </span>
+                  <ChevronRight size={24} aria-hidden />
+                </summary>
+                <div className="panel">
+                  <div className="grab">
+                    <b>{`ครั้งก่อน · ${plantDay(past.closed_at, round.timezone)}`}</b>
+                    <SheetClose />
+                  </div>
+                  <dl className="v-facts" style={{ padding: 0 }}>
+                    <div>
+                      <dt>ผล</dt>
+                      <dd>{OUTCOME[past.outcome] ?? past.outcome}</dd>
+                    </div>
+                    <div>
+                      <dt>ใช้เวลา</dt>
+                      <dd>{minutesText(past.minutes)}</dd>
+                    </div>
+                    {past.by.length > 0 && (
+                      <div>
+                        <dt>ช่าง</dt>
+                        <dd>{past.by.join(", ")}</dd>
+                      </div>
+                    )}
+                    {past.page !== null && (
+                      <div>
+                        <dt>คู่มือ</dt>
+                        <dd>{`หน้า ${past.page}`}</dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt>ใบงาน</dt>
+                      <dd className="code">{past.ref}</dd>
+                    </div>
+                  </dl>
+                  {past.note && (
+                    <p style={{ marginTop: 12 }}>
+                      <q>
+                        <Th>{past.note}</Th>
+                      </q>
+                    </p>
+                  )}
+                </div>
+              </details>
             ))}
-          </ol>
+          </div>
         ) : (
           <p className="v-card">ยังไม่มีงานที่ปิดแล้วบนเครื่องนี้</p>
         )}

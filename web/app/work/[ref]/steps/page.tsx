@@ -8,6 +8,7 @@ import { Approved, Clock, PhoneFrame, Plate, Row, Th, signalsAreSynthetic, stati
 import { moveTo } from "@/app/work/actions";
 import { KindHeader, NotYet, OfflineNote, Points, WaitBox, needed, neededLine, whoFor } from "@/app/work/[ref]/steps/energy";
 import { LockBar } from "@/app/ui/v2/signs";
+import { SheetClose } from "@/app/ui/v2/sheet-close";
 import { firstUnfinished, waitEnds } from "@/lib/energy";
 import { plantTime } from "@/lib/display";
 import { pagesNamed } from "@/lib/page-references";
@@ -264,6 +265,11 @@ export default async function StepsPage({
               <small>{`ทั้ง ${total} ขั้น · อยู่ที่ขั้น ${at}`}</small>
             </span>
           </summary>
+          <div className="panel">
+          <div className="grab">
+            <b>{`ทุกขั้น (${total})`}</b>
+            <SheetClose />
+          </div>
         <ol className="allsteps">
           {job.steps.map((one, index) => {
             const n = index + 1;
@@ -282,6 +288,7 @@ export default async function StepsPage({
             );
           })}
         </ol>
+          </div>
         </details>
         {history.length > 0 && (
           <Row

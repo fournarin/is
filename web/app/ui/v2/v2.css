@@ -6,11 +6,15 @@
  * space; outlines are for inputs only; amber means over threshold (solid) or forecast (outline) and nothing else.
  */
 .v2 {
-  --canvas: #eef0f2; --surface: #ffffff; --sunk: #e2e5e9;
-  --ink: #111418; --ink-2: #3d434b; --line: #7d858e; --hair: #d9dde2;
+  --canvas: #f4f5f7; --surface: #ffffff; --sunk: #ebedf0;   /* refresh (Q13, ADR-139): paler, calmer */
+  --ink: #111418; --ink-2: #3d434b; --line: #7d858e; --hair: #e3e6ea;
   --andon: #16191d; --lamp-off: #2a2f36; --on-andon: #ffffff; --on-andon-2: #bac1c9;
   --stop: #a3121a; --amber: #e8890c; --done: #1e6b3a;
-  --r: 8px;
+  --r: 12px; --r-sm: 8px;
+  /* one elevation, for sheets and drawers only; the rest is flat with hairlines */
+  --lift: 0 12px 32px rgba(17, 20, 24, 0.18), 0 1px 0 rgba(17, 20, 24, 0.06);
+  --dur: 180ms; --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mono: var(--font-mono), ui-monospace, monospace;
   --t1: 18px; --t2: 18px; --t3: 24px; --t4: 36px;   /* phone: nothing under 18 px (REQ-G-06) */
   min-height: 100vh;
   background: var(--canvas);
@@ -37,7 +41,7 @@
 .v2 small { font-size: var(--t1); }
 .v2 h1, .v2 h2 { text-wrap: balance; }
 .v2 p, .v2 li { text-wrap: pretty; }
-.v2 .code { font-weight: 600; white-space: nowrap; }
+.v2 .code { font-family: var(--mono); font-weight: 400; white-space: nowrap; }
 .v2 .muted { color: var(--ink-2); font-size: inherit; }
 .v2 :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .v2 svg.ic { flex: none; display: block; }
@@ -192,12 +196,27 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .page-text p + p { margin-top: 8px; }
 
 /* forms */
+/* sheets (Q13): a row that opens its detail - a bottom sheet on a phone, a drawer from the right on a desk.
+   The summary becomes the dimmed backdrop when open, so a tap outside closes it without a script. */
 .v2 .sheet { margin-top: 12px; background: var(--surface); border-radius: var(--r); padding: 0 16px; }
-.v2 .sheet[open] { padding-bottom: 16px; }
 .v2 .sheet > summary .t { flex: 1; min-width: 0; line-height: 1.3; }
 .v2 .sheet > summary .t small { display: block; font-weight: 400; line-height: 1.45; color: var(--ink-2); }
+.v2 .sheet > .panel { display: none; }
+.v2 .sheet[open] > summary { position: fixed; inset: 0; z-index: 40; min-height: 0; background: rgba(11, 13, 16, 0.45); animation: v2fade var(--dur) var(--ease); }
+.v2 .sheet[open] > summary > * { visibility: hidden; }
+.v2 .sheet[open] > .panel { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 86vh; overflow: auto;
+  padding: 8px 16px 24px; background: var(--surface); border-radius: 16px 16px 0 0; box-shadow: var(--lift); animation: v2rise var(--dur) var(--ease); }
+.v2 .sheet .panel .grab { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.v2 .sheet .panel .grab b { font-size: var(--t2); line-height: 1.35; }
+.v2 .sheet .panel .grab button { min-height: 56px; padding: 0 12px; border-radius: var(--r-sm); background: var(--sunk); font-weight: 600; }
+@media (min-width: 900px) {
+  .v2 .sheet[open] > .panel { left: auto; top: 0; width: min(480px, 92vw); max-height: none; border-radius: 0; padding: 24px; animation-name: v2slide; }
+}
+@keyframes v2fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes v2rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes v2slide { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .v2 *, .v2 *::before, .v2 *::after { animation: none !important; transition: none !important; } }
 .v2 .rows .sheet { margin: 0; padding: 0 16px; border-radius: 0; background: none; }
-.v2 .rows .sheet[open] { padding-bottom: 16px; }
 .v2 .rows > * + .sheet, .v2 .rows > .sheet + * { margin-top: 8px; position: relative; }
 .v2 .rows > * + .sheet::before, .v2 .rows > .sheet + *::before { content: ""; position: absolute; left: 16px; right: 0; top: -4px; height: 1px; background: var(--hair); }
 .v2 .rw.info { cursor: default; }
@@ -218,7 +237,9 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 
 /* every step, one tap each (the rail above is the picture of where you are) */
 .v2 .allsteps li a { display: flex; gap: 12px; align-items: flex-start; min-height: 56px; padding: 12px 0; text-decoration: none; line-height: 1.45; }
-.v2 .allsteps li + li a { box-shadow: inset 0 1px 0 var(--hair); }
+/* 8 px between two taps, the hairline in the gap (REQ-T-02) */
+.v2 .allsteps li + li { position: relative; margin-top: 8px; }
+.v2 .allsteps li + li::before { content: ""; position: absolute; left: 40px; right: 0; top: -4px; height: 1px; background: var(--hair); }
 .v2 .allsteps .n { flex: none; width: 28px; height: 28px; border-radius: 4px; background: var(--sunk); display: flex; align-items: center; justify-content: center; font-weight: 600; }
 .v2 .allsteps .is-done .n { background: var(--ink); color: var(--surface); }
 .v2 .allsteps .cur .n { box-shadow: inset 0 0 0 2px var(--ink); background: var(--surface); }
