@@ -49,7 +49,7 @@ from pdm.platform.documents import DocumentLibrary
 from pdm.platform.objects import FilesystemObjectStore
 from pdm.playbooks import repo as playbooks
 from pdm.triggers import repo as findings
-from pdm.work import WorkOrders, locks
+from pdm.work import TransitionRefused, WorkOrders, locks
 from pdm.work import repo as work_repo
 from tests.released import released
 
@@ -338,9 +338,21 @@ def _to_restore(client: TestClient, world: dict[str, Any]) -> None:
     assert _go(client, ref, 5) == 200
 
 
-def _release(client: TestClient, lock_id: int, reason: str = "คนรับใส่แล้ว", **witness: str) -> Any:
+def _release(
+    client: TestClient,
+    lock_id: int,
+    reason: str = "คนรับใส่แล้ว",
+    checks: tuple[str, ...] = CHECKS,
+    **witness: str,
+) -> Any:
     """The owner takes their lock off outside the restore step, with the shift lead signing."""
-    body = {"reason": reason, "witness": str(LEAD), "witness_password": PASSWORD, **witness}
+    body: dict[str, Any] = {
+        "reason": reason,
+        "witness": str(LEAD),
+        "witness_password": PASSWORD,
+        "checks": list(checks),
+        **witness,
+    }
     return client.post(f"/locks/{lock_id}/release", json=body)
 
 
@@ -691,3 +703,112 @@ class TestARestoreStepWithTwoPoints:
             f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "released"}
         )
         assert closed.status_code == 200, closed.text
+
+
+class TestTheCarryOver:
+    """ADR-138: C1-C5 from the set 2 final review."""
+
+    def test_nobody_witnesses_their_own_release(self, world: dict[str, Any]) -> None:
+        """C1, at the service: the witness is somebody other than the owner."""
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        lock_id = _my_lock_id(client)
+        orders = WorkOrders(world["clock"], fallback_minutes=FALLBACK, restore_checks=CHECKS)
+        with _db(world) as conn, pytest.raises(TransitionRefused, match="พยาน"):
+            orders.release_own_lock(conn, lock_id, user=TECHNICIAN, reason="x", witness=TECHNICIAN)
+
+    def test_a_witness_password_is_not_guessed(self, world: dict[str, Any]) -> None:
+        """C2: five wrong tries hold the witness for fifteen minutes; each try is audited."""
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        lock_id = _my_lock_id(client)
+        for _ in range(5):
+            assert _release(client, lock_id, witness_password="guess").status_code == 403
+        held = _release(client, lock_id)
+        assert held.status_code == 429, "even the right password, until the window passes"
+        with _db(world) as conn:
+            tries = conn.execute(
+                "SELECT count(*) FROM access_log WHERE action = 'witness_lock_release'"
+                " AND subject = 'sup-1' AND NOT allowed"
+            ).fetchone()
+        assert tries == (5,)
+        world["clock"].advance(timedelta(minutes=16))
+        assert _release(client, lock_id).status_code != 429
+
+    def test_a_late_release_makes_the_restore_checks(self, world: dict[str, Any]) -> None:
+        """C3: after a "still locked" close there is no restore step left."""
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        closed = client.post(
+            f"/work-orders/{ref}/close",
+            json={
+                "outcome": "temporary_fix",
+                "lock_state": "still_locked",
+                "lock_reason": "รออะไหล่",
+            },
+        )
+        assert closed.status_code == 200, closed.text
+        (mine,) = client.get("/locks/mine").json()
+        assert mine["job_open"] is False
+        assert [one["key"] for one in mine["checks_needed"]] == list(CHECKS)
+        lock_id = int(mine["lock_id"])
+        assert _release(client, lock_id, checks=CHECKS[:2]).status_code == 422
+        assert _release(client, lock_id).status_code == 200
+        with _db(world) as conn:
+            row = conn.execute(
+                "SELECT release_checks FROM lock_record WHERE lock_id = %s", (lock_id,)
+            ).fetchone()
+        assert row == (list(CHECKS),)
+
+    def test_between_handover_and_reassignment_the_lock_stays_on(
+        self, world: dict[str, Any]
+    ) -> None:
+        """C4: queued with nobody on it - the sender's lock is the only lock, so it stays."""
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        handed = client.post(
+            f"/work-orders/{ref}/handover",
+            json={"note": "ถึงขั้น 2", "lock_state": "still_locked", "lock_reason": "หมดกะ"},
+        )
+        assert handed.status_code == 200, handed.text
+        assert handed.json()["status"] == "queued"
+        refused = _release(client, _my_lock_id(client))
+        assert refused.status_code == 409
+        assert [one["lock_no"] for one in _ticket(client, ref)["locks"]] == ["ก-03"]
+        # Nobody holds it: nobody can close it past the lock either.
+        assert (
+            client.post(f"/work-orders/{ref}/close", json={"outcome": "fixed"}).status_code == 409
+        )
+
+
+class TestOneMachineOneWriter:
+    """C5: the register's read-then-write is one transaction and one writer per machine."""
+
+    def test_the_api_works_in_a_transaction(self, database_url: str) -> None:
+        from pdm.platform.db import make_pool
+
+        pool = make_pool(min_size=1, max_size=1)
+        try:
+            with pool.connection() as conn:
+                assert conn.autocommit is False
+        finally:
+            pool.close()
+
+    def test_a_second_connection_waits_for_the_machine(self, database_url: str) -> None:
+        from psycopg import errors
+
+        first, second = connect(database_url), connect(database_url)
+        try:
+            locks.hold_machine(first, MOTOR)
+            second.execute("SET lock_timeout = '200ms'")
+            with pytest.raises(errors.LockNotAvailable):
+                locks.hold_machine(second, MOTOR)
+            second.rollback()
+            locks.hold_machine(second, MachineId("MC-004"))  # another machine is not held
+            second.rollback()
+            first.commit()
+            second.execute("SET lock_timeout = '200ms'")
+            locks.hold_machine(second, MOTOR)  # free once the first transaction ends
+        finally:
+            first.close()
+            second.close()

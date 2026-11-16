@@ -174,6 +174,8 @@ export type Lamp = { seq: number; name: string | null; state: "normal" | "predic
 
 export type MyLock = {
   lock_id: number;
+  job_open: boolean;
+  checks_needed: { key: string; label: string }[];
   work_order_ref: string;
   machine_id: string;
   point_id: string;

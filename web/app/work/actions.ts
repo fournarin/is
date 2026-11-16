@@ -196,6 +196,7 @@ export async function releaseMyLock(lockId: number, form: FormData): Promise<voi
       reason: why,
       witness: String(form.get("witness") ?? "").trim(),
       witness_password: String(form.get("witness_password") ?? ""),
+      checks: form.getAll("checks").map(String),
     }),
   });
   redirect(response.ok ? "/work?done=unlocked" : `/work?error=${encodeURIComponent(await reason(response))}`);

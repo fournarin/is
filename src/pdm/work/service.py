@@ -435,6 +435,8 @@ class WorkOrders:
         if not 1 <= step <= len(order.playbook_snapshot):
             raise ValueError(f"ใบงาน {ref} มี {len(order.playbook_snapshot)} ขั้น ไม่มีขั้นที่ {step}")
         now = self.clock.now()
+        # C5: moving past a step reads the register; nobody changes it meanwhile.
+        locks.hold_machine(conn, order.machine_id)
         blocked = self._unfinished(conn, ref, order, user, before=step, now=now)
         if blocked is not None:
             raise TransitionRefused(f"ขั้นที่ {blocked} ยังยืนยันไม่ครบ ไปขั้นถัดไปไม่ได้")
@@ -570,6 +572,7 @@ class WorkOrders:
         user: UserId,
         reason: str,
         witness: UserId,
+        checks: Sequence[str] = (),
     ) -> locks.Lock:
         """The owner takes their own lock off outside the restore step, witnessed
         by a shift lead (ADR-136 B3, ADR-137).
@@ -582,12 +585,20 @@ class WorkOrders:
         """
         if not reason.strip():
             raise ValueError("บอกเหตุที่ปลดกุญแจ เช่น คนรับงานใส่กุญแจของตัวเองแล้ว")
+        # C1: the person who saw it is somebody else - nobody witnesses their own release.
+        if witness == user:
+            raise TransitionRefused("พยานต้องเป็นหัวหน้ากะคนอื่น ไม่ใช่เจ้าของกุญแจ")
         lock = locks.lock_by_id(conn, lock_id)
         if lock is None or lock.owner != user:
             raise TransitionRefused("ไม่มีกุญแจนี้ในชื่อคุณที่ยังล็อกอยู่")
         locks.hold_machine(conn, lock.machine_id)
         order = repo.get(conn, lock.work_order_ref)
-        if order is not None and order.status in domain.STILL_LIVE:
+        live = order is not None and order.status in domain.STILL_LIVE
+        # C3: a job that has closed has no restore step left; the plant's checks
+        # before energy goes back are made on the release itself.
+        if not live and not set(self.restore_checks) <= set(checks):
+            raise ValueError("งานนี้ปิดไปแล้ว ตรวจก่อนจ่ายไฟคืนให้ครบก่อนปลด (เครื่องมือ ฝาครอบ คน พนักงาน)")
+        if order is not None and live:
             if domain.holds_it(order, user):
                 raise TransitionRefused(
                     f"คุณยังถืองาน {lock.work_order_ref} อยู่ ปลดกุญแจในขั้นคืนพลังงาน ซึ่งมีรายการตรวจก่อนจ่ายไฟ"
@@ -603,7 +614,13 @@ class WorkOrders:
                     "เครื่องต้องไม่ว่างกุญแจระหว่างส่งต่อ"
                 )
         released = locks.release_own(
-            conn, lock_id, owner=user, now=self.clock.now(), reason=reason, witness=witness
+            conn,
+            lock_id,
+            owner=user,
+            now=self.clock.now(),
+            reason=reason,
+            witness=witness,
+            checks=() if live else checks,
         )
         if released is None:
             raise TransitionRefused("ไม่มีกุญแจนี้ในชื่อคุณที่ยังล็อกอยู่")

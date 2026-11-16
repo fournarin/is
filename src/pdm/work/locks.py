@@ -27,6 +27,7 @@ from typing import Any
 
 from psycopg import Connection
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict
 
 from pdm.contracts import LockState, MachineId, PlaybookStep, StepKind, UserId
@@ -383,6 +384,7 @@ def release_own(
     now: datetime,
     reason: str,
     witness: UserId | None = None,
+    checks: Sequence[str] = (),
 ) -> Lock | None:
     """The owner takes their own lock off, from wherever they are (ADR-136, B3).
 
@@ -393,11 +395,12 @@ def release_own(
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             f"""
-            UPDATE lock_record SET released_at = %s, release_reason = %s, release_witness = %s
+            UPDATE lock_record SET released_at = %s, release_reason = %s, release_witness = %s,
+                   release_checks = %s
              WHERE lock_id = %s AND owner = %s AND released_at IS NULL
             RETURNING {_LOCK_COLUMNS}
             """,
-            (now, reason, witness, lock_id, owner),
+            (now, reason, witness, Jsonb(list(checks)) if checks else None, lock_id, owner),
         )
         row = cur.fetchone()
     return Lock.model_validate(row) if row else None

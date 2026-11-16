@@ -25,12 +25,13 @@ for work already open.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, Plant, authentication, requires
+from pdm.api.deps import Db, Plant, Time, authentication, requires
 from pdm.contracts import (
     BlockedReason,
     LockState,
@@ -43,9 +44,11 @@ from pdm.contracts import (
     WorkOrderStatus,
     WorkOutcome,
 )
+from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.auth.service import Authentication
 from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders, locks
+from pdm.work import repo as work_repo
 
 router = APIRouter(tags=["work orders"])
 
@@ -428,6 +431,9 @@ def confirm_point(
 
 class LockView(BaseModel):
     lock_id: int
+    # Whether the job is still open: a closed one asks for the restore checks on the release.
+    job_open: bool = True
+    checks_needed: tuple[CheckView, ...] = ()
     work_order_ref: str
     machine_id: str
     point_id: str
@@ -444,6 +450,13 @@ class Removal(BaseModel):
     # on this phone (ADR-137): outside the restore step nothing else vouches for it.
     witness: str = Field(min_length=1)
     witness_password: str = Field(min_length=1)
+    # The plant's restore checks, confirmed on the release when the job has closed (C3).
+    checks: tuple[str, ...] = ()
+
+
+class CheckView(BaseModel):
+    key: str
+    label: str
 
 
 def _lock(one: locks.Lock) -> LockView:
@@ -461,10 +474,34 @@ def _lock(one: locks.Lock) -> LockView:
 @router.get("/locks/mine", response_model=list[LockView])
 def my_locks(
     conn: Db,
+    config: Plant,
     account: Annotated[Account, Depends(requires(*_MAY_WORK, action="read_own_locks"))],
 ) -> list[LockView]:
-    """Every lock still on in this person's name, on any job (ADR-136)."""
-    return [_lock(one) for one in locks.locks_of(conn, account.user)]
+    """Every lock still on in this person's name, on any job (ADR-136), with the
+    plant's restore checks for those whose job has closed (ADR-138, C3)."""
+    checks = tuple(
+        CheckView(key=one.key, label=one.label) for one in config.policy.safety.restore_checks
+    )
+    views = []
+    for one in locks.locks_of(conn, account.user):
+        order = work_repo.get(conn, one.work_order_ref)
+        is_open = order is not None and order.status not in (
+            WorkOrderStatus.CLOSED,
+            WorkOrderStatus.CANCELLED,
+        )
+        views.append(
+            _lock(one).model_copy(
+                update={"job_open": is_open, "checks_needed": () if is_open else checks}
+            )
+        )
+    return views
+
+
+# C2: a witness's password is tried at most this often before the account is
+# held, and every try is written to the access log - a phone passed round a
+# shift is not a place to guess a lead's password.
+WITNESS_TRIES = 5
+WITNESS_WINDOW = timedelta(minutes=15)
 
 
 @router.post("/locks/{lock_id}/release", response_model=LockView)
@@ -473,22 +510,48 @@ def release_my_lock(
     removal: Removal,
     conn: Db,
     orders: Orders,
+    clock: Time,
     auth: Annotated[Authentication, Depends(authentication)],
     account: Annotated[Account, Depends(requires(*_MAY_WORK, action="release_own_lock"))],
 ) -> LockView:
     """The owner records taking their own lock off, with why and in front of a
     shift lead - after a handover or a "still locked" close, when the job is no
-    longer theirs (ADR-136 B3, ADR-137). Nobody else's: a lock is removed by the
-    person whose lock it is."""
-    witness = auth.identity.authenticate(conn, UserId(removal.witness), removal.witness_password)
-    if witness is None or witness.role is not Role.SUPERVISOR:
+    longer theirs (ADR-136 B3, ADR-137, ADR-138). Nobody else's: a lock is
+    removed by the person whose lock it is."""
+    now = clock.now()
+    witness_id = UserId(removal.witness)
+    failed = auth_repo.failed_attempts(
+        conn, action="witness_lock_release", subject=str(witness_id), since=now - WITNESS_WINDOW
+    )
+    if failed >= WITNESS_TRIES:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"ใส่รหัสพยานผิด {failed} ครั้ง รอ 15 นาที หรือให้หัวหน้ากะมาใส่เอง",
+        )
+    witness = auth.identity.authenticate(conn, witness_id, removal.witness_password)
+    ok = witness is not None and witness.role is Role.SUPERVISOR
+    auth_repo.record_access(
+        conn,
+        now=now,
+        user=account.user,
+        role=account.role,
+        action="witness_lock_release",
+        subject=str(witness_id),
+        allowed=ok,
+    )
+    if witness is None or not ok:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "ต้องมีหัวหน้ากะยืนยันด้วยรหัสของตัวเองตอนปลดกุญแจนอกขั้นคืนพลังงาน"
         )
     try:
         return _lock(
             orders.release_own_lock(
-                conn, lock_id, user=account.user, reason=removal.reason, witness=witness.user
+                conn,
+                lock_id,
+                user=account.user,
+                reason=removal.reason,
+                witness=witness.user,
+                checks=removal.checks,
             )
         )
     except (TransitionRefused, ValueError) as error:

@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 
 import { releaseMyLock } from "@/app/work/actions";
 import { plantTime } from "@/lib/display";
@@ -27,6 +27,21 @@ export function MyLocks({ locks, timezone }: { locks: MyLock[]; timezone: string
             </span>
             <small>{`${one.machine_id} · ${one.work_order_ref} · ใส่ ${plantTime(one.applied_at, timezone)} น. ขั้น ${one.step}`}</small>
           </h3>
+          {/* C3: the job has closed, so its restore step is gone - the plant's checks are made here. */}
+          {!one.job_open && one.checks_needed.length > 0 && (
+            <fieldset className="g1" style={{ marginBottom: 8 }}>
+              <legend className="lbl">ก่อนจ่ายไฟคืน · ตรวจให้ครบ</legend>
+              {one.checks_needed.map((check) => (
+                <label className="ch box" key={check.key}>
+                  <input type="checkbox" name="checks" value={check.key} required />
+                  <span className="mk" aria-hidden>
+                    <Check size={16} strokeWidth={3} />
+                  </span>
+                  {check.label}
+                </label>
+              ))}
+            </fieldset>
+          )}
           <label className="field">
             <span className="lbl">เหตุที่ปลด</span>
             <input type="text" name="reason" required placeholder="เช่น คนรับงานใส่กุญแจของตัวเองแล้ว" />
@@ -39,7 +54,8 @@ export function MyLocks({ locks, timezone }: { locks: MyLock[]; timezone: string
             </label>
             <label className="field">
               <span className="lbl">รหัสของหัวหน้ากะ</span>
-              <input type="password" name="witness_password" required autoComplete="off" />
+              {/* C2: never remembered on a shared phone; tries are limited and audited by the API. */}
+              <input type="password" name="witness_password" required autoComplete="off" data-lpignore="true" data-1p-ignore />
             </label>
           </div>
           <button type="submit" className="btn" style={{ marginTop: 8, background: "var(--sunk)" }}>

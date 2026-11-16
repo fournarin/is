@@ -182,3 +182,15 @@ def record_access(
             """,
             (now, user, role.value if role else None, action, subject, allowed),
         )
+
+
+def failed_attempts(conn: Connection[Any], *, action: str, subject: str, since: datetime) -> int:
+    """Refused attempts at one action on one subject since a moment (ADR-138, C2)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM access_log"
+            " WHERE action = %s AND subject = %s AND NOT allowed AND at >= %s",
+            (action, subject, since),
+        )
+        row = cur.fetchone()
+    return int(row[0]) if row else 0
