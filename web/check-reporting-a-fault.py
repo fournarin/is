@@ -119,7 +119,9 @@ def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
 def readable(page: str) -> str:
     """The page with React's text-node separators taken out, so the assertions
     below are about what a person reads rather than about the renderer."""
-    return re.sub(r"<!--.*?-->", "", page)
+    # A Thai word is wrapped in <span class="w"> so a line breaks only between words
+    # (web/lib/thai.ts); the text a person reads is the words without the wrapper.
+    return re.sub(r'<span class="w">(.*?)</span>', r"\1", re.sub(r"<!--.*?-->", "", page))
 
 
 def get(path: str) -> str:

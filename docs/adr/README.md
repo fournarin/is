@@ -141,6 +141,7 @@ entries replace parts of earlier ones, and both are kept.
 | [130](0130-tools-in-thai-and-a-skill-picked-by-name.md) | Tools in Thai, and a skill picked by name | |
 | [131](0131-a-predicted-jobs-waiting-costs-less-than-a-stop-already-happening.md) | A predicted job's waiting costs less than a stop already happening | |
 | [132](0132-the-shift-lead-confirms-to-somebody-else.md) | The shift lead confirms to somebody else | |
+| [133](0133-the-screens-are-rebuilt-on-one-design-system.md) | The screens are rebuilt on one design system, with Lucide and React Aria | |
 
 ## The invariants these records cite
 

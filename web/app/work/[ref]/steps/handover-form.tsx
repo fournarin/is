@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRightLeft } from "lucide-react";
 import { useActionState } from "react";
 
 import { handOver, type HandoverState } from "@/app/work/actions";
@@ -20,17 +21,20 @@ export function HandoverForm({ workOrder }: { workOrder: string }) {
   const [state, action, pending] = useActionState(handOver, NOTHING_WRONG);
 
   return (
-    <details className="card">
-      <summary>ทำไม่เสร็จ? ส่งต่อให้คนถัดไป</summary>
-      <form action={action}>
+    <details className="sheet">
+      <summary>
+        <ArrowRightLeft size={24} aria-hidden />
+        ทำไม่เสร็จ? ส่งต่อให้คนถัดไป
+      </summary>
+      <form action={action} style={{ marginTop: 8 }}>
         <input type="hidden" name="ref" value={workOrder} />
         {state.error !== null && (
-          <p className="error" role="alert">
+          <p className="callout is-bad error" role="alert">
             {state.error}
           </p>
         )}
         <label className="field">
-          <span>ทำถึงไหนแล้ว</span>
+          <span className="muted">ทำถึงไหนแล้ว</span>
           <textarea
             name="note"
             rows={3}
@@ -38,7 +42,7 @@ export function HandoverForm({ workOrder }: { workOrder: string }) {
             placeholder="เช่น ถอดฝาครอบพัดลมแล้ว รออะไหล่ตลับลูกปืน"
           />
         </label>
-        <button type="submit" disabled={pending}>
+        <button type="submit" className="btn pri" disabled={pending} style={{ marginTop: 16 }}>
           {pending ? "กำลังส่งเวร..." : "ส่งต่องานพร้อมโน้ตนี้"}
         </button>
       </form>

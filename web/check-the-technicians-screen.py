@@ -310,7 +310,9 @@ def readable(page: str) -> str:
     first; matching on the second would make every assertion here a statement
     about React's renderer instead of about the screen.
     """
-    return re.sub(r"<!--.*?-->", "", page)
+    # A Thai word is wrapped in <span class="w"> so a line breaks only between words
+    # (web/lib/thai.ts); the text a person reads is the words without the wrapper.
+    return re.sub(r'<span class="w">(.*?)</span>', r"\1", re.sub(r"<!--.*?-->", "", page))
 
 
 def get(path: str) -> str:
@@ -425,7 +427,9 @@ def main() -> None:
     print("\n2. starting the job goes straight to the steps")
     steps = submit("/work", form_with(queue, "รับงานและเริ่มทำ"))
     expect("ขั้นที่ 1 จาก 3" in readable(steps), "the first step of three")
-    expect(STEPS[0] in steps, "and it is the first step of the playbook that was snapshotted")
+    expect(
+        STEPS[0] in readable(steps), "and it is the first step of the playbook that was snapshotted"
+    )
     expect("อ่านคู่มือหน้า 142" in readable(steps), "with the page it came from")
     cited = re.search(r'href="(/work/[^"]+/manual\?doc=[^"]+?page=142[^"]*)"', steps)
     expect(cited is not None, "read inside the job, not in another tab (third trial)")
@@ -438,9 +442,11 @@ def main() -> None:
     print("\n3. stepping through")
     second = get("/work/" + ref_from(steps) + "/steps?step=2")
     expect("ขั้นที่ 2 จาก 3" in readable(second), "step two")
-    expect(STEPS[1] in second, "shows the second instruction")
+    expect(STEPS[1] in readable(second), "shows the second instruction")
     last = get("/work/" + ref_from(steps) + "/steps?step=3")
-    expect("ครบทุกขั้น ปิดงาน" in last, "and the last one offers closing instead of another step")
+    expect(
+        "ครบทุกขั้น ปิดงาน" in readable(last), "and the last one offers closing instead of another step"
+    )
 
     print("\n3b. a step that names another page lets the technician open it")
     expect(
