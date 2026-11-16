@@ -30,15 +30,26 @@ const LOCK_LABELS = {
 export function HandoverForm({ workOrder, locks, note }: { workOrder: string; locks: LockContext; note: string }) {
   const [state, action, pending] = useActionState(handOver, NOTHING_WRONG);
   const off = {
-    released: locks.mine.length > 0 || !locks.hadMine,
+    released: locks.onMachine.length > 0 || !locks.hadMine,
     still_locked: locks.onJob.length === 0,
-    not_isolated: locks.onJob.length > 0,
+    not_isolated: locks.onJob.length > 0 || locks.anybodyLocked,
   };
   const why = {
     released:
-      locks.mine.length > 0 ? "คนรับงานต้องใส่กุญแจของตัวเองก่อน" : !locks.hadMine ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้" : null,
+      locks.mine.length > 0
+        ? "คนรับงานต้องใส่กุญแจของตัวเองก่อน"
+        : locks.onMachine.length > 0
+          ? `ยังมีกุญแจ ${locks.onMachine.join(", ")} ที่เครื่องนี้`
+          : !locks.hadMine
+            ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้"
+            : null,
     still_locked: locks.onJob.length > 0 ? locks.onJob.join(", ") : "ทะเบียนไม่มีกุญแจที่ยังล็อกอยู่ในงานนี้",
-    not_isolated: locks.onJob.length > 0 ? `ทะเบียนมีกุญแจ ${locks.onJob.join(", ")}` : null,
+    not_isolated:
+      locks.onJob.length > 0
+        ? `ทะเบียนมีกุญแจ ${locks.onJob.join(", ")}`
+        : locks.anybodyLocked
+          ? "ทะเบียนบันทึกว่ามีการใส่กุญแจในงานนี้"
+          : null,
   };
 
   return (

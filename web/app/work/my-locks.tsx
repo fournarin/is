@@ -1,0 +1,39 @@
+import { Lock } from "lucide-react";
+
+import { releaseMyLock } from "@/app/work/actions";
+import { plantTime } from "@/lib/display";
+import type { MyLock } from "@/lib/work";
+
+/**
+ * Your locks still on, on any job, and the way to record one coming off (ADR-136).
+ *
+ * After a handover or a "still locked" close the job is no longer yours and its
+ * restore step is not yours to confirm, but the lock is still yours - only you
+ * take it off. Recording it here, with why, is how the register ends empty.
+ */
+export function MyLocks({ locks, timezone }: { locks: MyLock[]; timezone: string }) {
+  if (locks.length === 0) return null;
+  return (
+    <section className="sec" aria-labelledby="locks-h">
+      <h2 id="locks-h">{`กุญแจของคุณที่ยังล็อกอยู่ (${locks.length})`}</h2>
+      {locks.map((one) => (
+        <form className="v-card pt" key={one.lock_id} action={releaseMyLock.bind(null, one.lock_id)}>
+          <h3>
+            <span className="w">
+              <Lock size={20} aria-hidden style={{ display: "inline", verticalAlign: "-3px", marginRight: 8 }} />
+              {`${one.lock_no} ที่ ${one.point_id}`}
+            </span>
+            <small>{`${one.machine_id} · ${one.work_order_ref} · ใส่ ${plantTime(one.applied_at, timezone)} น. ขั้น ${one.step}`}</small>
+          </h3>
+          <label className="field">
+            <span className="lbl">เหตุที่ปลด · ปลดต่อหน้าหัวหน้ากะ</span>
+            <input type="text" name="reason" required placeholder="เช่น คนรับงานใส่กุญแจของตัวเองแล้ว" />
+          </label>
+          <button type="submit" className="btn" style={{ marginTop: 8, background: "var(--sunk)" }}>
+            บันทึกว่าปลดกุญแจของฉันแล้ว
+          </button>
+        </form>
+      ))}
+    </section>
+  );
+}

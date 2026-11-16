@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { NotThere, Shell } from "@/app/ui/shell";
 import { Approved, Clock, PhoneFrame, Plate, Row, Th, signalsAreSynthetic, stationNumber } from "@/app/ui/v2/frame";
 import { moveTo } from "@/app/work/actions";
-import { KindHeader, NotYet, Points, WaitBox, needed, neededLine } from "@/app/work/[ref]/steps/energy";
+import { KindHeader, NotYet, Points, WaitBox, needed, neededLine, whoFor } from "@/app/work/[ref]/steps/energy";
 import { LockBar } from "@/app/ui/v2/signs";
 import { firstUnfinished, waitEnds } from "@/lib/energy";
 import { plantTime } from "@/lib/display";
@@ -119,8 +119,8 @@ export default async function StepsPage({
 
   const now = new Date();
   // This step's own confirmations, or an earlier step's left unfinished: the API refuses either.
-  const earlier = firstUnfinished(job.steps, job.confirmations ?? [], at, now);
-  const missing = needed(job, at, now);
+  const earlier = firstUnfinished(job.steps, job.confirmations ?? [], at, now, whoFor(job, account.user));
+  const missing = needed(job, at, now, account.user);
   const waitUntil = current.wait_minutes ? waitEnds(current, at, job.confirmations ?? []) : null;
 
   return (
@@ -339,18 +339,10 @@ function NoSteps({
       <div className="callout is-lock v-note" role="note">
         <CircleAlert size={20} aria-hidden />
         <div>
-          <h1 className="nop">
-            <Th>
-              {job.origin === "scheduled"
-                ? "ยังไม่มีขั้นตอนที่อนุมัติแล้วสำหรับงานนี้"
-                : "ยังไม่มีขั้นตอนซ่อมที่อนุมัติแล้วสำหรับอาการนี้"}
-            </Th>
-          </h1>
+          {/* Short enough that the actions under it start above the fold at 360x640 (set 2 review S6). */}
+          <h1 className="nop">ไม่มีขั้นตอนที่อนุมัติ</h1>
           <p>
-            <b>อย่าเดาขั้นตอน</b> · <Th>{`ดูคู่มือของเครื่อง หรือโทรถาม${engineer}`}</Th>
-          </p>
-          <p style={{ marginTop: 8 }}>
-            <Th>ระบบไม่สร้างขั้นตอนให้ระหว่างทำงาน · ปิดงานและส่งต่อได้ตามปกติ</Th>
+            <b>อย่าเดาขั้นตอน</b> · <Th>{`ดูคู่มือ หรือโทรถาม${engineer}`}</Th>
           </p>
         </div>
       </div>
@@ -401,6 +393,8 @@ function NoSteps({
         </div>
       )}
       <p className="prov">
+        <Th>ระบบไม่สร้างขั้นตอนให้ระหว่างทำงาน · ปิดงานและส่งต่อได้ตามปกติ</Th>
+        {" · "}
         <Th>{job.reason}</Th>
         {job.started_at && ` · เริ่ม ${plantTime(job.started_at, timezone)} น.`}
         {job.eta_text && (

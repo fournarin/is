@@ -45,7 +45,7 @@
 /* the frame */
 .v2 .synthetic { display: flex; justify-content: center; padding: 4px 16px; background: var(--sunk); color: var(--ink-2); line-height: 1.4; }
 .v2 .synthetic b { color: var(--ink); }
-.v2 .top { display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 8px 16px; }
+.v2 .top { display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 4px 16px; }
 .v2 .top .v-who { flex: 1; min-width: 0; font-weight: 600; line-height: 1.3; }
 .v2 .top .v-who small { display: block; font-size: var(--t1); font-weight: 400; color: var(--ink-2); }
 .v2 .clock { text-align: right; white-space: nowrap; line-height: 1.2; }
@@ -80,10 +80,14 @@
 .v2 .pos li.me { background: var(--surface); color: var(--ink); }
 .v2 .pos li.fc { box-shadow: inset 0 0 0 2px var(--amber); }
 .v2 .pos li.ov { background: var(--amber); color: var(--ink); }
-/* no connection: the same andon voice as the plate */
-.v2 .offline { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 16px; background: var(--andon); color: var(--on-andon); line-height: 1.45; }
-.v2 .offline b { font-weight: 600; }
-.v2 .offline svg { flex: none; width: 24px; height: 24px; color: var(--on-andon); }
+/* no connection: the clock's place in the top bar, in the plate's andon voice; nothing else moves */
+.v2 .offline-tag { display: none; flex: none; align-items: center; gap: 4px; min-height: 48px; padding: 0 8px; border-radius: var(--r);
+  background: var(--andon); color: var(--on-andon); font-weight: 600; line-height: 1.2; white-space: nowrap; }
+.v2 .offline-tag svg { flex: none; }
+html[data-offline] .v2 .offline-tag { display: inline-flex; }
+html[data-offline] .v2 .top .clock { display: none; }
+.v2 .offline-only, .v2 .callout.offline-only { display: none; }
+html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-only { display: flex; }
 .v2 .page-text .ph { font-size: var(--t2); font-weight: 600; line-height: 1.45; margin-bottom: 8px; }
 
 /* surfaces, buttons, lists */
@@ -167,17 +171,17 @@
   color: var(--ink-2); font-weight: 600; text-decoration: none; }
 .v2 .rail > span.is-done { background: var(--ink); color: var(--surface); }
 .v2 .rail > span.cur { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
-.v2 .step { margin-top: 16px; }
+.v2 .step { margin-top: 12px; }
 .v2 .step .th { font-size: var(--t3); line-height: 1.5; }
-.v2 .step .en { margin-top: 12px; padding-top: 12px; box-shadow: inset 0 1px 0 var(--hair); line-height: 1.55; }
-.v2 .step .en .lbl { margin-right: 8px; color: var(--ink-2); }
-.v2 .mref { display: flex; align-items: center; gap: 12px; min-height: 64px; margin-top: 12px; padding: 8px; border-radius: var(--r);
+.v2 .step .en { margin-top: 8px; padding-top: 8px; box-shadow: inset 0 1px 0 var(--hair); line-height: 1.55; }
+.v2 .step .en .lbl { display: block; color: var(--ink-2); }
+.v2 .mref { display: flex; align-items: center; gap: 12px; min-height: 56px; margin-top: 12px; padding: 4px 8px; border-radius: var(--r);
   background: var(--canvas); text-decoration: none; color: var(--ink); }
 .v2 .mref .thumb { flex: none; width: 48px; height: 48px; border-radius: 4px; background: var(--surface); color: var(--ink-2);
   display: flex; align-items: center; justify-content: center; }
 .v2 .mref .t { flex: 1; min-width: 0; font-weight: 600; line-height: 1.35; }
 .v2 .mref .t small { display: block; font-weight: 400; color: var(--ink-2); }
-.v2 .done-btn { margin-top: 16px; }
+.v2 .done-btn { margin-top: 12px; }
 .v2 .after { margin-top: 24px; }
 .v2 .prov { margin-top: 24px; line-height: 1.6; color: var(--ink-2); }
 .v2 .prov b { color: var(--ink); }
@@ -221,7 +225,7 @@
 
 /* set 2: energy steps (ADR-135). ISO 3864 safety colours appear only on signs and signal words. */
 .v2 { --iso-blue: #005387; --iso-yellow: #f9a800; }
-.v2 .kindh { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: start; padding-bottom: 12px; margin-bottom: 12px;
+.v2 .kindh { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: start; padding-bottom: 12px; margin-bottom: 12px;
   box-shadow: inset 0 -1px 0 var(--hair); }
 .v2 .kindh.nosign { grid-template-columns: 1fr; }
 .v2 .kindh .signs { display: grid; gap: 8px; }
@@ -279,7 +283,7 @@
 .v2 .timer { display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 12px 16px; background: var(--surface); border-radius: var(--r);
   line-height: 1.35; }
 .v2 .timer > b { font-size: var(--t4); line-height: 1; white-space: nowrap; }
-.v2 .timer > b small { font-size: var(--t1); margin-left: 4px; }
+.v2 .timer > b small { display: inline; font-size: var(--t1); margin-left: 4px; color: var(--ink); }
 .v2 .timer small { display: block; color: var(--ink-2); }
 .v2 .timer small b { color: var(--ink); }
 .v2 .wait { margin-top: 16px; }
@@ -294,6 +298,8 @@
 .v2 .where b { color: var(--ink); }
 .v2 .sub-q { margin-top: 12px; }
 .v2 .submit { margin-top: 32px; }
+/* the last decision on a long form stays under the thumb */
+.v2 .submit.sticky { position: sticky; bottom: 0; z-index: 1; padding: 8px 0; background: var(--canvas); }
 .v2 .saved { margin-top: 8px; line-height: 1.45; color: var(--ink-2); }
 .v2 .gapfree li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; line-height: 1.45; }
 .v2 .gapfree li + li { box-shadow: inset 0 1px 0 var(--hair); }

@@ -43,7 +43,7 @@ from pdm.contracts import (
     WorkOutcome,
 )
 from pdm.platform.auth.domain import Account
-from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders
+from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders, locks
 
 router = APIRouter(tags=["work orders"])
 
@@ -378,7 +378,7 @@ class Confirming(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    item: str = Field(pattern="^(off|locked|verified|released|wait_started)$")
+    item: str = Field(pattern="^(off|locked|verified|checked|released|wait_started)$")
     point_id: str = ""
     lock_no: str | None = None
 
@@ -422,6 +422,62 @@ def confirm_point(
         )
         for one in done
     ]
+
+
+class LockView(BaseModel):
+    lock_id: int
+    work_order_ref: str
+    machine_id: str
+    point_id: str
+    lock_no: str
+    step: int
+    applied_at: str
+
+
+class Removal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1)
+
+
+def _lock(one: locks.Lock) -> LockView:
+    return LockView(
+        lock_id=one.lock_id,
+        work_order_ref=one.work_order_ref,
+        machine_id=str(one.machine_id),
+        point_id=one.point_id,
+        lock_no=one.lock_no,
+        step=one.step,
+        applied_at=one.applied_at.isoformat(),
+    )
+
+
+@router.get("/locks/mine", response_model=list[LockView])
+def my_locks(
+    conn: Db,
+    account: Annotated[Account, Depends(requires(*_MAY_WORK, action="read_own_locks"))],
+) -> list[LockView]:
+    """Every lock still on in this person's name, on any job (ADR-136)."""
+    return [_lock(one) for one in locks.locks_of(conn, account.user)]
+
+
+@router.post("/locks/{lock_id}/release", response_model=LockView)
+def release_my_lock(
+    lock_id: int,
+    removal: Removal,
+    conn: Db,
+    orders: Orders,
+    account: Annotated[Account, Depends(requires(*_MAY_WORK, action="release_own_lock"))],
+) -> LockView:
+    """The owner records taking their own lock off, with why - after a handover
+    or a "still locked" close, when the job is no longer theirs (ADR-136, B3).
+    Nobody else's: a lock is removed by the person whose lock it is."""
+    try:
+        return _lock(
+            orders.release_own_lock(conn, lock_id, user=account.user, reason=removal.reason)
+        )
+    except (TransitionRefused, ValueError) as error:
+        raise _translate(error) from error
 
 
 @router.post("/work-orders/{work_order_ref}/handover", response_model=WorkOrderState)

@@ -1,20 +1,22 @@
 "use client";
 
-import { WifiOff } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect } from "react";
 
 /**
- * Says so when the phone has lost the network (ADR-134).
+ * Marks the page while the phone has lost the network (ADR-134, ADR-136).
  *
- * A cell's Wi-Fi drops while somebody is mid-job, and the next tap then fails
- * with the browser's own error page. The strip comes first: what is on the
- * screen can still be read, and what was done is already recorded, so nobody
- * starts the step again. Drawn only while offline; nothing at all otherwise.
+ * A cell's Wi-Fi drops while somebody is mid-job, and the next tap then fails.
+ * What changes is drawn by CSS from this one mark: the clock in the top bar
+ * becomes "Wi-Fi หลุด", and a step that records confirmations says they are
+ * not being recorded. Nothing moves - the synthetic banner keeps its words and
+ * the step's button stays where the thumb expects it (set 1 and 2 reviews).
  */
-export function OfflineStrip({ children, synthetic }: { children: ReactNode; synthetic: boolean }) {
-  const [offline, setOffline] = useState(false);
+export function OfflineWatch() {
   useEffect(() => {
-    const update = () => setOffline(!navigator.onLine);
+    const update = () => {
+      if (navigator.onLine) delete document.documentElement.dataset.offline;
+      else document.documentElement.dataset.offline = "1";
+    };
     update();
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
@@ -23,15 +25,5 @@ export function OfflineStrip({ children, synthetic }: { children: ReactNode; syn
       window.removeEventListener("offline", update);
     };
   }, []);
-  // In the synthetic banner's row, not a row of its own, so the step's button
-  // stays where the thumb expects it (set 1 review); the banner's words stay in it.
-  if (!offline) return <>{children}</>;
-  return (
-    <div className="offline" role="status">
-      <WifiOff size={24} aria-hidden />
-      <span>
-        <b>Wi-Fi หลุด</b> · ที่ทำไว้ไม่หาย{synthetic && " · จำลอง"}
-      </span>
-    </div>
-  );
+  return null;
 }

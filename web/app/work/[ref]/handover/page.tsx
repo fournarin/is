@@ -35,12 +35,14 @@ export default async function HandoverPage({
   const at = Number.isInteger(given) && given >= 1 ? Math.min(given, total) : (job.step_reached ?? 1);
   const back = `/work/${encodeURIComponent(job.ref)}/steps${total > 0 ? `?step=${at}` : ""}`;
   const onJob = (job.locks ?? []).filter((one) => one.work_order_ref === job.ref);
-  const said = (one: (typeof onJob)[number]) => `${one.lock_no} ที่ ${one.point_id} ใส่ ${plantTime(one.applied_at, round.timezone)} น.`;
+  const said = (one: NonNullable<typeof job.locks>[number]) => `${one.lock_no} ที่ ${one.point_id} ใส่ ${plantTime(one.applied_at, round.timezone)} น.`;
   const mine = onJob.filter((one) => one.owner === account.user);
   const locks: LockContext = {
     mine: mine.map(said),
     onJob: onJob.map(said),
+    onMachine: (job.locks ?? []).map(said),
     hadMine: (job.confirmations ?? []).some((one) => one.item === "locked" && one.by === account.user),
+    anybodyLocked: (job.confirmations ?? []).some((one) => one.item === "locked"),
     restoreLeft: null,
   };
   const symptom = job.title ? job.title.replace(job.machine_id, "").trim() : job.reason;

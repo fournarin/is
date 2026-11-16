@@ -9,7 +9,8 @@ import { DisagreeForm } from "@/app/work/disagree-form";
 import { OUTCOME, UNIT, bandFor, figure, minutesText, plantDay, plantTime, seenLine } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { currentRound, lineLamps, myWork, proposals, toolNames, type Reading, type Ticket } from "@/lib/work";
+import { currentRound, lineLamps, myLocks, myWork, proposals, toolNames, type Reading, type Ticket } from "@/lib/work";
+import { MyLocks } from "@/app/work/my-locks";
 
 /**
  * One job, not a menu - the way a ride-hailing app hands a driver one trip
@@ -35,7 +36,7 @@ export default async function WorkPage({
     );
   }
 
-  const [round, mine, lamps] = await Promise.all([currentRound(), myWork(), lineLamps()]);
+  const [round, mine, lamps, locksOn] = await Promise.all([currentRound(), myWork(), lineLamps(), myLocks()]);
   const now = new Date();
   const top = (
     <>
@@ -49,7 +50,9 @@ export default async function WorkPage({
       ? `ปิดงาน ${ref ?? ""} แล้ว หัวหน้ากะเห็นผลและบันทึกของคุณแล้ว`
       : done === "handed"
         ? `ส่งต่องาน ${ref ?? ""} แล้ว หัวหน้ากะจะส่งให้ช่างคนอื่น`
-        : null;
+        : done === "unlocked"
+          ? "บันทึกว่าปลดกุญแจแล้ว ทะเบียนอัปเดตแล้ว"
+          : null;
   const recorded = doneLine && (
     <div className="callout is-ok v-note" role="status">
       <CircleCheck size={20} aria-hidden />
@@ -65,6 +68,7 @@ export default async function WorkPage({
     return (
       <PhoneFrame top={top}>
         {recorded}
+        <MyLocks locks={locksOn} timezone={round.timezone} />
         <div className="v-card" style={{ marginTop: 16 }}>
           <h1 className="sym">{waiting.length > 0 ? "มีงานรอหัวหน้ากะยืนยัน" : "ยังไม่มีงานที่ส่งถึงคุณ"}</h1>
           <p style={{ marginTop: 8 }}>
@@ -316,6 +320,7 @@ export default async function WorkPage({
         </section>
       )}
 
+      <MyLocks locks={locksOn.filter((one) => one.work_order_ref !== job.ref)} timezone={round.timezone} />
       {job.approval && <Approved approval={job.approval} timezone={round.timezone} />}
     </PhoneFrame>
   );

@@ -64,6 +64,7 @@ from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.config import Config
 from pdm.playbooks import repo as playbooks_repo
+from pdm.playbooks.domain import uncovered
 
 # Layer 4, for one line in `confirm_proposal`. `.importlinter` bans `pdm.dispatch`
 # and `pdm.work` from importing this package at all and names only the workers
@@ -191,6 +192,11 @@ class PointConfirmed(BaseModel):
     item: str
     by: str
     at: datetime
+
+
+class RestoreCheckView(BaseModel):
+    key: str
+    label: str
 
 
 class LockOn(BaseModel):
@@ -358,8 +364,11 @@ class TicketView(BaseModel):
     locks: tuple[LockOn, ...] = ()
     # Lock numbers the reader has used before, for one-tap choices.
     your_lock_numbers: tuple[str, ...] = ()
-    # An isolation step with no verify after it (REQ-H-05): shown as a stop bar.
+    # Isolated points no verify step covers (REQ-H-05): shown as a stop bar.
     missing_verify: bool = False
+    unverified_points: tuple[str, ...] = ()
+    # EHS's checks before a restore step's locks come off (policy.yaml, ADR-136).
+    restore_checks: tuple[RestoreCheckView, ...] = ()
 
 
 class Mine(BaseModel):
@@ -1356,7 +1365,12 @@ def ticket(
             for one in locks.open_locks(conn, machine_id=order.machine_id)
         ),
         your_lock_numbers=tuple(locks.lock_numbers_of(conn, account.user)),
-        missing_verify=locks.missing_verify(order.playbook_snapshot),
+        missing_verify=bool(uncovered(order.playbook_snapshot)),
+        unverified_points=tuple(uncovered(order.playbook_snapshot)),
+        restore_checks=tuple(
+            RestoreCheckView(key=one.key, label=one.label)
+            for one in config.policy.safety.restore_checks
+        ),
     )
 
 

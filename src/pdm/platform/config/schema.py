@@ -488,6 +488,29 @@ class SinkPolicy(BaseModel):
     destination: Literal["own-system", "file", "cmms"]
 
 
+class RestoreCheck(BaseModel):
+    """One check before energy goes back on, as the plant's EHS wrote it (ADR-136)."""
+
+    model_config = _STRICT
+
+    key: str = Field(pattern="^[a-z_]+$")
+    label: str = Field(min_length=1)
+
+
+class SafetyPolicy(BaseModel):
+    """Plant rules for energy work that belong to EHS, not to any one playbook.
+
+    R-H5: before a restore step's locks come off - tools removed, guards back,
+    people clear, the station's operator told. They are the same on every
+    machine, so they are configured once rather than repeated in every step,
+    and a playbook cannot leave them out.
+    """
+
+    model_config = _STRICT
+
+    restore_checks: tuple[RestoreCheck, ...] = ()
+
+
 class PolicyConfig(BaseModel):
     model_config = _STRICT
 
@@ -504,3 +527,4 @@ class PolicyConfig(BaseModel):
     # a duration and stays in the queue instead of vanishing (design.md 3.2).
     fallback_minutes: dict[MachineModel, dict[Severity, int]]
     jobs: JobPolicy
+    safety: SafetyPolicy = SafetyPolicy()

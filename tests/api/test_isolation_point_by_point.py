@@ -1,4 +1,4 @@
-"""Isolation point by point, over HTTP (ADR-135, REQ-H-04, REQ-H-06).
+"""Isolation point by point, over HTTP (ADR-135, ADR-136, REQ-H-04, REQ-H-06).
 
 The endpoint refuses, not only the button: a job cannot move past an isolation
 step until each point is off and locked, past a waiting hazard until its time is
@@ -22,6 +22,8 @@ from psycopg_pool import ConnectionPool
 
 from pdm.api.app import create_app
 from pdm.contracts import (
+    Assignee,
+    AssigneeRole,
     ComponentLabel,
     Finding,
     FindingKind,
@@ -38,6 +40,7 @@ from pdm.contracts import (
     StepKind,
     SymptomCode,
     UserId,
+    WorkOrderStatus,
 )
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SimulatedClock
@@ -47,6 +50,7 @@ from pdm.platform.objects import FilesystemObjectStore
 from pdm.playbooks import repo as playbooks
 from pdm.triggers import repo as findings
 from pdm.work import WorkOrders, locks
+from pdm.work import repo as work_repo
 from tests.released import released
 
 pytestmark = pytest.mark.db
@@ -215,11 +219,29 @@ def _ticket(client: TestClient, ref: str) -> dict[str, Any]:
     return dict(response.json())
 
 
-def _working(world: dict[str, Any]) -> TestClient:
-    client = _as(world["client"], TECHNICIAN)
+CHECKS = ("tools_removed", "guards_back", "people_clear", "operator_told")
+
+
+def _db(world: dict[str, Any]) -> Any:
+    return connect(os.environ["DATABASE_URL"], autocommit=True)
+
+
+def _working(world: dict[str, Any], user: UserId = TECHNICIAN) -> TestClient:
+    client = _as(world["client"], user)
     ref = world["predicted"]
     assert client.post(f"/work-orders/{ref}/accept").status_code == 200
     assert client.post(f"/work-orders/{ref}/start").status_code == 200
+    return client
+
+
+def _also_on_it(world: dict[str, Any], user: UserId) -> TestClient:
+    """A second technician put on the same job, as a lead would."""
+    with _db(world) as conn:
+        work_repo.add_assignee(
+            conn, world["predicted"], Assignee(user=user, role=AssigneeRole.HELPER)
+        )
+    client = _as(world["client"], user)
+    assert client.post(f"/work-orders/{world['predicted']}/start").status_code == 200
     return client
 
 
@@ -227,10 +249,32 @@ def _confirm(client: TestClient, ref: str, step: int, item: str, **body: str) ->
     return client.post(f"/work-orders/{ref}/steps/{step}/confirm", json={"item": item, **body})
 
 
-def _lock_cp3(client: TestClient, ref: str) -> None:
-    assert _confirm(client, ref, 2, "off", point_id="CP-3").status_code == 200
-    locked = _confirm(client, ref, 2, "locked", point_id="CP-3", lock_no="ก-03")
+def _go(client: TestClient, ref: str, step: int) -> int:
+    return int(client.post(f"/work-orders/{ref}/progress", json={"step": step}).status_code)
+
+
+def _lock_cp3(client: TestClient, ref: str, number: str = "ก-03") -> None:
+    assert _go(client, ref, 2) == 200
+    off = _confirm(client, ref, 2, "off", point_id="CP-3")
+    assert off.status_code == 200, off.text
+    locked = _confirm(client, ref, 2, "locked", point_id="CP-3", lock_no=number)
     assert locked.status_code == 200, locked.text
+
+
+def _to_restore(client: TestClient, world: dict[str, Any]) -> None:
+    """Locked, waited, verified, at the restore step."""
+    ref = world["predicted"]
+    _lock_cp3(client, ref)
+    assert _go(client, ref, 3) == 200
+    world["clock"].advance(timedelta(minutes=5))
+    assert _go(client, ref, 4) == 200
+    assert _confirm(client, ref, 4, "verified", point_id="CP-3").status_code == 200
+    assert _go(client, ref, 5) == 200
+
+
+def _my_lock_id(client: TestClient) -> int:
+    (one,) = client.get("/locks/mine").json()
+    return int(one["lock_id"])
 
 
 class TestTheJobWaitsForEachPoint:
@@ -238,13 +282,14 @@ class TestTheJobWaitsForEachPoint:
         self, world: dict[str, Any]
     ) -> None:
         client, ref = _working(world), world["predicted"]
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 2}).status_code == 200
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 3}).status_code == 409
+        assert _go(client, ref, 2) == 200
+        assert _go(client, ref, 3) == 409
         _lock_cp3(client, ref)
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 3}).status_code == 200
+        assert _go(client, ref, 3) == 200
 
     def test_points_are_confirmed_in_order(self, world: dict[str, Any]) -> None:
         client, ref = _working(world), world["predicted"]
+        assert _go(client, ref, 2) == 200
         out_of_order = _confirm(client, ref, 2, "locked", point_id="CP-3", lock_no="ก-03")
         assert out_of_order.status_code == 409, out_of_order.text
         assert "CP-3" in out_of_order.json()["detail"]
@@ -255,10 +300,7 @@ class TestTheJobWaitsForEachPoint:
         body = _ticket(client, ref)
         assert [
             (one["step"], one["point_id"], one["item"], one["by"]) for one in body["confirmations"]
-        ] == [
-            (2, "CP-3", "off", "tech-1"),
-            (2, "CP-3", "locked", "tech-1"),
-        ]
+        ] == [(2, "CP-3", "off", "tech-1"), (2, "CP-3", "locked", "tech-1")]
         (on,) = body["locks"]
         assert (on["point_id"], on["lock_no"], on["owner_name"], on["step"]) == (
             "CP-3",
@@ -267,35 +309,131 @@ class TestTheJobWaitsForEachPoint:
             2,
         )
         assert body["your_lock_numbers"] == ["ก-03"]
-        assert body["steps"][1]["kind"] == "isolation"
-        assert body["steps"][1]["isolation_points"][0]["point_id"] == "CP-3"
+        assert [one["key"] for one in body["restore_checks"]] == list(CHECKS)
         assert body["missing_verify"] is False
 
     def test_a_wait_holds_the_job_until_its_time_is_up(self, world: dict[str, Any]) -> None:
         client, ref = _working(world), world["predicted"]
         _lock_cp3(client, ref)
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 3}).status_code == 200
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 4}).status_code == 409
+        assert _go(client, ref, 3) == 200
+        assert _go(client, ref, 4) == 409
         world["clock"].advance(timedelta(minutes=5))
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 4}).status_code == 200
+        assert _go(client, ref, 4) == 200
 
-    def test_verify_before_working_on_it(self, world: dict[str, Any]) -> None:
+
+class TestNothingIsConfirmedAhead:
+    """B1: a confirmation belongs to a step the job has reached, after everything before it."""
+
+    def test_a_step_not_reached_is_refused(self, world: dict[str, Any]) -> None:
+        client, ref = _working(world), world["predicted"]
+        assert _confirm(client, ref, 2, "off", point_id="CP-3").status_code == 409
+        assert _confirm(client, ref, 4, "verified", point_id="CP-3").status_code == 409
+
+    def test_the_lock_cannot_come_off_at_the_isolation_step(self, world: dict[str, Any]) -> None:
         client, ref = _working(world), world["predicted"]
         _lock_cp3(client, ref)
-        client.post(f"/work-orders/{ref}/progress", json={"step": 3})
+        assert _confirm(client, ref, 5, "released", point_id="CP-3").status_code == 409
+        assert len(_ticket(client, ref)["locks"]) == 1
+
+    def test_a_wait_cannot_be_started_early(self, world: dict[str, Any]) -> None:
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        assert _confirm(client, ref, 3, "wait_started").status_code == 409
+
+    def test_a_lock_taken_off_early_opens_the_isolation_again(self, world: dict[str, Any]) -> None:
+        """Taken off by its owner from 'my locks' while the job is at step 3:
+        nobody works past the isolation step until their lock is back on."""
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        assert _go(client, ref, 3) == 200
+        released = client.post(f"/locks/{_my_lock_id(client)}/release", json={"reason": "ถอดผิดดอก"})
+        assert released.status_code == 200, released.text
         world["clock"].advance(timedelta(minutes=5))
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 5}).status_code == 409
-        assert _confirm(client, ref, 4, "verified", point_id="CP-3").status_code == 200
-        assert client.post(f"/work-orders/{ref}/progress", json={"step": 5}).status_code == 200
+        assert _go(client, ref, 4) == 409
+        again = _confirm(client, ref, 2, "locked", point_id="CP-3", lock_no="ก-04")
+        assert again.status_code == 200, again.text
+        assert _go(client, ref, 4) == 200
 
 
-class TestTheRegister:
+class TestEveryoneHangsTheirOwnLock:
+    """B4, group lockout (1910.147(f)(3))."""
+
+    def test_a_second_technician_locks_for_themselves(self, world: dict[str, Any]) -> None:
+        first = _working(world)
+        ref = world["predicted"]
+        _lock_cp3(first, ref)
+        second = _also_on_it(world, OTHER)
+        assert _go(second, ref, 3) == 409, "the first person's lock does not cover the second"
+        mine = _confirm(second, ref, 2, "locked", point_id="CP-3", lock_no="ก-09")
+        assert mine.status_code == 200, mine.text
+        assert sorted(one["lock_no"] for one in _ticket(second, ref)["locks"]) == ["ก-03", "ก-09"]
+
+    def test_nobody_takes_off_another_persons_lock(self, world: dict[str, Any]) -> None:
+        first = _working(world)
+        ref = world["predicted"]
+        _to_restore(first, world)
+        for key in CHECKS:
+            assert _confirm(first, ref, 5, "checked", point_id=key).status_code == 200
+        theirs = _my_lock_id(first)
+        # The clients share one session jar: from here every request is the second person's.
+        second = _also_on_it(world, OTHER)
+        assert second.post(f"/locks/{theirs}/release", json={"reason": "x"}).status_code == 409
+        assert _confirm(second, ref, 5, "released", point_id="CP-3").status_code == 409
+        assert [one["lock_no"] for one in _ticket(second, ref)["locks"]] == ["ก-03"]
+
+    def test_the_receiver_of_a_handover_locks_for_themselves(self, world: dict[str, Any]) -> None:
+        first = _working(world)
+        ref = world["predicted"]
+        _lock_cp3(first, ref)
+        handed = first.post(
+            f"/work-orders/{ref}/handover",
+            json={"note": "ถึงขั้น 2", "lock_state": "still_locked", "lock_reason": "หมดกะ"},
+        )
+        assert handed.status_code == 200, handed.text
+        with _db(world) as conn:
+            work_repo.add_assignee(conn, ref, Assignee(user=OTHER, role=AssigneeRole.PRIMARY))
+            work_repo.set_status(conn, ref, status=WorkOrderStatus.ASSIGNED)
+        second = _as(world["client"], OTHER)
+        assert second.post(f"/work-orders/{ref}/start").status_code == 200
+        assert _go(second, ref, 3) == 409
+        assert (
+            _confirm(second, ref, 2, "locked", point_id="CP-3", lock_no="ก-09").status_code == 200
+        )
+        assert _go(second, ref, 3) == 200
+        # Only then does the first person take theirs off, from their own list.
+        first = _as(world["client"], TECHNICIAN)
+        lock_id = _my_lock_id(first)
+        assert (
+            first.post(f"/locks/{lock_id}/release", json={"reason": "คนรับใส่แล้ว"}).status_code == 200
+        )
+        assert [one["lock_no"] for one in _ticket(first, ref)["locks"]] == ["ก-09"]
+
+
+class TestRestoring:
+    def test_the_plants_checks_come_before_the_lock_comes_off(self, world: dict[str, Any]) -> None:
+        """B5."""
+        client, ref = _working(world), world["predicted"]
+        _to_restore(client, world)
+        early = _confirm(client, ref, 5, "released", point_id="CP-3")
+        assert early.status_code == 409
+        for key in CHECKS:
+            assert _confirm(client, ref, 5, "checked", point_id=key).status_code == 200
+        released = _confirm(client, ref, 5, "released", point_id="CP-3")
+        assert released.status_code == 200, released.text
+        assert _ticket(client, ref)["locks"] == []
+
+    def test_only_the_owner_takes_a_lock_off(self, world: dict[str, Any]) -> None:
+        client, ref = _working(world), world["predicted"]
+        _to_restore(client, world)
+        for key in CHECKS:
+            _confirm(client, ref, 5, "checked", point_id=key)
+        assert _confirm(client, ref, 5, "released", point_id="CP-3").status_code == 200
+        assert _ticket(client, ref)["locks"] == []
+
     def test_a_lock_number_is_on_one_point_at_a_time(self, world: dict[str, Any]) -> None:
-        """The database's rule, not the screen's: the same personal lock cannot
-        hang on two points at once."""
         client, ref = _working(world), world["predicted"]
         _lock_cp3(client, ref)
-        with connect(os.environ["DATABASE_URL"]) as conn:
+        with _db(world) as conn:
             again = locks.apply_lock(
                 conn,
                 work_order_ref=ref,
@@ -307,13 +445,6 @@ class TestTheRegister:
                 now=NOW,
             )
         assert again is False
-
-    def test_only_the_owner_takes_a_lock_off(self, world: dict[str, Any]) -> None:
-        client, ref = _working(world), world["predicted"]
-        _lock_cp3(client, ref)
-        released = _confirm(client, ref, 5, "released", point_id="CP-3")
-        assert released.status_code == 200, released.text
-        assert _ticket(client, ref)["locks"] == []
 
 
 class TestClosingSaysWhatIsLocked:
@@ -329,9 +460,70 @@ class TestClosingSaysWhatIsLocked:
             client.post(f"/work-orders/{ref}/close", json={"outcome": "fixed"}).status_code == 409
         )
 
-    def test_still_locked_closes_with_the_line_on_top_of_the_note(
+    def test_whoever_took_over_must_answer_while_anybodys_lock_is_on(
         self, world: dict[str, Any]
     ) -> None:
+        """Red line 3: the second person has no lock of their own on and still may
+        not close without saying what is locked."""
+        first = _working(world)
+        ref = world["predicted"]
+        _lock_cp3(first, ref)
+        second = _also_on_it(world, OTHER)
+        assert (
+            second.post(f"/work-orders/{ref}/close", json={"outcome": "fixed"}).status_code == 409
+        )
+        released = second.post(
+            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "released"}
+        )
+        assert released.status_code == 409
+        handed = second.post(f"/work-orders/{ref}/handover", json={"note": "ถึงขั้น 2"})
+        assert handed.status_code == 409
+
+    def test_released_is_refused_while_another_jobs_lock_is_on_the_machine(
+        self, world: dict[str, Any]
+    ) -> None:
+        """B2: two work orders on one machine."""
+        client, ref = _working(world), world["predicted"]
+        _to_restore(client, world)
+        with _db(world) as conn:
+            assert locks.apply_lock(
+                conn,
+                work_order_ref=world["reported"],
+                machine_id=MOTOR,
+                point_id="CP-3",
+                lock_no="ก-77",
+                owner=OTHER,
+                step=1,
+                now=NOW,
+            )
+        for key in CHECKS:
+            _confirm(client, ref, 5, "checked", point_id=key)
+        assert _confirm(client, ref, 5, "released", point_id="CP-3").status_code == 200
+        refused = client.post(
+            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "released"}
+        )
+        assert refused.status_code == 409
+        assert "ก-77" in refused.json()["detail"]
+
+    def test_not_isolated_is_refused_after_a_release(self, world: dict[str, Any]) -> None:
+        client, ref = _working(world), world["predicted"]
+        _to_restore(client, world)
+        for key in CHECKS:
+            _confirm(client, ref, 5, "checked", point_id=key)
+        _confirm(client, ref, 5, "released", point_id="CP-3")
+        refused = client.post(
+            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "not_isolated"}
+        )
+        assert refused.status_code == 409
+        closed = client.post(
+            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "released"}
+        )
+        assert closed.status_code == 200, closed.text
+
+    def test_still_locked_closes_and_the_owner_takes_it_off_later(
+        self, world: dict[str, Any]
+    ) -> None:
+        """B3: a lock left on at close is still its owner's to record coming off."""
         client, ref = _working(world), world["predicted"]
         _lock_cp3(client, ref)
         closed = client.post(
@@ -346,16 +538,15 @@ class TestClosingSaysWhatIsLocked:
         assert closed.status_code == 200, closed.text
         history = _ticket(client, world["reported"])["history"]
         assert history[0]["note"] == "สถานะกุญแจ: ยังล็อกอยู่ ก-03 ที่ CP-3 · เหตุ: รออะไหล่\nสั่งพัดลมแล้ว"
-        # The lock is still on the machine for the next person to see.
         assert [one["lock_no"] for one in _ticket(client, world["reported"])["locks"]] == ["ก-03"]
-
-    def test_not_isolated_is_refused_while_a_lock_is_on(self, world: dict[str, Any]) -> None:
-        client, ref = _working(world), world["predicted"]
-        _lock_cp3(client, ref)
-        refused = client.post(
-            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "not_isolated"}
+        no_reason = client.post(f"/locks/{_my_lock_id(client)}/release", json={"reason": " "})
+        assert no_reason.status_code == 422
+        off = client.post(
+            f"/locks/{_my_lock_id(client)}/release", json={"reason": "ได้อะไหล่ ปิดเครื่องเรียบร้อย"}
         )
-        assert refused.status_code == 409
+        assert off.status_code == 200, off.text
+        assert client.get("/locks/mine").json() == []
+        assert _ticket(client, world["reported"])["locks"] == []
 
     def test_a_handover_keeps_the_lock_and_says_so(self, world: dict[str, Any]) -> None:
         client, ref = _working(world), world["predicted"]

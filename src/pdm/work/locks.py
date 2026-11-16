@@ -1,17 +1,22 @@
-"""Isolation confirmed point by point, and the register of locks (ADR-135).
+"""Isolation confirmed point by point, and the register of locks (ADR-135, ADR-136).
 
-The rules are pure functions over the steps an order was issued with and what
-has been confirmed, so they can be asserted without a database; the register is
-plain SQL beside them.
+The rules are pure functions over the steps an order was issued with, what has
+been confirmed, and which locks are on now, so they can be asserted without a
+database; the register is plain SQL beside them.
 
-What a step needs before the job moves past it comes only from what the
+What a step needs before somebody works past it comes only from what the
 approving engineer marked (`PlaybookStep.kind`), never from the words of the
-step (REQ-H-02):
+step (REQ-H-02), and for the person asking (ADR-136, group lockout):
 
-  isolation  every point switched off, then a personal lock and tag on it
-  verify     every point checked at zero energy
-  restore    every point's lock taken off by its owner
+  isolation  every point switched off (by anybody), then **your own** lock on
+             it - on now, not once: a lock taken off early opens the step again
+  verify     every point checked at zero energy, by you
+  restore    the plant's restore checks (policy.yaml), then every lock on its
+             points off - each by its owner
   hazard     with `wait_minutes`, that long since the step was reached
+
+An isolation step stops asking for your lock once the job is past a restore
+step for that point, because that is where the lock is meant to come off.
 """
 
 from __future__ import annotations
@@ -28,11 +33,11 @@ from pdm.contracts import LockState, MachineId, PlaybookStep, StepKind, UserId
 
 _FROZEN = ConfigDict(frozen=True)
 
-# What each kind of step asks for, per point, in order.
+# The items a confirmation can be, by the kind of step that takes it.
 ITEMS: dict[StepKind, tuple[str, ...]] = {
     StepKind.ISOLATION: ("off", "locked"),
     StepKind.VERIFY: ("verified",),
-    StepKind.RESTORE: ("released",),
+    StepKind.RESTORE: ("checked", "released"),
 }
 WAIT_STARTED = "wait_started"
 
@@ -76,16 +81,39 @@ def wait_ends(step: PlaybookStep, number: int, done: Iterable[Confirmation]) -> 
 
 
 def still_needed(
-    step: PlaybookStep, number: int, done: Sequence[Confirmation], *, now: datetime
+    step: PlaybookStep,
+    number: int,
+    done: Sequence[Confirmation],
+    *,
+    now: datetime,
+    user: UserId,
+    locks_on: Sequence[Lock],
+    checks: Sequence[str] = (),
+    restored: frozenset[str] = frozenset(),
 ) -> list[tuple[str, str]]:
-    """The (point, item) pairs this step still needs, in the order they are confirmed."""
-    have = {(one.point_id, one.item) for one in done if one.step == number}
-    needed = [
-        (point.point_id, item)
-        for point in step.isolation_points
-        for item in ITEMS.get(step.kind, ())
-        if (point.point_id, item) not in have
-    ]
+    """The (point, item) pairs this step still needs from `user`, in order.
+
+    `locks_on` are the locks on this job now; `restored` the points whose restore
+    step the job is already past, where a lock is no longer asked for.
+    """
+    here = [one for one in done if one.step == number]
+    by_anybody = {(one.point_id, one.item) for one in here}
+    by_you = {(one.point_id, one.item) for one in here if one.confirmed_by == user}
+    yours_on = {one.point_id for one in locks_on if one.owner == user}
+    any_on = {one.point_id for one in locks_on}
+    needed: list[tuple[str, str]] = []
+    points = [point.point_id for point in step.isolation_points]
+    if step.kind is StepKind.ISOLATION:
+        for point in points:
+            if (point, "off") not in by_anybody:
+                needed.append((point, "off"))
+            if point not in yours_on and point not in restored:
+                needed.append((point, "locked"))
+    elif step.kind is StepKind.VERIFY:
+        needed += [(point, "verified") for point in points if (point, "verified") not in by_you]
+    elif step.kind is StepKind.RESTORE:
+        needed += [(check, "checked") for check in checks if (check, "checked") not in by_anybody]
+        needed += [(point, "released") for point in points if point in any_on]
     if step.wait_minutes is not None:
         ends = wait_ends(step, number, done)
         if ends is None or now < ends:
@@ -93,51 +121,77 @@ def still_needed(
     return needed
 
 
+def restored_points(steps: Sequence[PlaybookStep], *, before: int) -> frozenset[str]:
+    """Points whose restore step comes before `before` (1-based): their locks may be off."""
+    return frozenset(
+        point.point_id
+        for step in steps[: max(0, before - 1)]
+        if step.kind is StepKind.RESTORE
+        for point in step.isolation_points
+    )
+
+
 def first_unfinished(
-    steps: Sequence[PlaybookStep], done: Sequence[Confirmation], *, before: int, now: datetime
+    steps: Sequence[PlaybookStep],
+    done: Sequence[Confirmation],
+    *,
+    before: int,
+    now: datetime,
+    user: UserId,
+    locks_on: Sequence[Lock],
+    checks: Sequence[str] = (),
 ) -> tuple[int, list[tuple[str, str]]] | None:
-    """The first step before `before` (1-based) that still needs something, if any."""
+    """The first step before `before` (1-based) that still needs something from `user`."""
+    restored = restored_points(steps, before=before)
     for number, step in enumerate(steps[: max(0, before - 1)], start=1):
-        missing = still_needed(step, number, done, now=now)
+        missing = still_needed(
+            step,
+            number,
+            done,
+            now=now,
+            user=user,
+            locks_on=locks_on,
+            checks=checks,
+            restored=restored,
+        )
         if missing:
             return number, missing
     return None
 
 
-def missing_verify(steps: Sequence[PlaybookStep]) -> bool:
-    """An isolation step with no verify step after it (REQ-H-05).
-
-    OSHA 1910.147 puts "verify zero energy" between isolating and working. An
-    approved playbook that skips it is shown with a stop bar rather than worked
-    as if it were complete.
-    """
-    for index, step in enumerate(steps):
-        if step.kind is StepKind.ISOLATION and not any(
-            later.kind is StepKind.VERIFY for later in steps[index + 1 :]
-        ):
-            return True
-    return False
-
-
 def lock_state_refused(
-    answer: LockState | None, *, mine: Sequence[Lock], on_this_job: Sequence[Lock]
+    answer: LockState | None,
+    *,
+    on_job: Sequence[Lock],
+    on_machine: Sequence[Lock],
+    you_locked_here: bool,
+    anybody_locked_here: bool,
 ) -> str | None:
     """Why the register contradicts this answer about locks, or None if it does not.
 
-    The register is the record and the answer has to agree with it: "my locks
-    are off" while one of yours is still on the breaker is the sentence that
-    gets somebody hurt (REQ-H-06). No answer at all is accepted only from a job
-    with none of your locks on it, so a caller that predates the question still
-    works where the question cannot matter.
+    The register is the record and the answer has to agree with it (REQ-H-06):
+
+    - no answer, while **anybody's** lock is on the job - whoever took over may
+      not close past somebody else's lock without saying so (red line 3);
+    - "my locks are off, the machine goes back to production", while any lock is
+      on the machine - another person's, or another job's on the same machine -
+      or from somebody who never locked here;
+    - "not isolated", for a job where anybody locked anything;
+    - "still locked", with nothing on.
     """
-    if answer is LockState.RELEASED and mine:
-        return f"กุญแจ {_named(mine)} ของคุณยังล็อกอยู่ ปลดในขั้นคืนพลังงานก่อน หรือเลือก “ยังล็อกอยู่”"
-    if answer is LockState.NOT_ISOLATED and on_this_job:
-        return f"ทะเบียนมีกุญแจ {_named(on_this_job)} ในงานนี้ จึงเลือก “งานนี้ไม่ได้ตัดพลังงาน” ไม่ได้"
-    if answer is LockState.STILL_LOCKED and not on_this_job:
+    if answer is None and on_job:
+        return f"ในทะเบียนยังมีกุญแจ {_named(on_job)} ในงานนี้ ตอบสถานะกุญแจก่อน"
+    if answer is LockState.RELEASED:
+        if on_machine:
+            return (
+                f"ในทะเบียนยังมีกุญแจ {_named(on_machine)} ที่เครื่องนี้ เครื่องยังคืนสู่การผลิตไม่ได้ เลือก “ยังล็อกอยู่”"
+            )
+        if not you_locked_here:
+            return "คุณไม่ได้ใส่กุญแจในงานนี้ เลือก “ปลดกุญแจแล้ว” ไม่ได้"
+    if answer is LockState.NOT_ISOLATED and (on_job or anybody_locked_here):
+        return "ทะเบียนบันทึกว่ามีการใส่กุญแจในงานนี้ จึงเลือก “งานนี้ไม่ได้ตัดพลังงาน” ไม่ได้"
+    if answer is LockState.STILL_LOCKED and not on_job:
         return "ทะเบียนไม่มีกุญแจที่ยังล็อกอยู่ในงานนี้"
-    if answer is None and mine:
-        return f"กุญแจ {_named(mine)} ของคุณยังล็อกอยู่ ตอบสถานะกุญแจก่อน"
     return None
 
 
@@ -249,18 +303,57 @@ def apply_lock(
 
 
 def release_lock(
-    conn: Connection[Any], *, work_order_ref: str, point_id: str, owner: UserId, now: datetime
+    conn: Connection[Any],
+    *,
+    work_order_ref: str,
+    point_id: str,
+    owner: UserId,
+    now: datetime,
+    reason: str = "restore step",
 ) -> bool:
     """Take the owner's lock off a point. Only the owner's: nobody removes another's lock."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            UPDATE lock_record SET released_at = %s
+            UPDATE lock_record SET released_at = %s, release_reason = %s
              WHERE work_order_ref = %s AND point_id = %s AND owner = %s AND released_at IS NULL
             """,
-            (now, work_order_ref, point_id, owner),
+            (now, reason, work_order_ref, point_id, owner),
         )
         return cur.rowcount > 0
+
+
+def release_own(
+    conn: Connection[Any], lock_id: int, *, owner: UserId, now: datetime, reason: str
+) -> Lock | None:
+    """The owner takes their own lock off, from wherever they are (ADR-136, B3).
+
+    After a handover or a "still locked" close the owner no longer holds the job,
+    and the lock is still theirs: this is how the register records it coming off.
+    None when it is not this person's lock, or is already off.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            UPDATE lock_record SET released_at = %s, release_reason = %s
+             WHERE lock_id = %s AND owner = %s AND released_at IS NULL
+            RETURNING {_LOCK_COLUMNS}
+            """,
+            (now, reason, lock_id, owner),
+        )
+        row = cur.fetchone()
+    return Lock.model_validate(row) if row else None
+
+
+def locks_of(conn: Connection[Any], owner: UserId) -> list[Lock]:
+    """This person's locks still on, anywhere."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"SELECT {_LOCK_COLUMNS} FROM lock_record"
+            " WHERE owner = %s AND released_at IS NULL ORDER BY applied_at, lock_id",
+            (owner,),
+        )
+        return [Lock.model_validate(row) for row in cur.fetchall()]
 
 
 def lock_numbers_of(conn: Connection[Any], user: UserId, *, limit: int = 4) -> list[str]:

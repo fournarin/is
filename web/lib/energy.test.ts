@@ -1,39 +1,62 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { stillNeeded, waitEnds } from "./energy.ts";
-import type { PointConfirmed, Step } from "./work.ts";
+import { firstUnfinished, stillNeeded, waitEnds } from "./energy.ts";
+import type { LockOn, PointConfirmed, Step } from "./work.ts";
 
 const BASE: Step = { text: "x", text_th: null, source_doc: "d", page: 2, manual: null };
 const CP3 = { point_id: "CP-3", label: "breaker", energy: "electrical" };
+const ISOLATE: Step = { ...BASE, kind: "isolation", isolation_points: [CP3] };
 const at = (minutes: number) => new Date(Date.UTC(2026, 2, 3, 8, minutes));
-const done = (item: string, point_id = "CP-3", step = 2, minutes = 0): PointConfirmed => ({
+const done = (item: string, point_id = "CP-3", step = 2, by = "tech-1", minutes = 0): PointConfirmed => ({
   step,
   point_id,
   item,
-  by: "tech-1",
+  by,
   at: at(minutes).toISOString(),
 });
+const lock = (owner = "tech-1"): LockOn => ({
+  point_id: "CP-3",
+  lock_no: "ก-03",
+  owner,
+  owner_name: owner,
+  work_order_ref: "WO-1",
+  step: 2,
+  applied_at: at(0).toISOString(),
+});
+const me = (locksOn: LockOn[] = [], user = "tech-1") => ({ user, locksOn, checks: ["tools_removed"] });
 
-test("isolation is off then locked, and only this step's confirmations count", () => {
-  const isolate: Step = { ...BASE, kind: "isolation", isolation_points: [CP3] };
-  assert.deepEqual(stillNeeded(isolate, 2, [], at(0)), [
+test("isolation is off then your own lock, on now", () => {
+  assert.deepEqual(stillNeeded(ISOLATE, 2, [], at(0), me()), [
     { point_id: "CP-3", item: "off" },
     { point_id: "CP-3", item: "locked" },
   ]);
-  assert.deepEqual(stillNeeded(isolate, 2, [done("off"), done("locked", "CP-3", 5)], at(0)), [
-    { point_id: "CP-3", item: "locked" },
+  const said = [done("off"), done("locked")];
+  assert.deepEqual(stillNeeded(ISOLATE, 2, said, at(0), me([])), [{ point_id: "CP-3", item: "locked" }]);
+  assert.deepEqual(stillNeeded(ISOLATE, 2, said, at(0), me([lock()])), []);
+  assert.deepEqual(stillNeeded(ISOLATE, 2, said, at(0), me([lock()], "tech-2")), [{ point_id: "CP-3", item: "locked" }]);
+});
+
+test("restore asks for the plant's checks, then every lock off", () => {
+  const restore: Step = { ...BASE, kind: "restore", isolation_points: [CP3] };
+  assert.deepEqual(stillNeeded(restore, 7, [], at(0), me([lock("tech-2")])), [
+    { point_id: "tools_removed", item: "checked" },
+    { point_id: "CP-3", item: "released" },
   ]);
+  // Past the restore step, the isolation no longer asks for the lock that came off there.
+  const steps = [ISOLATE, restore, BASE];
+  const said = [done("off", "CP-3", 1), done("checked", "tools_removed", 2)];
+  assert.equal(firstUnfinished(steps, said, 3, at(0), me([])), null);
 });
 
 test("a wait counts from when it started", () => {
   const hot: Step = { ...BASE, kind: "hazard", wait_minutes: 30 };
-  const started = [done("wait_started", "", 3, 0)];
+  const started = [done("wait_started", "", 3)];
   assert.equal(waitEnds(hot, 3, started)?.toISOString(), at(30).toISOString());
-  assert.equal(stillNeeded(hot, 3, started, at(29)).length, 1);
-  assert.equal(stillNeeded(hot, 3, started, at(30)).length, 0);
+  assert.equal(stillNeeded(hot, 3, started, at(29), me()).length, 1);
+  assert.equal(stillNeeded(hot, 3, started, at(30), me()).length, 0);
 });
 
 test("an unmarked step needs nothing", () => {
-  assert.deepEqual(stillNeeded(BASE, 1, [], at(0)), []);
+  assert.deepEqual(stillNeeded(BASE, 1, [], at(0), me()), []);
 });

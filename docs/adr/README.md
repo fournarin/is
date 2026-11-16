@@ -144,6 +144,7 @@ entries replace parts of earlier ones, and both are kept.
 | [133](0133-the-screens-are-rebuilt-on-one-design-system.md) | The screens are rebuilt on one design system, with Lucide and React Aria | |
 | [134](0134-the-ticket-carries-what-the-job-page-shows.md) | The ticket carries what the technician's job page shows | |
 | [135](0135-isolation-is-confirmed-point-by-point.md) | Isolation is confirmed point by point, and locks are registered | |
+| [136](0136-each-person-locks-and-the-register-is-the-authority.md) | Each person locks, and the register is the authority on every answer | |
 
 ## The invariants these records cite
 

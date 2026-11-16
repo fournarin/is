@@ -31,7 +31,7 @@ const SIGNS: Record<string, { label: string; svg: ReactNode }> = {
   W012: {
     label: "ISO 7010 W012 อันตรายจากไฟฟ้า",
     svg: (
-      <svg width="48" height="42" viewBox="0 0 100 88">
+      <svg width="55" height="48" viewBox="0 0 100 88">
         <path d="M50 4L96 84H4z" style={{ fill: "var(--iso-yellow)", stroke: "#000" }} strokeWidth="7" strokeLinejoin="round" />
         <path d="M55 26L36 58h13l-6 20 22-34H52l8-18z" fill="#000" />
       </svg>
@@ -40,7 +40,7 @@ const SIGNS: Record<string, { label: string; svg: ReactNode }> = {
   W017: {
     label: "ISO 7010 W017 พื้นผิวร้อน",
     svg: (
-      <svg width="48" height="42" viewBox="0 0 100 88">
+      <svg width="55" height="48" viewBox="0 0 100 88">
         <path d="M50 4L96 84H4z" style={{ fill: "var(--iso-yellow)", stroke: "#000" }} strokeWidth="7" strokeLinejoin="round" />
         <g fill="none" stroke="#000" strokeWidth="4.5" strokeLinecap="round">
           <path d="M38 52c-5-6 5-10 0-17M50 52c-5-6 5-10 0-17M62 52c-5-6 5-10 0-17" />
@@ -66,6 +66,7 @@ export function Sign({ code }: { code: string }) {
  * One line per lock, in the plate's andon voice, on every screen of the job.
  */
 export function LockBar({ locks, you, timezone }: { locks: LockOn[]; you: string; timezone: string }) {
+  // Whose lock, where, which, since when and from which step - all five (spec; set 2 review S3).
   if (locks.length === 0) return null;
   return (
     <div className="lockbar" role="status">
@@ -73,11 +74,11 @@ export function LockBar({ locks, you, timezone }: { locks: LockOn[]; you: string
       <span>
         {locks.map((one) => (
           <span key={one.lock_no} style={{ display: "block" }}>
-            <b>{`ล็อก ${one.point_id}`}</b>
-            {" · "}
+            <b>{`ล็อกอยู่ ${one.point_id}`}</b>
+            {" · กุญแจ "}
             <b>{one.lock_no}</b>
-            {one.owner === you ? " ของคุณ" : ` ของ ${one.owner_name}`}
-            {` · ${plantTime(one.applied_at, timezone)} น.`}
+            {one.owner === you ? ` ของคุณ (${one.owner_name})` : ` ของ ${one.owner_name}`}
+            {` · ใส่ ${plantTime(one.applied_at, timezone)} น. ขั้น ${one.step}`}
           </span>
         ))}
       </span>

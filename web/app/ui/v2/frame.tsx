@@ -1,3 +1,4 @@
+import { WifiOff } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -7,7 +8,7 @@ import { SEVERITY, plantDay, plantTime } from "@/lib/display";
 import { thaiPieces } from "@/lib/thai";
 import type { Lamp, Ticket } from "@/lib/work";
 
-import { OfflineStrip } from "./offline";
+import { OfflineWatch } from "./offline";
 import "./v2.css";
 
 /**
@@ -47,16 +48,21 @@ export function signalsAreSynthetic(): boolean {
 export function PhoneFrame({ top, children }: { top: ReactNode; children: ReactNode }) {
   return (
     <div className="v2">
-      <OfflineStrip synthetic={signalsAreSynthetic()}>
-        {signalsAreSynthetic() && (
-          <div className="synthetic" role="note">
-            <span>
-              <b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง
-            </span>
-          </div>
-        )}
-      </OfflineStrip>
-      <header className="top">{top}</header>
+      <OfflineWatch />
+      {signalsAreSynthetic() && (
+        <div className="synthetic" role="note">
+          <span>
+            <b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง
+          </span>
+        </div>
+      )}
+      <header className="top">
+        {top}
+        <span className="offline-tag" role="status">
+          <WifiOff size={20} aria-hidden />
+          Wi-Fi หลุด
+        </span>
+      </header>
       <main className="wrap">{children}</main>
     </div>
   );

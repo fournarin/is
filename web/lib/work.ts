@@ -135,6 +135,8 @@ export type Ticket = {
   locks?: LockOn[];
   your_lock_numbers?: string[];
   missing_verify?: boolean;
+  unverified_points?: string[];
+  restore_checks?: { key: string; label: string }[];
 };
 
 /** The measurement behind a condition ticket, as its Finding recorded it. */
@@ -169,6 +171,25 @@ export type Approval = {
 };
 
 export type Lamp = { seq: number; name: string | null; state: "normal" | "predicted" | "over_threshold" };
+
+export type MyLock = {
+  lock_id: number;
+  work_order_ref: string;
+  machine_id: string;
+  point_id: string;
+  lock_no: string;
+  step: number;
+  applied_at: string;
+};
+
+/** The reader's own locks still on, on any job (ADR-136); empty when it cannot be read. */
+export async function myLocks(): Promise<MyLock[]> {
+  try {
+    return await read<MyLock[]>("/locks/mine");
+  } catch {
+    return [];
+  }
+}
 
 /** Every station's lamp, for the sign over a job (ADR-134). Null when it cannot be read: the sign then has no strip. */
 export async function lineLamps(): Promise<Lamp[][] | null> {

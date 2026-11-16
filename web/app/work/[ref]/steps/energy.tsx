@@ -1,10 +1,10 @@
-import { Check, Lock, Timer } from "lucide-react";
+import { Check, CircleAlert, Lock, Timer } from "lucide-react";
 
 import { Th } from "@/app/ui/v2/frame";
 import { Sign } from "@/app/ui/v2/signs";
 import { confirmPoint } from "@/app/work/actions";
 import { plantTime } from "@/lib/display";
-import { SAID, stillNeeded, waitEnds, type Needed } from "@/lib/energy";
+import { SAID, restoredBefore, stillNeeded, waitEnds, type Needed, type Who } from "@/lib/energy";
 import type { Step, Ticket } from "@/lib/work";
 
 /**
@@ -24,6 +24,9 @@ const ENERGY: Record<string, string> = {
   gravity: "แรงโน้มถ่วง",
 };
 
+// ISO 7010 warnings whose harm is death or serious injury: the DANGER signal word.
+const DANGER = new Set(["W012"]);
+
 // The hazard a sign stands for, as the step's title says it.
 const HAZARD_TITLE: Record<string, string> = {
   W017: "ขั้นพื้นผิวร้อน",
@@ -33,7 +36,8 @@ const HAZARD_TITLE: Record<string, string> = {
 export function KindHeader({ step, revision }: { step: Step; revision: number | null }) {
   const kind = step.kind ?? "normal";
   if (kind === "normal" && (step.hazards ?? []).length === 0) return null;
-  const signs = [...(kind === "isolation" ? ["M021"] : []), ...(step.hazards ?? [])];
+  const hazards = step.hazards ?? [];
+  const signs = [...(kind === "isolation" ? ["M021"] : []), ...hazards];
   const title =
     kind === "isolation"
       ? "ขั้นตัดพลังงาน"
@@ -42,8 +46,13 @@ export function KindHeader({ step, revision }: { step: Step; revision: number | 
         : kind === "restore"
           ? "ขั้นคืนพลังงาน"
           : `${HAZARD_TITLE[step.hazards?.[0] ?? ""] ?? "ขั้นที่มีอันตราย"}${step.wait_minutes ? " รอให้ครบเวลา" : ""}`;
-  // ISO 3864-2: a signal word only beside a sign. Energy work is DANGER; a hazard that passes is CAUTION.
-  const word = signs.length === 0 ? null : kind === "hazard" ? ["ข้อควรระวัง", "sig-caution"] : ["อันตราย", "sig-danger"];
+  // ISO 3864-2: a signal word only beside a sign, graded by the worst hazard on the step (set 2
+  // review W1): electricity, stored or live, is DANGER; a hot surface is CAUTION.
+  const word = hazards.some((code) => DANGER.has(code))
+    ? ["อันตราย", "sig-danger"]
+    : hazards.length > 0
+      ? ["ข้อควรระวัง", "sig-caution"]
+      : null;
   return (
     <div className={`kindh${signs.length === 0 ? " nosign" : ""}`}>
       {signs.length > 0 && (
@@ -67,9 +76,19 @@ export function KindHeader({ step, revision }: { step: Step; revision: number | 
   );
 }
 
-/** What this step still needs, as the API will judge it. */
-export function needed(job: Ticket, number: number, now: Date): Needed[] {
-  return stillNeeded(job.steps[number - 1]!, number, job.confirmations ?? [], now);
+/** Who is asking, for rules that are per person (ADR-136). */
+export function whoFor(job: Ticket, you: string): Who {
+  return {
+    user: you,
+    locksOn: (job.locks ?? []).filter((one) => one.work_order_ref === job.ref),
+    checks: (job.restore_checks ?? []).map((one) => one.key),
+  };
+}
+
+/** What this step still needs from you, as the API will judge it. */
+export function needed(job: Ticket, number: number, now: Date, you: string): Needed[] {
+  const who = whoFor(job, you);
+  return stillNeeded(job.steps[number - 1]!, number, job.confirmations ?? [], now, who, restoredBefore(job.steps, number));
 }
 
 /** "ยังต้องยืนยัน: ใส่กุญแจ · ตรวจพลังงานเป็นศูนย์", one word per kind of thing left. */
@@ -82,9 +101,18 @@ export function Points({ job, number, you, now }: { job: Ticket; number: number;
   const kind = step.kind ?? "normal";
   const points = step.isolation_points ?? [];
   if (points.length === 0) return null;
-  const missing = needed(job, number, now);
-  const next = missing[0];
-  const done = new Set((job.confirmations ?? []).filter((one) => one.step === number).map((one) => `${one.point_id}|${one.item}`));
+  const missing = needed(job, number, now, you);
+  const mine = new Set((job.locks ?? []).filter((one) => one.owner === you).map((one) => one.point_id));
+  // The next thing you can do: somebody else's lock is theirs to take off.
+  const next = missing.find((one) => !(one.item === "released" && !mine.has(one.point_id)));
+  // Done means nothing more is asked of you for it - not that somebody once said so.
+  const left = new Set(missing.map((one) => `${one.point_id}|${one.item}`));
+  const done = new Set(
+    points.flatMap((point) => ["off", "locked", "verified", "released"].map((item) => `${point.point_id}|${item}`)).filter((key) => !left.has(key)),
+  );
+  (job.restore_checks ?? []).forEach((check) => {
+    if (!left.has(`${check.key}|checked`)) done.add(`${check.key}|checked`);
+  });
   const heading =
     kind === "isolation"
       ? `จุดตัดพลังงาน ${points.length} จุด · ยืนยันตามลำดับ`
@@ -96,10 +124,17 @@ export function Points({ job, number, you, now }: { job: Ticket; number: number;
   return (
     <section className="pts" aria-label={heading}>
       <h2 className="ptsh">{heading}</h2>
+      {/* W5: a confirmation is never queued with the device's time - offline it is simply not recorded. */}
+      <p className="callout is-bad offline-only" role="status">
+        <CircleAlert size={20} aria-hidden />
+        <span>
+          <b>ยังไม่ได้บันทึก</b> · Wi-Fi หลุด ทำตามใบพิมพ์ แล้วแจ้งหัวหน้ากะ
+        </span>
+      </p>
+      {kind === "restore" && <RestoreChecks job={job} number={number} next={next} done={done} />}
       {points.map((point) => {
         const lock = (job.locks ?? []).find((one) => one.point_id === point.point_id);
-        const items =
-          kind === "isolation" ? ["off", "locked"] : kind === "verify" ? ["verified"] : ["released"];
+        const items = kind === "isolation" ? ["off", "locked"] : kind === "verify" ? ["verified"] : ["released"];
         return (
           <div className="v-card pt" key={point.point_id}>
             <h3>
@@ -169,6 +204,55 @@ export function Points({ job, number, you, now }: { job: Ticket; number: number;
   );
 }
 
+/**
+ * The plant's checks before a restore step's locks come off (policy.yaml, R-H5,
+ * ADR-136): tools out, guards back, people clear, the operator told. EHS's list,
+ * the same on every machine, confirmed by whoever is restoring.
+ */
+function RestoreChecks({ job, number, next, done }: { job: Ticket; number: number; next: Needed | undefined; done: Set<string> }) {
+  const checks = job.restore_checks ?? [];
+  if (checks.length === 0) return null;
+  return (
+    <div className="v-card pt">
+      <h3>
+        ก่อนจ่ายไฟคืน
+        <small>รายการของ จป. ใช้กับทุกเครื่อง</small>
+      </h3>
+      {checks.map((check, index) => {
+        const isDone = done.has(`${check.key}|checked`);
+        const isNext = next !== undefined && next.point_id === check.key && next.item === "checked";
+        return (
+          <div className="seqn" key={check.key}>
+            <span className={`k${isDone ? " ok" : ""}`} aria-hidden>
+              {index + 1}
+            </span>
+            {isDone ? (
+              <div className="ch box is-on" role="status">
+                <span className="mk">
+                  <Check size={16} strokeWidth={3} aria-hidden />
+                </span>
+                <span>{check.label}</span>
+              </div>
+            ) : isNext ? (
+              <form action={confirmPoint.bind(null, job.ref, number, check.key, "checked")}>
+                <button type="submit" className="ch box">
+                  <span className="mk" aria-hidden />
+                  <span>{check.label}</span>
+                </button>
+              </form>
+            ) : (
+              <div className="ch box off" aria-disabled>
+                <span className="mk" aria-hidden />
+                <span>{check.label}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Which personal lock went on: a tap on one used before, or typed once. */
 function LockChooser({ job, number, point }: { job: Ticket; number: number; point: string }) {
   const used = (job.your_lock_numbers ?? []).filter((one) => !(job.locks ?? []).some((lock) => lock.lock_no === one));
@@ -222,7 +306,7 @@ export function WaitBox({ job, number, now, timezone }: { job: Ticket; number: n
         <small>นาที</small>
       </b>
       <span>
-        {left > 0 ? "เหลือก่อนแตะได้" : "ครบเวลาแล้ว"}
+        {left > 0 ? "เหลือ · ระหว่างรอ ห้ามแตะฝาครอบ" : "ครบเวลารอแล้ว · ตรวจก่อนแตะ"}
         <small>
           {"เริ่มรอ "}
           <b>{plantTime(started.toISOString(), timezone)}</b>

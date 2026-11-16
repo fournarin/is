@@ -55,8 +55,12 @@ export type LockContext = {
   mine: string[];
   // Anybody's lock still on this job.
   onJob: string[];
+  // Anybody's lock on the machine, this job or another (B2: no "back to production" while one is on).
+  onMachine: string[];
   // Whether you put a lock on during this job, so "my locks are off" means something.
   hadMine: boolean;
+  // Whether anybody locked anything on this job ("not isolated" is then not true).
+  anybodyLocked: boolean;
   // The restore step not yet done, as "ขั้น 6 “...”", when your lock is still on.
   restoreLeft: string | null;
 };
@@ -251,12 +255,27 @@ export function CloseForm({
             </ol>
           </div>
         )}
-        <div className="submit">
-          <button type="button" className="btn pri" disabled={state === "sending"} onClick={() => void send(review)}>
-            <SquareCheck size={24} aria-hidden />
-            {state === "sending" ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
-          </button>
+        {/* Steps left undone: going back to them is the first choice, closing anyway the second (spec). */}
+        <div className="submit sticky">
+          {stepsLeft.length > 0 ? (
+            <>
+              <Link className="btn pri" href={back}>
+                <ArrowLeft size={24} aria-hidden />
+                {`กลับไปทำ${backLabel.replace("ยังไม่ปิด กลับไป", "")}`}
+              </Link>
+              <button type="button" className="btn" style={{ marginTop: 8 }} disabled={state === "sending"} onClick={() => void send(review)}>
+                <SquareCheck size={24} aria-hidden />
+                {state === "sending" ? "กำลังปิดงาน..." : "ปิดงานเลย"}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn pri" disabled={state === "sending"} onClick={() => void send(review)}>
+              <SquareCheck size={24} aria-hidden />
+              {state === "sending" ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
+            </button>
+          )}
         </div>
+        <p className="saved">ถ้าเน็ตหลุด การปิดงานเก็บไว้ในเครื่องและส่งเองเมื่อกลับมา · ถ้าทะเบียนไม่ตรง ระบบจะแจ้ง</p>
         <div style={{ marginTop: 8 }}>
           <button type="button" className="btn" onClick={() => setReview(null)}>
             <ArrowLeft size={24} aria-hidden />
@@ -267,10 +286,11 @@ export function CloseForm({
     );
   }
 
+  // The register's rules, as the API applies them (ADR-136); the API refuses either way.
   const lockOff = {
-    released: locks.mine.length > 0 || !locks.hadMine,
+    released: locks.onMachine.length > 0 || !locks.hadMine,
     still_locked: locks.onJob.length === 0,
-    not_isolated: locks.onJob.length > 0,
+    not_isolated: locks.onJob.length > 0 || locks.anybodyLocked,
   };
   const lockWhy = {
     released:
@@ -278,20 +298,121 @@ export function CloseForm({
         ? locks.restoreLeft
           ? `${locks.restoreLeft.split(" “")[0]} คืนพลังงาน ยังไม่ได้ทำ`
           : "กุญแจของคุณยังล็อกอยู่"
-        : !locks.hadMine
-          ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้"
-          : null,
+        : locks.onMachine.length > 0
+          ? `ยังมีกุญแจ ${locks.onMachine.join(", ")} ที่เครื่องนี้`
+          : !locks.hadMine
+            ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้"
+            : null,
     still_locked: locks.onJob.length === 0 ? "ทะเบียนไม่มีกุญแจที่ยังล็อกอยู่ในงานนี้" : null,
-    not_isolated: locks.onJob.length > 0 ? `ทะเบียนมีกุญแจ ${locks.onJob.join(", ")}` : null,
+    not_isolated:
+      locks.onJob.length > 0
+        ? `ทะเบียนมีกุญแจ ${locks.onJob.join(", ")}`
+        : locks.anybodyLocked
+          ? "ทะเบียนบันทึกว่ามีการใส่กุญแจในงานนี้"
+          : null,
   };
   const missing = [!answers.outcome && "ผลการซ่อม", answers.lock === null && "สถานะกุญแจ"].filter(Boolean);
+  const lockFirst = locks.onJob.length > 0;
+  const refused = waiting.filter((one) => one.refused !== undefined);
+
+  const lockQuestion = (
+  <fieldset className="q lockq">
+    <legend className="qh">
+      <span className="n">{lockFirst ? 2 : 3}</span>สถานะกุญแจ<span className="tag req">ต้องตอบ</span>
+    </legend>
+    {locks.mine.length > 0 && (
+      <p className="callout v-note" style={{ marginTop: 0, marginBottom: 8 }}>
+        <Lock size={20} aria-hidden style={{ color: "var(--stop)" }} />
+        <span>
+          <b>{`กุญแจ ${locks.mine.join(", ")} ของคุณยังล็อกอยู่`}</b>
+          {locks.restoreLeft && ` · ${locks.restoreLeft} ยังไม่ได้ทำ จึงเลือก “ปลดกุญแจแล้ว” ไม่ได้`}
+        </span>
+      </p>
+    )}
+    <div className="g1">
+      {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[]).map((answer) => (
+        <label className="ch" key={answer}>
+          <input type="radio" name="lock_state" value={answer} required disabled={lockOff[answer]} />
+          <span className="mk" aria-hidden />
+          <span>
+            {LOCK_LABELS[answer]}
+            {lockWhy[answer] && <small>{lockWhy[answer]}</small>}
+          </span>
+        </label>
+      ))}
+    </div>
+    {locks.onJob.length > 0 && (
+      <div className="sub-q">
+        <p className="where">
+          <b>{locks.onJob.join(", ")}</b> (จากทะเบียน) · เหตุที่ยังล็อก
+        </p>
+        <div className="g2" style={{ marginTop: 8 }}>
+          {BLOCKED_REASONS.map((reason) => (
+            <label className="ch" key={reason}>
+              <input type="radio" name="lock_reason" value={BLOCKED_LABELS[reason]} />
+              <span className="mk" aria-hidden />
+              {BLOCKED_LABELS[reason]}
+            </label>
+          ))}
+        </div>
+      </div>
+    )}
+  </fieldset>
+  );
+  const waitQuestion = (
+  <fieldset className="q">
+    <legend className="qh">
+      <span className="n">{lockFirst ? 3 : 2}</span>รอไปกี่นาที<span className="tag">ค่าเริ่มต้น 0</span>
+    </legend>
+    {/* Not the job's duration - that is the sum of the segments (ADR-025).
+        This is the part of the elapsed time that was not repair, and it is
+        subtracted before anything feeds back into an estimate (ADR-006). */}
+    <div className="waits">
+      {WAITS.map((minutes) => (
+        <label className="ch" key={minutes}>
+          <input
+            type="radio"
+            name="blocked_minutes"
+            value={minutes}
+            defaultChecked={minutes === 0}
+            onChange={() => setWaited(String(minutes))}
+          />
+          {minutes}
+          <small>{minutes === 0 ? "ไม่ได้รอ" : "นาที"}</small>
+        </label>
+      ))}
+    </div>
+    <p className="where">{waited === "0" ? "รอเพราะอะไร · เลือกได้เมื่อรอมากกว่า 0 นาที" : "รอเพราะอะไร"}</p>
+    <div className="g2" style={{ marginTop: 8 }}>
+      {BLOCKED_REASONS.map((reason) => (
+        <label className="ch box" key={reason}>
+          <input type="checkbox" name="blocked_reason" value={reason} disabled={waited === "0"} />
+          <span className="mk" aria-hidden>
+            <Check size={16} strokeWidth={3} />
+          </span>
+          {BLOCKED_LABELS[reason]}
+        </label>
+      ))}
+    </div>
+  </fieldset>
+  );
+
 
   return (
     <>
-      {waiting.length > 0 && (
+      {refused.map((one) => (
+        // A close kept offline that the register refused when it arrived (ADR-136): said, not retried.
+        <p className="callout is-bad v-note" role="alert" key={one.ref}>
+          <Lock size={20} aria-hidden />
+          <span>
+            <b>{`การปิดงาน ${one.ref} ที่เก็บไว้ในเครื่อง ส่งไม่ผ่าน`}</b> · {one.refused} · ตอบใหม่แล้วปิดงานอีกครั้ง
+          </span>
+        </p>
+      ))}
+      {waiting.length > refused.length && (
         <p className="callout is-lock v-note">
           <Lock size={20} aria-hidden />
-          <span>มีการปิดงาน {waiting.length} รายการที่ยังส่งไม่สำเร็จ ระบบจะลองส่งให้เองเมื่อเครือข่ายกลับมา</span>
+          <span>มีการปิดงาน {waiting.length - refused.length} รายการที่ยังส่งไม่สำเร็จ ระบบจะลองส่งให้เองเมื่อเครือข่ายกลับมา</span>
         </p>
       )}
 
@@ -328,84 +449,9 @@ export function CloseForm({
           </div>
         </fieldset>
 
-        <fieldset className="q">
-          <legend className="qh">
-            <span className="n">2</span>รอไปกี่นาที<span className="tag">ค่าเริ่มต้น 0</span>
-          </legend>
-          {/* Not the job's duration - that is the sum of the segments (ADR-025).
-              This is the part of the elapsed time that was not repair, and it is
-              subtracted before anything feeds back into an estimate (ADR-006). */}
-          <div className="waits">
-            {WAITS.map((minutes) => (
-              <label className="ch" key={minutes}>
-                <input
-                  type="radio"
-                  name="blocked_minutes"
-                  value={minutes}
-                  defaultChecked={minutes === 0}
-                  onChange={() => setWaited(String(minutes))}
-                />
-                {minutes}
-                <small>{minutes === 0 ? "ไม่ได้รอ" : "นาที"}</small>
-              </label>
-            ))}
-          </div>
-          <p className="where">{waited === "0" ? "รอเพราะอะไร · เลือกได้เมื่อรอมากกว่า 0 นาที" : "รอเพราะอะไร"}</p>
-          <div className="g2" style={{ marginTop: 8 }}>
-            {BLOCKED_REASONS.map((reason) => (
-              <label className="ch box" key={reason}>
-                <input type="checkbox" name="blocked_reason" value={reason} disabled={waited === "0"} />
-                <span className="mk" aria-hidden>
-                  <Check size={16} strokeWidth={3} />
-                </span>
-                {BLOCKED_LABELS[reason]}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset className="q lockq">
-          <legend className="qh">
-            <span className="n">3</span>สถานะกุญแจ<span className="tag req">ต้องตอบ</span>
-          </legend>
-          {locks.mine.length > 0 && (
-            <p className="callout v-note" style={{ marginTop: 0, marginBottom: 8 }}>
-              <Lock size={20} aria-hidden style={{ color: "var(--stop)" }} />
-              <span>
-                <b>{`กุญแจ ${locks.mine.join(", ")} ของคุณยังล็อกอยู่`}</b>
-                {locks.restoreLeft && ` · ${locks.restoreLeft} ยังไม่ได้ทำ จึงเลือก “ปลดกุญแจแล้ว” ไม่ได้`}
-              </span>
-            </p>
-          )}
-          <div className="g1">
-            {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[]).map((answer) => (
-              <label className="ch" key={answer}>
-                <input type="radio" name="lock_state" value={answer} required disabled={lockOff[answer]} />
-                <span className="mk" aria-hidden />
-                <span>
-                  {LOCK_LABELS[answer]}
-                  {lockWhy[answer] && <small>{lockWhy[answer]}</small>}
-                </span>
-              </label>
-            ))}
-          </div>
-          {locks.onJob.length > 0 && (
-            <div className="sub-q">
-              <p className="where">
-                <b>{locks.onJob.join(", ")}</b> (จากทะเบียน) · เหตุที่ยังล็อก
-              </p>
-              <div className="g2" style={{ marginTop: 8 }}>
-                {BLOCKED_REASONS.map((reason) => (
-                  <label className="ch" key={reason}>
-                    <input type="radio" name="lock_reason" value={BLOCKED_LABELS[reason]} />
-                    <span className="mk" aria-hidden />
-                    {BLOCKED_LABELS[reason]}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </fieldset>
+        {/* With a lock on the job, the lock is the second question, not the third (set 2 review S4). */}
+        {lockFirst ? lockQuestion : waitQuestion}
+        {lockFirst ? waitQuestion : lockQuestion}
 
         <label className="q field">
           <span className="qh">

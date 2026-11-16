@@ -137,3 +137,30 @@ test("two retries at once end with what the device still holds, not a stale copy
   assert.deepEqual(one, []);
   assert.deepEqual(two, []);
 });
+
+test("a queued close the register refuses is kept with the reason and not sent again", async () => {
+  // Closed offline as "my locks are off" while the register still had a lock on the
+  // machine: when the network comes back the API refuses it (ADR-136).
+  const device = storage();
+  enqueue(device, close("WO-1"));
+  let sent = 0;
+  const refusal = "ในทะเบียนยังมีกุญแจ ก-03 ที่ CP-3 ที่เครื่องนี้";
+  const left = await drain(device, async () => {
+    sent += 1;
+    return refusal;
+  });
+  assert.equal(left.length, 1);
+  assert.equal(left[0]!.refused, refusal);
+  await drain(device, async () => {
+    sent += 1;
+    return "sent";
+  });
+  assert.equal(sent, 1, "a refusal is not retried");
+});
+
+test("a close that could not reach anybody stays queued and is tried again", async () => {
+  const device = storage();
+  enqueue(device, close("WO-1"));
+  const left = await drain(device, async () => "offline");
+  assert.equal(left[0]!.refused, undefined);
+});

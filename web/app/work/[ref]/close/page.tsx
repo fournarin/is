@@ -50,7 +50,7 @@ export default async function ClosePage({
   const backLabel = total > 0 ? `ยังไม่ปิด กลับไปขั้น ${resume}` : "ยังไม่ปิด กลับไปที่ใบงาน";
 
   const onJob = (job.locks ?? []).filter((one) => one.work_order_ref === job.ref);
-  const said = (one: (typeof onJob)[number]) => `${one.lock_no} ที่ ${one.point_id} ใส่ ${plantTime(one.applied_at, round.timezone)} น.`;
+  const said = (one: NonNullable<typeof job.locks>[number]) => `${one.lock_no} ที่ ${one.point_id} ใส่ ${plantTime(one.applied_at, round.timezone)} น.`;
   const mine = onJob.filter((one) => one.owner === account.user);
   const restore = job.steps.findIndex(
     (step, index) => index >= done && step.kind === "restore" && (step.isolation_points ?? []).some((point) => mine.some((one) => one.point_id === point.point_id)),
@@ -58,7 +58,9 @@ export default async function ClosePage({
   const locks: LockContext = {
     mine: mine.map(said),
     onJob: onJob.map(said),
+    onMachine: (job.locks ?? []).map(said),
     hadMine: (job.confirmations ?? []).some((one) => one.item === "locked" && one.by === account.user),
+    anybodyLocked: (job.confirmations ?? []).some((one) => one.item === "locked"),
     restoreLeft: restore >= 0 ? `ขั้น ${restore + 1} “${job.steps[restore]!.text_th ?? job.steps[restore]!.text}”` : null,
   };
   const symptom = job.title ? job.title.replace(job.machine_id, "").trim() : job.reason;

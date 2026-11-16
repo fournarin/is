@@ -177,3 +177,21 @@ export async function disagree(
   const recorded = (await response.json()) as { at: string };
   return { error: null, recordedAt: recorded.at };
 }
+
+/**
+ * The owner records taking their own lock off, with why (ADR-136, B3): after a
+ * handover or a "still locked" close, when the job is no longer theirs. Bound
+ * and always redirecting, back to the job page with the API's sentence.
+ */
+export async function releaseMyLock(lockId: number, form: FormData): Promise<void> {
+  const why = String(form.get("reason") ?? "").trim();
+  if (why === "") {
+    redirect(`/work?error=${encodeURIComponent("บอกเหตุที่ปลดกุญแจ เช่น คนรับงานใส่กุญแจของตัวเองแล้ว")}`);
+  }
+  const response = await callApi(`/locks/${lockId}/release`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ reason: why }),
+  });
+  redirect(response.ok ? "/work?done=unlocked" : `/work?error=${encodeURIComponent(await reason(response))}`);
+}
