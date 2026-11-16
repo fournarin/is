@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { NotThere, Shell } from "@/app/ui/shell";
-import { Clock, PhoneFrame, Th } from "@/app/ui/v2/frame";
+import { Clock, PhoneFrame, Th, signalsAreSynthetic } from "@/app/ui/v2/frame";
+import { pageParagraphs } from "@/lib/page-text";
 import { evidence } from "@/lib/review";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
@@ -99,19 +100,15 @@ export default async function ManualPage({
     notFound();
   }
 
-  // The index joins a page's lines, so a procedure arrives as one run of
-  // "... 1. Isolate ... 2. Remove ...". Each numbered item goes back on its own
-  // line - only after a sentence ends (fourth trial) - and nothing else is changed.
-  const paragraphs = (read.text ?? "")
-    .split(/\n{2,}/)
-    .flatMap((one) => one.split(/(?<=\.)\s(?=\d{1,2}\.\s)/))
-    .filter((one) => one.trim() !== "");
+  // The index joins a page's lines; lib/page-text.ts puts back the ones the text marks.
+  const { heading, paragraphs } = pageParagraphs(read.text ?? "");
 
   return (
     <PhoneFrame top={top}>
       <p className="mhead">
         <b lang="en">{read.title}</b>
         {step === undefined ? `หน้า ${read.page} · เปิดจากใบงาน ${job.ref}` : `หน้า ${read.page} · เปิดจากขั้น ${step} ของ ${job.ref}`}
+        {signalsAreSynthetic() && " · คู่มือจำลอง"}
       </p>
       {read.withdrawn && (
         <div className="callout is-bad v-note">
@@ -124,6 +121,7 @@ export default async function ManualPage({
       <section className="v-card page-text" style={{ marginTop: 12 }}>
         {paragraphs.length > 0 ? (
           <div lang="en">
+            {heading && <h1 className="ph">{heading}</h1>}
             {paragraphs.map((text, index) => (
               <p key={index}>{text}</p>
             ))}

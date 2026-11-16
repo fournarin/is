@@ -152,9 +152,10 @@ export default async function WorkPage({
             <Th>{job.eta_text}</Th>
           </p>
         )}
-        {/* Written by the backend when the job was created, never here. */}
+        {/* Written by the backend when the job was created, never here; the
+            "<symptom> ที่เครื่อง <machine> · " it opens with is the heading above. */}
         <p className="v-why">
-          <Th>{job.reason}</Th>
+          <Th>{withoutHeading(job.reason, symptom)}</Th>
         </p>
         {seen !== null && (
           <p className="muted">
@@ -218,8 +219,7 @@ export default async function WorkPage({
 
       <section className="sec" aria-labelledby="hist-h">
         <h2 id="hist-h">
-          ครั้งก่อนที่เครื่องนี้
-          {signalsAreSynthetic() && history.length > 0 && <span className="r unap">จำลอง</span>}
+          {`ครั้งก่อนที่เครื่องนี้${signalsAreSynthetic() && history.length > 0 ? " · จำลอง" : ""}`}
         </h2>
         {history.length > 0 ? (
           <ol className="hist">
@@ -365,4 +365,10 @@ function ReadingBox({ reading, band, detected }: { reading: Reading; band: strin
       )}
     </section>
   );
+}
+
+/** The backend's reason without the "<symptom> ที่เครื่อง <machine> · " the heading already says. */
+function withoutHeading(reason: string, symptom: string): string {
+  const cut = reason.indexOf(" · ");
+  return cut > 0 && reason.startsWith(symptom) ? reason.slice(cut + 3) : reason;
 }

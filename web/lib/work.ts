@@ -49,6 +49,24 @@ export type Step = {
   source_doc: string;
   page: number;
   manual: string | null;
+  // As the approving engineer marked it (ADR-135); absent on older tickets.
+  kind?: StepKind;
+  hazards?: string[];
+  isolation_points?: IsolationPoint[];
+  wait_minutes?: number | null;
+};
+
+export type StepKind = "normal" | "isolation" | "verify" | "restore" | "hazard";
+export type IsolationPoint = { point_id: string; label: string; energy: string };
+export type PointConfirmed = { step: number; point_id: string; item: string; by: string; at: string };
+export type LockOn = {
+  point_id: string;
+  lock_no: string;
+  owner: string;
+  owner_name: string;
+  work_order_ref: string;
+  step: number;
+  applied_at: string;
 };
 
 export type Recurrence = {
@@ -112,6 +130,11 @@ export type Ticket = {
   history?: PastJob[];
   approval?: Approval | null;
   engineer?: string | null;
+  // Isolation, point by point (ADR-135).
+  confirmations?: PointConfirmed[];
+  locks?: LockOn[];
+  your_lock_numbers?: string[];
+  missing_verify?: boolean;
 };
 
 /** The measurement behind a condition ticket, as its Finding recorded it. */

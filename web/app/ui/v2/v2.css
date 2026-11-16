@@ -81,8 +81,10 @@
 .v2 .pos li.fc { box-shadow: inset 0 0 0 2px var(--amber); }
 .v2 .pos li.ov { background: var(--amber); color: var(--ink); }
 /* no connection: the same andon voice as the plate */
-.v2 .offline { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--andon); color: var(--on-andon); line-height: 1.45; }
+.v2 .offline { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 16px; background: var(--andon); color: var(--on-andon); line-height: 1.45; }
 .v2 .offline b { font-weight: 600; }
+.v2 .offline svg { flex: none; width: 24px; height: 24px; color: var(--on-andon); }
+.v2 .page-text .ph { font-size: var(--t2); font-weight: 600; line-height: 1.45; margin-bottom: 8px; }
 
 /* surfaces, buttons, lists */
 .v2 .v-card { background: var(--surface); border-radius: var(--r); padding: 16px; }
@@ -105,7 +107,7 @@
 
 /* the one callout: white surface, a leading icon whose colour carries the meaning, the key word in bold */
 .v2 .callout { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: var(--r); background: var(--surface); line-height: 1.5; }
-.v2 .callout > svg { margin-top: 4px; color: var(--ink-2); }
+.v2 .callout > svg { flex: none; margin-top: 4px; color: var(--ink-2); }
 .v2 .callout.is-bad > svg { color: var(--stop); } .v2 .callout.is-ok > svg { color: var(--done); } .v2 .callout.is-lock > svg { color: var(--ink); }
 .v2 .callout > div { flex: 1; min-width: 0; }
 
@@ -168,10 +170,10 @@
 .v2 .step { margin-top: 16px; }
 .v2 .step .th { font-size: var(--t3); line-height: 1.5; }
 .v2 .step .en { margin-top: 12px; padding-top: 12px; box-shadow: inset 0 1px 0 var(--hair); line-height: 1.55; }
-.v2 .step .en .lbl { display: block; color: var(--ink-2); }
+.v2 .step .en .lbl { margin-right: 8px; color: var(--ink-2); }
 .v2 .mref { display: flex; align-items: center; gap: 12px; min-height: 64px; margin-top: 12px; padding: 8px; border-radius: var(--r);
   background: var(--canvas); text-decoration: none; color: var(--ink); }
-.v2 .mref .thumb { flex: none; width: 64px; height: 64px; border-radius: 4px; background: var(--surface); color: var(--ink-2);
+.v2 .mref .thumb { flex: none; width: 48px; height: 48px; border-radius: 4px; background: var(--surface); color: var(--ink-2);
   display: flex; align-items: center; justify-content: center; }
 .v2 .mref .t { flex: 1; min-width: 0; font-weight: 600; line-height: 1.35; }
 .v2 .mref .t small { display: block; font-weight: 400; color: var(--ink-2); }
@@ -181,7 +183,7 @@
 .v2 .prov b { color: var(--ink); }
 
 /* the manual page, read inside the job */
-.v2 .mhead { margin-top: 8px; line-height: 1.5; color: var(--ink-2); }
+.v2 .mhead { margin-top: 8px; margin-bottom: 4px; line-height: 1.5; color: var(--ink-2); }
 .v2 .mhead b { display: block; color: var(--ink); }
 .v2 .page-text p + p { margin-top: 8px; }
 
@@ -216,3 +218,90 @@
 .v2 .allsteps .n { flex: none; width: 28px; height: 28px; border-radius: 4px; background: var(--sunk); display: flex; align-items: center; justify-content: center; font-weight: 600; }
 .v2 .allsteps .is-done .n { background: var(--ink); color: var(--surface); }
 .v2 .allsteps .cur .n { box-shadow: inset 0 0 0 2px var(--ink); background: var(--surface); }
+
+/* set 2: energy steps (ADR-135). ISO 3864 safety colours appear only on signs and signal words. */
+.v2 { --iso-blue: #005387; --iso-yellow: #f9a800; }
+.v2 .kindh { display: grid; grid-template-columns: 48px 1fr; gap: 12px; align-items: start; padding-bottom: 12px; margin-bottom: 12px;
+  box-shadow: inset 0 -1px 0 var(--hair); }
+.v2 .kindh.nosign { grid-template-columns: 1fr; }
+.v2 .kindh .signs { display: grid; gap: 8px; }
+.v2 .kindh p { font-weight: 600; line-height: 1.35; }
+.v2 .kindh p small { display: block; font-weight: 400; color: var(--ink-2); }
+.v2 .sig { display: inline-block; margin-bottom: 4px; padding: 2px 12px; border-radius: 4px; font-weight: 600; line-height: 1.35; }
+.v2 .sig-danger { background: var(--stop); color: #fff; }
+.v2 .sig-caution { background: var(--iso-yellow); color: var(--ink); }
+.v2 .lockbar { display: flex; align-items: center; gap: 12px; margin: 0 -16px; padding: 4px 16px; background: var(--andon); color: var(--on-andon);
+  line-height: 1.45; }
+.v2 .lockbar svg { flex: none; }
+.v2 .lockbar b { font-weight: 600; }
+.v2 .pts { margin-top: 24px; }
+.v2 .pts .ptsh { font-weight: 600; line-height: 1.35; color: var(--ink-2); margin-bottom: 8px; }
+.v2 .pt + .pt { margin-top: 8px; }
+.v2 .pt h3 { font-weight: 600; line-height: 1.4; margin-bottom: 8px; }
+.v2 .pt h3 small { display: block; font-weight: 400; color: var(--ink-2); }
+.v2 .seqn { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start; }
+.v2 .seqn + .seqn { margin-top: 8px; }
+.v2 .seqn .k { width: 28px; height: 28px; margin-top: 16px; border-radius: 50%; background: var(--sunk); display: flex; align-items: center;
+  justify-content: center; font-weight: 600; }
+.v2 .seqn .k.ok { background: var(--ink); color: var(--surface); }
+/* choice tiles on native inputs: one selection style, a 2 px ink ring and a filled mark */
+.v2 .ch { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 16px; text-align: left;
+  border-radius: var(--r); background: var(--canvas); line-height: 1.35; cursor: pointer; }
+.v2 .q .ch { background: var(--surface); }
+.v2 .ch input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.v2 .ch .mk { flex: none; width: 24px; height: 24px; border: 2px solid var(--ink-2); border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; }
+.v2 .ch.box .mk { border-radius: 4px; }
+.v2 .ch small { display: block; font-weight: 400; line-height: 1.45; color: var(--ink-2); }
+.v2 .ch:has(input:checked), .v2 .ch.is-on { box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; background: var(--surface); }
+.v2 .ch:has(input:checked) .mk, .v2 .ch.is-on .mk { border-color: var(--ink); }
+.v2 .ch:not(.box):has(input:checked) .mk::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); }
+.v2 .ch.box.is-on .mk, .v2 .ch.box:has(input:checked) .mk { background: var(--ink); color: var(--surface); }
+.v2 .ch.box .mk svg { display: none; }
+.v2 .ch.box.is-on .mk svg, .v2 .ch.box:has(input:checked) .mk svg { display: block; }
+.v2 fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.v2 legend { display: flex; width: 100%; padding: 0; }
+/* the reason a lock stays on is asked only once "still locked" is the answer */
+.v2 .lockq:not(:has(input[value=still_locked]:checked)) .sub-q { display: none; }
+.v2 .ch:has(input:focus-visible) { outline: 3px solid var(--ink); outline-offset: 3px; }
+.v2 .ch.off, .v2 .ch:has(input:disabled) { background: var(--sunk); color: var(--ink-2); cursor: not-allowed; }
+.v2 .ch.off .mk, .v2 .ch:has(input:disabled) .mk { border-color: var(--line); }
+.v2 .lockpick { display: grid; gap: 8px; }
+.v2 .lbl { color: var(--ink-2); line-height: 1.45; }
+.v2 .field { display: grid; gap: 4px; }
+.v2 input[type=text], .v2 input[type=number] { display: block; width: 100%; min-height: 56px; padding: 8px 16px; border: 1.5px solid var(--line);
+  border-radius: var(--r); font: inherit; background: var(--surface); color: var(--ink); }
+.v2 .g1 { display: grid; gap: 8px; }
+.v2 .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v2 .waits { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.v2 .waits .ch { flex-direction: column; justify-content: center; gap: 0; padding: 8px 4px; text-align: center; font-weight: 600; min-height: 64px; }
+.v2 .waits .ch .mk { display: none; }
+.v2 .timer { display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 12px 16px; background: var(--surface); border-radius: var(--r);
+  line-height: 1.35; }
+.v2 .timer > b { font-size: var(--t4); line-height: 1; white-space: nowrap; }
+.v2 .timer > b small { font-size: var(--t1); margin-left: 4px; }
+.v2 .timer small { display: block; color: var(--ink-2); }
+.v2 .timer small b { color: var(--ink); }
+.v2 .wait { margin-top: 16px; }
+.v2 .miss { margin-top: 8px; line-height: 1.5; font-weight: 600; }
+/* questions on the close and handover screens */
+.v2 .q { margin-top: 24px; }
+.v2 .qh { display: flex; align-items: baseline; gap: 12px; font-weight: 600; line-height: 1.35; margin-bottom: 8px; }
+.v2 .qh .n { flex: none; color: var(--ink-2); }
+.v2 .qh .tag { margin-left: auto; font-weight: 400; color: var(--ink-2); white-space: nowrap; }
+.v2 .qh .tag.req { font-weight: 600; color: var(--ink); }
+.v2 .where { margin-top: 8px; line-height: 1.55; color: var(--ink-2); }
+.v2 .where b { color: var(--ink); }
+.v2 .sub-q { margin-top: 12px; }
+.v2 .submit { margin-top: 32px; }
+.v2 .saved { margin-top: 8px; line-height: 1.45; color: var(--ink-2); }
+.v2 .gapfree li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; line-height: 1.45; }
+.v2 .gapfree li + li { box-shadow: inset 0 1px 0 var(--hair); }
+.v2 .gapfree .k { width: 28px; height: 28px; border-radius: 50%; background: var(--sunk); display: flex; align-items: center; justify-content: center;
+  font-weight: 600; }
+.v2 .gapfree small { display: block; color: var(--ink-2); }
+.v2 .sumlist > div { display: grid; grid-template-columns: 88px 1fr; gap: 12px; padding: 12px 0; line-height: 1.5; }
+.v2 .sumlist > div + div { box-shadow: inset 0 1px 0 var(--hair); }
+.v2 .sumlist dt { color: var(--ink-2); }
+.v2 .sumlist dd b { font-weight: 600; }
+.v2 .sumlist dd small { display: block; color: var(--ink-2); }

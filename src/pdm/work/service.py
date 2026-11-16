@@ -22,6 +22,7 @@ from pdm.contracts import (
     BlockedReason,
     Finding,
     FindingRef,
+    LockState,
     MachineId,
     MachineModel,
     Playbook,
@@ -29,6 +30,7 @@ from pdm.contracts import (
     PMTask,
     PMTaskRef,
     Severity,
+    StepKind,
     SymptomCode,
     UserId,
     WorkOrder,
@@ -39,7 +41,7 @@ from pdm.contracts import (
 from pdm.contracts.wording import Wording
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo as playbooks
-from pdm.work import domain, repo
+from pdm.work import domain, locks, repo
 
 
 class NoSuchOrder(LookupError):
@@ -427,10 +429,119 @@ class WorkOrders:
             raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
         if not 1 <= step <= len(order.playbook_snapshot):
             raise ValueError(f"ใบงาน {ref} มี {len(order.playbook_snapshot)} ขั้น ไม่มีขั้นที่ {step}")
-        repo.record_step(conn, ref, step=step, user=user, now=self.clock.now())
+        now = self.clock.now()
+        # An isolation, verify or restore step is left only when every point is
+        # confirmed, and a waiting hazard only when its time is up (ADR-135,
+        # REQ-H-04). Checked here, not only by a disabled button.
+        blocked = locks.first_unfinished(
+            order.playbook_snapshot, locks.confirmations(conn, ref), before=step, now=now
+        )
+        if blocked is not None:
+            number, _ = blocked
+            raise TransitionRefused(f"ขั้นที่ {number} ยังยืนยันไม่ครบ ไปขั้นถัดไปไม่ได้")
+        repo.record_step(conn, ref, step=step, user=user, now=now)
+        # A wait starts when the step is reached, so leaving the page does not stop the clock.
+        if order.playbook_snapshot[step - 1].wait_minutes is not None:
+            locks.confirm(
+                conn, ref, step=step, point_id="", item=locks.WAIT_STARTED, user=user, now=now
+            )
         return step
 
-    def hand_over(self, conn: Connection[Any], ref: str, *, user: UserId, note: str) -> WorkOrder:
+    def confirm(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        *,
+        user: UserId,
+        step: int,
+        point_id: str,
+        item: str,
+        lock_no: str | None = None,
+    ) -> list[locks.Confirmation]:
+        """One point of an isolation, verify or restore step, confirmed by the person doing it.
+
+        In order: a point is locked after it is off, and a step's points are
+        worked one after another (OSHA 1910.147, REQ-H-04). A lock goes into the
+        register as it is confirmed, and comes out only by its owner on a
+        restore step (ADR-135).
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
+        if not 1 <= step <= len(order.playbook_snapshot):
+            raise ValueError(f"ใบงาน {ref} ไม่มีขั้นที่ {step}")
+        marked = order.playbook_snapshot[step - 1]
+        if marked.kind is StepKind.HAZARD and item == locks.WAIT_STARTED and point_id == "":
+            locks.confirm(
+                conn, ref, step=step, point_id="", item=item, user=user, now=self.clock.now()
+            )
+            return locks.confirmations(conn, ref)
+        if item not in locks.ITEMS.get(marked.kind, ()):
+            raise ValueError(f"ขั้นที่ {step} ไม่มีการยืนยัน “{item}”")
+        if point_id not in {point.point_id for point in marked.isolation_points}:
+            raise ValueError(f"ขั้นที่ {step} ไม่มีจุด {point_id}")
+
+        now = self.clock.now()
+        done = locks.confirmations(conn, ref)
+        needed = locks.still_needed(marked, step, done, now=now)
+        if (point_id, item) not in needed:
+            return done  # already confirmed: a second tap is not a second statement
+        if needed[0] != (point_id, item):
+            first_point, first_item = needed[0]
+            raise TransitionRefused(f"ยืนยันตามลำดับ: {first_point} ก่อน ({_SAID[first_item]})")
+
+        if item == "locked":
+            if not lock_no or not lock_no.strip():
+                raise ValueError("เลือกเลขกุญแจที่ใส่")
+            if not locks.apply_lock(
+                conn,
+                work_order_ref=ref,
+                machine_id=order.machine_id,
+                point_id=point_id,
+                lock_no=lock_no,
+                owner=user,
+                step=step,
+                now=now,
+            ):
+                raise TransitionRefused(f"กุญแจ {lock_no.strip()} ล็อกอยู่ที่จุดอื่นแล้ว")
+        if item == "released" and not locks.release_lock(
+            conn, work_order_ref=ref, point_id=point_id, owner=user, now=now
+        ):
+            raise TransitionRefused(f"ไม่มีกุญแจของคุณที่ {point_id} ปลดได้เฉพาะเจ้าของกุญแจ")
+        locks.confirm(conn, ref, step=step, point_id=point_id, item=item, user=user, now=now)
+        return locks.confirmations(conn, ref)
+
+    def _lock_answer(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        user: UserId,
+        answer: LockState | None,
+        reason: str | None,
+        note: str | None,
+    ) -> str | None:
+        """Check the answer about locks against the register; return the note with it on top."""
+        on_job = locks.open_locks(conn, work_order_ref=ref)
+        mine = [one for one in on_job if one.owner == user]
+        refused = locks.lock_state_refused(answer, mine=mine, on_this_job=on_job)
+        if refused is not None:
+            raise TransitionRefused(refused)
+        line = locks.lock_line(answer, reason, on_job)
+        text = (note or "").strip()
+        if line is None:
+            return text or None
+        return f"{line}\n{text}" if text else line
+
+    def hand_over(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        *,
+        user: UserId,
+        note: str,
+        lock_state: LockState | None = None,
+        lock_reason: str | None = None,
+    ) -> WorkOrder:
         """Put the job down for somebody else, and say how far it got.
 
         The note is checked before anything is written. ADR-025 asks for it
@@ -451,6 +562,8 @@ class WorkOrders:
             raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
         if not note.strip():
             raise ValueError("ส่งต่องานต้องเขียนว่าทำถึงไหนแล้ว ไม่อย่างนั้นคนถัดไปต้องเริ่มใหม่ตั้งแต่ขั้นแรก")
+        # A lock left on goes over with the job and stays its owner's (ADR-135).
+        note = self._lock_answer(conn, ref, user, lock_state, lock_reason, note) or note
 
         repo.close_segments(conn, ref, user=user, now=self.clock.now())
         repo.remove_assignee(conn, ref, user)
@@ -473,6 +586,8 @@ class WorkOrders:
         blocked_minutes: int = 0,
         blocked_reason: tuple[BlockedReason, ...] = (),
         technician_feedback: str | None = None,
+        lock_state: LockState | None = None,
+        lock_reason: str | None = None,
     ) -> WorkOrder:
         """End the job, with how it ended and what held it up.
 
@@ -501,6 +616,10 @@ class WorkOrders:
             )
         if blocked_minutes > 0 and not blocked_reason:
             raise ValueError("ถ้ามีเวลารอ ต้องเลือกเหตุผลด้วย: รออะไหล่ รอสายหยุด หรือรอคนช่วย")
+        # Agreed with the register, and carried at the top of the note (REQ-H-06, ADR-135).
+        technician_feedback = self._lock_answer(
+            conn, ref, user, lock_state, lock_reason, technician_feedback
+        )
 
         repo.close_segments(conn, ref, now=now)
         repo.close(
@@ -565,3 +684,13 @@ class WorkOrders:
         order somebody has accepted is left where it is (ADR-044 §7).
         """
         return repo.cancel_untouched_for_finding(conn, finding_ref, now=self.clock.now())
+
+
+# How a confirmation is said back, for the refusal that names the one to do first.
+_SAID = {
+    "off": "ตัดพลังงาน",
+    "locked": "ใส่กุญแจ",
+    "verified": "ตรวจว่าพลังงานเป็นศูนย์",
+    "released": "ปลดกุญแจ",
+    locks.WAIT_STARTED: "รอให้ครบเวลา",
+}

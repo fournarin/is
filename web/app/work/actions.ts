@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { callApi } from "@/lib/api";
+import { lockAnswer } from "@/lib/close";
 
 /**
  * Take the job and open a segment, in that order.
@@ -51,12 +52,38 @@ export async function startWork(ref: string): Promise<void> {
  * step is shown either way, and the job page simply resumes from the last mark.
  */
 export async function moveTo(ref: string, step: number): Promise<void> {
-  await callApi(`/work-orders/${encodeURIComponent(ref)}/progress`, {
+  const steps = `/work/${encodeURIComponent(ref)}/steps`;
+  const moved = await callApi(`/work-orders/${encodeURIComponent(ref)}/progress`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ step }),
   }).catch(() => undefined);
-  redirect(`/work/${encodeURIComponent(ref)}/steps?step=${step}`);
+  // A step that still needs a point confirmed, or a wait not yet over, is
+  // refused by the API (ADR-135): stay on it and say why, never skip past it.
+  if (moved !== undefined && moved.status === 409) {
+    redirect(`${steps}?step=${step - 1}&error=${encodeURIComponent(await reason(moved))}`);
+  }
+  redirect(`${steps}?step=${step}`);
+}
+
+/**
+ * One point of an isolation, verify or restore step: off, locked, verified or
+ * released (ADR-135, REQ-H-04). Bound and always redirecting back to the step,
+ * with the API's sentence when it refused - out of order, a lock number already
+ * on another point, a lock that is not yours to take off.
+ */
+export async function confirmPoint(ref: string, step: number, point: string, item: string, form: FormData): Promise<void> {
+  const lockNo = String(form.get("lock_other") ?? "").trim() || String(form.get("lock_no") ?? "").trim();
+  if (item === "locked" && lockNo === "") {
+    redirect(`/work/${encodeURIComponent(ref)}/steps?step=${step}&error=${encodeURIComponent("เลือกหรือพิมพ์เลขกุญแจที่ใส่")}`);
+  }
+  const response = await callApi(`/work-orders/${encodeURIComponent(ref)}/steps/${step}/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ item, point_id: point, ...(item === "locked" ? { lock_no: lockNo } : {}) }),
+  });
+  const back = `/work/${encodeURIComponent(ref)}/steps?step=${step}`;
+  redirect(response.ok ? back : `${back}&error=${encodeURIComponent(await reason(response))}`);
 }
 
 export type HandoverState = { error: string | null };
@@ -90,13 +117,19 @@ export async function handOver(
     return { error: "เขียนสั้น ๆ ว่าทำถึงไหนแล้ว ก่อนส่งต่องาน" };
   }
 
+  // What is still locked goes over with the job, checked against the register (ADR-135).
+  const lock = lockAnswer(form.get("lock_state"), form.get("lock_reason"));
+  if (form.has("lock_question") && lock.lock_state === undefined) {
+    return { error: "ตอบสถานะกุญแจก่อนส่งต่องาน" };
+  }
   const response = await callApi(`/work-orders/${encodeURIComponent(ref)}/handover`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ note, ...lock }),
   });
   if (response.status === 409) {
-    return { error: "งานนี้ถูกเปลี่ยนสถานะไปแล้ว ลองโหลดหน้าใหม่" };
+    // The API's own sentence: a lock the answer contradicts, or a job that moved on.
+    return { error: await reason(response) };
   }
   if (!response.ok) {
     return { error: `ระบบตอบกลับผิดปกติ (${response.status})` };

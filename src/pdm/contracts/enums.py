@@ -181,3 +181,28 @@ class Role(StrEnum):
     ENGINEER = "engineer"
     SUPERVISOR = "supervisor"
     OPERATOR = "operator"
+
+
+class StepKind(StrEnum):
+    """What a step does to the machine's energy, as the approving engineer marked it (ADR-135).
+
+    Never guessed from the words of the step (REQ-H-02): a step reading "lock
+    out" that nobody marked is a normal step, and the screen says nothing more
+    than it says. The marks follow OSHA 1910.147: isolate, verify zero energy,
+    and restore, each its own step, plus a hazard that is not stored energy (a
+    hot surface, a wait).
+    """
+
+    NORMAL = "normal"
+    ISOLATION = "isolation"
+    VERIFY = "verify"
+    RESTORE = "restore"
+    HAZARD = "hazard"
+
+
+class LockState(StrEnum):
+    """The answer every close and handover gives about locks (REQ-H-06, ADR-135)."""
+
+    RELEASED = "released"
+    STILL_LOCKED = "still_locked"
+    NOT_ISOLATED = "not_isolated"

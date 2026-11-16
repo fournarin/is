@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pdm.api.deps import Db, Plant, requires
 from pdm.contracts import (
     BlockedReason,
+    LockState,
     MachineId,
     Role,
     Severity,
@@ -72,6 +73,9 @@ class Handover(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     note: str = Field(min_length=1)
+    # What is still locked goes over with the job (REQ-H-06, ADR-135).
+    lock_state: LockState | None = None
+    lock_reason: str | None = None
 
     @field_validator("note")
     @classmethod
@@ -102,6 +106,9 @@ class Closing(BaseModel):
     blocked_minutes: int = Field(default=0, ge=0)
     blocked_reason: tuple[BlockedReason, ...] = ()
     technician_feedback: str | None = None
+    # Checked against the lock register before the job closes (REQ-H-06, ADR-135).
+    lock_state: LockState | None = None
+    lock_reason: str | None = None
 
 
 class Report(BaseModel):
@@ -366,6 +373,57 @@ def progress(
     return StepReached(ref=work_order_ref, step=step)
 
 
+class Confirming(BaseModel):
+    """One point of an isolation, verify or restore step (ADR-135, REQ-H-04)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    item: str = Field(pattern="^(off|locked|verified|released|wait_started)$")
+    point_id: str = ""
+    lock_no: str | None = None
+
+
+class Confirmed(BaseModel):
+    step: int
+    point_id: str
+    item: str
+    confirmed_at: str
+
+
+@router.post("/work-orders/{work_order_ref}/steps/{step}/confirm", response_model=list[Confirmed])
+def confirm_point(
+    work_order_ref: str,
+    step: int,
+    confirming: Confirming,
+    conn: Db,
+    orders: Orders,
+    account: Annotated[Account, Depends(requires(*_MAY_WORK, action="confirm_isolation_point"))],
+) -> list[Confirmed]:
+    """Switched off, locked, verified at zero, or released - one point at a
+    time, in order, recorded with who and when. Locks go into the register."""
+    try:
+        done = orders.confirm(
+            conn,
+            work_order_ref,
+            user=account.user,
+            step=step,
+            point_id=confirming.point_id,
+            item=confirming.item,
+            lock_no=confirming.lock_no,
+        )
+    except (NoSuchOrder, TransitionRefused, ValueError) as error:
+        raise _translate(error) from error
+    return [
+        Confirmed(
+            step=one.step,
+            point_id=one.point_id,
+            item=one.item,
+            confirmed_at=one.confirmed_at.isoformat(),
+        )
+        for one in done
+    ]
+
+
 @router.post("/work-orders/{work_order_ref}/handover", response_model=WorkOrderState)
 def hand_over(
     work_order_ref: str,
@@ -377,7 +435,14 @@ def hand_over(
     """Put it down for the next shift, with the note that saves them the first
     hour (ADR-025)."""
     try:
-        order = orders.hand_over(conn, work_order_ref, user=account.user, note=handover.note)
+        order = orders.hand_over(
+            conn,
+            work_order_ref,
+            user=account.user,
+            note=handover.note,
+            lock_state=handover.lock_state,
+            lock_reason=handover.lock_reason,
+        )
     except (NoSuchOrder, TransitionRefused, ValueError) as error:
         raise _translate(error) from error
     return _state(work_order_ref, order)
@@ -401,6 +466,8 @@ def close(
             blocked_minutes=closing.blocked_minutes,
             blocked_reason=closing.blocked_reason,
             technician_feedback=closing.technician_feedback,
+            lock_state=closing.lock_state,
+            lock_reason=closing.lock_reason,
         )
     except (NoSuchOrder, TransitionRefused, ValueError) as error:
         raise _translate(error) from error

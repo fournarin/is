@@ -1,7 +1,7 @@
 "use client";
 
 import { WifiOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 /**
  * Says so when the phone has lost the network (ADR-134).
@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
  * screen can still be read, and what was done is already recorded, so nobody
  * starts the step again. Drawn only while offline; nothing at all otherwise.
  */
-export function OfflineStrip() {
+export function OfflineStrip({ children, synthetic }: { children: ReactNode; synthetic: boolean }) {
   const [offline, setOffline] = useState(false);
   useEffect(() => {
     const update = () => setOffline(!navigator.onLine);
@@ -23,12 +23,14 @@ export function OfflineStrip() {
       window.removeEventListener("offline", update);
     };
   }, []);
-  if (!offline) return null;
+  // In the synthetic banner's row, not a row of its own, so the step's button
+  // stays where the thumb expects it (set 1 review); the banner's words stay in it.
+  if (!offline) return <>{children}</>;
   return (
     <div className="offline" role="status">
       <WifiOff size={24} aria-hidden />
       <span>
-        <b>Wi-Fi หลุด</b> · หน้านี้ยังอ่านได้ ขั้นที่ทำแล้วบันทึกไว้แล้ว กดต่อได้เมื่อสัญญาณกลับมา
+        <b>Wi-Fi หลุด</b> · ที่ทำไว้ไม่หาย{synthetic && " · จำลอง"}
       </span>
     </div>
   );

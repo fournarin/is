@@ -540,18 +540,29 @@ def main() -> None:
     next_ref = ref_from(after_closing)
     next_steps = submit("/work", form_with(get("/work"), "รับงานและเริ่มทำ"))
     expect(next_ref in readable(next_steps), "the next job starts")
+    # Handing over is its own screen now, with the lock question on it (ADR-135).
+    handover = get(f"/work/{next_ref}/handover")
     blank = submit(
-        f"/work/{next_ref}/steps",
-        form_with(next_steps, 'name="note"'),
+        f"/work/{next_ref}/handover",
+        form_with(handover, 'name="note"'),
         [("note", "   ")],
     )
     expect("ก่อนส่งต่องาน" in readable(blank), "whitespace is not a handover note (ADR-025)")
-    handed = submit(
-        f"/work/{next_ref}/steps",
-        form_with(next_steps, 'name="note"'),
+    unanswered = submit(
+        f"/work/{next_ref}/handover",
+        form_with(handover, 'name="note"'),
         [("note", "ถอดฝาครอบแล้ว รออะไหล่")],
     )
-    expect("งานของฉัน" in handed, "with a note it goes through")
+    expect(
+        "ตอบสถานะกุญแจ" in readable(unanswered),
+        "and not without an answer about locks (REQ-H-06)",
+    )
+    handed = submit(
+        f"/work/{next_ref}/handover",
+        form_with(handover, 'name="note"'),
+        [("note", "ถอดฝาครอบแล้ว รออะไหล่"), ("lock_state", "not_isolated")],
+    )
+    expect("งานของฉัน" in handed, "with a note and the answer it goes through")
 
     print("\n8. the manual opens at a page rather than downloading whole")
     # The PDF link is on the in-job manual page now, one tap past the step

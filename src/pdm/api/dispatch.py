@@ -39,10 +39,12 @@ from pdm.contracts import (
     Assignee,
     AssigneeRole,
     FindingKind,
+    IsolationPoint,
     MachineId,
     MachineModel,
     Role,
     Severity,
+    StepKind,
     SymptomCode,
     Technician,
     UserId,
@@ -76,6 +78,7 @@ from pdm.sinks import repo as deliveries
 # composition layer that already reaches into work/, dispatch/ and playbooks/ to
 # assemble a screen.
 from pdm.triggers import repo as findings
+from pdm.work import locks
 from pdm.work import repo as work
 from pdm.work.domain import reported_words, title, when_expected
 
@@ -175,6 +178,31 @@ class Step(BaseModel):
     # Which manual the page is in, so a technician holding the printed copy
     # knows which book to open (ADR-102).
     manual: str | None = None
+    # As the approving engineer marked it (ADR-135); a step nobody marked is normal.
+    kind: StepKind = StepKind.NORMAL
+    hazards: tuple[str, ...] = ()
+    isolation_points: tuple[IsolationPoint, ...] = ()
+    wait_minutes: int | None = None
+
+
+class PointConfirmed(BaseModel):
+    step: int
+    point_id: str
+    item: str
+    by: str
+    at: datetime
+
+
+class LockOn(BaseModel):
+    """A personal lock still on a point of this machine (ADR-135)."""
+
+    point_id: str
+    lock_no: str
+    owner: str
+    owner_name: str
+    work_order_ref: str
+    step: int
+    applied_at: datetime
 
 
 class Reading(BaseModel):
@@ -324,6 +352,14 @@ class TicketView(BaseModel):
     # Whom to ask when there are no approved steps: the engineer who last
     # approved a playbook for this machine model.
     engineer: str | None = None
+
+    # Isolation, point by point (ADR-135).
+    confirmations: tuple[PointConfirmed, ...] = ()
+    locks: tuple[LockOn, ...] = ()
+    # Lock numbers the reader has used before, for one-tap choices.
+    your_lock_numbers: tuple[str, ...] = ()
+    # An isolation step with no verify after it (REQ-H-05): shown as a stop bar.
+    missing_verify: bool = False
 
 
 class Mine(BaseModel):
@@ -1273,6 +1309,10 @@ def ticket(
                 source_doc=str(step.source_doc),
                 page=step.page,
                 manual=manuals.get(str(step.source_doc)),
+                kind=step.kind,
+                hazards=step.hazards,
+                isolation_points=step.isolation_points,
+                wait_minutes=step.wait_minutes,
             )
             for step in order.playbook_snapshot
         ),
@@ -1293,6 +1333,30 @@ def ticket(
         history=_history(conn, config, work_order_ref, order),
         approval=_approval(conn, order, manuals),
         engineer=_engineer(conn, config, order),
+        confirmations=tuple(
+            PointConfirmed(
+                step=one.step,
+                point_id=one.point_id,
+                item=one.item,
+                by=str(one.confirmed_by),
+                at=one.confirmed_at,
+            )
+            for one in locks.confirmations(conn, work_order_ref)
+        ),
+        locks=tuple(
+            LockOn(
+                point_id=one.point_id,
+                lock_no=one.lock_no,
+                owner=str(one.owner),
+                owner_name=_names(conn, (one.owner,))[0],
+                work_order_ref=one.work_order_ref,
+                step=one.step,
+                applied_at=one.applied_at,
+            )
+            for one in locks.open_locks(conn, machine_id=order.machine_id)
+        ),
+        your_lock_numbers=tuple(locks.lock_numbers_of(conn, account.user)),
+        missing_verify=locks.missing_verify(order.playbook_snapshot),
     )
 
 

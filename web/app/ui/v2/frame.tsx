@@ -47,14 +47,15 @@ export function signalsAreSynthetic(): boolean {
 export function PhoneFrame({ top, children }: { top: ReactNode; children: ReactNode }) {
   return (
     <div className="v2">
-      {signalsAreSynthetic() && (
-        <div className="synthetic" role="note">
-          <span>
-            <b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง
-          </span>
-        </div>
-      )}
-      <OfflineStrip />
+      <OfflineStrip synthetic={signalsAreSynthetic()}>
+        {signalsAreSynthetic() && (
+          <div className="synthetic" role="note">
+            <span>
+              <b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง
+            </span>
+          </div>
+        )}
+      </OfflineStrip>
       <header className="top">{top}</header>
       <main className="wrap">{children}</main>
     </div>

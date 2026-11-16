@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, Check, ChevronRight, CircleAlert, History, Image as Figure, Info, ListOrdered, Phone, SquareCheck } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, BookOpen, Lock, Check, ChevronRight, CircleAlert, History, Image as Figure, Info, ListOrdered, Phone, SquareCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -6,7 +6,9 @@ import type { ReactNode } from "react";
 import { NotThere, Shell } from "@/app/ui/shell";
 import { Approved, Clock, PhoneFrame, Plate, Row, Th, signalsAreSynthetic, stationNumber } from "@/app/ui/v2/frame";
 import { moveTo } from "@/app/work/actions";
-import { HandoverForm } from "@/app/work/[ref]/steps/handover-form";
+import { KindHeader, NotYet, Points, WaitBox, needed, neededLine } from "@/app/work/[ref]/steps/energy";
+import { LockBar } from "@/app/ui/v2/signs";
+import { firstUnfinished, waitEnds } from "@/lib/energy";
 import { plantTime } from "@/lib/display";
 import { pagesNamed } from "@/lib/page-references";
 import { evidence } from "@/lib/review";
@@ -27,11 +29,11 @@ export default async function StepsPage({
   searchParams,
 }: {
   params: Promise<{ ref: string }>;
-  searchParams: Promise<{ step?: string }>;
+  searchParams: Promise<{ step?: string; error?: string }>;
 }) {
   const account = await requireAccount();
   const { ref } = await params;
-  const { step } = await searchParams;
+  const { step, error } = await searchParams;
 
   const [job, round, lamps] = await Promise.all([ticketAt(decodeURIComponent(ref)), currentRound(), lineLamps()]);
   if (job === null) {
@@ -115,8 +117,32 @@ export default async function StepsPage({
     }),
   );
 
+  const now = new Date();
+  // This step's own confirmations, or an earlier step's left unfinished: the API refuses either.
+  const earlier = firstUnfinished(job.steps, job.confirmations ?? [], at, now);
+  const missing = needed(job, at, now);
+  const waitUntil = current.wait_minutes ? waitEnds(current, at, job.confirmations ?? []) : null;
+
   return (
     <PhoneFrame top={top}>
+      <LockBar locks={job.locks ?? []} you={account.user} timezone={round.timezone} />
+      {error !== undefined && error !== "" && (
+        <div className="callout is-bad v-note" role="alert">
+          <CircleAlert size={20} aria-hidden />
+          <div>
+            <Th>{error}</Th>
+          </div>
+        </div>
+      )}
+      {/* REQ-H-05: isolating without verifying zero energy is not a procedure to work from. */}
+      {job.missing_verify && (
+        <div className="callout is-bad v-note" role="alert">
+          <CircleAlert size={20} aria-hidden />
+          <div>
+            <b>ขาดการตรวจยืนยันพลังงานเป็นศูนย์</b> · แจ้งหัวหน้ากะก่อนเริ่ม
+          </div>
+        </div>
+      )}
       {handover}
       {job.playbook_warning !== null && (
         <div className="callout is-bad v-note">
@@ -145,6 +171,7 @@ export default async function StepsPage({
       </div>
 
       <section className="v-card step" aria-label={`ขั้นที่ ${at}`}>
+        <KindHeader step={current} revision={job.approval?.revision ?? null} />
         <p className="th">
           <Th>{current.text_th ?? current.text}</Th>
         </p>
@@ -155,7 +182,7 @@ export default async function StepsPage({
           </span>
           <span className="t">
             {`คู่มือหน้า ${current.page}`}
-            <small>{`${job.machine_model ? `${job.machine_model} · ` : ""}ข้อความและรูปของหน้านี้`}</small>
+            <small>{`${job.machine_model ? `${job.machine_model} · ` : ""}อ่านทั้งหน้า`}</small>
           </span>
           <ChevronRight size={24} aria-hidden />
         </Link>
@@ -183,16 +210,36 @@ export default async function StepsPage({
         {current.text_th !== null && (
           <p className="en" lang="en">
             <span className="lbl" lang="th">
-              ต้นฉบับจากคู่มือ · หน้า {current.page}
+              <Th>{`ต้นฉบับ หน้า ${current.page}${signalsAreSynthetic() ? " · จำลอง" : ""}`}</Th>
             </span>
             {current.text}
           </p>
         )}
       </section>
 
+      <Points job={job} number={at} you={account.user} now={now} />
+      <WaitBox job={job} number={at} now={now} timezone={round.timezone} />
+
       <div className="done-btn">
-        {last ? (
-          <Link className="btn pri" href={close}>
+        {earlier !== null && missing.length === 0 ? (
+          <>
+            <div className="btn off" aria-disabled>
+              <Lock size={24} aria-hidden />
+              ทำขั้นนี้แล้ว ถัดไป
+            </div>
+            <p className="miss">
+              {`ขั้นที่ ${earlier.number} ยังยืนยันไม่ครบ · ${neededLine(earlier.missing).replace("ยังต้องยืนยัน: ", "")}`}
+            </p>
+          </>
+        ) : missing.length > 0 ? (
+          // Refused by the API as well; this only says so before the tap (ADR-135).
+          <NotYet
+            missing={missing}
+            label={last ? "ทำขั้นนี้แล้ว ไปปิดงาน" : "ทำขั้นนี้แล้ว ถัดไป"}
+            until={waitUntil && missing.every((one) => one.item === "wait_started") ? `ถัดไปได้เมื่อ ${plantTime(waitUntil.toISOString(), round.timezone)}` : null}
+          />
+        ) : last ? (
+          <Link className="btn pri" href={`${close}?reached=${total}`}>
             <SquareCheck size={24} aria-hidden />
             ครบทุกขั้น ปิดงาน
           </Link>
@@ -243,12 +290,17 @@ export default async function StepsPage({
             href="/work#hist-h"
           />
         )}
-        <HandoverForm workOrder={job.ref} sub={`ให้คนอื่นทำต่อ บันทึกว่าถึงขั้น ${at} จาก ${total}`} />
+        <Row
+          icon={<ArrowRightLeft size={24} aria-hidden />}
+          label="ส่งต่องาน"
+          sub={`ให้คนอื่นทำต่อ บันทึกว่าถึงขั้น ${at} จาก ${total}`}
+          href={`/work/${encodeURIComponent(job.ref)}/handover?reached=${at}`}
+        />
         <Row
           icon={<SquareCheck size={24} aria-hidden />}
           label="ปิดงาน"
           sub="ตอบผลและนาทีที่ต้องรอ"
-          href={last ? close : `${close}?reached=${at}`}
+          href={`${close}?reached=${last && missing.length === 0 ? total : at - 1}`}
         />
       </nav>
       {job.approval && <Approved approval={job.approval} timezone={round.timezone} />}
@@ -303,6 +355,18 @@ function NoSteps({
         </div>
       </div>
       {handover}
+      <nav className="sec rows" aria-label="ทางเลือก">
+        {/* No number is kept for anybody yet, so this says who to ask and does not pretend to dial. */}
+        <div className="rw info">
+          <Phone size={24} aria-hidden />
+          <span className="t">
+            {`โทรถาม${engineer}`}
+            <small>เบอร์ยังไม่ได้ตั้งค่าในระบบ · ถามหัวหน้ากะ</small>
+          </span>
+        </div>
+        <Row icon={<ArrowRightLeft size={24} aria-hidden />} label="ส่งต่องาน" sub="ให้คนที่มีทักษะทำต่อ" href={`/work/${encodeURIComponent(job.ref)}/handover`} />
+        <Row icon={<SquareCheck size={24} aria-hidden />} label="ปิดงาน" sub="ตอบผลและนาทีที่ต้องรอ" href={close} />
+      </nav>
       {where.length > 0 && (
         <nav className="sec rows" aria-label="หน้าคู่มือที่อาจช่วย">
           {where.map((one) =>
@@ -336,18 +400,6 @@ function NoSteps({
           </div>
         </div>
       )}
-      <nav className="sec rows" aria-label="ทางเลือก">
-        {/* No number is kept for anybody yet, so this says who to ask and does not pretend to dial. */}
-        <div className="rw info">
-          <Phone size={24} aria-hidden />
-          <span className="t">
-            {`โทรถาม${engineer}`}
-            <small>เบอร์ยังไม่ได้ตั้งค่าในระบบ · ถามหัวหน้ากะ</small>
-          </span>
-        </div>
-        <HandoverForm workOrder={job.ref} sub="ให้คนที่มีทักษะทำต่อ" />
-        <Row icon={<SquareCheck size={24} aria-hidden />} label="ปิดงาน" sub="ตอบผลและนาทีที่ต้องรอ" href={close} />
-      </nav>
       <p className="prov">
         <Th>{job.reason}</Th>
         {job.started_at && ` · เริ่ม ${plantTime(job.started_at, timezone)} น.`}
