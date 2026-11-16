@@ -59,6 +59,7 @@ export default async function ClosePage({
     mine: mine.map(said),
     onJob: onJob.map(said),
     onMachine: (job.locks ?? []).map(said),
+    otherJobs: (job.locks ?? []).filter((one) => one.work_order_ref !== job.ref).map((one) => `${one.owner_name} ที่ ${one.point_id} (${one.work_order_ref})`),
     hadMine: (job.confirmations ?? []).some((one) => one.item === "locked" && one.by === account.user),
     anybodyLocked: (job.confirmations ?? []).some((one) => one.item === "locked"),
     restoreLeft: restore >= 0 ? `ขั้น ${restore + 1} “${job.steps[restore]!.text_th ?? job.steps[restore]!.text}”` : null,

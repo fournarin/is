@@ -27,6 +27,12 @@ def upgrade() -> None:
             CHECK (item IN ('off', 'locked', 'verified', 'checked', 'released', 'wait_started'))
     """)
     op.execute("ALTER TABLE lock_record ADD COLUMN release_reason text")
+    # Locks taken off under 0021 had no reason to record: say where they came off
+    # before the rule that every release says why (set 2 review N5).
+    op.execute(
+        "UPDATE lock_record SET release_reason = 'restore step (before ADR-136)'"
+        " WHERE released_at IS NOT NULL AND release_reason IS NULL"
+    )
     op.execute("""
         ALTER TABLE lock_record ADD CONSTRAINT a_lock_off_says_why
             CHECK (released_at IS NULL OR release_reason IS NOT NULL)

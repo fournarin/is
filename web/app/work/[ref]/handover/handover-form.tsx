@@ -10,6 +10,8 @@ const NOTHING_WRONG: HandoverState = { error: null };
 
 const LOCK_LABELS = {
   released: "ปลดกุญแจของฉันแล้ว เครื่องคืนสู่การผลิต",
+  // Mine are off, another job's lock is still on the machine (ADR-137, N3).
+  released_machine_locked: "ปลดกุญแจของฉันแล้ว · เครื่องยังล็อกโดยงานอื่น",
   still_locked: "ยังล็อกอยู่ (ระบุจุดและเหตุ)",
   not_isolated: "งานนี้ไม่ได้ตัดพลังงาน",
 } as const;
@@ -31,6 +33,7 @@ export function HandoverForm({ workOrder, locks, note }: { workOrder: string; lo
   const [state, action, pending] = useActionState(handOver, NOTHING_WRONG);
   const off = {
     released: locks.onMachine.length > 0 || !locks.hadMine,
+    released_machine_locked: locks.onJob.length > 0 || !locks.hadMine || locks.otherJobs.length === 0,
     still_locked: locks.onJob.length === 0,
     not_isolated: locks.onJob.length > 0 || locks.anybodyLocked,
   };
@@ -43,6 +46,7 @@ export function HandoverForm({ workOrder, locks, note }: { workOrder: string; lo
           : !locks.hadMine
             ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้"
             : null,
+    released_machine_locked: locks.otherJobs.length > 0 ? locks.otherJobs.join(", ") : null,
     still_locked: locks.onJob.length > 0 ? locks.onJob.join(", ") : "ทะเบียนไม่มีกุญแจที่ยังล็อกอยู่ในงานนี้",
     not_isolated:
       locks.onJob.length > 0
@@ -67,7 +71,9 @@ export function HandoverForm({ workOrder, locks, note }: { workOrder: string; lo
           <span className="n">1</span>สถานะกุญแจ<span className="tag req">ต้องตอบ</span>
         </legend>
         <div className="g1">
-          {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[]).map((answer) => (
+          {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[])
+            .filter((answer) => answer !== "released_machine_locked" || locks.otherJobs.length > 0)
+            .map((answer) => (
             <label className="ch" key={answer}>
               <input
                 type="radio"
@@ -119,7 +125,7 @@ export function HandoverForm({ workOrder, locks, note }: { workOrder: string; lo
       </label>
       <p className="saved">ระบบเติมขั้นที่ทำถึงให้ · สถานะกุญแจขึ้นบรรทัดแรกของโน้ต</p>
 
-      <div className="submit">
+      <div className="submit sticky">
         <button type="submit" className="btn pri" disabled={pending}>
           <ArrowRightLeft size={24} aria-hidden />
           {pending ? "กำลังส่งต่อ..." : "ส่งต่องานให้หัวหน้ากะ"}

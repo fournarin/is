@@ -124,13 +124,6 @@ export function Points({ job, number, you, now }: { job: Ticket; number: number;
   return (
     <section className="pts" aria-label={heading}>
       <h2 className="ptsh">{heading}</h2>
-      {/* W5: a confirmation is never queued with the device's time - offline it is simply not recorded. */}
-      <p className="callout is-bad offline-only" role="status">
-        <CircleAlert size={20} aria-hidden />
-        <span>
-          <b>ยังไม่ได้บันทึก</b> · Wi-Fi หลุด ทำตามใบพิมพ์ แล้วแจ้งหัวหน้ากะ
-        </span>
-      </p>
       {kind === "restore" && <RestoreChecks job={job} number={number} next={next} done={done} />}
       {points.map((point) => {
         const lock = (job.locks ?? []).find((one) => one.point_id === point.point_id);
@@ -328,5 +321,21 @@ export function NotYet({ missing, label, until }: { missing: Needed[]; label: st
       </div>
       <p className="miss">{neededLine(missing)}</p>
     </>
+  );
+}
+
+/**
+ * Offline on an energy step: confirmations are never queued with the device's
+ * time, so nothing is being recorded - said at the top, where it is seen before
+ * the next tap (set 2 review W5, S10). Drawn by CSS only while offline.
+ */
+export function OfflineNote() {
+  return (
+    <p className="callout is-bad offline-only v-note" role="status">
+      <CircleAlert size={20} aria-hidden />
+      <span>
+        <b>ยังไม่ได้บันทึก</b> · Wi-Fi หลุด ทำตามใบพิมพ์ แล้วแจ้งหัวหน้ากะ
+      </span>
+    </p>
   );
 }

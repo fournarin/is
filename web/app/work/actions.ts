@@ -188,10 +188,15 @@ export async function releaseMyLock(lockId: number, form: FormData): Promise<voi
   if (why === "") {
     redirect(`/work?error=${encodeURIComponent("บอกเหตุที่ปลดกุญแจ เช่น คนรับงานใส่กุญแจของตัวเองแล้ว")}`);
   }
+  // The shift lead who watched it come off signs with their own user and password (ADR-137).
   const response = await callApi(`/locks/${lockId}/release`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ reason: why }),
+    body: JSON.stringify({
+      reason: why,
+      witness: String(form.get("witness") ?? "").trim(),
+      witness_password: String(form.get("witness_password") ?? ""),
+    }),
   });
   redirect(response.ok ? "/work?done=unlocked" : `/work?error=${encodeURIComponent(await reason(response))}`);
 }

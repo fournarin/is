@@ -221,3 +221,55 @@ class TestTheAnswerAboutLocksAgreesWithTheRegister:
         line = lock_line(LockState.STILL_LOCKED, "รออะไหล่", [lock()])
         assert line == "สถานะกุญแจ: ยังล็อกอยู่ ก-03 ที่ CP-3 · เหตุ: รออะไหล่"
         assert lock_line(None, None, []) is None
+
+
+class TestRoundThree:
+    """ADR-137: the holes the second EHS review found."""
+
+    def refused(self, answer: LockState | None, **kw: object) -> str | None:
+        kw.setdefault("on_job", [])
+        kw.setdefault("on_machine", kw["on_job"])
+        kw.setdefault("you_locked_here", True)
+        kw.setdefault("anybody_locked_here", True)
+        return lock_state_refused(answer, **kw)  # type: ignore[arg-type]
+
+    def test_released_needs_the_restore_checks(self) -> None:
+        """N1: a lock off without the restore step skipped tools, guards, people, operator."""
+        assert self.refused(LockState.RELEASED, restore_checked=False)
+        assert self.refused(LockState.RELEASED, restore_checked=True) is None
+
+    def test_another_jobs_lock_has_its_own_answer(self) -> None:
+        """N3: mine are off, the machine is still locked by another job."""
+        theirs = [lock(OTHER)]
+        assert self.refused(LockState.RELEASED, on_machine=theirs)
+        assert self.refused(LockState.RELEASED_MACHINE_LOCKED, on_machine=theirs) is None
+        assert self.refused(LockState.RELEASED_MACHINE_LOCKED, on_machine=[])
+        line = lock_line(LockState.RELEASED_MACHINE_LOCKED, None, [], theirs)
+        assert line is not None and "tech-2 ที่ CP-3" in line
+
+    def test_no_answer_where_anybody_locked(self) -> None:
+        assert self.refused(None)
+        assert self.refused(None, anybody_locked_here=False) is None
+
+    def test_a_restore_step_with_two_points_finishes(self) -> None:
+        """N4: inside the restore step its own points no longer need the isolation lock."""
+        v7 = IsolationPoint(point_id="V-7", label="valve", energy="pneumatic")
+        isolate = step(StepKind.ISOLATION, isolation_points=(CP3, v7))
+        restore = step(StepKind.RESTORE, isolation_points=(CP3, v7))
+        said = [done(1, p, item) for p in ("CP-3", "V-7") for item in ("off", "locked")]
+        only_v7_on = [lock(point="V-7", number="ก-04")]
+        steps = [isolate, restore]
+        blocked = first_unfinished(steps, said, before=2, now=NOW, user=ME, locks_on=only_v7_on)
+        assert blocked is not None, "outside the restore step the lock is still asked for"
+        assert (
+            first_unfinished(
+                steps,
+                said,
+                before=2,
+                now=NOW,
+                user=ME,
+                locks_on=only_v7_on,
+                restoring=frozenset({"CP-3", "V-7"}),
+            )
+            is None
+        )

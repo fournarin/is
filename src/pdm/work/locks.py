@@ -140,9 +140,15 @@ def first_unfinished(
     user: UserId,
     locks_on: Sequence[Lock],
     checks: Sequence[str] = (),
+    restoring: frozenset[str] = frozenset(),
 ) -> tuple[int, list[tuple[str, str]]] | None:
-    """The first step before `before` (1-based) that still needs something from `user`."""
-    restored = restored_points(steps, before=before)
+    """The first step before `before` (1-based) that still needs something from `user`.
+
+    `restoring` are the points of a restore step being worked now: their locks are
+    coming off in it, so the isolation step behind it stops asking for them - or a
+    restore step with two points could never take its second lock off (ADR-137, N4).
+    """
+    restored = restored_points(steps, before=before) | restoring
     for number, step in enumerate(steps[: max(0, before - 1)], start=1):
         missing = still_needed(
             step,
@@ -166,28 +172,41 @@ def lock_state_refused(
     on_machine: Sequence[Lock],
     you_locked_here: bool,
     anybody_locked_here: bool,
+    restore_checked: bool = True,
 ) -> str | None:
     """Why the register contradicts this answer about locks, or None if it does not.
 
-    The register is the record and the answer has to agree with it (REQ-H-06):
+    The register is the record and the answer has to agree with it (REQ-H-06,
+    ADR-136, ADR-137):
 
-    - no answer, while **anybody's** lock is on the job - whoever took over may
-      not close past somebody else's lock without saying so (red line 3);
-    - "my locks are off, the machine goes back to production", while any lock is
-      on the machine - another person's, or another job's on the same machine -
-      or from somebody who never locked here;
+    - no answer, while **anybody's** lock is on the job (red line 3);
+    - "my locks are off" in either form, from somebody who never locked here, or
+      on a job whose restore checks were never confirmed - a lock taken off
+      outside the restore step skips tools, guards, people and operator (N1);
+    - "... the machine goes back to production", while any lock is on the
+      machine; "... the machine is still locked by another job", when it is not
+      (N3: the first technician can still answer while the second works on);
     - "not isolated", for a job where anybody locked anything;
-    - "still locked", with nothing on.
+    - "still locked", with nothing on this job.
     """
     if answer is None and on_job:
         return f"ในทะเบียนยังมีกุญแจ {_named(on_job)} ในงานนี้ ตอบสถานะกุญแจก่อน"
-    if answer is LockState.RELEASED:
-        if on_machine:
-            return (
-                f"ในทะเบียนยังมีกุญแจ {_named(on_machine)} ที่เครื่องนี้ เครื่องยังคืนสู่การผลิตไม่ได้ เลือก “ยังล็อกอยู่”"
-            )
+    if answer is None and anybody_locked_here:
+        return "งานนี้มีการใส่กุญแจ ตอบสถานะกุญแจก่อน"
+    if answer in (LockState.RELEASED, LockState.RELEASED_MACHINE_LOCKED):
+        if on_job:
+            return f"ในทะเบียนยังมีกุญแจ {_named(on_job)} ในงานนี้ เลือก “ยังล็อกอยู่”"
         if not you_locked_here:
             return "คุณไม่ได้ใส่กุญแจในงานนี้ เลือก “ปลดกุญแจแล้ว” ไม่ได้"
+        if not restore_checked:
+            return "ยังไม่ได้ตรวจก่อนจ่ายไฟคืน (เครื่องมือ ฝาครอบ คน พนักงาน) ในขั้นคืนพลังงาน"
+    if answer is LockState.RELEASED and on_machine:
+        return (
+            f"ในทะเบียนยังมีกุญแจ {_named(on_machine)} ที่เครื่องนี้ เครื่องยังคืนสู่การผลิตไม่ได้ "
+            "เลือก “ปลดของฉันแล้ว · เครื่องยังล็อกอยู่”"
+        )
+    if answer is LockState.RELEASED_MACHINE_LOCKED and not on_machine:
+        return "ทะเบียนไม่มีกุญแจอื่นที่เครื่องนี้ เลือก “ปลดกุญแจของฉันแล้ว เครื่องคืนสู่การผลิต”"
     if answer is LockState.NOT_ISOLATED and (on_job or anybody_locked_here):
         return "ทะเบียนบันทึกว่ามีการใส่กุญแจในงานนี้ จึงเลือก “งานนี้ไม่ได้ตัดพลังงาน” ไม่ได้"
     if answer is LockState.STILL_LOCKED and not on_job:
@@ -195,16 +214,27 @@ def lock_state_refused(
     return None
 
 
-def lock_line(answer: LockState | None, reason: str | None, locks: Sequence[Lock]) -> str | None:
+def lock_line(
+    answer: LockState | None,
+    reason: str | None,
+    locks: Sequence[Lock],
+    on_machine: Sequence[Lock] = (),
+) -> str | None:
     """The line put at the top of the note, so the answer travels with it (REQ-H-06)."""
     if answer is None:
         return None
     if answer is LockState.RELEASED:
         return "สถานะกุญแจ: ปลดกุญแจของฉันแล้ว เครื่องคืนสู่การผลิต"
+    if answer is LockState.RELEASED_MACHINE_LOCKED:
+        return f"สถานะกุญแจ: ปลดกุญแจของฉันแล้ว · เครื่องยังล็อกโดย {_owned(on_machine)}"
     if answer is LockState.NOT_ISOLATED:
         return "สถานะกุญแจ: งานนี้ไม่ได้ตัดพลังงาน"
     why = f" · เหตุ: {reason.strip()}" if reason and reason.strip() else ""
     return f"สถานะกุญแจ: ยังล็อกอยู่ {_named(locks)}{why}"
+
+
+def _owned(locks: Sequence[Lock]) -> str:
+    return ", ".join(f"{one.owner} ที่ {one.point_id} ({one.work_order_ref})" for one in locks)
 
 
 def _named(locks: Sequence[Lock]) -> str:
@@ -323,8 +353,36 @@ def release_lock(
         return cur.rowcount > 0
 
 
+def hold_machine(conn: Connection[Any], machine_id: MachineId) -> None:
+    """Serialise every read-then-write of one machine's locks in this transaction.
+
+    An answer about locks is read from the register and then written; a lock hung
+    on the same machine in between would slip past "back to production" under
+    READ COMMITTED (set 2 review). A transaction-scoped advisory lock per machine
+    makes the read and the write one step against any other.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"lock_record:{machine_id}",))
+
+
+def lock_by_id(conn: Connection[Any], lock_id: int) -> Lock | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"SELECT {_LOCK_COLUMNS} FROM lock_record WHERE lock_id = %s AND released_at IS NULL",
+            (lock_id,),
+        )
+        row = cur.fetchone()
+    return Lock.model_validate(row) if row else None
+
+
 def release_own(
-    conn: Connection[Any], lock_id: int, *, owner: UserId, now: datetime, reason: str
+    conn: Connection[Any],
+    lock_id: int,
+    *,
+    owner: UserId,
+    now: datetime,
+    reason: str,
+    witness: UserId | None = None,
 ) -> Lock | None:
     """The owner takes their own lock off, from wherever they are (ADR-136, B3).
 
@@ -335,11 +393,11 @@ def release_own(
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             f"""
-            UPDATE lock_record SET released_at = %s, release_reason = %s
+            UPDATE lock_record SET released_at = %s, release_reason = %s, release_witness = %s
              WHERE lock_id = %s AND owner = %s AND released_at IS NULL
             RETURNING {_LOCK_COLUMNS}
             """,
-            (now, reason, lock_id, owner),
+            (now, reason, witness, lock_id, owner),
         )
         row = cur.fetchone()
     return Lock.model_validate(row) if row else None

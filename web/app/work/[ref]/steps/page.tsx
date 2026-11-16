@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { NotThere, Shell } from "@/app/ui/shell";
 import { Approved, Clock, PhoneFrame, Plate, Row, Th, signalsAreSynthetic, stationNumber } from "@/app/ui/v2/frame";
 import { moveTo } from "@/app/work/actions";
-import { KindHeader, NotYet, Points, WaitBox, needed, neededLine, whoFor } from "@/app/work/[ref]/steps/energy";
+import { KindHeader, NotYet, OfflineNote, Points, WaitBox, needed, neededLine, whoFor } from "@/app/work/[ref]/steps/energy";
 import { LockBar } from "@/app/ui/v2/signs";
 import { firstUnfinished, waitEnds } from "@/lib/energy";
 import { plantTime } from "@/lib/display";
@@ -126,6 +126,7 @@ export default async function StepsPage({
   return (
     <PhoneFrame top={top}>
       <LockBar locks={job.locks ?? []} you={account.user} timezone={round.timezone} />
+      {(current.kind ?? "normal") !== "normal" && <OfflineNote />}
       {error !== undefined && error !== "" && (
         <div className="callout is-bad v-note" role="alert">
           <CircleAlert size={20} aria-hidden />
@@ -333,7 +334,7 @@ function NoSteps({
   return (
     <>
       <Plate job={job} lamps={lamps} sub={<span className="w">{job.ref}</span>} />
-      <p className="sym" style={{ marginTop: 16 }}>
+      <p className="when" style={{ marginTop: 12 }}>
         <Th>{job.title ? job.title.replace(job.machine_id, "").trim() : job.reason}</Th>
       </p>
       <div className="callout is-lock v-note" role="note">
@@ -347,7 +348,8 @@ function NoSteps({
         </div>
       </div>
       {handover}
-      <nav className="sec rows" aria-label="ทางเลือก">
+      {/* Right under the callout, so the first action is on the first screen at 360x640 (S9). */}
+      <nav className="rows v-note" aria-label="ทางเลือก">
         {/* No number is kept for anybody yet, so this says who to ask and does not pretend to dial. */}
         <div className="rw info">
           <Phone size={24} aria-hidden />

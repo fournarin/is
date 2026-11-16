@@ -61,8 +61,11 @@ R2000 = MachineModel("R-2000iC")
 TECHNICIAN = UserId("tech-1")
 OTHER = UserId("tech-2")
 ENGINEER = UserId("eng-1")
+LEAD = UserId("sup-1")
+AXIS = MachineId("MC-004")
 PASSWORD = "correct horse battery staple"
 CP3 = IsolationPoint(point_id="CP-3", label="เบรกเกอร์ CP-3", energy="electrical")
+V7 = IsolationPoint(point_id="V-7", label="วาล์วลม V-7", energy="pneumatic")
 CONFIG = load_config(Path("config"))
 FALLBACK = {str(model): dict(rows) for model, rows in CONFIG.policy.fallback_minutes.items()}
 
@@ -93,6 +96,7 @@ def world(database_url: str, tmp_path: Path) -> Iterator[dict[str, Any]]:
             (TECHNICIAN, "Somchai", Role.TECHNICIAN),
             (OTHER, "Malee", Role.TECHNICIAN),
             (ENGINEER, "Pranee", Role.ENGINEER),
+            (LEAD, "Anan", Role.SUPERVISOR),
         ]:
             auth.create_account(conn, user=user, display_name=name, role=role, password=PASSWORD)
         manual = library.add(
@@ -138,7 +142,7 @@ def world(database_url: str, tmp_path: Path) -> Iterator[dict[str, Any]]:
                     isolation_points=(CP3,),
                 ),
                 PlaybookStep(
-                    text="Remove your lock and run the axis.",
+                    text="Remove your lock.",
                     source_doc=manual,
                     page=4,
                     confidence=0.9,
@@ -182,6 +186,62 @@ def world(database_url: str, tmp_path: Path) -> Iterator[dict[str, Any]]:
         predicted = orders.from_finding(
             conn, finding, finding_ref=findings.raise_finding(conn, finding), machine_model=R2000
         ).ref
+        # A job on another machine whose restore step has two points (N4).
+        two = (CP3, V7)
+        playbooks.save_approved(
+            conn,
+            playbook.model_copy(
+                update={
+                    "symptom_code": SymptomCode("SYM-021"),
+                    "steps": (
+                        PlaybookStep(
+                            text="Isolate.",
+                            source_doc=manual,
+                            page=2,
+                            confidence=0.9,
+                            kind=StepKind.ISOLATION,
+                            isolation_points=two,
+                        ),
+                        PlaybookStep(
+                            text="Verify.",
+                            source_doc=manual,
+                            page=2,
+                            confidence=0.9,
+                            kind=StepKind.VERIFY,
+                            isolation_points=two,
+                        ),
+                        PlaybookStep(
+                            text="Restore.",
+                            source_doc=manual,
+                            page=2,
+                            confidence=0.9,
+                            kind=StepKind.RESTORE,
+                            isolation_points=two,
+                        ),
+                    ),
+                }
+            ),
+            approved_by=ENGINEER,
+            approved_at=NOW,
+            approver_role=Role.ENGINEER,
+        )
+        axis_finding = Finding(
+            machine_id=AXIS,
+            component=ComponentLabel("servo_axis_1"),
+            symptom_code=SymptomCode("SYM-021"),
+            severity=Severity.MEDIUM,
+            rule_id=RuleId("R-servo-current-high"),
+            detected_at=NOW,
+            evidence={},
+            kind=FindingKind.DETECTED,
+        )
+        two_points = orders.from_finding(
+            conn,
+            axis_finding,
+            finding_ref=findings.raise_finding(conn, axis_finding),
+            machine_model=R2000,
+        ).ref
+        released(conn, two_points)
         reported = orders.from_report(
             conn,
             machine_id=MOTOR,
@@ -201,7 +261,13 @@ def world(database_url: str, tmp_path: Path) -> Iterator[dict[str, Any]]:
     )
     try:
         with TestClient(app) as client:
-            yield {"client": client, "clock": clock, "predicted": predicted, "reported": reported}
+            yield {
+                "client": client,
+                "clock": clock,
+                "predicted": predicted,
+                "reported": reported,
+                "two_points": two_points,
+            }
     finally:
         pool.close()
 
@@ -272,6 +338,12 @@ def _to_restore(client: TestClient, world: dict[str, Any]) -> None:
     assert _go(client, ref, 5) == 200
 
 
+def _release(client: TestClient, lock_id: int, reason: str = "คนรับใส่แล้ว", **witness: str) -> Any:
+    """The owner takes their lock off outside the restore step, with the shift lead signing."""
+    body = {"reason": reason, "witness": str(LEAD), "witness_password": PASSWORD, **witness}
+    return client.post(f"/locks/{lock_id}/release", json=body)
+
+
 def _my_lock_id(client: TestClient) -> int:
     (one,) = client.get("/locks/mine").json()
     return int(one["lock_id"])
@@ -340,19 +412,21 @@ class TestNothingIsConfirmedAhead:
         _lock_cp3(client, ref)
         assert _confirm(client, ref, 3, "wait_started").status_code == 409
 
-    def test_a_lock_taken_off_early_opens_the_isolation_again(self, world: dict[str, Any]) -> None:
-        """Taken off by its owner from 'my locks' while the job is at step 3:
-        nobody works past the isolation step until their lock is back on."""
+    def test_your_own_lock_on_a_job_you_hold_comes_off_only_in_the_restore_step(
+        self, world: dict[str, Any]
+    ) -> None:
+        """N1: taking it off from "my locks" and then closing as "back to production"
+        skipped tools, guards, people and operator. Refused, even witnessed."""
         client, ref = _working(world), world["predicted"]
         _lock_cp3(client, ref)
-        assert _go(client, ref, 3) == 200
-        released = client.post(f"/locks/{_my_lock_id(client)}/release", json={"reason": "ถอดผิดดอก"})
-        assert released.status_code == 200, released.text
-        world["clock"].advance(timedelta(minutes=5))
-        assert _go(client, ref, 4) == 409
-        again = _confirm(client, ref, 2, "locked", point_id="CP-3", lock_no="ก-04")
-        assert again.status_code == 200, again.text
-        assert _go(client, ref, 4) == 200
+        refused = _release(client, _my_lock_id(client), "เสร็จแล้ว")
+        assert refused.status_code == 409, refused.text
+        assert "ขั้นคืนพลังงาน" in refused.json()["detail"]
+        assert len(_ticket(client, ref)["locks"]) == 1
+        closed = client.post(
+            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "released"}
+        )
+        assert closed.status_code == 409
 
 
 class TestEveryoneHangsTheirOwnLock:
@@ -377,7 +451,7 @@ class TestEveryoneHangsTheirOwnLock:
         theirs = _my_lock_id(first)
         # The clients share one session jar: from here every request is the second person's.
         second = _also_on_it(world, OTHER)
-        assert second.post(f"/locks/{theirs}/release", json={"reason": "x"}).status_code == 409
+        assert _release(second, theirs, "x").status_code == 409
         assert _confirm(second, ref, 5, "released", point_id="CP-3").status_code == 409
         assert [one["lock_no"] for one in _ticket(second, ref)["locks"]] == ["ก-03"]
 
@@ -395,6 +469,12 @@ class TestEveryoneHangsTheirOwnLock:
             work_repo.set_status(conn, ref, status=WorkOrderStatus.ASSIGNED)
         second = _as(world["client"], OTHER)
         assert second.post(f"/work-orders/{ref}/start").status_code == 200
+        # N2: the sender cannot take theirs off before the receiver's is on - no gap.
+        sender = _as(world["client"], TECHNICIAN)
+        early = _release(sender, _my_lock_id(sender))
+        assert early.status_code == 409, early.text
+        assert "คนรับงาน" in early.json()["detail"]
+        second = _as(world["client"], OTHER)
         assert _go(second, ref, 3) == 409
         assert (
             _confirm(second, ref, 2, "locked", point_id="CP-3", lock_no="ก-09").status_code == 200
@@ -403,9 +483,7 @@ class TestEveryoneHangsTheirOwnLock:
         # Only then does the first person take theirs off, from their own list.
         first = _as(world["client"], TECHNICIAN)
         lock_id = _my_lock_id(first)
-        assert (
-            first.post(f"/locks/{lock_id}/release", json={"reason": "คนรับใส่แล้ว"}).status_code == 200
-        )
+        assert _release(first, lock_id).status_code == 200
         assert [one["lock_no"] for one in _ticket(first, ref)["locks"]] == ["ก-09"]
 
 
@@ -504,6 +582,18 @@ class TestClosingSaysWhatIsLocked:
         )
         assert refused.status_code == 409
         assert "ก-77" in refused.json()["detail"]
+        # N3: still locked and not isolated are untrue too - this answer is the true one.
+        for untrue in ("still_locked", "not_isolated"):
+            body = {"outcome": "fixed", "lock_state": untrue}
+            assert client.post(f"/work-orders/{ref}/close", json=body).status_code == 409
+        assert (
+            client.post(f"/work-orders/{ref}/close", json={"outcome": "fixed"}).status_code == 409
+        )
+        closed = client.post(
+            f"/work-orders/{ref}/close",
+            json={"outcome": "fixed", "lock_state": "released_machine_locked"},
+        )
+        assert closed.status_code == 200, closed.text
 
     def test_not_isolated_is_refused_after_a_release(self, world: dict[str, Any]) -> None:
         client, ref = _working(world), world["predicted"]
@@ -539,12 +629,22 @@ class TestClosingSaysWhatIsLocked:
         history = _ticket(client, world["reported"])["history"]
         assert history[0]["note"] == "สถานะกุญแจ: ยังล็อกอยู่ ก-03 ที่ CP-3 · เหตุ: รออะไหล่\nสั่งพัดลมแล้ว"
         assert [one["lock_no"] for one in _ticket(client, world["reported"])["locks"]] == ["ก-03"]
-        no_reason = client.post(f"/locks/{_my_lock_id(client)}/release", json={"reason": " "})
-        assert no_reason.status_code == 422
-        off = client.post(
-            f"/locks/{_my_lock_id(client)}/release", json={"reason": "ได้อะไหล่ ปิดเครื่องเรียบร้อย"}
-        )
+        lock_id = _my_lock_id(client)
+        assert _release(client, lock_id, " ").status_code == 422, "a reason is required"
+        unwitnessed = client.post(f"/locks/{lock_id}/release", json={"reason": "ได้อะไหล่"})
+        assert unwitnessed.status_code == 422, "and a witness"
+        wrong = _release(client, lock_id, "ได้อะไหล่", witness_password="not it")
+        assert wrong.status_code == 403
+        not_a_lead = _release(client, lock_id, "ได้อะไหล่", witness=str(OTHER))
+        assert not_a_lead.status_code == 403, "a technician cannot witness"
+        off = _release(client, lock_id, "ได้อะไหล่ ปิดเครื่องเรียบร้อย")
         assert off.status_code == 200, off.text
+        with _db(world) as conn:
+            row = conn.execute(
+                "SELECT release_reason, release_witness FROM lock_record WHERE lock_id = %s",
+                (lock_id,),
+            ).fetchone()
+        assert row == ("ได้อะไหล่ ปิดเครื่องเรียบร้อย", "sup-1")
         assert client.get("/locks/mine").json() == []
         assert _ticket(client, world["reported"])["locks"] == []
 
@@ -561,3 +661,33 @@ class TestClosingSaysWhatIsLocked:
         )
         assert handed.status_code == 200, handed.text
         assert handed.json()["handover_note"].startswith("สถานะกุญแจ: ยังล็อกอยู่ ก-03 ที่ CP-3")
+
+
+class TestARestoreStepWithTwoPoints:
+    def test_both_locks_come_off_in_one_restore_step(self, world: dict[str, Any]) -> None:
+        """N4: the second release was refused because the isolation step behind it
+        asked for the first lock again."""
+        client = _as(world["client"], TECHNICIAN)
+        ref = world["two_points"]
+        assert client.post(f"/work-orders/{ref}/accept").status_code == 200
+        assert client.post(f"/work-orders/{ref}/start").status_code == 200
+        for point, number in (("CP-3", "ก-03"), ("V-7", "ก-04")):
+            assert _confirm(client, ref, 1, "off", point_id=point).status_code == 200
+            assert (
+                _confirm(client, ref, 1, "locked", point_id=point, lock_no=number).status_code
+                == 200
+            )
+        assert _go(client, ref, 2) == 200
+        for point in ("CP-3", "V-7"):
+            assert _confirm(client, ref, 2, "verified", point_id=point).status_code == 200
+        assert _go(client, ref, 3) == 200
+        for key in CHECKS:
+            assert _confirm(client, ref, 3, "checked", point_id=key).status_code == 200
+        for point in ("CP-3", "V-7"):
+            released = _confirm(client, ref, 3, "released", point_id=point)
+            assert released.status_code == 200, released.text
+        assert _ticket(client, ref)["locks"] == []
+        closed = client.post(
+            f"/work-orders/{ref}/close", json={"outcome": "fixed", "lock_state": "released"}
+        )
+        assert closed.status_code == 200, closed.text

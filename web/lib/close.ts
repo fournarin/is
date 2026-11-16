@@ -15,7 +15,7 @@ export const BLOCKED_REASONS = ["waiting_parts", "waiting_line_stop", "waiting_h
 export type Outcome = (typeof OUTCOMES)[number];
 export type BlockedReason = (typeof BLOCKED_REASONS)[number];
 
-export const LOCK_STATES = ["released", "still_locked", "not_isolated"] as const;
+export const LOCK_STATES = ["released", "released_machine_locked", "still_locked", "not_isolated"] as const;
 export type LockState = (typeof LOCK_STATES)[number];
 
 export type ClosePayload = {

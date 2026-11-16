@@ -145,6 +145,7 @@ entries replace parts of earlier ones, and both are kept.
 | [134](0134-the-ticket-carries-what-the-job-page-shows.md) | The ticket carries what the technician's job page shows | |
 | [135](0135-isolation-is-confirmed-point-by-point.md) | Isolation is confirmed point by point, and locks are registered | |
 | [136](0136-each-person-locks-and-the-register-is-the-authority.md) | Each person locks, and the register is the authority on every answer | |
+| [137](0137-a-lock-comes-off-in-the-restore-step-or-witnessed-after-it.md) | A lock comes off in the restore step, or witnessed once the job is gone | |
 
 ## The invariants these records cite
 

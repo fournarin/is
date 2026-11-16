@@ -57,6 +57,8 @@ export type LockContext = {
   onJob: string[];
   // Anybody's lock on the machine, this job or another (B2: no "back to production" while one is on).
   onMachine: string[];
+  // Locks on the machine from other jobs only (N3: "mine are off, the machine is still locked").
+  otherJobs: string[];
   // Whether you put a lock on during this job, so "my locks are off" means something.
   hadMine: boolean;
   // Whether anybody locked anything on this job ("not isolated" is then not true).
@@ -67,6 +69,8 @@ export type LockContext = {
 
 const LOCK_LABELS = {
   released: "ปลดกุญแจของฉันแล้ว เครื่องคืนสู่การผลิต",
+  // Mine are off, another job's lock is still on the machine (ADR-137, N3).
+  released_machine_locked: "ปลดกุญแจของฉันแล้ว · เครื่องยังล็อกโดยงานอื่น",
   still_locked: "ยังล็อกอยู่ (ระบุจุดและเหตุ)",
   not_isolated: "งานนี้ไม่ได้ตัดพลังงาน",
 } as const;
@@ -289,6 +293,7 @@ export function CloseForm({
   // The register's rules, as the API applies them (ADR-136); the API refuses either way.
   const lockOff = {
     released: locks.onMachine.length > 0 || !locks.hadMine,
+    released_machine_locked: locks.onJob.length > 0 || !locks.hadMine || locks.otherJobs.length === 0,
     still_locked: locks.onJob.length === 0,
     not_isolated: locks.onJob.length > 0 || locks.anybodyLocked,
   };
@@ -303,6 +308,7 @@ export function CloseForm({
           : !locks.hadMine
             ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้"
             : null,
+    released_machine_locked: locks.otherJobs.length > 0 ? locks.otherJobs.join(", ") : null,
     still_locked: locks.onJob.length === 0 ? "ทะเบียนไม่มีกุญแจที่ยังล็อกอยู่ในงานนี้" : null,
     not_isolated:
       locks.onJob.length > 0
@@ -330,7 +336,9 @@ export function CloseForm({
       </p>
     )}
     <div className="g1">
-      {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[]).map((answer) => (
+      {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[])
+            .filter((answer) => answer !== "released_machine_locked" || locks.otherJobs.length > 0)
+            .map((answer) => (
         <label className="ch" key={answer}>
           <input type="radio" name="lock_state" value={answer} required disabled={lockOff[answer]} />
           <span className="mk" aria-hidden />

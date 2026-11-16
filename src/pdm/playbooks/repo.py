@@ -32,6 +32,7 @@ from pdm.playbooks.domain import (
     ProposalStatus,
     StepEdit,
     cited_documents,
+    energy_problems,
 )
 
 _PLAYBOOK_COLUMNS = """
@@ -195,6 +196,12 @@ def save_approved(
             f"the playbook table holds no {playbook.status.value} rows: a draft is a proposal "
             "and lives in the queue (ADR-038, invariant 3)"
         )
+    # Every approved playbook passes here - approval, seeds, anything set through
+    # the contract - so the energy marks are checked here and not only at the
+    # review screen (REQ-H-05, ADR-137 B5).
+    problems = energy_problems(playbook.steps)
+    if problems:
+        raise ValueError("; ".join(problems))
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(

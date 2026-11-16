@@ -30,6 +30,7 @@ from pdm.contracts import (
     PMTask,
     PMTaskRef,
     Severity,
+    StepKind,
     SymptomCode,
     UserId,
     WorkOrder,
@@ -454,6 +455,7 @@ class WorkOrders:
         *,
         before: int,
         now: datetime,
+        restoring: frozenset[str] = frozenset(),
     ) -> int | None:
         found = locks.first_unfinished(
             order.playbook_snapshot,
@@ -463,6 +465,7 @@ class WorkOrders:
             user=user,
             locks_on=locks.open_locks(conn, work_order_ref=ref),
             checks=self.restore_checks,
+            restoring=restoring,
         )
         return None if found is None else found[0]
 
@@ -495,11 +498,20 @@ class WorkOrders:
         if step > reached:
             raise TransitionRefused(f"งานยังไม่ถึงขั้นที่ {step} ยืนยันล่วงหน้าไม่ได้")
         now = self.clock.now()
-        earlier = self._unfinished(conn, ref, order, user, before=step, now=now)
+        marked = order.playbook_snapshot[step - 1]
+        # Inside a restore step its own points are being restored: the isolation
+        # behind it stops asking for their locks (ADR-137, N4).
+        restoring = (
+            frozenset(point.point_id for point in marked.isolation_points)
+            if marked.kind is StepKind.RESTORE
+            else frozenset()
+        )
+        earlier = self._unfinished(
+            conn, ref, order, user, before=step, now=now, restoring=restoring
+        )
         if earlier is not None:
             raise TransitionRefused(f"ขั้นที่ {earlier} ยังยืนยันไม่ครบ ทำขั้นนั้นก่อน")
-
-        marked = order.playbook_snapshot[step - 1]
+        locks.hold_machine(conn, order.machine_id)
         if item == locks.WAIT_STARTED:
             if marked.wait_minutes is None or point_id != "":
                 raise ValueError(f"ขั้นที่ {step} ไม่มีเวลารอ")
@@ -551,19 +563,48 @@ class WorkOrders:
         return locks.confirmations(conn, ref)
 
     def release_own_lock(
-        self, conn: Connection[Any], lock_id: int, *, user: UserId, reason: str
+        self,
+        conn: Connection[Any],
+        lock_id: int,
+        *,
+        user: UserId,
+        reason: str,
+        witness: UserId,
     ) -> locks.Lock:
-        """The owner takes their own lock off after the job has left their hands (ADR-136, B3).
+        """The owner takes their own lock off outside the restore step, witnessed
+        by a shift lead (ADR-136 B3, ADR-137).
 
-        A handover or a "still locked" close leaves the lock on in its owner's
-        name, and the owner no longer holds the job, so the restore step is not
-        theirs to confirm. This records the lock coming off, by its owner only,
-        with why. If the job is still being worked, the isolation step it was on
-        asks for a lock again from whoever works past it.
+        Only for a job the owner no longer holds - after a handover, or a "still
+        locked" close. A job they still hold is restored in its restore step, with
+        the plant's checks (N1). And while that job is still open, only once
+        somebody else's lock is on the same point: lock-on before lock-off, so the
+        machine is never left unlocked between two people (N2).
         """
         if not reason.strip():
             raise ValueError("บอกเหตุที่ปลดกุญแจ เช่น คนรับงานใส่กุญแจของตัวเองแล้ว")
-        released = locks.release_own(conn, lock_id, owner=user, now=self.clock.now(), reason=reason)
+        lock = locks.lock_by_id(conn, lock_id)
+        if lock is None or lock.owner != user:
+            raise TransitionRefused("ไม่มีกุญแจนี้ในชื่อคุณที่ยังล็อกอยู่")
+        locks.hold_machine(conn, lock.machine_id)
+        order = repo.get(conn, lock.work_order_ref)
+        if order is not None and order.status in domain.STILL_LIVE:
+            if domain.holds_it(order, user):
+                raise TransitionRefused(
+                    f"คุณยังถืองาน {lock.work_order_ref} อยู่ ปลดกุญแจในขั้นคืนพลังงาน ซึ่งมีรายการตรวจก่อนจ่ายไฟ"
+                )
+            others = [
+                one
+                for one in locks.open_locks(conn, machine_id=lock.machine_id)
+                if one.point_id == lock.point_id and one.lock_id != lock.lock_id
+            ]
+            if not others:
+                raise TransitionRefused(
+                    f"ยังไม่มีกุญแจของคนรับงานที่ {lock.point_id} ให้คนรับงานใส่กุญแจของตัวเองก่อน "
+                    "เครื่องต้องไม่ว่างกุญแจระหว่างส่งต่อ"
+                )
+        released = locks.release_own(
+            conn, lock_id, owner=user, now=self.clock.now(), reason=reason, witness=witness
+        )
         if released is None:
             raise TransitionRefused("ไม่มีกุญแจนี้ในชื่อคุณที่ยังล็อกอยู่")
         return released
@@ -579,20 +620,28 @@ class WorkOrders:
         note: str | None,
     ) -> str | None:
         """Check the answer about locks against the register; return the note with it on top."""
+        locks.hold_machine(conn, order.machine_id)
         on_job = locks.open_locks(conn, work_order_ref=ref)
-        lockers = {
-            one.confirmed_by for one in locks.confirmations(conn, ref) if one.item == "locked"
-        }
+        on_machine = locks.open_locks(conn, machine_id=order.machine_id)
+        done = locks.confirmations(conn, ref)
+        lockers = {one.confirmed_by for one in done if one.item == "locked"}
+        # The plant's checks before energy goes back, confirmed in a restore step of this job (N1).
+        checked = {one.point_id for one in done if one.item == "checked"}
+        restore_checked = not self.restore_checks or (
+            any(step.kind is StepKind.RESTORE for step in order.playbook_snapshot)
+            and set(self.restore_checks) <= checked
+        )
         refused = locks.lock_state_refused(
             answer,
             on_job=on_job,
-            on_machine=locks.open_locks(conn, machine_id=order.machine_id),
+            on_machine=on_machine,
             you_locked_here=user in lockers,
             anybody_locked_here=bool(lockers),
+            restore_checked=restore_checked,
         )
         if refused is not None:
             raise TransitionRefused(refused)
-        line = locks.lock_line(answer, reason, on_job)
+        line = locks.lock_line(answer, reason, on_job, on_machine)
         text = (note or "").strip()
         if line is None:
             return text or None

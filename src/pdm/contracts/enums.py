@@ -204,5 +204,8 @@ class LockState(StrEnum):
     """The answer every close and handover gives about locks (REQ-H-06, ADR-135)."""
 
     RELEASED = "released"
+    # Mine are off, but another job's lock is still on the machine: it does not go
+    # back to production, and this job is not the one holding it (ADR-137, N3).
+    RELEASED_MACHINE_LOCKED = "released_machine_locked"
     STILL_LOCKED = "still_locked"
     NOT_ISOLATED = "not_isolated"

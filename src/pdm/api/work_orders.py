@@ -30,7 +30,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pdm.api.deps import Db, Plant, requires
+from pdm.api.deps import Db, Plant, authentication, requires
 from pdm.contracts import (
     BlockedReason,
     LockState,
@@ -38,11 +38,13 @@ from pdm.contracts import (
     Role,
     Severity,
     SymptomCode,
+    UserId,
     WorkOrder,
     WorkOrderStatus,
     WorkOutcome,
 )
 from pdm.platform.auth.domain import Account
+from pdm.platform.auth.service import Authentication
 from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders, locks
 
 router = APIRouter(tags=["work orders"])
@@ -438,6 +440,10 @@ class Removal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str = Field(min_length=1)
+    # The shift lead who watched the lock come off, signing with their own password
+    # on this phone (ADR-137): outside the restore step nothing else vouches for it.
+    witness: str = Field(min_length=1)
+    witness_password: str = Field(min_length=1)
 
 
 def _lock(one: locks.Lock) -> LockView:
@@ -467,14 +473,23 @@ def release_my_lock(
     removal: Removal,
     conn: Db,
     orders: Orders,
+    auth: Annotated[Authentication, Depends(authentication)],
     account: Annotated[Account, Depends(requires(*_MAY_WORK, action="release_own_lock"))],
 ) -> LockView:
-    """The owner records taking their own lock off, with why - after a handover
-    or a "still locked" close, when the job is no longer theirs (ADR-136, B3).
-    Nobody else's: a lock is removed by the person whose lock it is."""
+    """The owner records taking their own lock off, with why and in front of a
+    shift lead - after a handover or a "still locked" close, when the job is no
+    longer theirs (ADR-136 B3, ADR-137). Nobody else's: a lock is removed by the
+    person whose lock it is."""
+    witness = auth.identity.authenticate(conn, UserId(removal.witness), removal.witness_password)
+    if witness is None or witness.role is not Role.SUPERVISOR:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "ต้องมีหัวหน้ากะยืนยันด้วยรหัสของตัวเองตอนปลดกุญแจนอกขั้นคืนพลังงาน"
+        )
     try:
         return _lock(
-            orders.release_own_lock(conn, lock_id, user=account.user, reason=removal.reason)
+            orders.release_own_lock(
+                conn, lock_id, user=account.user, reason=removal.reason, witness=witness.user
+            )
         )
     except (TransitionRefused, ValueError) as error:
         raise _translate(error) from error

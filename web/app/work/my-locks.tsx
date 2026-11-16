@@ -9,7 +9,9 @@ import type { MyLock } from "@/lib/work";
  *
  * After a handover or a "still locked" close the job is no longer yours and its
  * restore step is not yours to confirm, but the lock is still yours - only you
- * take it off. Recording it here, with why, is how the register ends empty.
+ * take it off. Recording it here, with why and the shift lead who saw it, is how
+ * the register ends empty. A job you still hold is restored in its restore step
+ * instead, and the API refuses this for it (N1).
  */
 export function MyLocks({ locks, timezone }: { locks: MyLock[]; timezone: string }) {
   if (locks.length === 0) return null;
@@ -26,9 +28,20 @@ export function MyLocks({ locks, timezone }: { locks: MyLock[]; timezone: string
             <small>{`${one.machine_id} · ${one.work_order_ref} · ใส่ ${plantTime(one.applied_at, timezone)} น. ขั้น ${one.step}`}</small>
           </h3>
           <label className="field">
-            <span className="lbl">เหตุที่ปลด · ปลดต่อหน้าหัวหน้ากะ</span>
+            <span className="lbl">เหตุที่ปลด</span>
             <input type="text" name="reason" required placeholder="เช่น คนรับงานใส่กุญแจของตัวเองแล้ว" />
           </label>
+          {/* Outside the restore step nothing in the steps vouches for it: the lead who saw it signs (ADR-137). */}
+          <div className="g2" style={{ marginTop: 8 }}>
+            <label className="field">
+              <span className="lbl">หัวหน้ากะที่เห็น</span>
+              <input type="text" name="witness" required autoComplete="off" placeholder="ชื่อผู้ใช้" />
+            </label>
+            <label className="field">
+              <span className="lbl">รหัสของหัวหน้ากะ</span>
+              <input type="password" name="witness_password" required autoComplete="off" />
+            </label>
+          </div>
           <button type="submit" className="btn" style={{ marginTop: 8, background: "var(--sunk)" }}>
             บันทึกว่าปลดกุญแจของฉันแล้ว
           </button>

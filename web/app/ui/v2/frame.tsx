@@ -58,9 +58,10 @@ export function PhoneFrame({ top, children }: { top: ReactNode; children: ReactN
       )}
       <header className="top">
         {top}
-        <span className="offline-tag" role="status">
+        {/* No wider than the clock it replaces, so the station name keeps its room (set 2 review S8). */}
+        <span className="offline-tag" role="status" aria-label="Wi-Fi หลุด">
           <WifiOff size={20} aria-hidden />
-          Wi-Fi หลุด
+          หลุด
         </span>
       </header>
       <main className="wrap">{children}</main>
