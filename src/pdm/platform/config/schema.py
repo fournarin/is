@@ -87,6 +87,9 @@ class StationConfig(BaseModel):
 
     station_id: StationId
     seq: int = Field(ge=0)
+    # What the floor calls the station ("ติดตั้งหลังคา"), for the sign over it on
+    # a technician's screen (ADR-134). A label, never a key.
+    name: str | None = Field(default=None, min_length=1)
     buffer_units: int = Field(default=0, ge=0)
     bottleneck_multiplier: float = Field(default=1.0, gt=0)
     machines: tuple[MachineConfig, ...] = ()
@@ -172,6 +175,9 @@ class RuleConfig(BaseModel):
     title: str | None = Field(default=None, min_length=1)
 
     metric_name: str
+    # The reading as a technician names it ("อุณหภูมิมอเตอร์"), above the value
+    # on the ticket (ADR-134).
+    metric_title: str | None = Field(default=None, min_length=1)
     comparison: str = Field(pattern="^(above|below)$")
     threshold: float
     # How long the condition must hold before it counts. Without it a single

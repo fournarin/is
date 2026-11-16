@@ -415,6 +415,21 @@ class WorkOrders:
         repo.set_status(conn, ref, status=WorkOrderStatus.IN_PROGRESS)
         return self._reread(conn, ref)
 
+    def reach_step(self, conn: Connection[Any], ref: str, *, user: UserId, step: int) -> int:
+        """Mark the step this person has moved on to (ADR-134).
+
+        Only by somebody on the job, and only to a step the snapshot has: the
+        mark is what the job page resumes from, so a number outside the steps
+        it instructed would resume nowhere.
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
+        if not 1 <= step <= len(order.playbook_snapshot):
+            raise ValueError(f"ใบงาน {ref} มี {len(order.playbook_snapshot)} ขั้น ไม่มีขั้นที่ {step}")
+        repo.record_step(conn, ref, step=step, user=user, now=self.clock.now())
+        return step
+
     def hand_over(self, conn: Connection[Any], ref: str, *, user: UserId, note: str) -> WorkOrder:
         """Put the job down for somebody else, and say how far it got.
 

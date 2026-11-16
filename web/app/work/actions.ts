@@ -42,6 +42,23 @@ export async function startWork(ref: string): Promise<void> {
   redirect(`/work/${encodeURIComponent(ref)}/steps`);
 }
 
+/**
+ * "Done, next": keep where the job has got to, then show that step (ADR-134).
+ *
+ * Bound and always redirecting, like `startWork`. The mark is a bookmark - the
+ * job page's "step 2 of 6" and the step its button resumes at - so a mark the
+ * API refuses (a stale page after a handover) does not hold the person up: the
+ * step is shown either way, and the job page simply resumes from the last mark.
+ */
+export async function moveTo(ref: string, step: number): Promise<void> {
+  await callApi(`/work-orders/${encodeURIComponent(ref)}/progress`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ step }),
+  }).catch(() => undefined);
+  redirect(`/work/${encodeURIComponent(ref)}/steps?step=${step}`);
+}
+
 export type HandoverState = { error: string | null };
 
 /**
@@ -107,7 +124,10 @@ export async function disagree(
   form: FormData,
 ): Promise<ObjectionState> {
   const ref = String(form.get("ref") ?? "");
-  const reason = String(form.get("reason") ?? "").trim();
+  // A tapped reason, the typed words, or both - "no parts: the bearing is on order".
+  const reason = [String(form.get("choice") ?? "").trim(), String(form.get("reason") ?? "").trim()]
+    .filter((one) => one !== "")
+    .join(": ");
   if (reason === "") {
     return { error: "เขียนสั้น ๆ ว่าทำไมไม่เห็นด้วย", recordedAt: null };
   }

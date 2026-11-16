@@ -480,7 +480,15 @@ def _predicted(
         severity=rule.severity,
         rule_id=rule_id,
         detected_at=now,
-        evidence=trend.evidence_for(found, threshold=rule.threshold, comparison=rule.comparison),
+        # The reading the fit ends on goes with it, so the ticket can say
+        # "78 now, 85 is the line, rising 1.4 an hour" (ADR-134).
+        evidence={
+            **trend.evidence_for(found, threshold=rule.threshold, comparison=rule.comparison),
+            "metric_name": rule.metric_name,
+            "value": signal.value,
+            "unit": signal.unit,
+            "measured_at": signal.timestamp.isoformat(),
+        },
         kind=FindingKind.PREDICTED,
         # Both, always. A prediction without its interval is an opinion presented
         # as a forecast, and the contract refuses one without the other

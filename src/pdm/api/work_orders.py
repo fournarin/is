@@ -336,6 +336,36 @@ def start(
     return _state(work_order_ref, order)
 
 
+class Progress(BaseModel):
+    """The step a technician has moved on to, 1-based as the screen counts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: int = Field(ge=1)
+
+
+class StepReached(BaseModel):
+    ref: str
+    step: int
+
+
+@router.post("/work-orders/{work_order_ref}/progress", response_model=StepReached)
+def progress(
+    work_order_ref: str,
+    reached: Progress,
+    conn: Db,
+    orders: Orders,
+    account: Annotated[Account, Depends(requires(*_MAY_WORK, action="record_step_reached"))],
+) -> StepReached:
+    """Where the job's steps have got to, so the job page can resume there
+    (ADR-134). A bookmark: the order's status and segments do not move."""
+    try:
+        step = orders.reach_step(conn, work_order_ref, user=account.user, step=reached.step)
+    except (NoSuchOrder, TransitionRefused, ValueError) as error:
+        raise _translate(error) from error
+    return StepReached(ref=work_order_ref, step=step)
+
+
 @router.post("/work-orders/{work_order_ref}/handover", response_model=WorkOrderState)
 def hand_over(
     work_order_ref: str,

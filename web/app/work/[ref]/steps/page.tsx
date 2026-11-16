@@ -1,15 +1,18 @@
-import { ArrowLeft, ArrowRight, BookOpen, Check, CircleAlert, ChevronRight, Info, ListOrdered, SquareCheck } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, ChevronRight, CircleAlert, History, Image as Figure, Info, ListOrdered, Phone, SquareCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { NotThere, Shell } from "@/app/ui/shell";
-import { Clock, PhoneFrame, Plate, Row, Th } from "@/app/ui/v2/frame";
+import { Approved, Clock, PhoneFrame, Plate, Row, Th, signalsAreSynthetic, stationNumber } from "@/app/ui/v2/frame";
+import { moveTo } from "@/app/work/actions";
 import { HandoverForm } from "@/app/work/[ref]/steps/handover-form";
+import { plantTime } from "@/lib/display";
 import { pagesNamed } from "@/lib/page-references";
 import { evidence } from "@/lib/review";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { currentRound, ticketAt, type Ticket } from "@/lib/work";
+import { currentRound, lineLamps, ticketAt, type Lamp, type Ticket } from "@/lib/work";
 
 /**
  * One step at a time, because the other hand is holding a tool - with every step
@@ -30,7 +33,7 @@ export default async function StepsPage({
   const { ref } = await params;
   const { step } = await searchParams;
 
-  const [job, round] = await Promise.all([ticketAt(decodeURIComponent(ref)), currentRound()]);
+  const [job, round, lamps] = await Promise.all([ticketAt(decodeURIComponent(ref)), currentRound(), lineLamps()]);
   if (job === null) {
     return (
       <Shell account={account} current="/work">
@@ -43,19 +46,27 @@ export default async function StepsPage({
   const manualPage = (doc: string, page: number, fromStep?: number) =>
     `/work/${encodeURIComponent(job.ref)}/manual?doc=${encodeURIComponent(doc)}&page=${page}` +
     (fromStep === undefined ? "" : `&step=${fromStep}`);
+  const number = stationNumber(job);
+  // The station stays in sight on every step: its number, its name, the machine (design system).
   const top = (
     <>
       <Link className="back" href="/work">
         <ArrowLeft size={24} aria-hidden />
         งาน
       </Link>
+      {number !== null && (
+        <span className="stile" aria-label={job.station ?? undefined}>
+          {number}
+        </span>
+      )}
       <span className="anc">
-        <span className="code">{job.machine_id}</span>
-        <small>ใบงาน {job.ref}</small>
+        <Th>{job.station_name ?? job.machine_id}</Th>
+        <small className="w">{job.station_name ? job.machine_id : `ใบงาน ${job.ref}`}</small>
       </span>
       <Clock now={new Date()} timezone={round.timezone} date={false} />
     </>
   );
+  const history = job.history ?? [];
   const handover = job.handover_note && (
     <div className="callout is-lock v-note">
       <Info size={20} aria-hidden />
@@ -66,35 +77,28 @@ export default async function StepsPage({
   );
 
   if (total === 0) {
+    // The plate below names the station, so the bar keeps only the way back and the time.
+    const bare = (
+      <>
+        <Link className="back" href="/work">
+          <ArrowLeft size={24} aria-hidden />
+          งาน
+        </Link>
+        <span style={{ flex: 1 }} />
+        <Clock now={new Date()} timezone={round.timezone} date={false} />
+      </>
+    );
     return (
-      <PhoneFrame top={top}>
-        <NoSteps job={job} manualPage={manualPage} />
-        {handover}
-        <div className="done-btn">
-          <Link className="btn pri" href={close}>
-            <SquareCheck size={24} aria-hidden />
-            ทำเสร็จแล้ว ปิดงาน
-          </Link>
-        </div>
-        <p className="prov">
-          <Th>{job.reason}</Th>
-          {job.eta_text && (
-            <>
-              {" · "}
-              <Th>{job.eta_text}</Th>
-            </>
-          )}
-        </p>
-        <div className="after">
-          <HandoverForm workOrder={job.ref} />
-        </div>
+      <PhoneFrame top={bare}>
+        <NoSteps job={job} manualPage={manualPage} lamps={lamps} close={close} handover={handover} timezone={round.timezone} />
       </PhoneFrame>
     );
   }
 
   // 1-based, matching what the screen says. Anything outside the playbook is a
   // typed URL rather than a link this app produced.
-  const at = Number(step ?? "1");
+  // No step in the link: resume where the job got to (ADR-134).
+  const at = step === undefined ? Math.min(job.step_reached ?? 1, total) : Number(step);
   if (!Number.isInteger(at) || at < 1 || at > total) {
     notFound();
   }
@@ -123,12 +127,12 @@ export default async function StepsPage({
         </div>
       )}
 
-      <div className="v-progress" aria-hidden>
-        <span className="v-big">
-          <b>{at}</b>
-          <small>/{total}</small>
+      <div className="v-progress">
+        <span className="v-big" role="heading" aria-level={1} aria-label={`ขั้นที่ ${at} จาก ${total}`}>
+          <b aria-hidden>{at}</b>
+          <small aria-hidden>/{total}</small>
         </span>
-        <span className="rail">
+        <span className="rail" aria-hidden>
           {job.steps.map((_, index) => {
             const n = index + 1;
             return (
@@ -140,21 +144,18 @@ export default async function StepsPage({
         </span>
       </div>
 
-      <section className="v-card step" aria-labelledby="step-h">
-        <p className="muted" id="step-h">
-          ขั้นที่ {at} จาก {total}
-        </p>
+      <section className="v-card step" aria-label={`ขั้นที่ ${at}`}>
         <p className="th">
           <Th>{current.text_th ?? current.text}</Th>
         </p>
         {/* The cited page inside the job, one tap back to this step (third trial). */}
         <Link className="mref" href={manualPage(current.source_doc, current.page, at)}>
           <span className="thumb">
-            <BookOpen size={28} aria-hidden />
+            <Figure size={28} aria-hidden />
           </span>
           <span className="t">
-            อ่านคู่มือหน้า {current.page}
-            {current.manual !== null && <small lang="en">{current.manual}</small>}
+            {`คู่มือหน้า ${current.page}`}
+            <small>{`${job.machine_model ? `${job.machine_model} · ` : ""}ข้อความและรูปของหน้านี้`}</small>
           </span>
           <ChevronRight size={24} aria-hidden />
         </Link>
@@ -196,27 +197,25 @@ export default async function StepsPage({
             ครบทุกขั้น ปิดงาน
           </Link>
         ) : (
-          <Link className="btn pri" href={`?step=${at + 1}`}>
-            <Check size={24} aria-hidden />
-            ทำขั้นนี้แล้ว ถัดไป
-          </Link>
+          // A form, so moving on is kept and the job page resumes here (ADR-134).
+          <form action={moveTo.bind(null, job.ref, at + 1)}>
+            <button type="submit" className="btn pri">
+              <Check size={24} aria-hidden />
+              ทำขั้นนี้แล้ว ถัดไป
+            </button>
+          </form>
         )}
       </div>
 
       <nav className="after rows" aria-label="ทางเลือกอื่น">
-        {at > 1 && (
-          <Row icon={<ArrowLeft size={24} aria-hidden />} label={`ย้อนไปขั้นที่ ${at - 1}`} sub="ดูขั้นก่อนหน้าอีกครั้ง" href={`?step=${at - 1}`} />
-        )}
-        {!last && (
-          <Row icon={<SquareCheck size={24} aria-hidden />} label="ปิดงานก่อนครบทุกขั้น" sub={`ทำถึงขั้นที่ ${at} จาก ${total}`} href={`${close}?reached=${at}`} />
-        )}
-        <Row icon={<ArrowRight size={24} aria-hidden />} label="กลับไปที่ใบงาน" sub="เหตุผล เครื่องมือ และงานถัดไป" href="/work" />
-      </nav>
-      <details className="sheet after">
-        <summary>
-          <ListOrdered size={24} aria-hidden />
-          ดูทุกขั้น ({total})
-        </summary>
+        <details className="sheet">
+          <summary>
+            <ListOrdered size={24} aria-hidden />
+            <span className="t">
+              ดูทุกขั้น
+              <small>{`ทั้ง ${total} ขั้น · อยู่ที่ขั้น ${at}`}</small>
+            </span>
+          </summary>
         <ol className="allsteps">
           {job.steps.map((one, index) => {
             const n = index + 1;
@@ -235,36 +234,77 @@ export default async function StepsPage({
             );
           })}
         </ol>
-      </details>
-      <div className="after">
-        <HandoverForm workOrder={job.ref} />
-      </div>
+        </details>
+        {history.length > 0 && (
+          <Row
+            icon={<History size={24} aria-hidden />}
+            label="ครั้งก่อนที่เครื่องนี้"
+            sub={`${history.length} ครั้ง${signalsAreSynthetic() ? " · จำลอง" : ""}`}
+            href="/work#hist-h"
+          />
+        )}
+        <HandoverForm workOrder={job.ref} sub={`ให้คนอื่นทำต่อ บันทึกว่าถึงขั้น ${at} จาก ${total}`} />
+        <Row
+          icon={<SquareCheck size={24} aria-hidden />}
+          label="ปิดงาน"
+          sub="ตอบผลและนาทีที่ต้องรอ"
+          href={last ? close : `${close}?reached=${at}`}
+        />
+      </nav>
+      {job.approval && <Approved approval={job.approval} timezone={round.timezone} />}
     </PhoneFrame>
   );
 }
 
 /**
  * A job with no approved steps (REQ-H-08, principle 5): saying so beats inventing
- * a procedure, and the manual pages that might help are offered as pages to read.
+ * a procedure. The engineer to ask is named, the manual pages that might help are
+ * offered as pages to read, and handing over and closing work as on any job.
  */
-function NoSteps({ job, manualPage }: { job: Ticket; manualPage: (doc: string, page: number) => string }) {
+function NoSteps({
+  job,
+  manualPage,
+  lamps,
+  close,
+  handover,
+  timezone,
+}: {
+  job: Ticket;
+  manualPage: (doc: string, page: number) => string;
+  lamps: Lamp[][] | null;
+  close: string;
+  handover: ReactNode;
+  timezone: string;
+}) {
   const where = job.where_to_look ?? [];
+  const engineer = job.engineer ? `วิศวกร (${job.engineer})` : "วิศวกร";
   return (
     <>
-      <Plate station={job.station} title={job.machine_id} sub={<Th>{job.title?.replace(job.machine_id, "").trim() ?? job.reason}</Th>} />
+      <Plate job={job} lamps={lamps} sub={<span className="w">{job.ref}</span>} />
+      <p className="sym" style={{ marginTop: 16 }}>
+        <Th>{job.title ? job.title.replace(job.machine_id, "").trim() : job.reason}</Th>
+      </p>
       <div className="callout is-lock v-note" role="note">
         <CircleAlert size={20} aria-hidden />
         <div>
-          <b>
-            {job.origin === "scheduled"
-              ? "ยังไม่มีขั้นตอนที่อนุมัติแล้วสำหรับงานนี้"
-              : "ยังไม่มีขั้นตอนซ่อมที่อนุมัติแล้วสำหรับอาการนี้"}
-          </b>
-          <p>ให้ดูคู่มือของเครื่อง หรือโทรถามวิศวกร อย่าเดาขั้นตอนเอง</p>
+          <h1 className="nop">
+            <Th>
+              {job.origin === "scheduled"
+                ? "ยังไม่มีขั้นตอนที่อนุมัติแล้วสำหรับงานนี้"
+                : "ยังไม่มีขั้นตอนซ่อมที่อนุมัติแล้วสำหรับอาการนี้"}
+            </Th>
+          </h1>
+          <p>
+            <b>อย่าเดาขั้นตอน</b> · <Th>{`ดูคู่มือของเครื่อง หรือโทรถาม${engineer}`}</Th>
+          </p>
+          <p style={{ marginTop: 8 }}>
+            <Th>ระบบไม่สร้างขั้นตอนให้ระหว่างทำงาน · ปิดงานและส่งต่อได้ตามปกติ</Th>
+          </p>
         </div>
       </div>
+      {handover}
       {where.length > 0 && (
-        <nav className="sec rows" aria-label="ดูที่นี่">
+        <nav className="sec rows" aria-label="หน้าคู่มือที่อาจช่วย">
           {where.map((one) =>
             one.page ? (
               <Row
@@ -296,6 +336,28 @@ function NoSteps({ job, manualPage }: { job: Ticket; manualPage: (doc: string, p
           </div>
         </div>
       )}
+      <nav className="sec rows" aria-label="ทางเลือก">
+        {/* No number is kept for anybody yet, so this says who to ask and does not pretend to dial. */}
+        <div className="rw info">
+          <Phone size={24} aria-hidden />
+          <span className="t">
+            {`โทรถาม${engineer}`}
+            <small>เบอร์ยังไม่ได้ตั้งค่าในระบบ · ถามหัวหน้ากะ</small>
+          </span>
+        </div>
+        <HandoverForm workOrder={job.ref} sub="ให้คนที่มีทักษะทำต่อ" />
+        <Row icon={<SquareCheck size={24} aria-hidden />} label="ปิดงาน" sub="ตอบผลและนาทีที่ต้องรอ" href={close} />
+      </nav>
+      <p className="prov">
+        <Th>{job.reason}</Th>
+        {job.started_at && ` · เริ่ม ${plantTime(job.started_at, timezone)} น.`}
+        {job.eta_text && (
+          <>
+            {" · "}
+            <Th>{job.eta_text}</Th>
+          </>
+        )}
+      </p>
     </>
   );
 }

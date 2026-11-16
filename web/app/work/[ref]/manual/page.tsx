@@ -55,6 +55,8 @@ export default async function ManualPage({
   const steps = `/work/${encodeURIComponent(job.ref)}/steps`;
   const back = step === undefined ? steps : `${steps}?step=${encodeURIComponent(step)}`;
   const backLabel = step === undefined ? "กลับไปที่ใบงาน" : `กลับไปขั้นที่ ${step}`;
+  // The manual's name from the ticket, so even a page that failed to load says which manual it was.
+  const manual = job.steps.find((one) => one.source_doc === doc)?.manual ?? job.where_to_look?.find((one) => one.document_id === doc)?.manual ?? null;
   const pdf = `/manual/${encodeURIComponent(doc)}#page=${at}`;
   const top = (
     <>
@@ -73,7 +75,9 @@ export default async function ManualPage({
     return (
       <PhoneFrame top={top}>
         <div className="v-card" role="alert" style={{ marginTop: 16 }}>
-          <h1 className="sym">โหลดหน้า {at} ของคู่มือไม่ได้</h1>
+          <h1 className="sym">
+            <Th>{`โหลดหน้า ${at} ของ${manual ? ` ${manual} ` : "คู่มือ"}ไม่ได้`}</Th>
+          </h1>
           <p style={{ marginTop: 8 }}>เชื่อมต่อระบบไม่ได้ตอนนี้ · ขั้นที่ทำแล้วยังอยู่ในใบงาน</p>
           <div className="done-btn">
             <Link className="btn pri" href={`?doc=${encodeURIComponent(doc)}&page=${at}${step ? `&step=${encodeURIComponent(step)}` : ""}`}>
@@ -107,7 +111,7 @@ export default async function ManualPage({
     <PhoneFrame top={top}>
       <p className="mhead">
         <b lang="en">{read.title}</b>
-        หน้า {read.page} · เปิดจากใบงาน {job.ref}
+        {step === undefined ? `หน้า ${read.page} · เปิดจากใบงาน ${job.ref}` : `หน้า ${read.page} · เปิดจากขั้น ${step} ของ ${job.ref}`}
       </p>
       {read.withdrawn && (
         <div className="callout is-bad v-note">

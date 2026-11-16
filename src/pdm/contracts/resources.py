@@ -67,6 +67,8 @@ class Station(BaseModel):
     line_id: LineId
     # Position along the line, ascending.
     seq: int = Field(ge=0)
+    # The floor's name for it, for screens only (ADR-134).
+    name: str | None = None
     buffer_units: int = Field(default=0, ge=0)
     bottleneck_multiplier: float = Field(default=1.0, gt=0)
     # The mapping that lets a Finding holding only a machine_id be scored at

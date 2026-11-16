@@ -142,6 +142,7 @@ entries replace parts of earlier ones, and both are kept.
 | [131](0131-a-predicted-jobs-waiting-costs-less-than-a-stop-already-happening.md) | A predicted job's waiting costs less than a stop already happening | |
 | [132](0132-the-shift-lead-confirms-to-somebody-else.md) | The shift lead confirms to somebody else | |
 | [133](0133-the-screens-are-rebuilt-on-one-design-system.md) | The screens are rebuilt on one design system, with Lucide and React Aria | |
+| [134](0134-the-ticket-carries-what-the-job-page-shows.md) | The ticket carries what the technician's job page shows | |
 
 ## The invariants these records cite
 

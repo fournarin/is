@@ -33,6 +33,7 @@ rules:
     symptom_code: SYM-014
     title: มอเตอร์สายพานร้อนเกินกำหนด
     metric_name: motor_temp_c
+    metric_title: อุณหภูมิมอเตอร์
     comparison: above
     threshold: 85.0
     # Two minutes of sustained excess, so one noisy sample is not a work order.
@@ -46,6 +47,7 @@ rules:
     symptom_code: SYM-021
     title: กระแสมอเตอร์แกน 1 สูงเกินกำหนด
     metric_name: servo_current_a
+    metric_title: กระแสมอเตอร์แกน
     comparison: above
     threshold: 12.5
     for_seconds: 60
@@ -63,6 +65,7 @@ rules:
     symptom_code: SYM-002
     title: ระบบล็อกนิรภัยแจ้งว่าประตูเปิดอยู่
     metric_name: interlock_closed
+    metric_title: สวิตช์ประตูนิรภัย
     comparison: below
     threshold: 1.0
     for_seconds: 0
@@ -79,6 +82,7 @@ rules:
     symptom_code: SYM-031
     title: รอบการทำงานช้ากว่ากำหนด
     metric_name: cycle_time_s
+    metric_title: เวลาต่อรอบ
     comparison: above
     threshold: 62.0
     for_seconds: 600
@@ -91,6 +95,7 @@ rules:
     symptom_code: SYM-047
     title: พัดลมระบายความร้อนตู้ควบคุมหมุนช้าเกินกำหนด
     metric_name: fan_rpm
+    metric_title: รอบพัดลมตู้ควบคุม
     comparison: below
     threshold: 1200.0
     for_seconds: 180

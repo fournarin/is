@@ -177,6 +177,50 @@ class Step(BaseModel):
     manual: str | None = None
 
 
+class Reading(BaseModel):
+    """The measurement behind a condition ticket, as its Finding recorded it
+    (ADR-134): the value, the line it is measured against, and for a forecast
+    the slope. Each is None where the Finding did not carry it, and a screen
+    leaves that box out rather than inventing a figure."""
+
+    metric_name: str
+    metric_title: str | None = None
+    unit: str | None = None
+    value: float | None = None
+    measured_at: datetime | None = None
+    threshold: float | None = None
+    comparison: str | None = None
+    slope_per_hour: float | None = None
+
+
+class PastJob(BaseModel):
+    """One closed job on the same machine: what the last person found (ADR-134)."""
+
+    ref: str
+    title: str
+    closed_at: datetime
+    outcome: WorkOutcome
+    minutes: int
+    by: tuple[str, ...] = ()
+    page: int | None = None
+    note: str | None = None
+
+
+class Approval(BaseModel):
+    """Who approved the steps this order carries, and when (principle 2).
+
+    `revision` is the served playbook's only while it is still the one the
+    snapshot was taken from; after a re-approval the order's steps are an
+    older revision whose number is not kept, and None says so rather than
+    printing the new number over the old steps.
+    """
+
+    approved_by: str
+    approved_at: datetime
+    revision: int | None = None
+    manual: str | None = None
+
+
 class Recurrence(BaseModel):
     """How often the rule behind this ticket has fired, read now.
 
@@ -268,6 +312,18 @@ class TicketView(BaseModel):
     # manual to look instead of a bare title (fourth trial, finding 11).
     where_to_look_note: str | None = None
     recurrence: Recurrence | None = None
+
+    # What the technician's job page shows besides the steps (ADR-134).
+    station_name: str | None = None
+    machine_model: str | None = None
+    started_at: datetime | None = None
+    step_reached: int | None = None
+    reading: Reading | None = None
+    history: tuple[PastJob, ...] = ()
+    approval: Approval | None = None
+    # Whom to ask when there are no approved steps: the engineer who last
+    # approved a playbook for this machine model.
+    engineer: str | None = None
 
 
 class Mine(BaseModel):
@@ -1055,6 +1111,110 @@ def _station(config: Config, machine_id: MachineId) -> str | None:
         return None
 
 
+def _station_name(config: Config, machine_id: MachineId) -> str | None:
+    try:
+        return config.station_of(machine_id).name
+    except KeyError:
+        return None
+
+
+def _machine_model(config: Config, machine_id: MachineId) -> str | None:
+    try:
+        return str(config.model_of(machine_id))
+    except KeyError:
+        return None
+
+
+def _reading(conn: Connection[Any], config: Config, order: WorkOrder) -> Reading | None:
+    """The figures the Finding behind this order was raised on (ADR-134).
+
+    From its `evidence`, which a detection fills with the reading and a forecast
+    with the slope and, since ADR-134, the reading it was fitted up to.
+    """
+    if order.finding_ref is None:
+        return None
+    finding = findings.get(conn, order.finding_ref)
+    if finding is None:
+        return None
+    rule_id = str(finding.rule_id).split("/", 1)[0]
+    rule = next((one for one in config.rules.rules if str(one.rule_id) == rule_id), None)
+    evidence = finding.evidence
+
+    def number(key: str) -> float | None:
+        value = evidence.get(key)
+        return (
+            float(value)
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+            else None
+        )
+
+    measured = evidence.get("measured_at")
+    metric = evidence.get("metric_name") or (rule.metric_name if rule else None)
+    if metric is None:
+        return None
+    return Reading(
+        metric_name=str(metric),
+        metric_title=rule.metric_title if rule else None,
+        unit=str(evidence["unit"]) if evidence.get("unit") else None,
+        value=number("value"),
+        measured_at=datetime.fromisoformat(measured) if isinstance(measured, str) else None,
+        threshold=number("threshold")
+        if "threshold" in evidence
+        else (rule.threshold if rule else None),
+        comparison=str(evidence.get("comparison") or (rule.comparison if rule else "")) or None,
+        slope_per_hour=number("slope_per_hour"),
+    )
+
+
+def _history(
+    conn: Connection[Any], config: Config, ref: str, order: WorkOrder
+) -> tuple[PastJob, ...]:
+    """The last three jobs closed on this machine, newest first (ADR-134)."""
+    return tuple(
+        PastJob(
+            ref=past_ref,
+            title=_title(conn, config, past),
+            closed_at=closed_at,
+            # `outcome` is never None on a closed row: the database refuses one.
+            outcome=past.outcome or WorkOutcome.FIXED,
+            minutes=past.actual_minutes,
+            by=_names(conn, (one.user for one in past.assignees)),
+            page=past.playbook_snapshot[0].page if past.playbook_snapshot else None,
+            note=past.technician_feedback,
+        )
+        for past_ref, past, closed_at in work.closed_on_machine(
+            conn, order.machine_id, besides=ref, limit=3
+        )
+    )
+
+
+def _approval(conn: Connection[Any], order: WorkOrder, manuals: dict[str, str]) -> Approval | None:
+    if order.snapshot_approved_by is None or order.snapshot_approved_at is None:
+        return None
+    revision = None
+    if order.playbook_ref and "/" in order.playbook_ref:
+        symptom, model = order.playbook_ref.split("/", 1)
+        served = playbooks_repo.get(conn, SymptomCode(symptom), MachineModel(model))
+        if served is not None and served[0].approved_at == order.snapshot_approved_at:
+            revision = served[0].revision
+    first = order.playbook_snapshot[0] if order.playbook_snapshot else None
+    return Approval(
+        approved_by=_names(conn, (order.snapshot_approved_by,))[0],
+        approved_at=order.snapshot_approved_at,
+        revision=revision,
+        manual=manuals.get(str(first.source_doc)) if first else None,
+    )
+
+
+def _engineer(conn: Connection[Any], config: Config, order: WorkOrder) -> str | None:
+    try:
+        model = config.model_of(order.machine_id)
+    except KeyError:
+        return None
+    approver = playbooks_repo.last_approver(conn, model)
+    return _names(conn, (approver,))[0] if approver is not None else None
+
+
 @router.get("/work-orders/{work_order_ref}", response_model=TicketView)
 def ticket(
     work_order_ref: str,
@@ -1125,6 +1285,14 @@ def ticket(
             task_title=_pm_title(config, order),
         ),
         recurrence=_recurrence(conn, order),
+        station_name=_station_name(config, order.machine_id),
+        machine_model=_machine_model(config, order.machine_id),
+        started_at=min((one.started_at for one in order.work_segments), default=None),
+        step_reached=work.step_reached(conn, work_order_ref),
+        reading=_reading(conn, config, order),
+        history=_history(conn, config, work_order_ref, order),
+        approval=_approval(conn, order, manuals),
+        engineer=_engineer(conn, config, order),
     )
 
 

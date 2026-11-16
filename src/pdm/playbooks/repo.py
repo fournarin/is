@@ -87,6 +87,23 @@ def get(
     return _to_playbook(row) if row else None
 
 
+def last_approver(conn: Connection[Any], machine_model: MachineModel) -> UserId | None:
+    """The engineer to ask about a job with no steps (ADR-134).
+
+    Whoever last approved a playbook for this model, since they have read its
+    manual; for a model nobody has written for yet, whoever approves playbooks
+    here at all.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT approved_by FROM playbook WHERE approved_by IS NOT NULL "
+            "ORDER BY machine_model = %s DESC, approved_at DESC LIMIT 1",
+            (machine_model,),
+        )
+        row = cur.fetchone()
+    return UserId(row[0]) if row else None
+
+
 def needing_review(conn: Connection[Any]) -> list[tuple[Playbook, str | None]]:
     """Everything served with a warning, for the second list on the screen."""
     with conn.cursor(row_factory=dict_row) as cur:

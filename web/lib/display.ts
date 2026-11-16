@@ -98,3 +98,34 @@ export const SEVERITY: Readonly<Record<string, string>> = {
   medium: "ปานกลาง",
   low: "ต่ำ",
 };
+
+/** "28 ต.ค. 2026": a day in the plant's zone, the year as the floor writes it. */
+export function plantDay(iso: string, timezone: string): string {
+  return new Intl.DateTimeFormat("th-TH-u-ca-gregory", {
+    timeZone: timezone,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
+}
+
+/** A signal's unit as a label beside its number; the code itself where there is no label. */
+export const UNIT: Readonly<Record<string, string>> = {
+  degC: "°C",
+  A: "A",
+  rpm: "รอบ/นาที",
+  s: "วินาที",
+};
+
+/** How a past job ended, in the close screen's own words. */
+export const OUTCOME: Readonly<Record<string, string>> = {
+  fixed: "แก้แล้ว",
+  temporary_fix: "แก้ชั่วคราว",
+  not_fixed: "ยังไม่หาย",
+  no_problem_found: "ไม่พบปัญหา",
+};
+
+/** A reading as the stats box prints it: one decimal at most, no trailing zero. */
+export function figure(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}

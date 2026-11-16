@@ -17,14 +17,17 @@ const NOTHING_WRONG: HandoverState = { error: null };
  */
 // The prop is `workOrder` and not `ref`: React reserves that name, and a
 // component taking one silently receives something else.
-export function HandoverForm({ workOrder }: { workOrder: string }) {
+export function HandoverForm({ workOrder, sub }: { workOrder: string; sub: string }) {
   const [state, action, pending] = useActionState(handOver, NOTHING_WRONG);
 
   return (
     <details className="sheet">
       <summary>
         <ArrowRightLeft size={24} aria-hidden />
-        ทำไม่เสร็จ? ส่งต่อให้คนถัดไป
+        <span className="t">
+          ส่งต่องาน
+          <small>{sub}</small>
+        </span>
       </summary>
       <form action={action} style={{ marginTop: 8 }}>
         <input type="hidden" name="ref" value={workOrder} />

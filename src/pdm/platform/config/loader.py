@@ -87,6 +87,7 @@ class Config:
                     station_id=station.station_id,
                     line_id=line.line_id,
                     seq=station.seq,
+                    name=station.name,
                     buffer_units=station.buffer_units,
                     bottleneck_multiplier=station.bottleneck_multiplier,
                     machine_ids=tuple(machine.machine_id for machine in station.machines),

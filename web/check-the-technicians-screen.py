@@ -302,6 +302,13 @@ def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary}"
 
 
+def above_the_queue(page: str) -> str:
+    """Everything before the list of what is queued behind the job, minus the
+    page's own "updated at" clock, which changes on every read (ADR-134)."""
+    top = page.partition(" · ตามลำดับที่ระบบจัด")[0]
+    return re.sub(r'<p class="upd">.*?</p>', "", top)
+
+
 def readable(page: str) -> str:
     """The page with React's text-node separators taken out.
 
@@ -373,8 +380,9 @@ def main() -> None:
     queue = get("/work")
     shown = readable(queue)
     # Split at the list of what is queued behind it (ADR-093 made it a plain
-    # section rather than a collapsed one).
-    above_the_fold, _, behind = shown.partition("งานถัดไปของคุณ (")
+    # section rather than a collapsed one; ADR-134 heads it as the design does).
+    above_the_fold = above_the_queue(shown)
+    behind = shown.partition(" · ตามลำดับที่ระบบจัด")[2]
     expect("MC-012" in above_the_fold, "the machine the scheduler chose")
     expect(
         "วางแผนซ่อม" in above_the_fold,
@@ -390,7 +398,7 @@ def main() -> None:
         "ทำไมต้องทำงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)"
     )
     expect(
-        behind.startswith("1)"),
+        above_the_fold.endswith("ถัดไป 1 งาน"),
         "one more job is queued behind it, and visible",
     )
     expect(
@@ -420,7 +428,7 @@ def main() -> None:
     # is not a queue, and the load gate stops meaning anything (ADR-011, ADR-059).
     after = readable(get("/work"))
     expect(
-        after.partition("งานถัดไปของคุณ (")[0] == above_the_fold,
+        above_the_queue(after) == above_the_fold,
         "the job on top is byte-for-byte the one that was there before the objection",
     )
 
@@ -430,7 +438,7 @@ def main() -> None:
     expect(
         STEPS[0] in readable(steps), "and it is the first step of the playbook that was snapshotted"
     )
-    expect("อ่านคู่มือหน้า 142" in readable(steps), "with the page it came from")
+    expect("คู่มือหน้า 142" in readable(steps), "with the page it came from")
     cited = re.search(r'href="(/work/[^"]+/manual\?doc=[^"]+?page=142[^"]*)"', steps)
     expect(cited is not None, "read inside the job, not in another tab (third trial)")
     if cited is not None:

@@ -1,14 +1,15 @@
 import { ArrowRight, BookOpen, ChevronRight, CircleAlert, CircleCheck, Info, ListOrdered, Megaphone, Printer } from "lucide-react";
 import Link from "next/link";
 
+import { KeepFresh } from "@/app/ui/keep-fresh";
 import { NotYours, Shell } from "@/app/ui/shell";
-import { Clock, PhoneFrame, Plate, Row, Th, Who } from "@/app/ui/v2/frame";
+import { Approved, Clock, PhoneFrame, Plate, Prio, Row, Th, Who, signalsAreSynthetic } from "@/app/ui/v2/frame";
 import { startWork } from "@/app/work/actions";
 import { DisagreeForm } from "@/app/work/disagree-form";
-import { bandFor, minutesText, seenLine } from "@/lib/display";
+import { OUTCOME, UNIT, bandFor, figure, minutesText, plantDay, plantTime, seenLine } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
-import { currentRound, myWork, proposals, toolNames, type Ticket } from "@/lib/work";
+import { currentRound, lineLamps, myWork, proposals, toolNames, type Reading, type Ticket } from "@/lib/work";
 
 /**
  * One job, not a menu - the way a ride-hailing app hands a driver one trip
@@ -34,7 +35,7 @@ export default async function WorkPage({
     );
   }
 
-  const [round, mine] = await Promise.all([currentRound(), myWork()]);
+  const [round, mine, lamps] = await Promise.all([currentRound(), myWork(), lineLamps()]);
   const now = new Date();
   const top = (
     <>
@@ -88,15 +89,18 @@ export default async function WorkPage({
   const band = bandFor(job);
   const seen = seenLine(job, round.timezone);
   const inProgress = job.status === "in_progress";
-  const hasSteps = job.steps.length > 0;
+  const total = job.steps.length;
+  // Where the steps have got to: the last mark, or the first step (ADR-134).
+  const at = Math.min(Math.max(job.step_reached ?? 1, 1), Math.max(total, 1));
   const steps = `/work/${encodeURIComponent(job.ref)}/steps`;
   // The title is the backend's "MC-012 มอเตอร์สายพาน..."; the plate already names the machine.
   const symptom = job.title ? job.title.replace(job.machine_id, "").trim() : job.reason;
-  // Amber is a machine past its threshold (solid) or forecast to be (outline) - and nothing else (ADR-133).
-  const tone = job.finding_kind === "predicted" ? "band-forecast" : job.finding_kind === "detected" ? "band-over" : "";
+  const tools = toolNames(job);
+  const history = job.history ?? [];
 
   return (
     <PhoneFrame top={top}>
+      <KeepFresh />
       {recorded}
       {error !== undefined && (
         <div className="callout is-bad v-note" role="alert">
@@ -107,11 +111,18 @@ export default async function WorkPage({
         </div>
       )}
       <Plate
-        station={job.station}
-        title={job.machine_id}
+        job={job}
+        lamps={lamps}
         sub={
           <>
-            ใบงาน <span className="code">{job.ref}</span> · <span className="w">งานที่ 1 จาก {mine.length}</span>
+            {job.machine_model && `${job.machine_model} · `}
+            <span className="w">{job.ref}</span>
+            {mine.length > 1 && (
+              <>
+                {" · "}
+                <span className="w">{`งานที่ 1 จาก ${mine.length}`}</span>
+              </>
+            )}
           </>
         }
       />
@@ -121,10 +132,20 @@ export default async function WorkPage({
           <Th>{symptom}</Th>
         </h1>
         <div className="meta">
-          <span className={`v-chip ${tone}`}>
-            <Th>{band.label}</Th>
-          </span>
+          <Prio severity={job.severity} />
+          {/* With a reading, the band sits beside it as a swatch; without one, here, in plain words. */}
+          {!job.reading && (
+            <span className="v-chip">
+              <Th>{band.label}</Th>
+            </span>
+          )}
           {inProgress && <span className="v-chip">กำลังทำ</span>}
+          {inProgress && total > 0 && (
+            <span className="prog1">
+              <b>{`ขั้น ${at}/${total}`}</b>
+              {job.started_at && ` · เริ่ม ${plantTime(job.started_at, round.timezone)}`}
+            </span>
+          )}
         </div>
         {job.eta_text && (
           <p className="when">
@@ -169,8 +190,8 @@ export default async function WorkPage({
 
       <div className="go">
         {inProgress ? (
-          <Link className="btn pri" href={steps}>
-            ทำต่อ
+          <Link className="btn pri" href={total > 0 ? `${steps}?step=${at}` : steps}>
+            {total > 0 ? `ทำต่อขั้น ${at}` : "ดูว่าคู่มือหน้าไหน"}
             <ArrowRight size={24} aria-hidden />
           </Link>
         ) : (
@@ -185,23 +206,63 @@ export default async function WorkPage({
       {next.length > 0 && (
         <a className="nxt" href="#queue">
           <span className="t">
-            <b>ถัดไป {next.length} งาน</b> · <span className="code">{next[0]!.machine_id}</span>
+            <b>{`ถัดไป ${next.length} งาน`}</b> · <span className="code">{next[0]!.machine_id}</span>
           </span>
+          <Prio severity={next[0]!.severity} />
           <ChevronRight size={24} aria-hidden />
         </a>
       )}
+      <p className="upd">{`อัปเดต ${new Intl.DateTimeFormat("th-TH", { timeZone: round.timezone, timeStyle: "medium" }).format(now)} · หน้านี้อัปเดตเอง`}</p>
 
-      <section className="sec" aria-labelledby="why-h">
-        <h2 id="why-h">ทำไมต้องทำงานนี้ก่อน</h2>
-        <p className="v-card">
-          {job.priority_reason === "" ? <span className="muted">ยังไม่ได้จัดลำดับ</span> : <Th>{job.priority_reason}</Th>}
-        </p>
-        <DisagreeForm workOrder={job.ref} timezone={round.timezone} />
+      {job.reading && <ReadingBox reading={job.reading} band={band.label} detected={job.finding_kind === "detected"} />}
+
+      <section className="sec" aria-labelledby="hist-h">
+        <h2 id="hist-h">
+          ครั้งก่อนที่เครื่องนี้
+          {signalsAreSynthetic() && history.length > 0 && <span className="r unap">จำลอง</span>}
+        </h2>
+        {history.length > 0 ? (
+          <ol className="hist">
+            {history.map((past) => (
+              <li key={past.ref}>
+                <p className="h1">
+                  {past.page !== null && <span className="m w">{`คู่มือหน้า ${past.page}`}</span>}
+                  <span className="v-chip">{OUTCOME[past.outcome] ?? past.outcome}</span>{" "}
+                  <b className="w">{plantDay(past.closed_at, round.timezone)}</b>
+                  <span className="w">{` · ${minutesText(past.minutes)}${past.by.length > 0 ? ` · ${past.by.join(", ")}` : ""}`}</span>
+                </p>
+                {past.note && (
+                  <p>
+                    <q>
+                      <Th>{past.note}</Th>
+                    </q>
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="v-card">ยังไม่มีงานที่ปิดแล้วบนเครื่องนี้</p>
+        )}
       </section>
 
       <section className="sec" aria-labelledby="prep-h">
         <h2 id="prep-h">เตรียมก่อนเดินไปเครื่อง</h2>
         <dl className="v-facts">
+          {tools.length > 0 && (
+            <div>
+              <dt>เครื่องมือ</dt>
+              <dd>
+                <ul>
+                  {tools.map((tool) => (
+                    <li key={tool}>
+                      <Th>{tool}</Th>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          )}
           <div>
             <dt>เวลา</dt>
             <dd>
@@ -215,53 +276,93 @@ export default async function WorkPage({
               <Th>{job.required_skill_name ?? "ทั่วไป"}</Th> · {job.required_technicians} คน
             </dd>
           </div>
-          {job.tools.length > 0 && (
-            <div>
-              <dt>เครื่องมือ</dt>
-              <dd>
-                <Th>{toolNames(job).join(" · ")}</Th>
-              </dd>
-            </div>
-          )}
-          <div>
-            <dt>ขั้นตอน</dt>
-            <dd>{hasSteps ? `${job.steps.length} ขั้น` : "ยังไม่มีขั้นตอนที่อนุมัติ · ดูคู่มือ"}</dd>
-          </div>
         </dl>
       </section>
 
       <nav className="sec rows" aria-label="ทางเลือกอื่น">
-        {inProgress && (
-          <Row
-            icon={hasSteps ? <ListOrdered size={24} aria-hidden /> : <BookOpen size={24} aria-hidden />}
-            label={hasSteps ? "ดูทุกขั้น" : "ดูว่าคู่มือหน้าไหน"}
-            sub={hasSteps ? `${job.steps.length} ขั้น` : "ยังไม่มีขั้นตอนที่อนุมัติ"}
-            href={steps}
-          />
-        )}
-        <Row icon={<Printer size={24} aria-hidden />} label="พิมพ์ใบงาน" sub="A4 หน้าเดียว ขาวดำได้" href={`/work/${encodeURIComponent(job.ref)}/print`} />
+        <Row
+          icon={total > 0 ? <ListOrdered size={24} aria-hidden /> : <BookOpen size={24} aria-hidden />}
+          label={total > 0 ? "ดูทุกขั้น" : "ดูว่าคู่มือหน้าไหน"}
+          sub={total > 0 ? `${total} ขั้น${job.step_reached ? ` · ถึงขั้น ${at} แล้ว` : ""}` : "ยังไม่มีขั้นตอนที่อนุมัติ"}
+          href={steps}
+        />
+        <DisagreeForm
+          workOrder={job.ref}
+          timezone={round.timezone}
+          priorityReason={job.priority_reason === "" ? "ยังไม่ได้จัดลำดับ" : <Th>{job.priority_reason}</Th>}
+        />
         <Row icon={<Megaphone size={24} aria-hidden />} label="แจ้งซ่อมเครื่องอื่น" sub="เครื่องที่เจอปัญหาระหว่างทาง" href="/report" />
+        <Row icon={<Printer size={24} aria-hidden />} label="พิมพ์ใบงาน" sub="A4 หน้าเดียว ขาวดำได้" href={`/work/${encodeURIComponent(job.ref)}/print`} />
       </nav>
 
       {next.length > 0 && (
         <section className="sec" id="queue" aria-labelledby="queue-h">
           {/* Shown and not selectable: nothing in this list is a link (ADR-011). */}
-          <h2 id="queue-h">งานถัดไปของคุณ ({next.length})</h2>
-          <ul className="queue">
-            {next.map((one) => (
-              <li key={one.ref}>
-                <b className="code">{one.machine_id}</b> · <Th>{bandFor(one).label}</Th>
-                <span className="muted">
-                  <Th>{one.reason}</Th>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <h2 id="queue-h">{`ถัดไป ${next.length} งาน · ตามลำดับที่ระบบจัด`}</h2>
+          {next.map((one) => (
+            <div className="qrow" key={one.ref}>
+              <span className="t">
+                <Th>{one.title ? one.title.replace(one.machine_id, "").trim() : one.reason}</Th>
+                <small>
+                  <span className="code">{one.machine_id}</span> · {one.ref} · <Th>{bandFor(one).label}</Th>
+                </small>
+              </span>
+              <Prio severity={one.severity} />
+            </div>
+          ))}
           <p className="muted" style={{ marginTop: 8 }}>
             ระบบเรียงลำดับไว้แล้ว ปิดงานนี้แล้วงานถัดไปจะขึ้นมาเอง
           </p>
         </section>
       )}
+
+      {job.approval && <Approved approval={job.approval} timezone={round.timezone} />}
     </PhoneFrame>
+  );
+}
+
+/**
+ * The reading behind the ticket, as its Finding recorded it (ADR-134). A box the
+ * Finding did not carry is left out rather than filled with a figure.
+ */
+function ReadingBox({ reading, band, detected }: { reading: Reading; band: string; detected: boolean }) {
+  const unit = reading.unit ? (UNIT[reading.unit] ?? reading.unit) : "";
+  const boxes: { label: string; value: number; unit: string }[] = [];
+  if (reading.value !== null) boxes.push({ label: "ตอนนี้", value: reading.value, unit });
+  if (reading.threshold !== null) boxes.push({ label: "เกณฑ์", value: reading.threshold, unit });
+  if (reading.slope_per_hour !== null) {
+    boxes.push({
+      label: reading.slope_per_hour >= 0 ? "เพิ่มขึ้น" : "ลดลง",
+      value: Math.abs(reading.slope_per_hour),
+      unit: `${unit}/ชม.`,
+    });
+  }
+  return (
+    <section className="sec" aria-labelledby="sig-h">
+      <h2 id="sig-h">
+        <span>
+          <Th>{reading.metric_title ?? reading.metric_name}</Th>
+        </span>
+        <span className={`r sw${detected ? " ov" : ""}`}>
+          <i aria-hidden />
+          <span>
+            <Th>{band}</Th>
+          </span>
+        </span>
+      </h2>
+      {boxes.length > 0 && (
+        <dl className="stats">
+          {boxes.map((box) => (
+            <div key={box.label}>
+              <dt>{box.label}</dt>
+              <dd>
+                {figure(box.value)}
+                <small>{box.unit}</small>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
   );
 }

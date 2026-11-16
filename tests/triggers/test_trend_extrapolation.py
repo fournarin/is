@@ -576,3 +576,44 @@ class TestASpikeDoesNotSteerTheForecast:
         assert forecast is not None
         # 64 + 3 * (48/60) = 66.4 now; 85 is (85 - 66.4) / 3 = 6.2 hours away.
         assert (forecast.at - last) == pytest.approx(timedelta(hours=6.2), abs=timedelta(minutes=5))
+
+
+class TestAForecastCarriesItsReading:
+    def test_the_finding_keeps_the_reading_the_fit_ends_on(self) -> None:
+        """ADR-134: the ticket says "78 now, 85 is the line, rising 2 an hour".
+        The slope alone cannot say where the machine is now, and nothing else
+        keeps the reading once the window has moved on."""
+        from pathlib import Path
+
+        from pdm.contracts import MachineModel, Signal
+        from pdm.platform.config import load_config
+        from pdm.triggers.domain import forecast
+        from pdm.triggers.trend import Window
+
+        rules = load_config(Path("config")).rules.rules
+        windows = Window(timedelta(hours=3))
+        decisions = []
+        for at, value in _rising(per_hour=2.0, start_value=76.0):
+            signal = Signal(
+                timestamp=at,
+                machine_id=MachineId("MC-012"),
+                metric_name="motor_temp_c",
+                value=value,
+                unit="degC",
+            )
+            decisions = forecast(
+                signal,
+                rules,
+                machine_model=MachineModel("R-2000iC"),
+                now=at,
+                windows=windows,
+                horizon=HORIZON,
+                min_samples=10,
+            )
+
+        finding = next(one.finding for one in decisions if one.finding is not None)
+        assert finding.evidence["value"] == 80.0
+        assert finding.evidence["unit"] == "degC"
+        assert finding.evidence["metric_name"] == "motor_temp_c"
+        assert finding.evidence["threshold"] == 85.0
+        assert finding.evidence["slope_per_hour"] == pytest.approx(2.0)

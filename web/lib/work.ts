@@ -103,7 +103,58 @@ export type Ticket = {
   // is on record (fourth trial, finding 11).
   where_to_look_note?: string | null;
   recurrence: Recurrence | null;
+  // What the job page shows besides the steps (ADR-134).
+  station_name?: string | null;
+  machine_model?: string | null;
+  started_at?: string | null;
+  step_reached?: number | null;
+  reading?: Reading | null;
+  history?: PastJob[];
+  approval?: Approval | null;
+  engineer?: string | null;
 };
+
+/** The measurement behind a condition ticket, as its Finding recorded it. */
+export type Reading = {
+  metric_name: string;
+  metric_title: string | null;
+  unit: string | null;
+  value: number | null;
+  measured_at: string | null;
+  threshold: number | null;
+  comparison: string | null;
+  slope_per_hour: number | null;
+};
+
+/** One closed job on the same machine. */
+export type PastJob = {
+  ref: string;
+  title: string;
+  closed_at: string;
+  outcome: "fixed" | "temporary_fix" | "not_fixed" | "no_problem_found";
+  minutes: number;
+  by: string[];
+  page: number | null;
+  note: string | null;
+};
+
+export type Approval = {
+  approved_by: string;
+  approved_at: string;
+  revision: number | null;
+  manual: string | null;
+};
+
+export type Lamp = { seq: number; name: string | null; state: "normal" | "predicted" | "over_threshold" };
+
+/** Every station's lamp, for the sign over a job (ADR-134). Null when it cannot be read: the sign then has no strip. */
+export async function lineLamps(): Promise<Lamp[][] | null> {
+  try {
+    return (await read<{ lines: Lamp[][] }>("/line/lamps")).lines;
+  } catch {
+    return null;
+  }
+}
 
 async function read<T>(path: string): Promise<T> {
   const response = await callApi(path);
