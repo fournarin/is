@@ -7,7 +7,7 @@ import { NotYours, Shell } from "@/app/ui/shell";
 import { Approved, Clock, PhoneFrame, Plate, Prio, Row, Th, Who, signalsAreSynthetic } from "@/app/ui/v2/frame";
 import { startWork } from "@/app/work/actions";
 import { DisagreeForm } from "@/app/work/disagree-form";
-import { OUTCOME, UNIT, bandFor, figure, minutesText, plantDay, plantTime, seenLine } from "@/lib/display";
+import { OUTCOME, UNIT, bandFor, figure, minutesText, plantDateTime, plantDay, plantTime, seenLine } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
 import { currentRound, lineLamps, myLocks, myWork, proposals, toolNames, type Reading, type Ticket } from "@/lib/work";
@@ -118,18 +118,8 @@ export default async function WorkPage({
       <Plate
         job={job}
         lamps={lamps}
-        sub={
-          <>
-            {job.machine_model && `${job.machine_model} · `}
-            <span className="w">{job.ref}</span>
-            {mine.length > 1 && (
-              <>
-                {" · "}
-                <span className="w">{`งานที่ 1 จาก ${mine.length}`}</span>
-              </>
-            )}
-          </>
-        }
+        // Trimmed (Q14): the machine, and how many jobs there are; model and order number are lower down.
+        sub={mine.length > 1 ? <span className="w">{`งานที่ 1 จาก ${mine.length}`}</span> : null}
       />
 
       <section className="v-job" aria-labelledby="job-h">
@@ -152,10 +142,10 @@ export default async function WorkPage({
             </span>
           )}
         </div>
-        {job.eta_text && (
-          <p className="when">
-            <Th>{job.eta_text}</Th>
-          </p>
+        {/* One line above the fold, the interval always with the time (ADR-123); the backend's
+            full sentence is with the reading below. */}
+        {job.eta && job.eta_confidence_minutes !== null && (
+          <p className="when">{`ถึงเกณฑ์ราว ${plantDateTime(job.eta, round.timezone)} น. · ±${withinText(job.eta_confidence_minutes)}`}</p>
         )}
         {/* Written by the backend when the job was created, never here; the
             "<symptom> ที่เครื่อง <machine> · " it opens with is the heading above. */}
@@ -218,9 +208,9 @@ export default async function WorkPage({
           <ChevronRight size={24} aria-hidden />
         </a>
       )}
-      <p className="upd">{`อัปเดต ${new Intl.DateTimeFormat("th-TH", { timeZone: round.timezone, timeStyle: "medium" }).format(now)} · หน้านี้อัปเดตเอง`}</p>
-
-      {job.reading && <ReadingBox reading={job.reading} band={band.label} detected={job.finding_kind === "detected"} />}
+      {job.reading && (
+        <ReadingBox reading={job.reading} band={band.label} detected={job.finding_kind === "detected"} forecast={job.eta_text} />
+      )}
 
       <section className="sec" aria-labelledby="hist-h">
         <h2 id="hist-h">
@@ -358,6 +348,7 @@ export default async function WorkPage({
 
       <MyLocks locks={locksOn.filter((one) => one.work_order_ref !== job.ref)} timezone={round.timezone} />
       {job.approval && <Approved approval={job.approval} timezone={round.timezone} />}
+      <p className="upd">{`${job.machine_model ? `${job.machine_model} · ` : ""}${job.ref} · อัปเดต ${new Intl.DateTimeFormat("th-TH", { timeZone: round.timezone, timeStyle: "medium" }).format(now)} · หน้านี้อัปเดตเอง`}</p>
     </PhoneFrame>
   );
 }
@@ -366,7 +357,17 @@ export default async function WorkPage({
  * The reading behind the ticket, as its Finding recorded it (ADR-134). A box the
  * Finding did not carry is left out rather than filled with a figure.
  */
-function ReadingBox({ reading, band, detected }: { reading: Reading; band: string; detected: boolean }) {
+function ReadingBox({
+  reading,
+  band,
+  detected,
+  forecast,
+}: {
+  reading: Reading;
+  band: string;
+  detected: boolean;
+  forecast: string | null;
+}) {
   const unit = reading.unit ? (UNIT[reading.unit] ?? reading.unit) : "";
   const boxes: { label: string; value: number; unit: string }[] = [];
   if (reading.value !== null) boxes.push({ label: "ตอนนี้", value: reading.value, unit });
@@ -391,6 +392,11 @@ function ReadingBox({ reading, band, detected }: { reading: Reading; band: strin
           </span>
         </span>
       </h2>
+      {forecast && (
+        <p className="muted" style={{ marginBottom: 8 }}>
+          <Th>{forecast}</Th>
+        </p>
+      )}
       {boxes.length > 0 && (
         <dl className="stats">
           {boxes.map((box) => (
@@ -412,4 +418,9 @@ function ReadingBox({ reading, band, detected }: { reading: Reading; band: strin
 function withoutHeading(reason: string, symptom: string): string {
   const cut = reason.indexOf(" · ");
   return cut > 0 && reason.startsWith(symptom) ? reason.slice(cut + 3) : reason;
+}
+
+/** "2 ชม." / "45 นาที" for the give-or-take beside a forecast time. */
+function withinText(minutes: number): string {
+  return minutes >= 120 ? `${Math.round(minutes / 60)} ชม.` : `${minutes} นาที`;
 }

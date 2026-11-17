@@ -511,6 +511,7 @@ def release_my_lock(
     conn: Db,
     orders: Orders,
     clock: Time,
+    config: Plant,
     auth: Annotated[Authentication, Depends(authentication)],
     account: Annotated[Account, Depends(requires(*_MAY_WORK, action="release_own_lock"))],
 ) -> LockView:
@@ -520,13 +521,17 @@ def release_my_lock(
     removed by the person whose lock it is."""
     now = clock.now()
     witness_id = UserId(removal.witness)
-    failed = auth_repo.failed_attempts(
+    failed, last = auth_repo.failed_attempts(
         conn, action="witness_lock_release", subject=str(witness_id), since=now - WITNESS_WINDOW
     )
-    if failed >= WITNESS_TRIES:
+    if failed >= WITNESS_TRIES and last is not None:
+        # Who is held, since when and until when - and that another lead can clear it.
+        free_at = (last + WITNESS_WINDOW).astimezone(config.timezone)
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            f"ใส่รหัสพยานผิด {failed} ครั้ง รอ 15 นาที หรือให้หัวหน้ากะมาใส่เอง",
+            f"รหัสพยานของ {witness_id} ผิด {failed} ครั้ง ล่าสุด "
+            f"{last.astimezone(config.timezone):%H:%M} น. · ใช้ได้อีกครั้ง {free_at:%H:%M} น. "
+            "หรือให้หัวหน้ากะคนอื่นล้างการล็อก",
         )
     witness = auth.identity.authenticate(conn, witness_id, removal.witness_password)
     ok = witness is not None and witness.role is Role.SUPERVISOR
@@ -556,6 +561,29 @@ def release_my_lock(
         )
     except (TransitionRefused, ValueError) as error:
         raise _translate(error) from error
+
+
+@router.post("/witness-lockouts/{user}/reset", status_code=status.HTTP_204_NO_CONTENT)
+def reset_witness_lockout(
+    user: str,
+    conn: Db,
+    clock: Time,
+    account: Annotated[Account, Depends(requires(Role.SUPERVISOR, action="reset_witness_lockout"))],
+) -> None:
+    """Another shift lead clears a lead held after five wrong witness passwords
+    (ADR-138, set 2 refresh review item 8). Nobody clears their own; the reset is
+    in the access log, and the count starts again from it."""
+    if UserId(user) == account.user:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "ล้างการล็อกของตัวเองไม่ได้ ให้หัวหน้ากะคนอื่นทำ")
+    auth_repo.record_access(
+        conn,
+        now=clock.now(),
+        user=account.user,
+        role=account.role,
+        action="witness_lock_release_reset",
+        subject=user,
+        allowed=True,
+    )
 
 
 @router.post("/work-orders/{work_order_ref}/handover", response_model=WorkOrderState)

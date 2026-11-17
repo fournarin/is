@@ -732,7 +732,31 @@ class TestTheCarryOver:
                 " AND subject = 'sup-1' AND NOT allowed"
             ).fetchone()
         assert tries == (5,)
+        assert "sup-1" in held.json()["detail"], "the message says whose password is held"
         world["clock"].advance(timedelta(minutes=16))
+        assert _release(client, lock_id).status_code != 429
+
+    def test_another_lead_clears_a_held_witness(self, world: dict[str, Any]) -> None:
+        """Set 2 refresh review item 8: a held lead is cleared by another lead, audited."""
+        client, ref = _working(world), world["predicted"]
+        _lock_cp3(client, ref)
+        lock_id = _my_lock_id(client)
+        for _ in range(5):
+            _release(client, lock_id, witness_password="guess")
+        assert _release(client, lock_id).status_code == 429
+        with _db(world) as conn:
+            Authentication(LocalAccounts(), world["clock"]).create_account(
+                conn,
+                user=UserId("sup-2"),
+                display_name="Boon",
+                role=Role.SUPERVISOR,
+                password=PASSWORD,
+            )
+        own = _as(world["client"], LEAD)
+        assert own.post("/witness-lockouts/sup-1/reset").status_code == 403
+        other = _as(world["client"], UserId("sup-2"))
+        assert other.post("/witness-lockouts/sup-1/reset").status_code == 204
+        client = _as(world["client"], TECHNICIAN)
         assert _release(client, lock_id).status_code != 429
 
     def test_a_late_release_makes_the_restore_checks(self, world: dict[str, Any]) -> None:

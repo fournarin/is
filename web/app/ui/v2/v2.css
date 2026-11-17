@@ -120,7 +120,7 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .callout > div { flex: 1; min-width: 0; }
 
 /* the job */
-.v2 .v-job { margin-top: 16px; }
+.v2 .v-job { margin-top: 24px; }
 .v2 .sym { font-size: var(--t3); font-weight: 600; line-height: 1.35; }
 .v2 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; line-height: 1.4; }
 .v2 .meta .prog1 { margin-left: auto; white-space: nowrap; }
@@ -151,7 +151,7 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .qrow .t small { display: block; font-weight: 400; color: var(--ink-2); }
 .v2 .when { margin-top: 12px; font-weight: 600; line-height: 1.55; }
 .v2 .v-why { margin-top: 4px; line-height: 1.6; }
-.v2 .go { margin-top: 12px; }
+.v2 .go { margin-top: 20px; }
 .v2 .nxt { display: flex; align-items: center; gap: 12px; margin-top: 8px; min-height: 56px; padding: 8px 16px; border-radius: var(--r);
   background: var(--surface); text-decoration: none; line-height: 1.4; }
 .v2 .nxt .t { flex: 1; min-width: 0; }
@@ -166,15 +166,15 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .callout h1.nop { font-size: var(--t3); line-height: 1.35; margin-bottom: 8px; }
 
 /* steps */
-.v2 .v-progress { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
+.v2 .v-progress { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
 .v2 .v-big { flex: none; display: flex; align-items: baseline; gap: 4px; line-height: 1; }
 .v2 .v-big b { font-size: var(--t4); }
 .v2 .v-big small { font-size: var(--t1); color: var(--ink-2); }
 .v2 .rail { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
-.v2 .rail > span { height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: var(--sunk);
+.v2 .rail > span { height: 8px; display: block; border-radius: 4px; background: var(--sunk);
   color: var(--ink-2); font-weight: 600; text-decoration: none; }
 .v2 .rail > span.is-done { background: var(--ink); color: var(--surface); }
-.v2 .rail > span.cur { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.v2 .rail > span.cur { background: var(--surface); box-shadow: inset 0 0 0 2px var(--ink); height: 12px; border-radius: 6px; }
 .v2 .step { margin-top: 12px; }
 .v2 .step .th { font-size: var(--t3); line-height: 1.5; }
 .v2 .step .en { margin-top: 8px; padding-top: 8px; box-shadow: inset 0 1px 0 var(--hair); line-height: 1.55; }
@@ -208,7 +208,7 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
   padding: 8px 16px 24px; background: var(--surface); border-radius: 16px 16px 0 0; box-shadow: var(--lift); animation: v2rise var(--dur) var(--ease); }
 .v2 .sheet .panel .grab { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
 .v2 .sheet .panel .grab b { font-size: var(--t2); line-height: 1.35; }
-.v2 .sheet .panel .grab button { min-height: 56px; padding: 0 12px; border-radius: var(--r-sm); background: var(--sunk); font-weight: 600; }
+.v2 .sheet .panel .grab button { min-height: 56px; min-width: 56px; padding: 0 12px; border-radius: var(--r-sm); background: var(--sunk); font-weight: 600; }
 @media (min-width: 900px) {
   .v2 .sheet[open] > .panel { left: auto; top: 0; width: min(480px, 92vw); max-height: none; border-radius: 0; padding: 24px; animation-name: v2slide; }
 }
@@ -285,7 +285,7 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .ch.box .mk svg { display: none; }
 .v2 .ch.box.is-on .mk svg, .v2 .ch.box:has(input:checked) .mk svg { display: block; }
 .v2 fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.v2 legend { display: flex; width: 100%; padding: 0; }
+.v2 legend { display: flex; width: 100%; margin-inline: 0; padding: 0; }
 /* the reason a lock stays on is asked only once "still locked" is the answer */
 .v2 .lockq:not(:has(input[value=still_locked]:checked)) .sub-q { display: none; }
 .v2 .ch:has(input:focus-visible) { outline: 3px solid var(--ink); outline-offset: 3px; }
@@ -299,8 +299,8 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .g1 { display: grid; gap: 8px; }
 .v2 .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .v2 .waits { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.v2 .waits .ch { flex-direction: column; justify-content: center; gap: 0; padding: 8px 4px; text-align: center; font-weight: 600; min-height: 64px; }
-.v2 .waits .ch .mk { display: none; }
+@media (max-width: 599px) { .v2 .waits { grid-template-columns: 1fr 1fr; } }
+.v2 .waits .ch { gap: 8px; padding: 8px 12px; font-weight: 600; }
 .v2 .timer { display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 12px 16px; background: var(--surface); border-radius: var(--r);
   line-height: 1.35; }
 .v2 .timer > b { font-size: var(--t4); line-height: 1; white-space: nowrap; }

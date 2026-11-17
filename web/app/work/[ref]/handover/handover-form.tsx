@@ -110,7 +110,7 @@ export function HandoverForm({ workOrder, locks, note }: { workOrder: string; lo
               <span className="k">2</span>
               <span>
                 {`จากนั้นคุณจึงปลดกุญแจ ${locks.mine.map((one) => one.split(" ")[0]).join(", ")} ของคุณ`}
-                <small>ระบบยังไม่มีปุ่มส่งต่อกุญแจ ให้ปลดต่อหน้าหัวหน้ากะ</small>
+                <small>ปลดจาก “กุญแจของคุณที่ยังล็อกอยู่” ในหน้างาน ต่อหน้าหัวหน้ากะ · หัวหน้ากะใส่รหัสยืนยัน</small>
               </span>
             </li>
           </ol>

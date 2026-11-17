@@ -9,6 +9,7 @@ import { thaiPieces } from "@/lib/thai";
 import type { Lamp, Ticket } from "@/lib/work";
 
 import { OfflineWatch } from "./offline";
+import { SheetFocus } from "./sheet-focus";
 import "./v2.css";
 
 /**
@@ -49,6 +50,7 @@ export function PhoneFrame({ top, children }: { top: ReactNode; children: ReactN
   return (
     <div className="v2">
       <OfflineWatch />
+      <SheetFocus />
       {signalsAreSynthetic() && (
         <div className="synthetic" role="note">
           <span>
@@ -128,12 +130,8 @@ export function Plate({ job, sub, lamps }: { job: Ticket; sub: ReactNode; lamps:
             <Th>{job.station_name ?? job.machine_id}</Th>
           </span>
           <span className="mc">
-            {job.station_name && (
-              <>
-                <span className="code">{job.machine_id}</span>
-                {" · "}
-              </>
-            )}
+            {job.station_name && <span className="code">{job.machine_id}</span>}
+            {job.station_name && sub ? " · " : null}
             {sub}
           </span>
         </div>

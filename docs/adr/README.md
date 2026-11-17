@@ -147,7 +147,8 @@ entries replace parts of earlier ones, and both are kept.
 | [136](0136-each-person-locks-and-the-register-is-the-authority.md) | Each person locks, and the register is the authority on every answer | |
 | [137](0137-a-lock-comes-off-in-the-restore-step-or-witnessed-after-it.md) | A lock comes off in the restore step, or witnessed once the job is gone | |
 | [138](0138-the-witness-is-someone-else-and-is-not-guessed.md) | The witness is someone else and is not guessed; one writer per machine | |
-| [139](0139-a-calmer-look-detail-behind-a-tap.md) | A calmer look, with the detail behind a tap | |
+| [139](0139-a-calmer-look-detail-behind-a-tap.md) | A calmer look, with the detail behind a tap | 140 |
+| [140](0140-one-light-theme-and-a-board-that-asks-first.md) | One light theme, and a board that asks first | |
 
 ## The invariants these records cite
 

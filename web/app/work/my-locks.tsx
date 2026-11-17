@@ -55,7 +55,7 @@ export function MyLocks({ locks, timezone }: { locks: MyLock[]; timezone: string
             <label className="field">
               <span className="lbl">รหัสของหัวหน้ากะ</span>
               {/* C2: never remembered on a shared phone; tries are limited and audited by the API. */}
-              <input type="password" name="witness_password" required autoComplete="off" data-lpignore="true" data-1p-ignore />
+              <input type="password" name="witness_password" required autoComplete="new-password" data-lpignore="true" data-1p-ignore />
             </label>
           </div>
           <button type="submit" className="btn" style={{ marginTop: 8, background: "var(--sunk)" }}>

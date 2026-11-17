@@ -164,9 +164,8 @@ export default async function StepsPage({
           {job.steps.map((_, index) => {
             const n = index + 1;
             return (
-              <span key={n} className={n < at ? "is-done" : n === at ? "cur" : undefined}>
-                {n < at ? <Check size={18} strokeWidth={3} /> : n}
-              </span>
+              // A slim segment a step (Q14): where you are, without nine numbered boxes.
+              <span key={n} className={n < at ? "is-done" : n === at ? "cur" : undefined} />
             );
           })}
         </span>

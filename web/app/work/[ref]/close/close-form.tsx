@@ -385,8 +385,8 @@ export function CloseForm({
             defaultChecked={minutes === 0}
             onChange={() => setWaited(String(minutes))}
           />
-          {minutes}
-          <small>{minutes === 0 ? "ไม่ได้รอ" : "นาที"}</small>
+          <span className="mk" aria-hidden />
+          {minutes === 0 ? "ไม่ได้รอ" : `${minutes} นาที`}
         </label>
       ))}
     </div>
