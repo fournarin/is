@@ -7,7 +7,7 @@ import { NotYours, Shell } from "@/app/ui/shell";
 import { Approved, Clock, PhoneFrame, Plate, Prio, Row, Th, Who, signalsAreSynthetic } from "@/app/ui/v2/frame";
 import { startWork } from "@/app/work/actions";
 import { DisagreeForm } from "@/app/work/disagree-form";
-import { OUTCOME, UNIT, bandFor, figure, minutesText, plantDateTime, plantDay, plantTime, seenLine } from "@/lib/display";
+import { OUTCOME, UNIT, bandFor, figure, minutesText, plantDateTime, plantDay, seenLine } from "@/lib/display";
 import { homeFor } from "@/lib/screens";
 import { requireAccount } from "@/lib/session";
 import { currentRound, lineLamps, myLocks, myWork, proposals, toolNames, type Reading, type Ticket } from "@/lib/work";
@@ -134,16 +134,16 @@ export default async function WorkPage({
               <Th>{band.label}</Th>
             </span>
           )}
-          {inProgress && <span className="v-chip">กำลังทำ</span>}
+          {/* "◆ สูง · ขั้น 2/9" (round 3 item 2): the step says it is under way; when it started is on the steps. */}
           {inProgress && total > 0 && (
             <span className="prog1">
+              <span aria-hidden>{"· "}</span>
               <b>{`ขั้น ${at}/${total}`}</b>
-              {job.started_at && ` · เริ่ม ${plantTime(job.started_at, round.timezone)}`}
             </span>
           )}
         </div>
-        {/* One line above the fold, the interval always with the time (ADR-123); the backend's
-            full sentence is with the reading below. */}
+        {/* One line above the fold, the interval always with the time (ADR-123), and only here
+            (round 3 item 2): the reading below no longer repeats it. */}
         {job.eta && job.eta_confidence_minutes !== null && (
           <p className="when">{`ถึงเกณฑ์ราว ${plantDateTime(job.eta, round.timezone)} น. · ±${withinText(job.eta_confidence_minutes)}`}</p>
         )}
@@ -209,7 +209,7 @@ export default async function WorkPage({
         </a>
       )}
       {job.reading && (
-        <ReadingBox reading={job.reading} band={band.label} detected={job.finding_kind === "detected"} forecast={job.eta_text} />
+        <ReadingBox reading={job.reading} band={band.label} detected={job.finding_kind === "detected"} forecast={job.eta ? null : job.eta_text} />
       )}
 
       <section className="sec" aria-labelledby="hist-h">

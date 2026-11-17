@@ -54,7 +54,7 @@ from pdm.contracts import (
     WorkOrderStatus,
     WorkOutcome,
 )
-from pdm.dispatch import Band
+from pdm.dispatch import Band, downtime_or_unknown
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.agreement import AgreementReport, agreement
 from pdm.dispatch.overrides import Override, OverrideKind
@@ -421,6 +421,13 @@ class ProposalView(BaseModel):
     # active, rostered now, holding the skill the job asks for, and not already
     # the proposed primary. Empty when nobody else could.
     others: tuple[Candidate, ...] = ()
+    # What the line loses if this waits, in cars, by the same arithmetic the
+    # score used (ADR-021); None where the layout cannot place the machine. The
+    # board's one number per row (ADR-141).
+    downtime_units: float | None = None
+    # Why the proposed person, in one line: the skill, the time, what they hold
+    # now. Facts the round checked, not a ranking of people (ADR-141).
+    assigned_because: str | None = None
 
 
 class ProposalAnswered(BaseModel):
@@ -775,12 +782,38 @@ def _others(
     )
 
 
+def _assigned_because(proposal: Proposal, config: Config, conn: Connection[Any]) -> str | None:
+    """ "มีทักษะช่างไฟฟ้า · มีเวลาว่างพอในกะนี้ · ตอนนี้ถืออยู่ 1 งาน" (ADR-141).
+
+    Each part is a check the round made before it placed the job on this person:
+    the skill the order asks for, and minutes left in the shift (ADR-102: with
+    none, the job is unassigned rather than proposed). What they hold now is
+    read from the orders, so the lead sees the load the proposal adds to.
+    """
+    order = work.get(conn, proposal.work_order_ref)
+    primary = next(
+        (one.user for one in proposal.assignees if one.role is AssigneeRole.PRIMARY), None
+    )
+    if order is None or primary is None:
+        return None
+    skill = (
+        f"มีทักษะ{config.wording().skill(order.required_skill)}"
+        if order.required_skill
+        else "งานนี้ไม่ต้องใช้ทักษะเฉพาะ"
+    )
+    holding = len(work.assigned_to(conn, primary))
+    now = f"ตอนนี้ถืออยู่ {holding} งาน" if holding else "ตอนนี้ไม่มีงานค้าง"
+    return f"{skill} · มีเวลาว่างพอในกะนี้ · {now}"
+
+
 def _proposed(
     proposal: Proposal,
     config: Config,
     conn: Connection[Any],
     others: tuple[Candidate, ...] = (),
 ) -> ProposalView:
+    order = work.get(conn, proposal.work_order_ref)
+    lost = downtime_or_unknown(order, config) if order is not None else None
     return ProposalView(
         ref=proposal.work_order_ref,
         proposed_at=proposal.proposed_at,
@@ -793,6 +826,8 @@ def _proposed(
         shift_id=str(proposal.shift_id) if proposal.shift_id is not None else None,
         expires_at=_expires_at(proposal, config),
         others=others,
+        downtime_units=round(lost, 1) if lost is not None else None,
+        assigned_because=_assigned_because(proposal, config, conn),
     )
 
 

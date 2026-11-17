@@ -57,6 +57,7 @@ export default async function ClosePage({
   );
   const locks: LockContext = {
     mine: mine.map(said),
+    mineShort: mine.map((one) => `${one.lock_no} ยังล็อก ${one.point_id}`),
     onJob: onJob.map(said),
     onMachine: (job.locks ?? []).map(said),
     otherJobs: (job.locks ?? []).filter((one) => one.work_order_ref !== job.ref).map((one) => `${one.owner_name} ที่ ${one.point_id} (${one.work_order_ref})`),

@@ -149,6 +149,7 @@ entries replace parts of earlier ones, and both are kept.
 | [138](0138-the-witness-is-someone-else-and-is-not-guessed.md) | The witness is someone else and is not guessed; one writer per machine | |
 | [139](0139-a-calmer-look-detail-behind-a-tap.md) | A calmer look, with the detail behind a tap | 140 |
 | [140](0140-one-light-theme-and-a-board-that-asks-first.md) | One light theme, and a board that asks first | |
+| [141](0141-the-board-in-the-app-and-what-a-proposal-carries.md) | The board in the app, and what a proposal carries for it | |
 
 ## The invariants these records cite
 

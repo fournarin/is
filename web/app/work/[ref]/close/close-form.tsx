@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import { SheetClose } from "@/app/ui/v2/sheet-close";
+import { thaiPieces } from "@/lib/thai";
 import { BLOCKED_REASONS, type ClosePayload, OUTCOMES, closeFromForm, reachedNobody } from "@/lib/close";
 import { type PendingClose, drain as drainQueue, enqueue, settle } from "@/lib/pending-closes";
 
@@ -53,6 +55,8 @@ async function post(ref: string, close: unknown): Promise<"sent" | "offline" | s
 export type LockContext = {
   // Your locks still on points of this job, as "ก-03 ที่ CP-3 ใส่ 10:31 น.".
   mine: string[];
+  // The same in the few words the question opens with, as "ก-03 ยังล็อก CP-3" (round 3 item 2).
+  mineShort: string[];
   // Anybody's lock still on this job.
   onJob: string[];
   // Anybody's lock on the machine, this job or another (B2: no "back to production" while one is on).
@@ -327,13 +331,29 @@ export function CloseForm({
       <span className="n">{lockFirst ? 2 : 3}</span>สถานะกุญแจ<span className="tag req">ต้องตอบ</span>
     </legend>
     {locks.mine.length > 0 && (
-      <p className="callout v-note" style={{ marginTop: 0, marginBottom: 8 }}>
+      // One line, the rest behind "ทำไม" (round 3 item 2): which lock, where; when it went on and the step
+      // still to do are in the sheet, and the disabled answer below already says it cannot be chosen.
+      <div className="callout v-note lockline" style={{ marginTop: 0, marginBottom: 8 }}>
         <Lock size={20} aria-hidden style={{ color: "var(--stop)" }} />
-        <span>
-          <b>{`กุญแจ ${locks.mine.join(", ")} ของคุณยังล็อกอยู่`}</b>
-          {locks.restoreLeft && ` · ${locks.restoreLeft} ยังไม่ได้ทำ จึงเลือก “ปลดกุญแจแล้ว” ไม่ได้`}
-        </span>
-      </p>
+        <b className="t">
+          {thaiPieces(`กุญแจ ${locks.mineShort.join(", ")}`).map((piece, index) =>
+            piece.trim() === "" ? piece : <span className="w" key={index}>{piece}</span>,
+          )}
+        </b>
+        <details className="sheet lockwhy">
+          <summary>ทำไม</summary>
+          <div className="panel">
+            <div className="grab">
+              <b>กุญแจของคุณยังล็อกอยู่</b>
+              <SheetClose />
+            </div>
+            <p>{`กุญแจ ${locks.mine.join(", ")} ของคุณยังล็อกอยู่`}</p>
+            {locks.restoreLeft && (
+              <p style={{ marginTop: 8 }}>{`${locks.restoreLeft} ยังไม่ได้ทำ จึงเลือก “ปลดกุญแจแล้ว” ไม่ได้ ทำขั้นนั้นก่อน หรือตอบว่ายังล็อกอยู่พร้อมเหตุ`}</p>
+            )}
+          </div>
+        </details>
+      </div>
     )}
     <div className="g1">
       {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[])

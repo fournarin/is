@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRightLeft, BookOpen, Lock, Check, ChevronRight, CircleAlert, History, Image as Figure, Info, ListOrdered, Phone, SquareCheck } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRightLeft, BookOpen, Lock, Check, ChevronRight, CircleAlert, History, Image as Figure, Info, ListOrdered, Phone, SquareCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -218,6 +218,19 @@ export default async function StepsPage({
         )}
       </section>
 
+      {/* An energy step's next action is a point below the manual's words: on a small phone it starts
+          under the fold, so a link to it waits at the bottom of the first screen and settles in place
+          above the points once they are reached (round 3 item 4). */}
+      {earlier === null && (current.isolation_points ?? []).length > 0 && missing.some((one) => one.item !== "wait_started") && (
+        <div className="jump sticky">
+          <a className="btn pri" href="#pts">
+            <ArrowDown size={24} aria-hidden />
+            <span>
+              <Th>{`ต่อไป: ${neededLine(missing).replace("ยังต้องยืนยัน: ", "")}`}</Th>
+            </span>
+          </a>
+        </div>
+      )}
       <Points job={job} number={at} you={account.user} now={now} />
       <WaitBox job={job} number={at} now={now} timezone={round.timezone} />
 

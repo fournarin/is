@@ -258,6 +258,9 @@ export type Proposal = {
   expires_at: string;
   // Who else on this shift could take it, for "ให้คนอื่น" (ADR-132).
   others: { user: string; name: string }[];
+  // Cars lost if it waits, and why this person, both from the API (ADR-141).
+  downtime_units?: number | null;
+  assigned_because?: string | null;
 };
 
 /**

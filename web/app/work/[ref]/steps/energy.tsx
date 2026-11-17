@@ -122,7 +122,7 @@ export function Points({ job, number, you, now }: { job: Ticket; number: number;
   let count = 0;
 
   return (
-    <section className="pts" aria-label={heading}>
+    <section className="pts" id="pts" aria-label={heading}>
       <h2 className="ptsh">{heading}</h2>
       {kind === "restore" && <RestoreChecks job={job} number={number} next={next} done={done} />}
       {points.map((point) => {

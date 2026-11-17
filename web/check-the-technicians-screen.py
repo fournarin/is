@@ -369,7 +369,7 @@ def main() -> None:
     print("\n0b. the shift lead confirms, through their own screen")
     sign_in(SUPERVISOR, SUPERVISOR_PASSWORD)
     panel = readable(get("/board"))
-    expect("รอคุณยืนยัน" in panel, "the supervisor is asked, by name, about each one")
+    expect("รอคุณตัดสินใจ" in panel, "the supervisor is asked, by name, about each one")
     for ref in proposed:
         submit("/overview/confirm", [("ref", ref)])
     expect("ไม่มีงานรอยืนยัน" in readable(get("/board")), "and the list empties as they answer")
@@ -389,7 +389,8 @@ def main() -> None:
         "a predicted job is banded as planned, never as urgent (ADR-020)",
     )
     expect("ด่วน" not in above_the_fold, "and nothing above the fold calls it urgent")
-    expect("คาดว่าจะถึงเกณฑ์" in above_the_fold, "the reason the backend wrote is on it")
+    expect("ถึงเกณฑ์ราว" in above_the_fold, "when it is expected to cross is on it")
+    expect("±" in above_the_fold, "and never without its interval (ADR-123)")
     expect(
         "เกิดซ้ำ" not in above_the_fold,
         "a forecast recomputed on every reading is not shown as repeated failures (ADR-093)",

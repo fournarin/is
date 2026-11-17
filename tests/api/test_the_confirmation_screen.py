@@ -41,12 +41,14 @@ from pdm.contracts import (
     Technician,
     UserId,
 )
+from pdm.dispatch import downtime_or_unknown
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.service import DispatchRounds
 from pdm.platform.auth.service import Authentication, LocalAccounts
 from pdm.platform.clock import SimulatedClock
 from pdm.platform.config import load_config
 from pdm.work import WorkOrders
+from pdm.work import repo as work_repo
 
 pytestmark = pytest.mark.db
 
@@ -320,6 +322,38 @@ class TestTheBoard:
         (waiting,) = client.get("/dispatch/proposals").json()
 
         assert waiting["assignee_names"] == ["Somchai"]
+
+    def test_a_proposal_says_what_waiting_costs_in_cars(
+        self, client: TestClient, world: dict[str, Any], database_url: str
+    ) -> None:
+        """ADR-141: the board's one number per row is the score's own term (ADR-021),
+        not a second estimate made by the screen."""
+        _signed_in(client, Role.SUPERVISOR)
+
+        (waiting,) = client.get("/dispatch/proposals").json()
+
+        with connect(database_url) as conn:
+            order = work_repo.get(conn, world["ref"])
+        assert order is not None
+        expected = downtime_or_unknown(order, CONFIG)
+        assert expected is not None and expected > 0, "the fixture's machine is the bottleneck"
+        assert waiting["downtime_units"] == round(expected, 1)
+
+    def test_a_proposal_says_why_this_person_in_one_line(
+        self, client: TestClient, world: dict[str, Any], database_url: str
+    ) -> None:
+        """ADR-141 (the trial's "ได้งานนี้เพราะ"): what the round checked, nothing it did not."""
+        _signed_in(client, Role.SUPERVISOR)
+
+        (waiting,) = client.get("/dispatch/proposals").json()
+        assert waiting["assigned_because"] == (
+            "งานนี้ไม่ต้องใช้ทักษะเฉพาะ · มีเวลาว่างพอในกะนี้ · ตอนนี้ไม่มีงานค้าง"
+        )
+
+        _needs(database_url, world["ref"], "robot_mechanical")
+        (waiting,) = client.get("/dispatch/proposals").json()
+        skill = CONFIG.wording().skill(SkillId("robot_mechanical"))
+        assert waiting["assigned_because"].startswith(f"มีทักษะ{skill} · ")
 
     def test_confirmed_work_is_on_the_board_until_it_closes(
         self, client: TestClient, world: dict[str, Any]
