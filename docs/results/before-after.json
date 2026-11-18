@@ -1,0 +1,176 @@
+{
+ "measured": "2026-11-18",
+ "v1_commit": "f1499b8",
+ "v2_commit": "a6c0c95 (web identical to the build measured)",
+ "world": "tools/mac_stack.sh reset before each version; one API (repo-v2) and database behind both builds",
+ "v1": [
+  {
+   "task": "technician: job, then the manual page of step 1",
+   "done": true,
+   "actions": [
+    {
+     "kind": "tap",
+     "what": "ทำต่อ →"
+    },
+    {
+     "kind": "tap",
+     "what": "อ่านคู่มือหน้า"
+    }
+   ],
+   "screens": [
+    {
+     "path": "/work",
+     "words": 206
+    },
+    {
+     "path": "/work/WO-000005/steps",
+     "words": 273
+    },
+    {
+     "path": "/work/WO-000005/manual?doc=ca1a406f2a2e73d80b6b122ee20b786434180659cc353bc9f694fefc2551231c&page=2&step=1",
+     "words": 140
+    }
+   ]
+  },
+  {
+   "task": "operator: report MC-001 with a photo",
+   "done": true,
+   "actions": [
+    {
+     "kind": "pick",
+     "what": "เครื่องไหน"
+    },
+    {
+     "kind": "type",
+     "what": "เห็นอะไร",
+     "characters": 10
+    },
+    {
+     "kind": "tap",
+     "what": "แจ้งงานเสีย"
+    },
+    {
+     "kind": "tap",
+     "what": "ยืนยัน: นี่คนละเรื่อง"
+    }
+   ],
+   "screens": [
+    {
+     "path": "/report",
+     "words": 280
+    }
+   ],
+   "note": "v1 has no photo: the report was sent without one"
+  },
+  {
+   "task": "shift lead: confirm the top job (WO-000008)",
+   "done": true,
+   "actions": [
+    {
+     "kind": "tap",
+     "what": "✓ ยืนยัน"
+    }
+   ],
+   "screens": [
+    {
+     "path": "/board",
+     "words": 955
+    },
+    {
+     "path": "/board?confirmed=WO-000008",
+     "words": 907
+    }
+   ]
+  }
+ ],
+ "v2": [
+  {
+   "task": "technician: job, then the manual page of step 1",
+   "done": true,
+   "actions": [
+    {
+     "kind": "tap",
+     "what": "the job's steps"
+    },
+    {
+     "kind": "tap",
+     "what": "คู่มือหน้า"
+    }
+   ],
+   "screens": [
+    {
+     "path": "/work",
+     "words": 264
+    },
+    {
+     "path": "/work/WO-000005/steps",
+     "words": 197
+    },
+    {
+     "path": "/work/WO-000005/manual?doc=ca1a406f2a2e73d80b6b122ee20b786434180659cc353bc9f694fefc2551231c&page=2&step=2",
+     "words": 143
+    }
+   ]
+  },
+  {
+   "task": "operator: report MC-001 with a photo",
+   "done": true,
+   "actions": [
+    {
+     "kind": "tap",
+     "what": "station"
+    },
+    {
+     "kind": "tap",
+     "what": "หยุดไหม: ไม่"
+    },
+    {
+     "kind": "tap",
+     "what": "รั่ว / ซึม"
+    },
+    {
+     "kind": "file",
+     "what": "รูปถ่าย"
+    },
+    {
+     "kind": "tap",
+     "what": "ส่ง"
+    },
+    {
+     "kind": "tap",
+     "what": "ส่ง: นี่คนละเรื่อง"
+    }
+   ],
+   "screens": [
+    {
+     "path": "/report",
+     "words": 250
+    },
+    {
+     "path": "/report?machine=MC-001",
+     "words": 330
+    }
+   ]
+  },
+  {
+   "task": "shift lead: confirm the top job (WO-000008)",
+   "done": true,
+   "actions": [
+    {
+     "kind": "tap",
+     "what": "ยืนยันให้ …"
+    }
+   ],
+   "screens": [
+    {
+     "path": "/board",
+     "words": 213
+    },
+    {
+     "path": "/board?confirmed=WO-000008",
+     "words": 213
+    }
+   ]
+  }
+ ]
+}
