@@ -88,3 +88,18 @@ export const SAID: Readonly<Record<string, string>> = {
   released: "ปลดกุญแจ",
   wait_started: "รอให้ครบเวลา",
 };
+
+/**
+ * The sticky link's words on an energy step: what to do next and where, never the step's own name again
+ * (w1 check note 4: a verify step read "ต่อไป: ตรวจพลังงานเป็นศูนย์" under the heading that says the same).
+ */
+export function nextLine(missing: readonly Needed[]): string {
+  const first = missing.find((one) => one.item !== "wait_started");
+  if (first === undefined) return "ต่อไป: รอให้ครบเวลา";
+  if (first.item === "verified") {
+    const where = [...new Set(missing.filter((one) => one.item === "verified").map((one) => one.point_id))];
+    return `ต่อไป: วัดที่ ${where.join(" / ")}`;
+  }
+  if (first.item === "checked") return `ต่อไป: ${SAID.checked}`;
+  return `ต่อไป: ${SAID[first.item] ?? first.item} ที่ ${first.point_id}`;
+}

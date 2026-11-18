@@ -109,6 +109,8 @@ export type Ticket = {
   playbook_warning: string | null;
   // How far the last person got before putting the job down (ADR-025, ADR-120).
   handover_note: string | null;
+  /** A photo the reporter kept with it (ADR-142), at /work/<ref>/photo. */
+  photo?: boolean;
   finding_kind: "detected" | "predicted" | null;
   eta: string | null;
   eta_confidence_minutes: number | null;

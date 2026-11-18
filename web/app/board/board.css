@@ -42,6 +42,13 @@
 .v2.bd .bline .say { flex: 1; min-width: 0; line-height: 1.45; }
 
 .v2.bd .said { margin-top: 12px; }
+/* the smallest phone (360x640, w1 check note 1): the header keeps one row - the name goes, "ออก" stays - and the
+   strip keeps its lamps but drops its heading and sentence, so the focal card's confirm ends above the fold */
+@media (max-width: 899px) and (max-height: 700px) {
+  .v2.bd .bhdr .me > span { display: none; }
+  .v2.bd .bline .say, .v2.bd .bline h2 { display: none; }
+  .v2.bd .dec { margin-top: 16px; }
+}
 
 /* 2 - the decisions: one focal card, then quiet one-line rows */
 .v2.bd .dec { margin-top: 24px; }

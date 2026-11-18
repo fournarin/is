@@ -159,6 +159,17 @@ export default async function WorkPage({
         )}
       </section>
 
+      {/* What the reporter saw, before the walk to the machine (trial-kong, ADR-142). */}
+      {job.photo && (
+        <a className="mref v-note" href={`/work/${encodeURIComponent(job.ref)}/photo`}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- served through this origin from the API; nothing to optimise */}
+          <img className="thumb" src={`/work/${encodeURIComponent(job.ref)}/photo`} alt="" />
+          <span className="t">
+            รูปจากคนแจ้ง
+            <small>แตะเพื่อดูเต็มจอ</small>
+          </span>
+        </a>
+      )}
       {job.recurrence?.status === "superseded" && (
         <div className="callout is-bad v-note">
           <CircleAlert size={20} aria-hidden />

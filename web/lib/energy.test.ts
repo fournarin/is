@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { firstUnfinished, stillNeeded, waitEnds } from "./energy.ts";
+import { firstUnfinished, nextLine, stillNeeded, waitEnds } from "./energy.ts";
 import type { LockOn, PointConfirmed, Step } from "./work.ts";
 
 const BASE: Step = { text: "x", text_th: null, source_doc: "d", page: 2, manual: null };
@@ -59,4 +59,14 @@ test("a wait counts from when it started", () => {
 
 test("an unmarked step needs nothing", () => {
   assert.deepEqual(stillNeeded(BASE, 1, [], at(0), me()), []);
+});
+
+test("the sticky link names what is next and where, not the step's own name", () => {
+  const verify = [
+    { point_id: "TP-1", item: "verified" },
+    { point_id: "TP-2", item: "verified" },
+  ];
+  assert.equal(nextLine(verify), "ต่อไป: วัดที่ TP-1 / TP-2");
+  assert.equal(nextLine([{ point_id: "CP-3", item: "locked" }]), "ต่อไป: ใส่กุญแจของคุณ ที่ CP-3");
+  assert.equal(nextLine([{ point_id: "CP-3", item: "wait_started" }]), "ต่อไป: รอให้ครบเวลา");
 });

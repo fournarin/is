@@ -342,3 +342,38 @@ html[data-offline] .v2 .offline-only, html[data-offline] .v2 .callout.offline-on
 .v2 .jump .btn.pri { min-height: 56px; }
 .v2 .pts { scroll-margin-top: 16px; }
 @media (min-width: 900px) { .v2 .jump { position: static; } }
+/* the operator's report (set 4, REQ-P-01): taps, not typing; the track of four stages (REQ-P-05) */
+.v2 .rp-open { margin-top: 12px; line-height: 1.5; }
+.v2 .rp-urg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.v2 .rp-urg .ch { justify-content: center; text-align: center; padding: 8px 4px; }
+.v2 .rp-type { margin-top: 8px; }
+.v2 .rp-type > summary { list-style: none; }
+.v2 .rp-type > summary::-webkit-details-marker { display: none; }
+.v2 .rp-cam { position: relative; cursor: pointer; }
+.v2 .rp-cam.is-hidden { display: none; }
+.v2 .rp-cam input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.v2 .rp-photo { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; }
+.v2 .rp-photo img { width: 96px; height: 96px; object-fit: cover; border-radius: var(--r-sm); display: block; }
+.v2 .rp .where { margin-top: 8px; }
+.v2 .rp .submit { margin-top: 24px; }
+.v2 .rp-sent { display: grid; gap: 8px; margin-top: 16px; }
+.v2 .rp-note { margin-top: 24px; line-height: 1.55; color: var(--ink-2); }
+.v2 .rp-note b { color: var(--ink); }
+.v2 .rp-stns { display: grid; gap: 8px; }
+.v2 .rp-go { text-decoration: none; color: var(--ink); background: var(--surface); }
+.v2 .rp-go .t { flex: 1; min-width: 0; font-weight: 600; line-height: 1.35; }
+.v2 .rp-go .t small { font-weight: 400; }
+.v2 .rp-no { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--andon);
+  color: var(--on-andon); font-weight: 600; }
+.v2 .rp-rep + .rp-rep { margin-top: 0; }
+.v2 .rp-what { font-weight: 600; line-height: 1.5; }
+.v2 .rp-ph { display: inline-flex; align-items: center; gap: 4px; min-height: 56px; vertical-align: middle; font-weight: 600; }
+.v2 .rp-track { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px; }
+.v2 .rp-track::before { content: ""; position: absolute; left: 12.5%; right: 12.5%; top: 7px; height: 2px; background: var(--sunk); }
+.v2 .rp-track li { position: relative; padding: 0 4px; text-align: center; line-height: 1.35; color: var(--ink-2); }
+.v2 .rp-track li i { display: block; width: 16px; height: 16px; margin: 0 auto 8px; border-radius: 50%; background: var(--sunk); }
+.v2 .rp-track li.is-done i { background: var(--ink); }
+.v2 .rp-track li.cur { color: var(--ink); font-weight: 600; }
+.v2 .rp-track li.cur i { background: var(--ink); box-shadow: 0 0 0 4px var(--surface), 0 0 0 6px var(--ink); }
+.v2 .mref img.thumb { object-fit: cover; }
+@media (min-width: 900px) { .v2 .rp .submit.sticky { position: static; } }

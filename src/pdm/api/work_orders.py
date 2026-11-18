@@ -28,12 +28,13 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pdm.api.deps import Db, Plant, Time, authentication, requires
 from pdm.contracts import (
     BlockedReason,
+    DocumentId,
     LockState,
     MachineId,
     Role,
@@ -47,7 +48,7 @@ from pdm.contracts import (
 from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.auth.service import Authentication
-from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders, locks
+from pdm.work import AlreadyOpen, NoSuchOrder, TransitionRefused, WorkOrders, locks, photos
 from pdm.work import repo as work_repo
 
 router = APIRouter(tags=["work orders"])
@@ -634,3 +635,82 @@ def close(
     except (NoSuchOrder, TransitionRefused, ValueError) as error:
         raise _translate(error) from error
     return _state(work_order_ref, order)
+
+
+class Attached(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ref: str
+    size_bytes: int
+
+
+@router.post(
+    "/work-orders/{work_order_ref}/photo",
+    response_model=Attached,
+    status_code=status.HTTP_201_CREATED,
+)
+def attach_photo(
+    work_order_ref: str,
+    request: Request,
+    conn: Db,
+    clock: Time,
+    account: Annotated[Account, Depends(requires(*_MAY_REPORT, action="attach_report_photo"))],
+    file: Annotated[UploadFile, File()],
+) -> Attached:
+    """One photo with a report, from the person who reported it (ADR-142).
+
+    The reporter only: the photo is part of what they said, and nobody else
+    can add to their words. The screen shrinks the picture first; anything over
+    `photos.MAX_BYTES` was not shrunk and is refused rather than kept.
+    """
+    order = work_repo.get(conn, work_order_ref)
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no work order {work_order_ref}")
+    if order.reported_by != account.user:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "แนบรูปได้เฉพาะคนที่แจ้งเรื่องนี้")
+    content = file.file.read(photos.MAX_BYTES + 1)
+    if len(content) > photos.MAX_BYTES:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE, "รูปใหญ่เกินไป (เกิน 2 MB) ลองถ่ายใหม่จากหน้าแจ้งซ่อม"
+        )
+    declared = (file.content_type or "").split(";")[0].strip().lower()
+    magic = photos.ALLOWED_TYPES.get(declared)
+    if not content or magic is None or not content.startswith(magic):
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "แนบได้เฉพาะรูปถ่าย (JPEG, PNG, WebP)"
+        )
+    blob = request.app.state.library.store.put(content)
+    try:
+        photos.attach(
+            conn,
+            photos.Photo(
+                work_order_ref=work_order_ref,
+                blob_id=str(blob),
+                content_type=declared,
+                size_bytes=len(content),
+                taken_by=account.user,
+                taken_at=clock.now(),
+            ),
+        )
+    except photos.AlreadyHasPhoto as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    return Attached(ref=work_order_ref, size_bytes=len(content))
+
+
+@router.get("/work-orders/{work_order_ref}/photo")
+def photo(
+    work_order_ref: str,
+    request: Request,
+    conn: Db,
+    account: Annotated[Account, Depends(requires(*_MAY_REPORT, action="read_report_photo"))],
+) -> Response:
+    """The photo kept with a report. Logged like any read (ADR-019)."""
+    kept = photos.of(conn, work_order_ref)
+    if kept is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no photo with {work_order_ref}")
+    content = request.app.state.library.store.get(DocumentId(kept.blob_id))
+    return Response(
+        content=content,
+        media_type=kept.content_type,
+        headers={"cache-control": "private, max-age=3600", "x-content-type-options": "nosniff"},
+    )

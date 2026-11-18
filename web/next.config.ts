@@ -19,6 +19,12 @@ const config: NextConfig = {
   // typecheck` runs the same check on its own so CI can report it as its own
   // red line rather than as a failed build.
   typescript: { ignoreBuildErrors: false },
+
+  // A report may carry one photo (ADR-142). The screen shrinks it to a few
+  // hundred kilobytes first; the limit is wide so that a phone whose script did
+  // not arrive still gets its report through, and the API, not this parser,
+  // refuses the unshrunk picture - a 413 here would lose the words with it.
+  experimental: { serverActions: { bodySizeLimit: "12mb" } },
 };
 
 export default config;

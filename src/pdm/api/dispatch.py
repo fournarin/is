@@ -79,7 +79,7 @@ from pdm.sinks import repo as deliveries
 # composition layer that already reaches into work/, dispatch/ and playbooks/ to
 # assemble a screen.
 from pdm.triggers import repo as findings
-from pdm.work import locks
+from pdm.work import locks, photos
 from pdm.work import repo as work
 from pdm.work.domain import reported_words, title, when_expected
 
@@ -326,6 +326,8 @@ class TicketView(BaseModel):
     # What the last person to put this job down wrote about how far it got
     # (ADR-025). The next person, and the lead offering it to them, read it.
     handover_note: str | None = None
+    # A photo the reporter kept with it (ADR-142), served by /work-orders/{ref}/photo.
+    photo: bool = False
 
     # A predicted job must not be able to reach a screen looking like a detected
     # one. `eta_confidence` is serialised as whole minutes and is **never**
@@ -556,6 +558,27 @@ class Reported(BaseModel):
     # the screen: every sentence a person reads comes from the backend (ADR-063).
     where: str
     finished: bool
+    # The four stages the reporter's screen draws, and which one this is (REQ-P-05),
+    # so the track reads without a sentence and never names the technician
+    # (REQ-P-06): `where` names them, and the operator's screen does not show it.
+    stages: tuple[str, ...] = ()
+    stage: int = 1
+    # Whether a photo was kept with the report (ADR-142).
+    photo: bool = False
+
+
+# REQ-P-05: one set of words on every screen. `handed_over` is "received", waiting
+# for the next technician; cancelled and closed are both the end of the track.
+REPORT_STAGES = ("รับเรื่องแล้ว", "หัวหน้ากะส่งช่างแล้ว", "ช่างกำลังซ่อม", "เสร็จแล้ว")
+_STAGE_OF = {
+    WorkOrderStatus.QUEUED: 1,
+    WorkOrderStatus.PROPOSED: 1,
+    WorkOrderStatus.HANDED_OVER: 1,
+    WorkOrderStatus.ASSIGNED: 2,
+    WorkOrderStatus.IN_PROGRESS: 3,
+    WorkOrderStatus.CLOSED: 4,
+    WorkOrderStatus.CANCELLED: 4,
+}
 
 
 _OUTCOME_TH = {
@@ -599,6 +622,8 @@ def reported_by_me(
     In the owner's second trial a report, once sent, could not be found again
     by the person who sent it.
     """
+    rows = work.reported_by(conn, account.user, limit=limit)
+    with_photo = photos.refs_with_photos(conn, [ref for ref, *_ in rows])
     return [
         Reported(
             ref=ref,
@@ -610,8 +635,11 @@ def reported_by_me(
             status=order.status,
             where=_where(order, _names(conn, (one.user for one in order.assignees))),
             finished=order.status in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED),
+            stages=REPORT_STAGES,
+            stage=_STAGE_OF.get(order.status, 1),
+            photo=ref in with_photo,
         )
-        for ref, created_at, _closed, order in work.reported_by(conn, account.user, limit=limit)
+        for ref, created_at, _closed, order in rows
     ]
 
 
@@ -1338,6 +1366,7 @@ def ticket(
         assignees=tuple(str(who.user) for who in order.assignees),
         playbook_warning=order.playbook_warning,
         handover_note=order.handover_note,
+        photo=photos.of(conn, work_order_ref) is not None,
         finding_kind=order.finding_kind,
         eta_text=when_expected(order, config.wording(), now=clock.now()),
         eta=order.eta,

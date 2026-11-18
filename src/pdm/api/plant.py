@@ -40,6 +40,8 @@ class MachineOnTheFloor(BaseModel):
     station_id: str
     line_id: str
     seq: int
+    # The name the floor uses for the station (REQ-P-03), when plant.yaml gives one.
+    station_name: str | None = None
 
 
 @router.get("/machines", response_model=list[MachineOnTheFloor])
@@ -60,6 +62,7 @@ def machines(
                 station_id=str(station.station_id),
                 line_id=str(station.line_id),
                 seq=station.seq,
+                station_name=station.name,
             )
             for station in plant.stations.values()
             for machine_id in station.machine_ids

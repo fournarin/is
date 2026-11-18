@@ -9,7 +9,7 @@ import { moveTo } from "@/app/work/actions";
 import { KindHeader, NotYet, OfflineNote, Points, WaitBox, needed, neededLine, whoFor } from "@/app/work/[ref]/steps/energy";
 import { LockBar } from "@/app/ui/v2/signs";
 import { SheetClose } from "@/app/ui/v2/sheet-close";
-import { firstUnfinished, waitEnds } from "@/lib/energy";
+import { firstUnfinished, nextLine, waitEnds } from "@/lib/energy";
 import { plantTime } from "@/lib/display";
 import { pagesNamed } from "@/lib/page-references";
 import { evidence } from "@/lib/review";
@@ -226,7 +226,7 @@ export default async function StepsPage({
           <a className="btn pri" href="#pts">
             <ArrowDown size={24} aria-hidden />
             <span>
-              <Th>{`ต่อไป: ${neededLine(missing).replace("ยังต้องยืนยัน: ", "")}`}</Th>
+              <Th>{nextLine(missing)}</Th>
             </span>
           </a>
         </div>

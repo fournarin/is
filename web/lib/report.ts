@@ -14,6 +14,8 @@ export type Machine = {
   station_id: string;
   line_id: string;
   seq: number;
+  /** The floor's name for the station, when plant.yaml gives one (REQ-P-03). */
+  station_name?: string | null;
 };
 
 export async function machines(): Promise<Machine[]> {
@@ -36,6 +38,11 @@ export type Reported = {
   status: string;
   where: string;
   finished: boolean;
+  /** The four stages and which one this is (REQ-P-05). `where` names people and the operator never sees it (REQ-P-06). */
+  stages?: string[];
+  stage?: number;
+  /** A photo was kept with it (ADR-142). */
+  photo?: boolean;
 };
 
 export async function myReports(): Promise<Reported[]> {
