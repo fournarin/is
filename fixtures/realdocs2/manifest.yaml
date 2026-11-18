@@ -1,0 +1,233 @@
+# Answer key for three MORE real manufacturer manuals (realdocs2).
+# Written by Cowork on 2026-11-18 by reading the manuals, BEFORE the pipeline was run on them.
+# The builder (Claude Code) must not edit an entry after seeing a result. If a page index is
+# wrong because the pipeline numbers pages differently, fix ONLY the index mapping, say so in
+# LOG.md, and do it before the first measured run.
+#
+# Pages are 1-based PDF page indices (pypdf order), not the printed page numbers. For
+# 31978088.pdf the printed number equals the PDF index on the pages used here (checked with
+# pypdf: 154, 157, 159, 243). For the two SMC PDFs, pdftotext order was used; pypdf crashed on
+# om_mb2_doc1088008en.pdf (font encoding 90msp-RKSJ-H, UnicodeDecodeError) - if the pipeline's
+# ingest also fails on it, that failure is itself a result: report it, then fix ingest so one
+# bad page cannot sink a document, and measure again.
+#
+# Unlike the first realdocs set, two of these manuals DO prescribe field repair (seal
+# replacement, oil-level check), so this set has `covered` entries: the owed outcome is a repair
+# draft from the right page with the right figures.
+
+version: 1
+
+documents:
+  - filename: MRQB-MM00003.pdf
+    sha256: c5e273acc7776e295ab0bc75edece31e11633b94d1ff6f8f2cccf47eca29d858
+    title: Maintenance Procedure, Rotary Cylinder MRQ Series (MRQ32, MRQ40)
+    machine_model: SMC-MRQ
+    edition: MRQB-MM00003-C
+    pages: 14
+  - filename: om_mb2_doc1088008en.pdf
+    sha256: f12ced5a2ec01c79eee565dc190c4a3088358dc6793f05590009f245cddf4e46
+    title: Operation Manual, Air cylinder MB2 series (32 to 125)
+    machine_model: SMC-MB2
+    edition: DOC1088008
+    pages: 36
+  - filename: 31978088.pdf
+    sha256: 478fe766d8a7420b18777faa74c9017ca8505a2335721df5eafcda20d6de1abb
+    title: Assembly and operating instructions, R.., F.., K.., S.., SPIROPLAN W.. gear units
+    machine_model: SEW-GEAR
+    edition: 31978088/EN 03/2025
+    pages: 256
+    encrypted: true
+
+covered:
+  - symptom_code: RD2-01
+    split: test
+    machine_model: SMC-MRQ
+    answer_pages: [9]
+    supporting_pages: [5, 7, 8]
+    why: section 4.1, replacing the rod packing (12) in the rod packing guide (8), steps a to d
+    correct_figures: {}
+    queries:
+      en: rotary cylinder rod is leaking air, how to replace the rod packing
+      th: กระบอกสูบหมุนมีลมรั่วที่แกน เปลี่ยนซีลแกน (rod packing) ยังไง
+
+  - symptom_code: RD2-02
+    split: test
+    machine_model: SMC-MRQ
+    answer_pages: [10]
+    supporting_pages: [6, 8]
+    why: section 4.4, replacing the wear ring (28) and piston seal (33) of the rotary part, steps a to e
+    correct_figures: {}
+    queries:
+      en: rotary actuator turns weakly, replace the piston seal and wear ring of the rotary part
+      th: ชุดหมุนแรงตก ต้องเปลี่ยนซีลลูกสูบกับแหวนรองรับของส่วนหมุน
+
+  - symptom_code: RD2-03
+    split: test
+    machine_model: SMC-MRQ
+    answer_pages: [11]
+    supporting_pages: [13]
+    why: section 4.7, replacing the seal washer (38) on the end cover; torque in Table 2 row 2 on page 13
+    correct_figures:
+      seal_washer_set_screw_torque_nm: [1.0, 1.7]
+    queries:
+      en: air leaks at the end cover adjusting screw, replace the seal washer
+      th: ลมรั่วที่สกรูปรับตรงฝาท้าย ต้องเปลี่ยนแหวนซีล
+
+  - symptom_code: RD2-04
+    split: test
+    machine_model: SMC-MB2
+    answer_pages: [29, 31]
+    supporting_pages: [27, 28, 30, 32]
+    why: sections 3-2-2 (removing the piston seal by hand, not with a screwdriver) and 3-2-4 (mounting it without twisting, grease in the groove)
+    correct_figures: {}
+    queries:
+      en: air cylinder piston seal is worn, how to remove and fit a new piston seal
+      th: ซีลลูกสูบของกระบอกลมสึก ถอดและใส่ซีลลูกสูบใหม่ยังไง
+
+  - symptom_code: RD2-05
+    split: test
+    machine_model: SEW-GEAR
+    answer_pages: [159, 160]
+    supporting_pages: [150, 157, 158]
+    why: section 6.6.3 A, checking the oil level at the oil level plug, numbered steps 1 to 7; allowed fluctuation by bore size
+    correct_figures:
+      level_fluctuation_m10_mm: 1.5
+      level_fluctuation_m12_mm: 2
+      level_fluctuation_m22_mm: 3
+      level_fluctuation_m33_mm: 4
+      level_fluctuation_m42_mm: 5
+    figures_on_the_page_that_are_not_the_answer:
+      - value: 1.5
+        unit: thread pitch
+        belongs_to: the thread designations M12 x 1.5 and M22 x 1.5, not an oil level
+    queries:
+      en: how to check the gear unit oil level at the oil level plug
+      th: เช็กระดับน้ำมันเกียร์ทดที่ปลั๊กระดับน้ำมันยังไง
+
+documented_without_procedure:
+  - symptom_code: RD2-06
+    split: test
+    machine_model: SMC-MRQ
+    pages: [4]
+    why: annual maintenance is desirable; replace consumables such as the piston seal every three years even if there is no problem
+    queries:
+      en: how often should the rotary cylinder seals be replaced
+      th: กระบอกสูบหมุนต้องเปลี่ยนซีลทุกกี่ปี
+
+  - symptom_code: RD2-07
+    split: test
+    machine_model: SMC-MRQ
+    pages: [13]
+    why: "Table 2 row 5, end cover screws (39): 3.0 to 5.0 N·m for size 32, 4.0 to 6.0 N·m for size 40"
+    queries:
+      en: tightening torque for the end cover screws of MRQ40
+      th: แรงขันสกรูฝาท้ายของ MRQ40 เท่าไร
+
+  - symptom_code: RD2-08
+    split: test
+    machine_model: SMC-MB2
+    pages: [28]
+    why: Table 8, tie rod nut torque 5.1 N·m ±10% for bore 32 and 40
+    queries:
+      en: tie rod nut tightening torque for a 40 mm bore air cylinder
+      th: แรงขันน็อตเพลายึด (tie rod) ของกระบอกลมขนาด 40 มม.
+
+  - symptom_code: RD2-09
+    split: test
+    machine_model: SMC-MB2
+    pages: [33]
+    why: troubleshooting table, piston rod does not move smoothly - misalignment, lateral load, low speed, load factor, meter-in control, cushion valve closed
+    queries:
+      en: piston rod does not move smoothly
+      th: ก้านสูบเคลื่อนที่ไม่ราบเรียบ สะดุด
+
+  - symptom_code: RD2-10
+    split: test
+    machine_model: SMC-MB2
+    pages: [11]
+    why: section 2-7, a fully closed cushion valve makes the piston bounce at the stroke end; adjust the cushion valve, allowable torque in Table 2
+    queries:
+      en: piston bounces at the end of the stroke and does not complete the full stroke
+      th: ลูกสูบเด้งที่ปลายช่วงชักและวิ่งไม่สุดระยะ
+
+  - symptom_code: RD2-11
+    split: test
+    machine_model: SEW-GEAR
+    pages: [154]
+    why: every 3000 operating hours, at least every 6 months - check oil and level, running noise, seals, plugs; mineral oil changed at least every 3 years
+    queries:
+      en: gear unit inspection interval, how often to check the oil
+      th: เกียร์ทดต้องตรวจเช็กน้ำมันทุกกี่ชั่วโมง
+
+  - symptom_code: RD2-12
+    split: test
+    machine_model: SEW-GEAR
+    pages: [243]
+    supporting_pages: [145]
+    why: small amounts of oil at the oil seal during run-in are function-related pseudo-leakage, not a failure; wipe and keep monitoring
+    queries:
+      en: a little oil is leaking from the gear unit oil seal on a new gearmotor
+      th: มีน้ำมันซึมเล็กน้อยที่ซีลน้ำมันของเกียร์มอเตอร์ตัวใหม่
+
+  - symptom_code: RD2-13
+    split: test
+    machine_model: SEW-GEAR
+    pages: [243]
+    why: knocking noise means irregularity in the gearing - contact SEW-EURODRIVE and send an audio recording
+    queries:
+      en: knocking noise from the gear unit
+      th: เกียร์ทดมีเสียงเคาะ
+
+  - symptom_code: RD2-14
+    split: test
+    machine_model: SEW-GEAR
+    pages: [157]
+    why: table 6.6.1, M22 x 1.5 plugs are tightened to 60 Nm
+    queries:
+      en: tightening torque of an M22 x 1.5 oil drain plug
+      th: แรงขันปลั๊กถ่ายน้ำมัน M22 x 1.5 เท่าไร
+
+absent:
+  - symptom_code: RD2-15
+    split: test
+    machine_model: SMC-MRQ
+    why: solenoid valve coils are not in the rotary cylinder maintenance procedure
+    forbidden_phrases: [coil, solenoid]
+    queries:
+      en: solenoid valve coil burnt out on the rotary cylinder circuit
+      th: คอยล์โซลินอยด์วาล์วของกระบอกสูบหมุนไหม้
+
+  - symptom_code: RD2-16
+    split: test
+    machine_model: SMC-MB2
+    why: vacuum pads are not in an air cylinder manual
+    forbidden_phrases: [vacuum, pad]
+    queries:
+      en: vacuum pad is leaking and does not hold the panel
+      th: ถ้วยสุญญากาศรั่ว จับแผ่นงานไม่อยู่
+
+  - symptom_code: RD2-17
+    split: test
+    machine_model: SEW-GEAR
+    why: encoder alarms belong to the drive or inverter manual, not the gear unit manual
+    forbidden_phrases: [encoder]
+    queries:
+      en: inverter shows an encoder alarm on the conveyor gearmotor
+      th: อินเวอร์เตอร์ขึ้น alarm เอนโคเดอร์ที่เกียร์มอเตอร์สายพาน
+
+  - symptom_code: RD2-18
+    split: test
+    machine_model: SEW-GEAR
+    why: robot teach pendants are not in a gear unit manual
+    forbidden_phrases: [pendant]
+    queries:
+      en: robot teach pendant screen is frozen
+      th: จอ teach pendant ของหุ่นยนต์ค้าง
+
+never_an_answer:
+  - {document: MRQB-MM00003.pdf, page: 1}
+  - {document: om_mb2_doc1088008en.pdf, page: 1}
+  - {document: om_mb2_doc1088008en.pdf, page: 2}
+  - {document: 31978088.pdf, page: 1}
+  - {document: 31978088.pdf, page: 3}
+  - {document: 31978088.pdf, page: 4}

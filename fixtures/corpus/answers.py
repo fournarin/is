@@ -38,7 +38,13 @@ class ManualDocument(BaseModel):
     machine_model: MachineModel
     edition: str
     pages: int = Field(gt=0)
-    lockout_page: int = Field(gt=0)
+    # The synthetic corpus always has one (a test holds it to that). A real
+    # manual's key may not name one: the second set was written by reading the
+    # repair sections, not the safety chapter.
+    lockout_page: int | None = Field(default=None, gt=0)
+    # Owner-password AES, opened with the empty password (ADR-098). Recorded so
+    # the key says why the file needs pypdf's `crypto` extra.
+    encrypted: bool = False
 
     @property
     def path(self) -> Path:
@@ -110,8 +116,14 @@ class Answer(BaseModel):
     machine_model: MachineModel
     answer_pages: tuple[int, ...] = Field(min_length=1)
     supporting_pages: tuple[int, ...] = ()
-    required_skill: SkillId
-    estimated_minutes: int = Field(gt=0)
+    # Where on the page the answer is, for whoever checks a result by hand.
+    why: str = ""
+    # Required of the synthetic corpus (its tests check them against
+    # config/plant.yaml). A key of real manuals measures retrieval and drafting
+    # only, and a skill or a duration guessed for a stranger's machine would be
+    # a number with no provenance.
+    required_skill: SkillId | None = None
+    estimated_minutes: int | None = Field(default=None, gt=0)
     tools: tuple[str, ...] = ()
     correct_figures: dict[str, float | list[float]] = {}
     figures_on_the_page_that_are_not_the_answer: tuple[MisleadingFigure, ...] = ()
@@ -134,6 +146,9 @@ class DocumentedOnly(BaseModel):
     symptom_code: SymptomCode
     machine_model: MachineModel
     pages: tuple[int, ...] = Field(min_length=1)
+    # Pages that help a reader and are not the answer. A draft citing one is
+    # still marked off-key: the measurement rewards the page that says it.
+    supporting_pages: tuple[int, ...] = ()
     why: str = Field(min_length=1)
     queries: Queries
 

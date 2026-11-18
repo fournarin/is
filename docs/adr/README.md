@@ -151,6 +151,7 @@ entries replace parts of earlier ones, and both are kept.
 | [140](0140-one-light-theme-and-a-board-that-asks-first.md) | One light theme, and a board that asks first | |
 | [141](0141-the-board-in-the-app-and-what-a-proposal-carries.md) | The board in the app, and what a proposal carries for it | |
 | [142](0142-the-operator-report-in-the-new-look-with-one-photo.md) | The operator's report in the new look, with one photo | |
+| [143](0143-three-more-real-manuals-measured-as-shipped.md) | Three more real manuals, measured as shipped | |
 
 ## The invariants these records cite
 
