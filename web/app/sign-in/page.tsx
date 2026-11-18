@@ -1,6 +1,9 @@
+import { WifiOff, Wrench } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { SignInForm } from "@/app/sign-in/sign-in-form";
+import { Th } from "@/app/ui/v2/frame";
+import "@/app/ui/v2/v2.css";
 import { ApiUnreachable, UNREACHABLE } from "@/lib/api";
 import { currentAccount } from "@/lib/session";
 
@@ -27,20 +30,30 @@ export default async function SignInPage() {
   }
 
   return (
-    <main>
-      <div className="card" style={{ marginTop: "12vh" }}>
-        <p style={{ fontSize: "2.5rem", margin: 0 }} aria-hidden="true">
-          🛠️
+    <div className="v2 si">
+      <main className="si-col">
+        <div className="si-plate">
+          <span className="si-mark" aria-hidden>
+            <Wrench size={32} />
+          </span>
+          <div>
+            <h1>แจ้งซ่อมล่วงหน้า</h1>
+            <p>
+              <Th>ระบบงานซ่อมบำรุงของสายการผลิต</Th>
+            </p>
+          </div>
+        </div>
+        <p className="si-lead">
+          <Th>ใช้ชื่อผู้ใช้และรหัสผ่านที่หัวหน้าหรือวิศวกรให้ไว้</Th>
         </p>
-        <h1>แจ้งซ่อมล่วงหน้า</h1>
-        <p className="muted">เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านที่หัวหน้าหรือวิศวกรให้ไว้</p>
         {unreachable && (
-          <p className="warning" role="alert">
-            {UNREACHABLE} ระบบอาจกำลังเริ่มใหม่ รอสักครู่แล้วลองอีกครั้ง
-          </p>
+          <div className="callout is-bad" role="alert">
+            <WifiOff size={24} aria-hidden />
+            <div>{UNREACHABLE} ระบบอาจกำลังเริ่มใหม่ รอสักครู่แล้วลองอีกครั้ง</div>
+          </div>
         )}
         <SignInForm />
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

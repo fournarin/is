@@ -49,6 +49,19 @@ test("restore asks for the plant's checks, then every lock off", () => {
   assert.equal(firstUnfinished(steps, said, 3, at(0), me([])), null);
 });
 
+test("taking the lock off in the restore step does not reopen the isolation behind it", () => {
+  const restore: Step = { ...BASE, kind: "restore", isolation_points: [CP3] };
+  const steps = [BASE, ISOLATE, restore, BASE];
+  const said = [done("off"), done("locked"), done("checked", "tools_removed", 3)];
+  // On the restore step with the lock already off: step 2 is not unfinished.
+  assert.equal(firstUnfinished(steps, said, 3, at(0), me([])), null);
+  // On a normal step after the isolation with the lock gone, it still is.
+  assert.deepEqual(firstUnfinished([BASE, ISOLATE, BASE], said, 3, at(0), me([])), {
+    number: 2,
+    missing: [{ point_id: "CP-3", item: "locked" }],
+  });
+});
+
 test("a wait counts from when it started", () => {
   const hot: Step = { ...BASE, kind: "hazard", wait_minutes: 30 };
   const started = [done("wait_started", "", 3)];

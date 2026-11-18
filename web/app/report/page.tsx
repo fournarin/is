@@ -79,7 +79,7 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
       {station && (
         <div className="aplate">
           <div className="pl">
-            <div className="no" aria-label={`สถานี ${station.seq}`}>
+            <div className="no" role="img" aria-label={`สถานี ${station.seq}`}>
               <small>สถานี</small>
               <b>{station.seq}</b>
             </div>

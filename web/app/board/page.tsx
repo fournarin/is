@@ -237,7 +237,7 @@ export default async function BoardPage({
             ))}
           </nav>
           <span className="sp" />
-          <div className="clk" aria-label="เวลาโรงงาน">
+          <div className="clk" role="group" aria-label="เวลาโรงงาน">
             <b>{plantTime(round.at, tz)}</b>
           </div>
           <div className="me">

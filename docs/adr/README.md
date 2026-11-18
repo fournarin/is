@@ -152,6 +152,7 @@ entries replace parts of earlier ones, and both are kept.
 | [141](0141-the-board-in-the-app-and-what-a-proposal-carries.md) | The board in the app, and what a proposal carries for it | |
 | [142](0142-the-operator-report-in-the-new-look-with-one-photo.md) | The operator's report in the new look, with one photo | |
 | [143](0143-three-more-real-manuals-measured-as-shipped.md) | Three more real manuals, measured as shipped | |
+| [144](0144-end-to-end-flows-and-an-accessibility-scan-in-the-repo.md) | End-to-end flows and an accessibility scan in the repository | |
 
 ## The invariants these records cite
 

@@ -93,7 +93,7 @@ export function Clock({ now, timezone, date = true }: { now: Date; timezone: str
   const time = new Intl.DateTimeFormat("th-TH", { timeZone: timezone, hour: "2-digit", minute: "2-digit" }).format(now);
   const day = new Intl.DateTimeFormat("th-TH", { timeZone: timezone, day: "numeric", month: "short" }).format(now);
   return (
-    <div className="clock" aria-label="เวลาโรงงาน">
+    <div className="clock" role="group" aria-label="เวลาโรงงาน">
       <b>{time}</b>
       {date && <span>วันนี้ {day}</span>}
     </div>
@@ -120,7 +120,7 @@ export function Plate({ job, sub, lamps }: { job: Ticket; sub: ReactNode; lamps:
     <div className="aplate">
       <div className="pl">
         {number !== null && (
-          <div className="no" aria-label={job.station ?? undefined}>
+          <div className="no" role="img" aria-label={job.station ?? undefined}>
             <small>สถานี</small>
             <b>{number}</b>
           </div>

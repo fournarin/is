@@ -58,7 +58,7 @@ export default async function StepsPage({
         งาน
       </Link>
       {number !== null && (
-        <span className="stile" aria-label={job.station ?? undefined}>
+        <span className="stile" role="img" aria-label={job.station ?? undefined}>
           {number}
         </span>
       )}

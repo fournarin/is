@@ -63,7 +63,15 @@ export function stillNeeded(
   return needed;
 }
 
-/** The first step before `before` (1-based) that still needs something - the API's own gate. */
+/**
+ * The first step before `before` (1-based) that still needs something - the API's own gate.
+ *
+ * A restore step being worked counts as restoring its points, as
+ * `pdm.work.locks.first_unfinished` takes `restoring` (ADR-137, N4): without it
+ * the lock taken off here made the isolation step behind it ask for that lock
+ * again, and the screen held "next" shut on a step the API would let go
+ * (found by web/e2e/technician.spec.ts).
+ */
 export function firstUnfinished(
   steps: readonly Step[],
   done: readonly PointConfirmed[],
@@ -72,6 +80,8 @@ export function firstUnfinished(
   who: Who,
 ): { number: number; missing: Needed[] } | null {
   const restored = restoredBefore(steps, before);
+  const current = steps[before - 1];
+  if (current?.kind === "restore") (current.isolation_points ?? []).forEach((point) => restored.add(point.point_id));
   for (let number = 1; number < before && number <= steps.length; number += 1) {
     const missing = stillNeeded(steps[number - 1]!, number, done, now, who, restored);
     if (missing.length > 0) return { number, missing };
