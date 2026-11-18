@@ -1,0 +1,446 @@
+{
+ "set": "corpus",
+ "measured": "2026-11-18T16:42:30+00:00",
+ "embedder": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+ "reranker": "onnx-community/bge-reranker-v2-m3-ONNX",
+ "min_relevance": 0.1,
+ "candidates": 120,
+ "symptom_described": true,
+ "mismatched": false,
+ "coverage": {
+  "r-2000ic-maintenance.pdf": {
+   "pages": 11,
+   "pages_with_text": 11,
+   "pages_needing_ocr": [],
+   "chunks": 12
+  },
+  "m-710ic-maintenance.pdf": {
+   "pages": 7,
+   "pages_with_text": 7,
+   "pages_needing_ocr": [],
+   "chunks": 7
+  }
+ },
+ "questions": [
+  {
+   "symptom_code": "SYM-014",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "R-2000iC",
+   "query": "belt motor running above 85 degrees, what do I check",
+   "rank": 2,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.99
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.99
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.99
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.99
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.99
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.99
+    }
+   ],
+   "figures": {
+    "motor_mount_torque_nm": true,
+    "guard_bolt_torque_nm": true,
+    "belt_deflection_mm": true,
+    "deflection_force_n": true,
+    "threshold_c": false
+   },
+   "reason": "6 ขั้น จากหน้า 4 ของคู่มือรุ่น R-2000iC; พบหน้าจากคู่มือรุ่นอื่น 7 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-014",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "R-2000iC",
+   "query": "มอเตอร์สายพานร้อนเกิน 85 องศา ต้องตรวจอะไรบ้าง",
+   "rank": 2,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.946
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.946
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.946
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.946
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.946
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 4,
+     "confidence": 0.946
+    }
+   ],
+   "figures": {
+    "motor_mount_torque_nm": true,
+    "guard_bolt_torque_nm": true,
+    "belt_deflection_mm": true,
+    "deflection_force_n": true,
+    "threshold_c": false
+   },
+   "reason": "6 ขั้น จากหน้า 4 ของคู่มือรุ่น R-2000iC; พบหน้าจากคู่มือรุ่นอื่น 7 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-021",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "R-2000iC",
+   "query": "axis 1 current above 12.5 A",
+   "rank": 2,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.994
+    }
+   ],
+   "figures": {
+    "threshold_a": false,
+    "grease_grams": true,
+    "inspection_plug_torque_nm": true,
+    "return_below_a": true
+   },
+   "reason": "6 ขั้น จากหน้า 7 ของคู่มือรุ่น R-2000iC; พบหน้าจากคู่มือรุ่นอื่น 7 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-021",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "R-2000iC",
+   "query": "กระแสแกน 1 เกิน 12.5 แอมป์ ทำอย่างไร",
+   "rank": 3,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.97
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.97
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.97
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.97
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.97
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 7,
+     "confidence": 0.97
+    }
+   ],
+   "figures": {
+    "threshold_a": false,
+    "grease_grams": true,
+    "inspection_plug_torque_nm": true,
+    "return_below_a": true
+   },
+   "reason": "6 ขั้น จากหน้า 7 ของคู่มือรุ่น R-2000iC; พบหน้าจากคู่มือรุ่นอื่น 7 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-047",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "M-710iC",
+   "query": "cabinet fan slower than 1200 rpm",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.993
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.993
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.993
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.993
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.993
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.993
+    }
+   ],
+   "figures": {
+    "threshold_rpm": false,
+    "nominal_rpm": true,
+    "mounting_screw_torque_nm": true,
+    "confirm_within_seconds": true
+   },
+   "reason": "6 ขั้น จากหน้า 5 ของคู่มือรุ่น M-710iC; พบหน้าจากคู่มือรุ่นอื่น 11 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-047",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "M-710iC",
+   "query": "พัดลมตู้คอนโทรลหมุนต่ำกว่า 1200 rpm",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.975
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.975
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.975
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.975
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.975
+    },
+    {
+     "document": "m-710ic-maintenance.pdf",
+     "page": 5,
+     "confidence": 0.975
+    }
+   ],
+   "figures": {
+    "threshold_rpm": false,
+    "nominal_rpm": true,
+    "mounting_screw_torque_nm": true,
+    "confirm_within_seconds": true
+   },
+   "reason": "6 ขั้น จากหน้า 5 ของคู่มือรุ่น M-710iC; พบหน้าจากคู่มือรุ่นอื่น 11 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-002",
+   "language": "en",
+   "split": "dev",
+   "kind": "DocumentedOnly",
+   "machine_model": "R-2000iC",
+   "query": "interlock reported open but the gate is closed",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.998
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.998
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.998
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.998
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.998
+    }
+   ],
+   "figures": null,
+   "reason": "5 ขั้น จากหน้า 11 ของคู่มือรุ่น R-2000iC; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 7 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-002",
+   "language": "th",
+   "split": "dev",
+   "kind": "DocumentedOnly",
+   "machine_model": "R-2000iC",
+   "query": "interlock แจ้งว่าเปิดทั้งที่ประตูปิดอยู่",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.994
+    },
+    {
+     "document": "r-2000ic-maintenance.pdf",
+     "page": 11,
+     "confidence": 0.994
+    }
+   ],
+   "figures": null,
+   "reason": "5 ขั้น จากหน้า 11 ของคู่มือรุ่น R-2000iC; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 7 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "SYM-031",
+   "language": "en",
+   "split": "dev",
+   "kind": "AbsentSymptom",
+   "machine_model": "M-710iC",
+   "query": "cycle time drifting above 62 seconds",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง SYM-031 ในคู่มือของรุ่น M-710iC ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "SYM-031",
+   "language": "th",
+   "split": "dev",
+   "kind": "AbsentSymptom",
+   "machine_model": "M-710iC",
+   "query": "cycle time ค่อย ๆ สูงขึ้นเกิน 62 วินาที",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง SYM-031 ในคู่มือของรุ่น M-710iC ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  }
+ ]
+}

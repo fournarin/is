@@ -1,0 +1,1374 @@
+{
+ "set": "evalset",
+ "measured": "2026-11-18T16:41:40+00:00",
+ "embedder": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+ "reranker": "onnx-community/bge-reranker-v2-m3-ONNX",
+ "min_relevance": 0.1,
+ "candidates": 120,
+ "symptom_described": true,
+ "mismatched": false,
+ "coverage": {
+  "sw-210-servo-gun.pdf": {
+   "pages": 10,
+   "pages_with_text": 10,
+   "pages_needing_ocr": [],
+   "chunks": 10
+  },
+  "sw-310-servo-gun.pdf": {
+   "pages": 6,
+   "pages_with_text": 6,
+   "pages_needing_ocr": [],
+   "chunks": 6
+  },
+  "cv-500-skid-conveyor.pdf": {
+   "pages": 9,
+   "pages_with_text": 9,
+   "pages_needing_ocr": [],
+   "chunks": 9
+  },
+  "sd-30-sealer-dispenser.pdf": {
+   "pages": 7,
+   "pages_with_text": 7,
+   "pages_needing_ocr": [],
+   "chunks": 7
+  }
+ },
+ "questions": [
+  {
+   "symptom_code": "EV-101",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "weld splash and small nuggets, the tips look worn",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "tip_face_limit_mm": false,
+    "material_left_mm": false,
+    "alignment_mm": false,
+    "nugget_mm": false
+   },
+   "reason": "ไม่พบเรื่อง EV-101 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-101",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "หัวเชื่อมสึก เชื่อมแล้วสะเก็ดไฟกระเด็นเยอะ",
+   "rank": 5,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "tip_face_limit_mm": false,
+    "material_left_mm": false,
+    "alignment_mm": false,
+    "nugget_mm": false
+   },
+   "reason": "ไม่พบเรื่อง EV-101 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-102",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "weld gun cooling water flow alarm below 4 L/min",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.946
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.946
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.946
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.946
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.946
+    }
+   ],
+   "figures": {
+    "alarm_l_min": false,
+    "supply_bar": true,
+    "nominal_l_min": true,
+    "within_seconds": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น SW-210; พบหน้าจากคู่มือรุ่นอื่น 22 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-102",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "น้ำหล่อเย็นหัวเชื่อมไหลน้อยกว่า 4 ลิตรต่อนาที",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.746
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.746
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.746
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.746
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.746
+    }
+   ],
+   "figures": {
+    "alarm_l_min": false,
+    "supply_bar": true,
+    "nominal_l_min": true,
+    "within_seconds": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น SW-210; พบหน้าจากคู่มือรุ่นอื่น 22 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-103",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "servo gun motor temperature above 90 degrees",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.983
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.983
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.983
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.983
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.983
+    }
+   ],
+   "figures": {
+    "cover_bolts_nm": true,
+    "grease_g": true,
+    "test_strokes": true,
+    "settle_below_c": true
+   },
+   "reason": "5 ขั้น จากหน้า 6 ของคู่มือรุ่น SW-210; พบหน้าจากคู่มือรุ่นอื่น 22 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-103",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "มอเตอร์หัวเชื่อมร้อนเกิน 90 องศา",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.692
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.692
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.692
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.692
+    },
+    {
+     "document": "sw-210-servo-gun.pdf",
+     "page": 6,
+     "confidence": 0.692
+    }
+   ],
+   "figures": {
+    "cover_bolts_nm": true,
+    "grease_g": true,
+    "test_strokes": true,
+    "settle_below_c": true
+   },
+   "reason": "5 ขั้น จากหน้า 6 ของคู่มือรุ่น SW-210; พบหน้าจากคู่มือรุ่นอื่น 22 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-104",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "secondary weld cable jacket is cracked",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "clamp_bolts_nm": false
+   },
+   "reason": "ไม่พบเรื่อง EV-104 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-104",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-210",
+   "query": "สายเคเบิลเชื่อมเปลือกแตก ต้องเปลี่ยนสาย",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "clamp_bolts_nm": false
+   },
+   "reason": "พบคู่มือที่เกี่ยวข้อง 2 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "EV-111",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-310",
+   "query": "electrode tip face worn above 8 mm",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 3,
+     "confidence": 0.985
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 3,
+     "confidence": 0.985
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 3,
+     "confidence": 0.985
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 3,
+     "confidence": 0.985
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 3,
+     "confidence": 0.985
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 3,
+     "confidence": 0.985
+    }
+   ],
+   "figures": {
+    "tip_face_limit_mm": true,
+    "material_left_mm": true,
+    "alignment_mm": true,
+    "nugget_mm": true
+   },
+   "reason": "6 ขั้น จากหน้า 3 ของคู่มือรุ่น SW-310; พบหน้าจากคู่มือรุ่นอื่น 26 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-111",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-310",
+   "query": "ปลายหัวเชื่อมสึกเกิน 8 มม.",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "tip_face_limit_mm": false,
+    "material_left_mm": false,
+    "alignment_mm": false,
+    "nugget_mm": false
+   },
+   "reason": "พบคู่มือที่เกี่ยวข้อง 1 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "EV-112",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SW-310",
+   "query": "gun cooling water flow low alarm",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.818
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.818
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.818
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.818
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.818
+    }
+   ],
+   "figures": {
+    "alarm_l_min": false,
+    "supply_bar": true,
+    "nominal_l_min": true,
+    "within_seconds": true
+   },
+   "reason": "5 ขั้น จากหน้า 4 ของคู่มือรุ่น SW-310; พบหน้าจากคู่มือรุ่นอื่น 26 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-112",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SW-310",
+   "query": "น้ำหล่อเย็นหัวเชื่อมไหลต่ำกว่า 5 ลิตรต่อนาที",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.906
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.906
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.906
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.906
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 4,
+     "confidence": 0.906
+    }
+   ],
+   "figures": {
+    "alarm_l_min": false,
+    "supply_bar": true,
+    "nominal_l_min": true,
+    "within_seconds": true
+   },
+   "reason": "5 ขั้น จากหน้า 4 ของคู่มือรุ่น SW-310; พบหน้าจากคู่มือรุ่นอื่น 26 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-113",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-310",
+   "query": "weld gun servo motor running very hot",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.796
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.796
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.796
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.796
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.796
+    }
+   ],
+   "figures": {
+    "cover_bolts_nm": true,
+    "grease_g": true,
+    "test_strokes": true,
+    "settle_below_c": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น SW-310; พบหน้าจากคู่มือรุ่นอื่น 26 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-113",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SW-310",
+   "query": "มอเตอร์ปืนเชื่อมร้อนจัด",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.554
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.554
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.554
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.554
+    },
+    {
+     "document": "sw-310-servo-gun.pdf",
+     "page": 5,
+     "confidence": 0.554
+    }
+   ],
+   "figures": {
+    "cover_bolts_nm": true,
+    "grease_g": true,
+    "test_strokes": true,
+    "settle_below_c": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น SW-310; พบหน้าจากคู่มือรุ่นอื่น 26 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-121",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "drive chain stretched more than 2 percent",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.903
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.903
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.903
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.903
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.903
+    }
+   ],
+   "figures": {
+    "elongation_limit_pct": true,
+    "sag_mm": true,
+    "tensioner_nm": true
+   },
+   "reason": "5 ขั้น จากหน้า 4 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-121",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "โซ่ขับคอนเวเยอร์ยืดเกิน 2 เปอร์เซ็นต์",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.866
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.866
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.866
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.866
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 4,
+     "confidence": 0.866
+    }
+   ],
+   "figures": {
+    "elongation_limit_pct": true,
+    "sag_mm": true,
+    "tensioner_nm": true
+   },
+   "reason": "5 ขั้น จากหน้า 4 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-122",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "conveyor drive overload relay keeps tripping",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 5,
+     "confidence": 0.78
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 5,
+     "confidence": 0.78
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 5,
+     "confidence": 0.78
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 5,
+     "confidence": 0.78
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 5,
+     "confidence": 0.78
+    }
+   ],
+   "figures": {
+    "gearbox_l": true,
+    "relay_a": true,
+    "running_below_a": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-122",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "มอเตอร์ขับคอนเวเยอร์ทริปโอเวอร์โหลดบ่อย",
+   "rank": 2,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "gearbox_l": false,
+    "relay_a": false,
+    "running_below_a": false
+   },
+   "reason": "พบคู่มือที่เกี่ยวข้อง 2 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "EV-123",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "lift table hydraulic pressure below 90 bar",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.996
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.996
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.996
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.996
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.996
+    }
+   ],
+   "figures": {
+    "relief_bar": true,
+    "holds_above_bar": true
+   },
+   "reason": "5 ขั้น จากหน้า 6 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-123",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "แรงดันไฮดรอลิกโต๊ะยกต่ำกว่า 90 บาร์",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.995
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.995
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.995
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.995
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 6,
+     "confidence": 0.995
+    }
+   ],
+   "figures": {
+    "relief_bar": true,
+    "holds_above_bar": true
+   },
+   "reason": "5 ขั้น จากหน้า 6 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-124",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "skid presence sensor does not see the skid",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.864
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.864
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.864
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.864
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.864
+    }
+   ],
+   "figures": null,
+   "reason": "5 ขั้น จากหน้า 8 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-124",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "CV-500",
+   "query": "เซนเซอร์ตรวจสกิดจับสกิดไม่ได้ สัญญาณกระพริบ",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.837
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.837
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.837
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.837
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 8,
+     "confidence": 0.837
+    }
+   ],
+   "figures": null,
+   "reason": "5 ขั้น จากหน้า 8 ของคู่มือรุ่น CV-500; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-131",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SD-30",
+   "query": "sealer bead narrower than 3 mm, nozzle may be blocked",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 4,
+     "confidence": 0.694
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 4,
+     "confidence": 0.694
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 4,
+     "confidence": 0.694
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 4,
+     "confidence": 0.694
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 4,
+     "confidence": 0.694
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 4,
+     "confidence": 0.694
+    }
+   ],
+   "figures": {
+    "soak_minutes": true,
+    "nozzle_nm": true,
+    "bead_mm": true
+   },
+   "reason": "6 ขั้น จากหน้า 4 ของคู่มือรุ่น SD-30; พบหน้าจากคู่มือรุ่นอื่น 25 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-131",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SD-30",
+   "query": "เส้นซีลเลอร์บางกว่า 3 มม. หัวฉีดน่าจะตัน",
+   "rank": 2,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "soak_minutes": false,
+    "nozzle_nm": false,
+    "bead_mm": false
+   },
+   "reason": "พบคู่มือที่เกี่ยวข้อง 1 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "EV-132",
+   "language": "en",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SD-30",
+   "query": "sealer supply pressure dropped below 150 bar",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.941
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.941
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.941
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.941
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.941
+    }
+   ],
+   "figures": {
+    "filter_mesh": true,
+    "restart_bar": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น SD-30; พบหน้าจากคู่มือรุ่นอื่น 25 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-132",
+   "language": "th",
+   "split": "dev",
+   "kind": "Answer",
+   "machine_model": "SD-30",
+   "query": "แรงดันซีลเลอร์ตกต่ำกว่า 150 บาร์",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.701
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.701
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.701
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.701
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 5,
+     "confidence": 0.701
+    }
+   ],
+   "figures": {
+    "filter_mesh": true,
+    "restart_bar": true
+   },
+   "reason": "5 ขั้น จากหน้า 5 ของคู่มือรุ่น SD-30; พบหน้าจากคู่มือรุ่นอื่น 25 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-133",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SD-30",
+   "query": "sealer hose not heating, below 40 degrees",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.935
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.935
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.935
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.935
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.935
+    }
+   ],
+   "figures": {
+    "fuse_a": true,
+    "element_ohm": true,
+    "set_point_c": true
+   },
+   "reason": "5 ขั้น จากหน้า 6 ของคู่มือรุ่น SD-30; พบหน้าจากคู่มือรุ่นอื่น 25 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-133",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SD-30",
+   "query": "ท่อส่งซีลเลอร์ไม่ร้อน อุณหภูมิต่ำกว่า 40 องศา",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.685
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.685
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.685
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.685
+    },
+    {
+     "document": "sd-30-sealer-dispenser.pdf",
+     "page": 6,
+     "confidence": 0.685
+    }
+   ],
+   "figures": {
+    "fuse_a": true,
+    "element_ohm": true,
+    "set_point_c": true
+   },
+   "reason": "5 ขั้น จากหน้า 6 ของคู่มือรุ่น SD-30; พบหน้าจากคู่มือรุ่นอื่น 25 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-105",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SW-210",
+   "query": "servo gun does not close fully",
+   "rank": 3,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-105 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-105",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SW-210",
+   "query": "หัวเชื่อมปิดไม่สุด",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-105 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-125",
+   "language": "en",
+   "split": "dev",
+   "kind": "DocumentedOnly",
+   "machine_model": "CV-500",
+   "query": "carrier roller making noise",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.993
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.993
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.993
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.993
+    }
+   ],
+   "figures": null,
+   "reason": "4 ขั้น จากหน้า 7 ของคู่มือรุ่น CV-500; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-125",
+   "language": "th",
+   "split": "dev",
+   "kind": "DocumentedOnly",
+   "machine_model": "CV-500",
+   "query": "ลูกกลิ้งคอนเวเยอร์มีเสียงดัง",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.785
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.785
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.785
+    },
+    {
+     "document": "cv-500-skid-conveyor.pdf",
+     "page": 7,
+     "confidence": 0.785
+    }
+   ],
+   "figures": null,
+   "reason": "4 ขั้น จากหน้า 7 ของคู่มือรุ่น CV-500; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 23 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "EV-134",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SD-30",
+   "query": "sealer bead broken and irregular",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-134 ในคู่มือของรุ่น SD-30 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-134",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SD-30",
+   "query": "เส้นซีลเลอร์ขาดเป็นช่วง ๆ ไม่สม่ำเสมอ",
+   "rank": 3,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-134 ในคู่มือของรุ่น SD-30 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-106",
+   "language": "en",
+   "split": "dev",
+   "kind": "AbsentSymptom",
+   "machine_model": "SW-210",
+   "query": "robot controller backup battery low alarm",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-106 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-106",
+   "language": "th",
+   "split": "dev",
+   "kind": "AbsentSymptom",
+   "machine_model": "SW-210",
+   "query": "แบตเตอรี่สำรองคอนโทรลเลอร์ต่ำ",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-106 ในคู่มือของรุ่น SW-210 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-114",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SW-310",
+   "query": "air leaking from the gun equalizing cylinder",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-114 ในคู่มือของรุ่น SW-310 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-114",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SW-310",
+   "query": "ลมรั่วที่กระบอกสูบปรับสมดุลของหัวเชื่อม",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-114 ในคู่มือของรุ่น SW-310 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-126",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "CV-500",
+   "query": "conveyor zone PLC communication error",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-126 ในคู่มือของรุ่น CV-500 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-126",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "CV-500",
+   "query": "คอนเวเยอร์ขึ้น error สื่อสารกับ PLC ไม่ได้",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-126 ในคู่มือของรุ่น CV-500 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-135",
+   "language": "en",
+   "split": "dev",
+   "kind": "AbsentSymptom",
+   "machine_model": "SD-30",
+   "query": "bead inspection camera rejects good beads",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-135 ในคู่มือของรุ่น SD-30 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "EV-135",
+   "language": "th",
+   "split": "dev",
+   "kind": "AbsentSymptom",
+   "machine_model": "SD-30",
+   "query": "กล้องตรวจเส้นซีลเลอร์ reject ทั้งที่เส้นดี",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง EV-135 ในคู่มือของรุ่น SD-30 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  }
+ ]
+}

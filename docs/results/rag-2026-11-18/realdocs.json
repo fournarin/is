@@ -1,0 +1,1057 @@
+{
+ "set": "realdocs",
+ "measured": "2026-11-18T16:39:03+00:00",
+ "embedder": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+ "reranker": "onnx-community/bge-reranker-v2-m3-ONNX",
+ "min_relevance": 0.1,
+ "candidates": 120,
+ "symptom_described": true,
+ "mismatched": false,
+ "coverage": {
+  "sh3181l.pdf": {
+   "pages": 456,
+   "pages_with_text": 455,
+   "pages_needing_ocr": [],
+   "chunks": 1043
+  },
+  "sh030175b.pdf": {
+   "pages": 118,
+   "pages_with_text": 117,
+   "pages_needing_ocr": [],
+   "chunks": 344
+  }
+ },
+ "questions": [
+  {
+   "symptom_code": "RD-01",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "servo motor bearing makes an unusual noise",
+   "rank": 73,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.911
+    }
+   ],
+   "figures": null,
+   "reason": "16 ขั้น จากหน้า 66 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 16 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-01",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "มอเตอร์เซอร์โวมีเสียงดังผิดปกติที่ลูกปืน",
+   "rank": 13,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "พบคู่มือที่เกี่ยวข้อง 1 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "RD-02",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "how often should the servo motor oil seal be replaced",
+   "rank": 21,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.92
+    }
+   ],
+   "figures": null,
+   "reason": "16 ขั้น จากหน้า 66 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 14 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-02",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "ซีลน้ำมันมอเตอร์เซอร์โวต้องเปลี่ยนทุกกี่ชั่วโมง",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 66,
+     "confidence": 0.824
+    }
+   ],
+   "figures": null,
+   "reason": "16 ขั้น จากหน้า 66 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 22 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-03",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "need to turn the motor shaft by hand but the brake is holding it",
+   "rank": 2,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD-03 ในคู่มือของรุ่น HC-SERVO ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD-03",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "ต้องหมุนเพลามอเตอร์ด้วยมือแต่เบรกล็อกอยู่ ปลดเบรกยังไง",
+   "rank": 2,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD-03 ในคู่มือของรุ่น HC-SERVO ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD-04",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "motor was stored for six months, what to check before using it",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.875
+    }
+   ],
+   "figures": null,
+   "reason": "11 ขั้น จากหน้า 8 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 31 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-04",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "มอเตอร์เก็บไว้ 6 เดือน ก่อนใช้งานต้องตรวจอะไรบ้าง",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.548
+    }
+   ],
+   "figures": null,
+   "reason": "11 ขั้น จากหน้า 8 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 30 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-05",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "when to replace the electrolytic capacitor of the servo amplifier",
+   "rank": 4,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.994
+    }
+   ],
+   "figures": null,
+   "reason": "11 ขั้น จากหน้า 8 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 32 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-05",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "HC-SERVO",
+   "query": "คาปาซิเตอร์ในเซอร์โวแอมป์ต้องเปลี่ยนทุกกี่ปี",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    },
+    {
+     "document": "sh3181l.pdf",
+     "page": 8,
+     "confidence": 0.969
+    }
+   ],
+   "figures": null,
+   "reason": "11 ขั้น จากหน้า 8 ของคู่มือรุ่น HC-SERVO; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 31 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-06",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "MR-J4",
+   "query": "servo amplifier does not answer Modbus messages, maybe a CRC error",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.982
+    }
+   ],
+   "figures": null,
+   "reason": "18 ขั้น จากหน้า 35 ของคู่มือรุ่น MR-J4; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 37 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-06",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "MR-J4",
+   "query": "เซอร์โวแอมป์ไม่ตอบกลับทาง Modbus สงสัยว่า CRC error",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 35,
+     "confidence": 0.958
+    }
+   ],
+   "figures": null,
+   "reason": "18 ขั้น จากหน้า 35 ของคู่มือรุ่น MR-J4; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 17 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-07",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "MR-J4",
+   "query": "how to read the current alarm number over Modbus",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.977
+    }
+   ],
+   "figures": null,
+   "reason": "11 ขั้น จากหน้า 43 ของคู่มือรุ่น MR-J4; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 2 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-07",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "MR-J4",
+   "query": "อ่านเลข alarm ปัจจุบันผ่าน Modbus ได้อย่างไร",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    },
+    {
+     "document": "sh030175b.pdf",
+     "page": 43,
+     "confidence": 0.978
+    }
+   ],
+   "figures": null,
+   "reason": "11 ขั้น จากหน้า 43 ของคู่มือรุ่น MR-J4; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 4 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD-08",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "HC-SERVO",
+   "query": "robot gripper vacuum cup is not holding the part",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD-08 ในคู่มือของรุ่น HC-SERVO ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD-08",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "HC-SERVO",
+   "query": "หัวดูดสุญญากาศของกริปเปอร์จับชิ้นงานไม่อยู่",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD-08 ในคู่มือของรุ่น HC-SERVO ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD-09",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "MR-J4",
+   "query": "spot weld tip dresser cutter is broken",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD-09 ในคู่มือของรุ่น MR-J4 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD-09",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "MR-J4",
+   "query": "ใบมีดแต่งหัวเชื่อมหัก",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD-09 ในคู่มือของรุ่น MR-J4 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  }
+ ]
+}

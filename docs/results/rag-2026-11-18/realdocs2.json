@@ -1,0 +1,959 @@
+{
+ "set": "realdocs2",
+ "measured": "2026-11-18T15:40:29+00:00",
+ "embedder": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+ "reranker": "onnx-community/bge-reranker-v2-m3-ONNX",
+ "min_relevance": 0.1,
+ "candidates": 120,
+ "symptom_described": true,
+ "mismatched": false,
+ "coverage": {
+  "MRQB-MM00003.pdf": {
+   "pages": 14,
+   "pages_with_text": 14,
+   "pages_needing_ocr": [],
+   "chunks": 29
+  },
+  "om_mb2_doc1088008en.pdf": {
+   "pages": 36,
+   "pages_with_text": 36,
+   "pages_needing_ocr": [],
+   "chunks": 84
+  },
+  "31978088.pdf": {
+   "pages": 256,
+   "pages_with_text": 251,
+   "pages_needing_ocr": [
+    251,
+    252,
+    253,
+    254,
+    255
+   ],
+   "chunks": 501
+  }
+ },
+ "questions": [
+  {
+   "symptom_code": "RD2-01",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MRQ",
+   "query": "rotary cylinder rod is leaking air, how to replace the rod packing",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": false,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 9,
+     "confidence": 0.802
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 9,
+     "confidence": 0.802
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 9,
+     "confidence": 0.802
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 9,
+     "confidence": 0.802
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 9,
+     "confidence": 0.802
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 9,
+     "confidence": 0.802
+    }
+   ],
+   "figures": null,
+   "reason": "6 ขั้น จากหน้า 9 ของคู่มือรุ่น SMC-MRQ; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 77 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-01",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MRQ",
+   "query": "กระบอกสูบหมุนมีลมรั่วที่แกน เปลี่ยนซีลแกน (rod packing) ยังไง",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "พบคู่มือที่เกี่ยวข้อง 2 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "RD2-02",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MRQ",
+   "query": "rotary actuator turns weakly, replace the piston seal and wear ring of the rotary part",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-02 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-02",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MRQ",
+   "query": "ชุดหมุนแรงตก ต้องเปลี่ยนซีลลูกสูบกับแหวนรองรับของส่วนหมุน",
+   "rank": 6,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-02 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-03",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MRQ",
+   "query": "air leaks at the end cover adjusting screw, replace the seal washer",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "seal_washer_set_screw_torque_nm": false
+   },
+   "reason": "ไม่พบเรื่อง RD2-03 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-03",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MRQ",
+   "query": "ลมรั่วที่สกรูปรับตรงฝาท้าย ต้องเปลี่ยนแหวนซีล",
+   "rank": 4,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": {
+    "seal_washer_set_screw_torque_nm": false
+   },
+   "reason": "ไม่พบเรื่อง RD2-03 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-04",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MB2",
+   "query": "air cylinder piston seal is worn, how to remove and fit a new piston seal",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-04 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-04",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SMC-MB2",
+   "query": "ซีลลูกสูบของกระบอกลมสึก ถอดและใส่ซีลลูกสูบใหม่ยังไง",
+   "rank": 10,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-04 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-05",
+   "language": "en",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SEW-GEAR",
+   "query": "how to check the gear unit oil level at the oil level plug",
+   "rank": 1,
+   "outcome": "repair",
+   "ok": false,
+   "unsafe": true,
+   "cited": [
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 1.0
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 1.0
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 1.0
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 1.0
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 1.0
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 1.0
+    }
+   ],
+   "figures": {
+    "level_fluctuation_m10_mm": true,
+    "level_fluctuation_m12_mm": true,
+    "level_fluctuation_m22_mm": false,
+    "level_fluctuation_m33_mm": false,
+    "level_fluctuation_m42_mm": false
+   },
+   "reason": "6 ขั้น จากหน้า 169 ของคู่มือรุ่น SEW-GEAR; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง"
+  },
+  {
+   "symptom_code": "RD2-05",
+   "language": "th",
+   "split": "test",
+   "kind": "Answer",
+   "machine_model": "SEW-GEAR",
+   "query": "เช็กระดับน้ำมันเกียร์ทดที่ปลั๊กระดับน้ำมันยังไง",
+   "rank": 5,
+   "outcome": "repair",
+   "ok": false,
+   "unsafe": true,
+   "cited": [
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 0.99
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 0.99
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 0.99
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 0.99
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 0.99
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 169,
+     "confidence": 0.99
+    }
+   ],
+   "figures": {
+    "level_fluctuation_m10_mm": true,
+    "level_fluctuation_m12_mm": true,
+    "level_fluctuation_m22_mm": false,
+    "level_fluctuation_m33_mm": false,
+    "level_fluctuation_m42_mm": false
+   },
+   "reason": "6 ขั้น จากหน้า 169 ของคู่มือรุ่น SEW-GEAR; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 2 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-06",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MRQ",
+   "query": "how often should the rotary cylinder seals be replaced",
+   "rank": 3,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.962
+    }
+   ],
+   "figures": null,
+   "reason": "12 ขั้น จากหน้า 4 ของคู่มือรุ่น SMC-MRQ; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 77 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-06",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MRQ",
+   "query": "กระบอกสูบหมุนต้องเปลี่ยนซีลทุกกี่ปี",
+   "rank": 1,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    },
+    {
+     "document": "MRQB-MM00003.pdf",
+     "page": 4,
+     "confidence": 0.446
+    }
+   ],
+   "figures": null,
+   "reason": "12 ขั้น จากหน้า 4 ของคู่มือรุ่น SMC-MRQ; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 54 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-07",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MRQ",
+   "query": "tightening torque for the end cover screws of MRQ40",
+   "rank": 2,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-07 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-07",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MRQ",
+   "query": "แรงขันสกรูฝาท้ายของ MRQ40 เท่าไร",
+   "rank": 8,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-07 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-08",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MB2",
+   "query": "tie rod nut tightening torque for a 40 mm bore air cylinder",
+   "rank": 3,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "พบคู่มือที่เกี่ยวข้อง 1 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "RD2-08",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MB2",
+   "query": "แรงขันน็อตเพลายึด (tie rod) ของกระบอกลมขนาด 40 มม.",
+   "rank": 2,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "พบคู่มือที่เกี่ยวข้อง 1 หน้า แต่ไม่มีข้อความที่ใช้เป็นขั้นตอนได้"
+  },
+  {
+   "symptom_code": "RD2-09",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MB2",
+   "query": "piston rod does not move smoothly",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    },
+    {
+     "document": "om_mb2_doc1088008en.pdf",
+     "page": 33,
+     "confidence": 0.99
+    }
+   ],
+   "figures": null,
+   "reason": "9 ขั้น จากหน้า 33 ของคู่มือรุ่น SMC-MB2; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 70 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-09",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MB2",
+   "query": "ก้านสูบเคลื่อนที่ไม่ราบเรียบ สะดุด",
+   "rank": 13,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-09 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-10",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MB2",
+   "query": "piston bounces at the end of the stroke and does not complete the full stroke",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-10 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-10",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SMC-MB2",
+   "query": "ลูกสูบเด้งที่ปลายช่วงชักและวิ่งไม่สุดระยะ",
+   "rank": 4,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-10 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-11",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "gear unit inspection interval, how often to check the oil",
+   "rank": 3,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.992
+    }
+   ],
+   "figures": null,
+   "reason": "8 ขั้น จากหน้า 154 ของคู่มือรุ่น SEW-GEAR; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง"
+  },
+  {
+   "symptom_code": "RD2-11",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "เกียร์ทดต้องตรวจเช็กน้ำมันทุกกี่ชั่วโมง",
+   "rank": 2,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 154,
+     "confidence": 0.631
+    }
+   ],
+   "figures": null,
+   "reason": "8 ขั้น จากหน้า 154 ของคู่มือรุ่น SEW-GEAR; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 2 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-12",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "a little oil is leaking from the gear unit oil seal on a new gearmotor",
+   "rank": 5,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-12 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-12",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "มีน้ำมันซึมเล็กน้อยที่ซีลน้ำมันของเกียร์มอเตอร์ตัวใหม่",
+   "rank": 19,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-12 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-13",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "knocking noise from the gear unit",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-13 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-13",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "เกียร์ทดมีเสียงเคาะ",
+   "rank": 1,
+   "outcome": "not_found",
+   "ok": false,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-13 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-14",
+   "language": "en",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "tightening torque of an M22 x 1.5 oil drain plug",
+   "rank": 7,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "31978088.pdf",
+     "page": 157,
+     "confidence": 0.937
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 157,
+     "confidence": 0.937
+    }
+   ],
+   "figures": null,
+   "reason": "2 ขั้น จากหน้า 157 ของคู่มือรุ่น SEW-GEAR; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 10 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-14",
+   "language": "th",
+   "split": "test",
+   "kind": "DocumentedOnly",
+   "machine_model": "SEW-GEAR",
+   "query": "แรงขันปลั๊กถ่ายน้ำมัน M22 x 1.5 เท่าไร",
+   "rank": 10,
+   "outcome": "diagnostic",
+   "ok": true,
+   "unsafe": false,
+   "cited": [
+    {
+     "document": "31978088.pdf",
+     "page": 157,
+     "confidence": 0.761
+    },
+    {
+     "document": "31978088.pdf",
+     "page": 157,
+     "confidence": 0.761
+    }
+   ],
+   "figures": null,
+   "reason": "2 ขั้น จากหน้า 157 ของคู่มือรุ่น SEW-GEAR; คู่มือไม่ได้ระบุเวลา ต้องใส่เวลาโดยประมาณเอง; พบหน้าจากคู่มือรุ่นอื่น 8 หน้า แสดงไว้ให้เทียบเท่านั้น ไม่ได้นำมาใช้"
+  },
+  {
+   "symptom_code": "RD2-15",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SMC-MRQ",
+   "query": "solenoid valve coil burnt out on the rotary cylinder circuit",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-15 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-15",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SMC-MRQ",
+   "query": "คอยล์โซลินอยด์วาล์วของกระบอกสูบหมุนไหม้",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-15 ในคู่มือของรุ่น SMC-MRQ ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-16",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SMC-MB2",
+   "query": "vacuum pad is leaking and does not hold the panel",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-16 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-16",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SMC-MB2",
+   "query": "ถ้วยสุญญากาศรั่ว จับแผ่นงานไม่อยู่",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-16 ในคู่มือของรุ่น SMC-MB2 ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-17",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SEW-GEAR",
+   "query": "inverter shows an encoder alarm on the conveyor gearmotor",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-17 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-17",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SEW-GEAR",
+   "query": "อินเวอร์เตอร์ขึ้น alarm เอนโคเดอร์ที่เกียร์มอเตอร์สายพาน",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-17 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-18",
+   "language": "en",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SEW-GEAR",
+   "query": "robot teach pendant screen is frozen",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-18 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  },
+  {
+   "symptom_code": "RD2-18",
+   "language": "th",
+   "split": "test",
+   "kind": "AbsentSymptom",
+   "machine_model": "SEW-GEAR",
+   "query": "จอ teach pendant ของหุ่นยนต์ค้าง",
+   "rank": null,
+   "outcome": "not_found",
+   "ok": true,
+   "unsafe": false,
+   "cited": [],
+   "figures": null,
+   "reason": "ไม่พบเรื่อง RD2-18 ในคู่มือของรุ่น SEW-GEAR ให้ถามวิศวกรผู้เชี่ยวชาญหรือหาคู่มือเพิ่ม"
+  }
+ ]
+}
