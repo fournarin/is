@@ -16,9 +16,9 @@ synthetic and manufacturer manuals; see [limitations](#limitations).
   <a href="#why">Why</a> · <a href="#quick-start">Quick start</a> · <a href="#screens">Screens</a> · <a href="#architecture">Architecture</a> · <a href="#results">Results</a> · <a href="#documentation">Docs</a>
 </p>
 
-<img src="docs/images/engineer-review.png" alt="The engineer's review screen: a drafted repair procedure checked step by step against the manual page it cites, with the four reasons it cannot be approved yet">
+<img src="docs/images/board.png" alt="The shift lead's board: five decisions waiting, the critical one on top with the cars lost if it waits and the technician the round proposes, the rest in a list with one confirm button each">
 
-<sub>The engineer's review screen - each drafted step checked against the manual page it cites; approval stays locked until every mismatch is resolved. A design render on synthetic data: this screen is designed, not yet built.</sub>
+<sub>The shift lead's board, as the system draws it. Every screenshot in this README is the running system (main after #191) on seeded synthetic data - hence the "ข้อมูลจำลอง" banner on every screen.</sub>
 
 ## Why
 
@@ -68,6 +68,26 @@ uv run ruff check . && uv run mypy && uv run lint-imports
 ## Screens
 
 Each role lands on its own work, not on a menu.
+
+<table>
+<tr>
+<td><img src="docs/images/tech-job.png" width="200" alt="Technician's job on a phone: station 3, motor over temperature, predicted to reach the threshold around 16:55 (plus or minus two hours), with the reading, the threshold and the rate"></td>
+<td><img src="docs/images/tech-step-isolation.png" width="200" alt="An energy-isolation step: open breaker CP-3 and fit your own lock, with the manual page it comes from"></td>
+<td><img src="docs/images/tech-manual.png" width="200" alt="The cited manual page opened from a step, so the technician can read the source"></td>
+<td><img src="docs/images/tech-no-steps.png" width="200" alt="A job with no approved steps: the screen says so and offers to call the engineer, hand over or close, instead of guessing"></td>
+<td><img src="docs/images/report.png" width="200" alt="An operator reporting a fault from the station: machine still running, leak, how urgent"></td>
+</tr>
+<tr>
+<td><sub>A job - why now, and the trend behind it</sub></td>
+<td><sub>An isolation step, cited to the manual page</sub></td>
+<td><sub>The cited page itself</sub></td>
+<td><sub>No approved steps: it says so</sub></td>
+<td><sub>An operator's report</sub></td>
+</tr>
+</table>
+
+The engineer's screens (`/review`, `/gaps`, `/loops`, `/notes`) and `/overview` still have the
+first-generation look; they work, but were not redrawn this term.
 
 | Route | Who | What |
 |---|---|---|
