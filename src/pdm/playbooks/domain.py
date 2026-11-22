@@ -8,6 +8,7 @@ and what a runtime lookup answers when there is nothing approved to give
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
 
@@ -20,6 +21,7 @@ from pdm.contracts import (
     PlaybookStatus,
     PlaybookStep,
     SkillId,
+    StepKind,
     SymptomCode,
     UserId,
 )
@@ -229,3 +231,63 @@ def cited_documents(steps: tuple[PlaybookStep, ...], source_doc: DocumentId) -> 
     cascade exists for (ADR-018).
     """
     return tuple(sorted({source_doc, *(step.source_doc for step in steps)}))
+
+
+# ─────────────────────────────────────────────────────────────
+# Energy marks at approval (REQ-H-05, ADR-136)
+# ─────────────────────────────────────────────────────────────
+
+
+def uncovered(steps: Sequence[PlaybookStep]) -> list[str]:
+    """Isolated points with no verify of the same point after them (REQ-H-05).
+
+    OSHA 1910.147 puts "verify zero energy" between isolating and working, for
+    every point isolated. A playbook that leaves one out is shown with a stop bar
+    naming it, rather than worked as if it were complete.
+    """
+    missing: list[str] = []
+    for index, step in enumerate(steps):
+        if step.kind is not StepKind.ISOLATION:
+            continue
+        verified = {
+            point.point_id
+            for later in steps[index + 1 :]
+            if later.kind is StepKind.VERIFY
+            for point in later.isolation_points
+        }
+        missing += [p.point_id for p in step.isolation_points if p.point_id not in verified]
+    return missing
+
+
+# Words that say a step runs or tests the machine. Used only to warn the
+# approving engineer - never on a technician's screen, where nothing is read
+# from the words of a step (REQ-H-02).
+_RUNS = ("run ", "test", "start", "energi", "เดิน", "ทดลอง", "ทดสอบ", "สตาร์ท")
+
+
+def energy_problems(steps: Sequence[PlaybookStep]) -> list[str]:
+    """What an approval with energy marks must not let through (REQ-H-05, ADR-136).
+
+    Every isolated point verified and restored after it; and a restore step that
+    only restores - refitting, unlocking and test-running in one step is how the
+    machine starts with a hand still inside it.
+    """
+    problems = [f"จุด {point} ตัดพลังงานแล้วแต่ไม่มีขั้นตรวจพลังงานเป็นศูนย์" for point in uncovered(steps)]
+    for index, step in enumerate(steps):
+        if step.kind is StepKind.ISOLATION:
+            restored_later = {
+                point.point_id
+                for later in steps[index + 1 :]
+                if later.kind is StepKind.RESTORE
+                for point in later.isolation_points
+            }
+            for point in step.isolation_points:
+                if point.point_id not in restored_later:
+                    problems.append(f"จุด {point.point_id} ตัดพลังงานแล้วแต่ไม่มีขั้นคืนพลังงาน")
+        if step.kind is StepKind.RESTORE:
+            words = f" {step.text} {step.text_th or ''} ".lower()
+            if any(one in words for one in _RUNS):
+                problems.append(
+                    f"ขั้นที่ {index + 1} คืนพลังงานและเดินเครื่องในขั้นเดียว แยกการเดินเครื่องทดสอบเป็นขั้นของตัวเอง"
+                )
+    return problems

@@ -182,3 +182,27 @@ def record_access(
             """,
             (now, user, role.value if role else None, action, subject, allowed),
         )
+
+
+def failed_attempts(
+    conn: Connection[Any], *, action: str, subject: str, since: datetime
+) -> tuple[int, datetime | None]:
+    """Refused attempts at one action on one subject since a moment, and the last
+    one's time (ADR-138, C2). A recorded reset of that subject starts the count
+    again: a lead locked out is cleared by another lead, and that is audited too."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT max(at) FROM access_log WHERE action = %s AND subject = %s AND allowed",
+            (f"{action}_reset", subject),
+        )
+        reset = cur.fetchone()
+        # A reset clears everything up to and including its own moment.
+        after_reset = reset is not None and reset[0] is not None and reset[0] >= since
+        cur.execute(
+            "SELECT count(*), max(at) FROM access_log"
+            " WHERE action = %s AND subject = %s AND NOT allowed"
+            f" AND at {'>' if after_reset else '>='} %s",
+            (action, subject, reset[0] if after_reset and reset else since),
+        )
+        row = cur.fetchone()
+    return (int(row[0]), row[1]) if row else (0, None)

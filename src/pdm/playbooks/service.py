@@ -36,6 +36,7 @@ from pdm.playbooks.domain import (
     Served,
     apply_edits,
     edits_between,
+    energy_problems,
     primary_source,
 )
 
@@ -185,6 +186,11 @@ class PlaybookStore:
                 "the approver has to say which, because a value invented here would carry "
                 "the authority of the manual and the provenance of nothing"
             )
+        # Energy marks that would leave a point unverified or unrestored, or a
+        # restore step that also runs the machine, are not approved (REQ-H-05, ADR-136).
+        energy = energy_problems(steps)
+        if energy:
+            raise ValueError("; ".join(energy))
         if self.skills and skill not in self.skills:
             raise ValueError(
                 f"'{skill}' is not one of the skills declared in plant.yaml "

@@ -6,3 +6,7 @@ node_modules/
 # checkout does not have.
 next-env.d.ts
 *.tsbuildinfo
+
+# Playwright end-to-end runs (web/e2e): traces and results, regenerated each run.
+test-results/
+playwright-report/

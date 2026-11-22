@@ -121,6 +121,7 @@ def create_app(
                 str(model): dict(rows) for model, rows in config.policy.fallback_minutes.items()
             },
             wording=config.wording(),
+            restore_checks=[one.key for one in config.policy.safety.restore_checks],
         )
         # The API enqueues authoring work and claims none of it. `worker` names
         # this process in `claimed_by` only if it ever claimed anything, which it

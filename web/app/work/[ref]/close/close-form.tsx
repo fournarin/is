@@ -1,10 +1,13 @@
 "use client";
 
+import { ArrowLeft, ArrowRight, Check, CircleCheck, Lock, SquareCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import { BLOCKED_REASONS, OUTCOMES, closeFromForm, reachedNobody } from "@/lib/close";
+import { SheetClose } from "@/app/ui/v2/sheet-close";
+import { thaiPieces } from "@/lib/thai";
+import { BLOCKED_REASONS, type ClosePayload, OUTCOMES, closeFromForm, reachedNobody } from "@/lib/close";
 import { type PendingClose, drain as drainQueue, enqueue, settle } from "@/lib/pending-closes";
 
 const OUTCOME_LABELS: Record<(typeof OUTCOMES)[number], string> = {
@@ -48,12 +51,56 @@ async function post(ref: string, close: unknown): Promise<"sent" | "offline" | s
   }
 }
 
-export function CloseForm({ workOrder }: { workOrder: string }) {
+/** What the register says about locks on this job, for the lock question (ADR-135, REQ-H-06). */
+export type LockContext = {
+  // Your locks still on points of this job, as "ก-03 ที่ CP-3 ใส่ 10:31 น.".
+  mine: string[];
+  // The same in the few words the question opens with, as "ก-03 ยังล็อก CP-3" (round 3 item 2).
+  mineShort: string[];
+  // Anybody's lock still on this job.
+  onJob: string[];
+  // Anybody's lock on the machine, this job or another (B2: no "back to production" while one is on).
+  onMachine: string[];
+  // Locks on the machine from other jobs only (N3: "mine are off, the machine is still locked").
+  otherJobs: string[];
+  // Whether you put a lock on during this job, so "my locks are off" means something.
+  hadMine: boolean;
+  // Whether anybody locked anything on this job ("not isolated" is then not true).
+  anybodyLocked: boolean;
+  // The restore step not yet done, as "ขั้น 6 “...”", when your lock is still on.
+  restoreLeft: string | null;
+};
+
+const LOCK_LABELS = {
+  released: "ปลดกุญแจของฉันแล้ว เครื่องคืนสู่การผลิต",
+  // Mine are off, another job's lock is still on the machine (ADR-137, N3).
+  released_machine_locked: "ปลดกุญแจของฉันแล้ว · เครื่องยังล็อกโดยงานอื่น",
+  still_locked: "ยังล็อกอยู่ (ระบุจุดและเหตุ)",
+  not_isolated: "งานนี้ไม่ได้ตัดพลังงาน",
+} as const;
+
+const WAITS = [0, 15, 30, 60] as const;
+
+export function CloseForm({
+  workOrder,
+  locks,
+  back,
+  backLabel,
+  stepsLeft,
+}: {
+  workOrder: string;
+  locks: LockContext;
+  back: string;
+  backLabel: string;
+  stepsLeft: string[];
+}) {
   const router = useRouter();
   const [state, setState] = useState<Sending>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<PendingClose[]>([]);
-  const [blocked, setBlocked] = useState(false);
+  const [waited, setWaited] = useState<string>("0");
+  const [answers, setAnswers] = useState<{ outcome: boolean; lock: string | null }>({ outcome: false, lock: null });
+  const [review, setReview] = useState<ClosePayload | null>(null);
 
   /** Try everything the device is holding, and report what is left. */
   const drain = useCallback(
@@ -91,6 +138,17 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
       setMessage("เลือกก่อนว่างานจบอย่างไร");
       return;
     }
+    if (close.lock_state === undefined) {
+      setState("refused");
+      setMessage("ตอบสถานะกุญแจก่อนปิดงาน");
+      return;
+    }
+    // The close is the one action that cannot be taken back: say it once more before it goes (REQ-T-02).
+    setMessage(null);
+    setReview(close);
+  }
+
+  async function send(close: ClosePayload) {
 
     setState("sending");
     const result = await post(workOrder, close);
@@ -120,105 +178,330 @@ export function CloseForm({ workOrder }: { workOrder: string }) {
     // The retry above took it. Saying "not sent" after it went is how a
     // technician ends up closing the job again, or thinking it was lost.
     return (
-      <section className="card">
-        <h2>✓ ส่งการปิดงานแล้ว</h2>
-        <p>เครือข่ายกลับมาแล้ว ระบบได้รับการปิดงาน {workOrder} เรียบร้อย</p>
-        <Link className="button-link" href="/work">
-          กลับไปที่งานของฉัน
-        </Link>
-      </section>
+      <div className="callout is-ok v-note" role="status">
+        <CircleCheck size={20} aria-hidden />
+        <div>
+          <b>ส่งการปิดงานแล้ว</b> · เครือข่ายกลับมาแล้ว ระบบได้รับการปิดงาน {workOrder} เรียบร้อย
+          <p style={{ marginTop: 12 }}>
+            <Link className="btn pri" href="/work">
+              กลับไปที่งานของฉัน
+            </Link>
+          </p>
+        </div>
+      </div>
     );
   }
 
   if (state === "queued") {
     return (
-      <section className="card">
-        <h2>ยังส่งไม่ได้ — เก็บไว้ในเครื่องแล้ว</h2>
-        <p>
-          เครือข่ายไม่ถึงระบบ การปิดงานนี้ถูกเก็บไว้บนเครื่องและจะส่งเองเมื่อกลับมาต่อได้
-          ปิดหน้านี้หรือปิดเครื่องได้ ไม่หาย
-        </p>
-        <p className="muted">รอส่งอยู่ {waiting.length} รายการ</p>
-        <button type="button" onClick={() => void drain().then(setWaiting)}>
-          ลองส่งเดี๋ยวนี้
-        </button>
+      <div className="callout is-lock v-note" role="status">
+        <Lock size={20} aria-hidden />
+        <div>
+          <b>ยังส่งไม่ได้ เก็บไว้ในเครื่องแล้ว</b>
+          <p>เครือข่ายไม่ถึงระบบ การปิดงานนี้ถูกเก็บไว้บนเครื่องและจะส่งเองเมื่อกลับมาต่อได้ ปิดหน้านี้หรือปิดเครื่องได้ ไม่หาย</p>
+          <p className="muted">รอส่งอยู่ {waiting.length} รายการ</p>
+          <button type="button" className="btn" style={{ marginTop: 12, background: "var(--sunk)" }} onClick={() => void drain().then(setWaiting)}>
+            ลองส่งเดี๋ยวนี้
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (review !== null) {
+    return (
+      <section className="q" aria-labelledby="sum-h">
+        <h2 className="qh" id="sum-h">
+          ตรวจก่อนปิดงาน
+        </h2>
+        {message !== null && (
+          <p className="callout is-bad err" role="alert">
+            {message}
+          </p>
+        )}
+        <dl className="v-card sumlist" style={{ paddingTop: 0, paddingBottom: 0 }}>
+          <div>
+            <dt>ผล</dt>
+            <dd>
+              <b>{OUTCOME_LABELS[review.outcome]}</b>
+            </dd>
+          </div>
+          <div>
+            <dt>รอ</dt>
+            <dd>
+              <b>{review.blocked_minutes} นาที</b>
+              {review.blocked_reason.length > 0 && <small>{review.blocked_reason.map((one) => BLOCKED_LABELS[one]).join(" · ")}</small>}
+            </dd>
+          </div>
+          <div>
+            <dt>กุญแจ</dt>
+            <dd>
+              <b>{review.lock_state ? LOCK_LABELS[review.lock_state] : "-"}</b>
+              <small>
+                {locks.onJob.length > 0 ? `ทะเบียน: ${locks.onJob.join(", ")}` : "ทะเบียน: ไม่มีกุญแจค้างในงานนี้"}
+                {review.lock_reason ? ` · เหตุ: ${review.lock_reason}` : ""}
+              </small>
+            </dd>
+          </div>
+          <div>
+            <dt>โน้ต</dt>
+            <dd>
+              <b>{review.technician_feedback ?? "ไม่มีโน้ต"}</b>
+            </dd>
+          </div>
+        </dl>
+        {stepsLeft.length > 0 && (
+          <div className="q">
+            <h3 className="qh">{`ยังไม่ได้ทำ ${stepsLeft.length} ขั้น`}</h3>
+            <ol className="v-card gapfree" style={{ paddingTop: 0, paddingBottom: 0 }}>
+              {stepsLeft.map((one, index) => (
+                <li key={one}>
+                  <span className="k">{one.match(/\d+/)?.[0] ?? index + 1}</span>
+                  <span>{one.replace(/^ขั้น \d+ · /, "")}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {/* Steps left undone: going back to them is the first choice, closing anyway the second (spec). */}
+        <div className="submit sticky">
+          {stepsLeft.length > 0 ? (
+            <>
+              <Link className="btn pri" href={back}>
+                <ArrowLeft size={24} aria-hidden />
+                {`กลับไปทำ${backLabel.replace("ยังไม่ปิด กลับไป", "")}`}
+              </Link>
+              <button type="button" className="btn" style={{ marginTop: 8 }} disabled={state === "sending"} onClick={() => void send(review)}>
+                <SquareCheck size={24} aria-hidden />
+                {state === "sending" ? "กำลังปิดงาน..." : "ปิดงานเลย"}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn pri" disabled={state === "sending"} onClick={() => void send(review)}>
+              <SquareCheck size={24} aria-hidden />
+              {state === "sending" ? "กำลังปิดงาน..." : "ยืนยันปิดงาน"}
+            </button>
+          )}
+        </div>
+        <p className="saved">ถ้าเน็ตหลุด การปิดงานเก็บไว้ในเครื่องและส่งเองเมื่อกลับมา · ถ้าทะเบียนไม่ตรง ระบบจะแจ้ง</p>
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="btn" onClick={() => setReview(null)}>
+            <ArrowLeft size={24} aria-hidden />
+            แก้คำตอบ
+          </button>
+        </div>
       </section>
     );
   }
 
+  // The register's rules, as the API applies them (ADR-136); the API refuses either way.
+  const lockOff = {
+    released: locks.onMachine.length > 0 || !locks.hadMine,
+    released_machine_locked: locks.onJob.length > 0 || !locks.hadMine || locks.otherJobs.length === 0,
+    still_locked: locks.onJob.length === 0,
+    not_isolated: locks.onJob.length > 0 || locks.anybodyLocked,
+  };
+  const lockWhy = {
+    released:
+      locks.mine.length > 0
+        ? locks.restoreLeft
+          ? `${locks.restoreLeft.split(" “")[0]} คืนพลังงาน ยังไม่ได้ทำ`
+          : "กุญแจของคุณยังล็อกอยู่"
+        : locks.onMachine.length > 0
+          ? `ยังมีกุญแจ ${locks.onMachine.join(", ")} ที่เครื่องนี้`
+          : !locks.hadMine
+            ? "ทะเบียนไม่มีกุญแจของคุณในงานนี้"
+            : null,
+    released_machine_locked: locks.otherJobs.length > 0 ? locks.otherJobs.join(", ") : null,
+    still_locked: locks.onJob.length === 0 ? "ทะเบียนไม่มีกุญแจที่ยังล็อกอยู่ในงานนี้" : null,
+    not_isolated:
+      locks.onJob.length > 0
+        ? `ทะเบียนมีกุญแจ ${locks.onJob.join(", ")}`
+        : locks.anybodyLocked
+          ? "ทะเบียนบันทึกว่ามีการใส่กุญแจในงานนี้"
+          : null,
+  };
+  const missing = [!answers.outcome && "ผลการซ่อม", answers.lock === null && "สถานะกุญแจ"].filter(Boolean);
+  const lockFirst = locks.onJob.length > 0;
+  const refused = waiting.filter((one) => one.refused !== undefined);
+
+  const lockQuestion = (
+  <fieldset className="q lockq">
+    <legend className="qh">
+      <span className="n">{lockFirst ? 2 : 3}</span>สถานะกุญแจ<span className="tag req">ต้องตอบ</span>
+    </legend>
+    {locks.mine.length > 0 && (
+      // One line, the rest behind "ทำไม" (round 3 item 2): which lock, where; when it went on and the step
+      // still to do are in the sheet, and the disabled answer below already says it cannot be chosen.
+      <div className="callout v-note lockline" style={{ marginTop: 0, marginBottom: 8 }}>
+        <Lock size={20} aria-hidden style={{ color: "var(--stop)" }} />
+        <b className="t">
+          {thaiPieces(`กุญแจ ${locks.mineShort.join(", ")}`).map((piece, index) =>
+            piece.trim() === "" ? piece : <span className="w" key={index}>{piece}</span>,
+          )}
+        </b>
+        <details className="sheet lockwhy">
+          <summary>ทำไม</summary>
+          <div className="panel">
+            <div className="grab">
+              <b>กุญแจของคุณยังล็อกอยู่</b>
+              <SheetClose />
+            </div>
+            <p>{`กุญแจ ${locks.mine.join(", ")} ของคุณยังล็อกอยู่`}</p>
+            {locks.restoreLeft && (
+              <p style={{ marginTop: 8 }}>{`${locks.restoreLeft} ยังไม่ได้ทำ จึงเลือก “ปลดกุญแจแล้ว” ไม่ได้ ทำขั้นนั้นก่อน หรือตอบว่ายังล็อกอยู่พร้อมเหตุ`}</p>
+            )}
+          </div>
+        </details>
+      </div>
+    )}
+    <div className="g1">
+      {(Object.keys(LOCK_LABELS) as (keyof typeof LOCK_LABELS)[])
+            .filter((answer) => answer !== "released_machine_locked" || locks.otherJobs.length > 0)
+            .map((answer) => (
+        <label className="ch" key={answer}>
+          <input type="radio" name="lock_state" value={answer} required disabled={lockOff[answer]} />
+          <span className="mk" aria-hidden />
+          <span>
+            {LOCK_LABELS[answer]}
+            {lockWhy[answer] && <small>{lockWhy[answer]}</small>}
+          </span>
+        </label>
+      ))}
+    </div>
+    {locks.onJob.length > 0 && (
+      <div className="sub-q">
+        <p className="where">
+          <b>{locks.onJob.join(", ")}</b> (จากทะเบียน) · เหตุที่ยังล็อก
+        </p>
+        <div className="g2" style={{ marginTop: 8 }}>
+          {BLOCKED_REASONS.map((reason) => (
+            <label className="ch" key={reason}>
+              <input type="radio" name="lock_reason" value={BLOCKED_LABELS[reason]} />
+              <span className="mk" aria-hidden />
+              {BLOCKED_LABELS[reason]}
+            </label>
+          ))}
+        </div>
+      </div>
+    )}
+  </fieldset>
+  );
+  const waitQuestion = (
+  <fieldset className="q">
+    <legend className="qh">
+      <span className="n">{lockFirst ? 3 : 2}</span>รอไปกี่นาที<span className="tag">ค่าเริ่มต้น 0</span>
+    </legend>
+    {/* Not the job's duration - that is the sum of the segments (ADR-025).
+        This is the part of the elapsed time that was not repair, and it is
+        subtracted before anything feeds back into an estimate (ADR-006). */}
+    <div className="waits">
+      {WAITS.map((minutes) => (
+        <label className="ch" key={minutes}>
+          <input
+            type="radio"
+            name="blocked_minutes"
+            value={minutes}
+            defaultChecked={minutes === 0}
+            onChange={() => setWaited(String(minutes))}
+          />
+          <span className="mk" aria-hidden />
+          {minutes === 0 ? "ไม่ได้รอ" : `${minutes} นาที`}
+        </label>
+      ))}
+    </div>
+    <p className="where">{waited === "0" ? "รอเพราะอะไร · เลือกได้เมื่อรอมากกว่า 0 นาที" : "รอเพราะอะไร"}</p>
+    <div className="g2" style={{ marginTop: 8 }}>
+      {BLOCKED_REASONS.map((reason) => (
+        <label className="ch box" key={reason}>
+          <input type="checkbox" name="blocked_reason" value={reason} disabled={waited === "0"} />
+          <span className="mk" aria-hidden>
+            <Check size={16} strokeWidth={3} />
+          </span>
+          {BLOCKED_LABELS[reason]}
+        </label>
+      ))}
+    </div>
+  </fieldset>
+  );
+
+
   return (
     <>
-      {waiting.length > 0 && (
-        <p className="warning">
-          มีการปิดงาน {waiting.length} รายการที่ยังส่งไม่สำเร็จ ระบบจะลองส่งให้เองเมื่อเครือข่ายกลับมา
+      {refused.map((one) => (
+        // A close kept offline that the register refused when it arrived (ADR-136): said, not retried.
+        <p className="callout is-bad v-note" role="alert" key={one.ref}>
+          <Lock size={20} aria-hidden />
+          <span>
+            <b>{`การปิดงาน ${one.ref} ที่เก็บไว้ในเครื่อง ส่งไม่ผ่าน`}</b> · {one.refused} · ตอบใหม่แล้วปิดงานอีกครั้ง
+          </span>
+        </p>
+      ))}
+      {waiting.length > refused.length && (
+        <p className="callout is-lock v-note">
+          <Lock size={20} aria-hidden />
+          <span>มีการปิดงาน {waiting.length - refused.length} รายการที่ยังส่งไม่สำเร็จ ระบบจะลองส่งให้เองเมื่อเครือข่ายกลับมา</span>
         </p>
       )}
 
-      <form method="post" action={`/work/${encodeURIComponent(workOrder)}/close/send`} onSubmit={submit}>
+      <form
+        method="post"
+        action={`/work/${encodeURIComponent(workOrder)}/close/send`}
+        onSubmit={submit}
+        onChange={(event) => {
+          const form = event.currentTarget;
+          setAnswers({
+            outcome: form.querySelector("input[name=outcome]:checked") !== null,
+            lock: (form.querySelector("input[name=lock_state]:checked") as HTMLInputElement | null)?.value ?? null,
+          });
+        }}
+      >
         {message !== null && (
-          <p className="error" role="alert">
+          <p className="callout is-bad err v-note" role="alert">
             {message}
           </p>
         )}
 
-        <fieldset className="card">
-          <legend>งานจบอย่างไร</legend>
-          <div className="chips">
+        <fieldset className="q">
+          <legend className="qh">
+            <span className="n">1</span>ผลการซ่อม<span className="tag req">ต้องตอบ</span>
+          </legend>
+          <div className="g2">
             {OUTCOMES.map((outcome) => (
-              <label className="chip" key={outcome}>
+              <label className="ch" key={outcome}>
                 <input type="radio" name="outcome" value={outcome} required />
-                <span>{OUTCOME_LABELS[outcome]}</span>
+                <span className="mk" aria-hidden />
+                {OUTCOME_LABELS[outcome]}
               </label>
             ))}
           </div>
         </fieldset>
 
-        <fieldset className="card">
-          <legend>ติดอะไรระหว่างทางไหม</legend>
-          <div className="chips">
-            {BLOCKED_REASONS.map((reason) => (
-              <label className="chip" key={reason}>
-                <input
-                  type="checkbox"
-                  name="blocked_reason"
-                  value={reason}
-                  onChange={(event) => {
-                    if (event.currentTarget.checked) {
-                      setBlocked(true);
-                    }
-                  }}
-                />
-                <span>{BLOCKED_LABELS[reason]}</span>
-              </label>
-            ))}
-          </div>
-          {/* Not the job's duration - that is the sum of the segments (ADR-025).
-              This is the part of the elapsed time that was not repair, and it is
-              subtracted before anything feeds back into an estimate (ADR-006). */}
-          <label className="field minutes">
-            <span>ประมาณกี่นาทีที่รออยู่เฉย ๆ</span>
-            <input
-              type="number"
-              name="blocked_minutes"
-              min={0}
-              max={600}
-              step={5}
-              defaultValue={0}
-              inputMode="numeric"
-              aria-hidden={!blocked}
-            />
-          </label>
-        </fieldset>
+        {/* With a lock on the job, the lock is the second question, not the third (set 2 review S4). */}
+        {lockFirst ? lockQuestion : waitQuestion}
+        {lockFirst ? waitQuestion : lockQuestion}
 
-        <label className="field">
-          <span>บันทึกเพิ่มเติม (ไม่บังคับ)</span>
-          <textarea name="technician_feedback" rows={2} />
+        <label className="q field">
+          <span className="qh">
+            <span className="n">4</span>โน้ต<span className="tag">ไม่บังคับ</span>
+          </span>
+          <textarea name="technician_feedback" rows={3} placeholder="สิ่งที่เจอ หรือสิ่งที่คนถัดไปควรรู้" />
         </label>
 
-        <button type="submit" disabled={state === "sending"}>
-          {state === "sending" ? "กำลังปิดงาน..." : "ปิดงาน"}
-        </button>
+        <div className="submit">
+          <button type="submit" className={`btn ${missing.length === 0 ? "pri" : ""}`} disabled={state === "sending"}>
+            ตรวจสรุปก่อนปิดงาน
+            <ArrowRight size={24} aria-hidden />
+          </button>
+          {missing.length > 0 && <p className="miss">{`ยังต้องตอบ: ${missing.join(" · ")}`}</p>}
+        </div>
       </form>
+      <div className="after">
+        <Link className="btn" href={back}>
+          <ArrowLeft size={24} aria-hidden />
+          {backLabel}
+        </Link>
+      </div>
     </>
   );
 }

@@ -39,10 +39,12 @@ from pdm.contracts import (
     Assignee,
     AssigneeRole,
     FindingKind,
+    IsolationPoint,
     MachineId,
     MachineModel,
     Role,
     Severity,
+    StepKind,
     SymptomCode,
     Technician,
     UserId,
@@ -52,7 +54,7 @@ from pdm.contracts import (
     WorkOrderStatus,
     WorkOutcome,
 )
-from pdm.dispatch import Band
+from pdm.dispatch import Band, downtime_or_unknown
 from pdm.dispatch import repo as dispatch_repo
 from pdm.dispatch.agreement import AgreementReport, agreement
 from pdm.dispatch.overrides import Override, OverrideKind
@@ -62,6 +64,7 @@ from pdm.platform.auth import repo as auth_repo
 from pdm.platform.auth.domain import Account
 from pdm.platform.config import Config
 from pdm.playbooks import repo as playbooks_repo
+from pdm.playbooks.domain import uncovered
 
 # Layer 4, for one line in `confirm_proposal`. `.importlinter` bans `pdm.dispatch`
 # and `pdm.work` from importing this package at all and names only the workers
@@ -76,6 +79,7 @@ from pdm.sinks import repo as deliveries
 # composition layer that already reaches into work/, dispatch/ and playbooks/ to
 # assemble a screen.
 from pdm.triggers import repo as findings
+from pdm.work import locks, photos
 from pdm.work import repo as work
 from pdm.work.domain import reported_words, title, when_expected
 
@@ -175,6 +179,80 @@ class Step(BaseModel):
     # Which manual the page is in, so a technician holding the printed copy
     # knows which book to open (ADR-102).
     manual: str | None = None
+    # As the approving engineer marked it (ADR-135); a step nobody marked is normal.
+    kind: StepKind = StepKind.NORMAL
+    hazards: tuple[str, ...] = ()
+    isolation_points: tuple[IsolationPoint, ...] = ()
+    wait_minutes: int | None = None
+
+
+class PointConfirmed(BaseModel):
+    step: int
+    point_id: str
+    item: str
+    by: str
+    at: datetime
+
+
+class RestoreCheckView(BaseModel):
+    key: str
+    label: str
+
+
+class LockOn(BaseModel):
+    """A personal lock still on a point of this machine (ADR-135)."""
+
+    point_id: str
+    lock_no: str
+    owner: str
+    owner_name: str
+    work_order_ref: str
+    step: int
+    applied_at: datetime
+
+
+class Reading(BaseModel):
+    """The measurement behind a condition ticket, as its Finding recorded it
+    (ADR-134): the value, the line it is measured against, and for a forecast
+    the slope. Each is None where the Finding did not carry it, and a screen
+    leaves that box out rather than inventing a figure."""
+
+    metric_name: str
+    metric_title: str | None = None
+    unit: str | None = None
+    value: float | None = None
+    measured_at: datetime | None = None
+    threshold: float | None = None
+    comparison: str | None = None
+    slope_per_hour: float | None = None
+
+
+class PastJob(BaseModel):
+    """One closed job on the same machine: what the last person found (ADR-134)."""
+
+    ref: str
+    title: str
+    closed_at: datetime
+    outcome: WorkOutcome
+    minutes: int
+    by: tuple[str, ...] = ()
+    page: int | None = None
+    note: str | None = None
+
+
+class Approval(BaseModel):
+    """Who approved the steps this order carries, and when (principle 2).
+
+    `revision` is the served playbook's only while it is still the one the
+    snapshot was taken from; after a re-approval the order's steps are an
+    older revision whose number is not kept, and None says so rather than
+    printing the new number over the old steps.
+    """
+
+    approved_by: str
+    approved_at: datetime
+    revision: int | None = None
+    manual: str | None = None
 
 
 class Recurrence(BaseModel):
@@ -248,6 +326,8 @@ class TicketView(BaseModel):
     # What the last person to put this job down wrote about how far it got
     # (ADR-025). The next person, and the lead offering it to them, read it.
     handover_note: str | None = None
+    # A photo the reporter kept with it (ADR-142), served by /work-orders/{ref}/photo.
+    photo: bool = False
 
     # A predicted job must not be able to reach a screen looking like a detected
     # one. `eta_confidence` is serialised as whole minutes and is **never**
@@ -268,6 +348,29 @@ class TicketView(BaseModel):
     # manual to look instead of a bare title (fourth trial, finding 11).
     where_to_look_note: str | None = None
     recurrence: Recurrence | None = None
+
+    # What the technician's job page shows besides the steps (ADR-134).
+    station_name: str | None = None
+    machine_model: str | None = None
+    started_at: datetime | None = None
+    step_reached: int | None = None
+    reading: Reading | None = None
+    history: tuple[PastJob, ...] = ()
+    approval: Approval | None = None
+    # Whom to ask when there are no approved steps: the engineer who last
+    # approved a playbook for this machine model.
+    engineer: str | None = None
+
+    # Isolation, point by point (ADR-135).
+    confirmations: tuple[PointConfirmed, ...] = ()
+    locks: tuple[LockOn, ...] = ()
+    # Lock numbers the reader has used before, for one-tap choices.
+    your_lock_numbers: tuple[str, ...] = ()
+    # Isolated points no verify step covers (REQ-H-05): shown as a stop bar.
+    missing_verify: bool = False
+    unverified_points: tuple[str, ...] = ()
+    # EHS's checks before a restore step's locks come off (policy.yaml, ADR-136).
+    restore_checks: tuple[RestoreCheckView, ...] = ()
 
 
 class Mine(BaseModel):
@@ -320,6 +423,13 @@ class ProposalView(BaseModel):
     # active, rostered now, holding the skill the job asks for, and not already
     # the proposed primary. Empty when nobody else could.
     others: tuple[Candidate, ...] = ()
+    # What the line loses if this waits, in cars, by the same arithmetic the
+    # score used (ADR-021); None where the layout cannot place the machine. The
+    # board's one number per row (ADR-141).
+    downtime_units: float | None = None
+    # Why the proposed person, in one line: the skill, the time, what they hold
+    # now. Facts the round checked, not a ranking of people (ADR-141).
+    assigned_because: str | None = None
 
 
 class ProposalAnswered(BaseModel):
@@ -448,6 +558,27 @@ class Reported(BaseModel):
     # the screen: every sentence a person reads comes from the backend (ADR-063).
     where: str
     finished: bool
+    # The four stages the reporter's screen draws, and which one this is (REQ-P-05),
+    # so the track reads without a sentence and never names the technician
+    # (REQ-P-06): `where` names them, and the operator's screen does not show it.
+    stages: tuple[str, ...] = ()
+    stage: int = 1
+    # Whether a photo was kept with the report (ADR-142).
+    photo: bool = False
+
+
+# REQ-P-05: one set of words on every screen. `handed_over` is "received", waiting
+# for the next technician; cancelled and closed are both the end of the track.
+REPORT_STAGES = ("รับเรื่องแล้ว", "หัวหน้ากะส่งช่างแล้ว", "ช่างกำลังซ่อม", "เสร็จแล้ว")
+_STAGE_OF = {
+    WorkOrderStatus.QUEUED: 1,
+    WorkOrderStatus.PROPOSED: 1,
+    WorkOrderStatus.HANDED_OVER: 1,
+    WorkOrderStatus.ASSIGNED: 2,
+    WorkOrderStatus.IN_PROGRESS: 3,
+    WorkOrderStatus.CLOSED: 4,
+    WorkOrderStatus.CANCELLED: 4,
+}
 
 
 _OUTCOME_TH = {
@@ -491,6 +622,8 @@ def reported_by_me(
     In the owner's second trial a report, once sent, could not be found again
     by the person who sent it.
     """
+    rows = work.reported_by(conn, account.user, limit=limit)
+    with_photo = photos.refs_with_photos(conn, [ref for ref, *_ in rows])
     return [
         Reported(
             ref=ref,
@@ -502,8 +635,11 @@ def reported_by_me(
             status=order.status,
             where=_where(order, _names(conn, (one.user for one in order.assignees))),
             finished=order.status in (WorkOrderStatus.CLOSED, WorkOrderStatus.CANCELLED),
+            stages=REPORT_STAGES,
+            stage=_STAGE_OF.get(order.status, 1),
+            photo=ref in with_photo,
         )
-        for ref, created_at, _closed, order in work.reported_by(conn, account.user, limit=limit)
+        for ref, created_at, _closed, order in rows
     ]
 
 
@@ -674,12 +810,38 @@ def _others(
     )
 
 
+def _assigned_because(proposal: Proposal, config: Config, conn: Connection[Any]) -> str | None:
+    """ "มีทักษะช่างไฟฟ้า · มีเวลาว่างพอในกะนี้ · ตอนนี้ถืออยู่ 1 งาน" (ADR-141).
+
+    Each part is a check the round made before it placed the job on this person:
+    the skill the order asks for, and minutes left in the shift (ADR-102: with
+    none, the job is unassigned rather than proposed). What they hold now is
+    read from the orders, so the lead sees the load the proposal adds to.
+    """
+    order = work.get(conn, proposal.work_order_ref)
+    primary = next(
+        (one.user for one in proposal.assignees if one.role is AssigneeRole.PRIMARY), None
+    )
+    if order is None or primary is None:
+        return None
+    skill = (
+        f"มีทักษะ{config.wording().skill(order.required_skill)}"
+        if order.required_skill
+        else "งานนี้ไม่ต้องใช้ทักษะเฉพาะ"
+    )
+    holding = len(work.assigned_to(conn, primary))
+    now = f"ตอนนี้ถืออยู่ {holding} งาน" if holding else "ตอนนี้ไม่มีงานค้าง"
+    return f"{skill} · มีเวลาว่างพอในกะนี้ · {now}"
+
+
 def _proposed(
     proposal: Proposal,
     config: Config,
     conn: Connection[Any],
     others: tuple[Candidate, ...] = (),
 ) -> ProposalView:
+    order = work.get(conn, proposal.work_order_ref)
+    lost = downtime_or_unknown(order, config) if order is not None else None
     return ProposalView(
         ref=proposal.work_order_ref,
         proposed_at=proposal.proposed_at,
@@ -692,6 +854,8 @@ def _proposed(
         shift_id=str(proposal.shift_id) if proposal.shift_id is not None else None,
         expires_at=_expires_at(proposal, config),
         others=others,
+        downtime_units=round(lost, 1) if lost is not None else None,
+        assigned_because=_assigned_because(proposal, config, conn),
     )
 
 
@@ -1055,6 +1219,110 @@ def _station(config: Config, machine_id: MachineId) -> str | None:
         return None
 
 
+def _station_name(config: Config, machine_id: MachineId) -> str | None:
+    try:
+        return config.station_of(machine_id).name
+    except KeyError:
+        return None
+
+
+def _machine_model(config: Config, machine_id: MachineId) -> str | None:
+    try:
+        return str(config.model_of(machine_id))
+    except KeyError:
+        return None
+
+
+def _reading(conn: Connection[Any], config: Config, order: WorkOrder) -> Reading | None:
+    """The figures the Finding behind this order was raised on (ADR-134).
+
+    From its `evidence`, which a detection fills with the reading and a forecast
+    with the slope and, since ADR-134, the reading it was fitted up to.
+    """
+    if order.finding_ref is None:
+        return None
+    finding = findings.get(conn, order.finding_ref)
+    if finding is None:
+        return None
+    rule_id = str(finding.rule_id).split("/", 1)[0]
+    rule = next((one for one in config.rules.rules if str(one.rule_id) == rule_id), None)
+    evidence = finding.evidence
+
+    def number(key: str) -> float | None:
+        value = evidence.get(key)
+        return (
+            float(value)
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+            else None
+        )
+
+    measured = evidence.get("measured_at")
+    metric = evidence.get("metric_name") or (rule.metric_name if rule else None)
+    if metric is None:
+        return None
+    return Reading(
+        metric_name=str(metric),
+        metric_title=rule.metric_title if rule else None,
+        unit=str(evidence["unit"]) if evidence.get("unit") else None,
+        value=number("value"),
+        measured_at=datetime.fromisoformat(measured) if isinstance(measured, str) else None,
+        threshold=number("threshold")
+        if "threshold" in evidence
+        else (rule.threshold if rule else None),
+        comparison=str(evidence.get("comparison") or (rule.comparison if rule else "")) or None,
+        slope_per_hour=number("slope_per_hour"),
+    )
+
+
+def _history(
+    conn: Connection[Any], config: Config, ref: str, order: WorkOrder
+) -> tuple[PastJob, ...]:
+    """The last three jobs closed on this machine, newest first (ADR-134)."""
+    return tuple(
+        PastJob(
+            ref=past_ref,
+            title=_title(conn, config, past),
+            closed_at=closed_at,
+            # `outcome` is never None on a closed row: the database refuses one.
+            outcome=past.outcome or WorkOutcome.FIXED,
+            minutes=past.actual_minutes,
+            by=_names(conn, (one.user for one in past.assignees)),
+            page=past.playbook_snapshot[0].page if past.playbook_snapshot else None,
+            note=past.technician_feedback,
+        )
+        for past_ref, past, closed_at in work.closed_on_machine(
+            conn, order.machine_id, besides=ref, limit=3
+        )
+    )
+
+
+def _approval(conn: Connection[Any], order: WorkOrder, manuals: dict[str, str]) -> Approval | None:
+    if order.snapshot_approved_by is None or order.snapshot_approved_at is None:
+        return None
+    revision = None
+    if order.playbook_ref and "/" in order.playbook_ref:
+        symptom, model = order.playbook_ref.split("/", 1)
+        served = playbooks_repo.get(conn, SymptomCode(symptom), MachineModel(model))
+        if served is not None and served[0].approved_at == order.snapshot_approved_at:
+            revision = served[0].revision
+    first = order.playbook_snapshot[0] if order.playbook_snapshot else None
+    return Approval(
+        approved_by=_names(conn, (order.snapshot_approved_by,))[0],
+        approved_at=order.snapshot_approved_at,
+        revision=revision,
+        manual=manuals.get(str(first.source_doc)) if first else None,
+    )
+
+
+def _engineer(conn: Connection[Any], config: Config, order: WorkOrder) -> str | None:
+    try:
+        model = config.model_of(order.machine_id)
+    except KeyError:
+        return None
+    approver = playbooks_repo.last_approver(conn, model)
+    return _names(conn, (approver,))[0] if approver is not None else None
+
+
 @router.get("/work-orders/{work_order_ref}", response_model=TicketView)
 def ticket(
     work_order_ref: str,
@@ -1098,6 +1366,7 @@ def ticket(
         assignees=tuple(str(who.user) for who in order.assignees),
         playbook_warning=order.playbook_warning,
         handover_note=order.handover_note,
+        photo=photos.of(conn, work_order_ref) is not None,
         finding_kind=order.finding_kind,
         eta_text=when_expected(order, config.wording(), now=clock.now()),
         eta=order.eta,
@@ -1113,6 +1382,10 @@ def ticket(
                 source_doc=str(step.source_doc),
                 page=step.page,
                 manual=manuals.get(str(step.source_doc)),
+                kind=step.kind,
+                hazards=step.hazards,
+                isolation_points=step.isolation_points,
+                wait_minutes=step.wait_minutes,
             )
             for step in order.playbook_snapshot
         ),
@@ -1125,6 +1398,43 @@ def ticket(
             task_title=_pm_title(config, order),
         ),
         recurrence=_recurrence(conn, order),
+        station_name=_station_name(config, order.machine_id),
+        machine_model=_machine_model(config, order.machine_id),
+        started_at=min((one.started_at for one in order.work_segments), default=None),
+        step_reached=work.step_reached(conn, work_order_ref),
+        reading=_reading(conn, config, order),
+        history=_history(conn, config, work_order_ref, order),
+        approval=_approval(conn, order, manuals),
+        engineer=_engineer(conn, config, order),
+        confirmations=tuple(
+            PointConfirmed(
+                step=one.step,
+                point_id=one.point_id,
+                item=one.item,
+                by=str(one.confirmed_by),
+                at=one.confirmed_at,
+            )
+            for one in locks.confirmations(conn, work_order_ref)
+        ),
+        locks=tuple(
+            LockOn(
+                point_id=one.point_id,
+                lock_no=one.lock_no,
+                owner=str(one.owner),
+                owner_name=_names(conn, (one.owner,))[0],
+                work_order_ref=one.work_order_ref,
+                step=one.step,
+                applied_at=one.applied_at,
+            )
+            for one in locks.open_locks(conn, machine_id=order.machine_id)
+        ),
+        your_lock_numbers=tuple(locks.lock_numbers_of(conn, account.user)),
+        missing_verify=bool(uncovered(order.playbook_snapshot)),
+        unverified_points=tuple(uncovered(order.playbook_snapshot)),
+        restore_checks=tuple(
+            RestoreCheckView(key=one.key, label=one.label)
+            for one in config.policy.safety.restore_checks
+        ),
     )
 
 

@@ -22,6 +22,7 @@ from pdm.contracts.enums import (
     PlaybookStatus,
     Role,
     Severity,
+    StepKind,
     WorkOrderOrigin,
     WorkOrderStatus,
     WorkOutcome,
@@ -140,6 +141,21 @@ class Finding(BaseModel):
         return self
 
 
+class IsolationPoint(BaseModel):
+    """One energy-isolating device a step names: a breaker, a valve (ADR-135).
+
+    A separate object confirmed one at a time and in order, never a phrase in
+    the step's text (OSHA 1910.147, REQ-H-03).
+    """
+
+    model_config = _FROZEN
+
+    point_id: str = Field(min_length=1)
+    # Where it is, as the engineer wrote it: "เบรกเกอร์ CP-3 ที่ตู้ควบคุมหุ่นยนต์".
+    label: str = Field(min_length=1)
+    energy: str = Field(pattern="^(electrical|pneumatic|hydraulic|mechanical|thermal|gravity)$")
+
+
 class PlaybookStep(BaseModel):
     """One instruction, carrying its own source.
 
@@ -159,6 +175,25 @@ class PlaybookStep(BaseModel):
     # (ADR-095). `text` stays the manual's own words, because that is what the
     # page citation proves; this is what a technician reads first.
     text_th: str | None = Field(default=None, min_length=1)
+
+    # What the step does to the machine's energy, marked by the approving
+    # engineer and never inferred from the text (ADR-135, REQ-H-02, REQ-H-03).
+    kind: StepKind = StepKind.NORMAL
+    # ISO 7010 codes ("W012" electricity, "W017" hot surface) for the signs.
+    hazards: tuple[Annotated[str, Field(pattern=r"^[WMPEF]\d{3}$")], ...] = ()
+    # The devices an isolation, verify or restore step works through, in order.
+    isolation_points: tuple[IsolationPoint, ...] = ()
+    # A hazard that passes with time - a surface cooling, a bus discharging.
+    wait_minutes: int | None = Field(default=None, ge=1, le=24 * 60)
+
+    @model_validator(mode="after")
+    def _energy_steps_name_their_points(self) -> PlaybookStep:
+        energy = (StepKind.ISOLATION, StepKind.VERIFY, StepKind.RESTORE)
+        if self.kind in energy and not self.isolation_points:
+            raise ValueError(f"a {self.kind.value} step must name the points it works through")
+        if self.kind not in energy and self.isolation_points:
+            raise ValueError("only isolation, verify and restore steps name isolation points")
+        return self
 
 
 class Playbook(BaseModel):

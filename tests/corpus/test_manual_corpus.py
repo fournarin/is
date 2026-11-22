@@ -115,6 +115,7 @@ class TestTheCorpusMatchesThePlant:
         config = load_config(REPO_CONFIG)
         for answer in corpus.covered:
             assert answer.required_skill in config.skills
+            assert answer.estimated_minutes is not None
 
 
 class TestTheGapsAreDeliberate:
@@ -324,5 +325,6 @@ class TestTheManifestAgreesWithTheText:
         """Every corrective procedure in the corpus begins by citing it."""
         for document in corpus.documents:
             manual = next(m for m in MANUALS if m.filename == document.filename)
+            assert document.lockout_page is not None, f"{document.filename} names no lockout page"
             heading = manual.pages[document.lockout_page - 1].heading.lower()
             assert "lockout" in heading

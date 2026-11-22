@@ -302,6 +302,13 @@ def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary}"
 
 
+def above_the_queue(page: str) -> str:
+    """Everything before the list of what is queued behind the job, minus the
+    page's own "updated at" clock, which changes on every read (ADR-134)."""
+    top = page.partition(" · ตามลำดับที่ระบบจัด")[0]
+    return re.sub(r'<p class="upd">.*?</p>', "", top)
+
+
 def readable(page: str) -> str:
     """The page with React's text-node separators taken out.
 
@@ -310,7 +317,9 @@ def readable(page: str) -> str:
     first; matching on the second would make every assertion here a statement
     about React's renderer instead of about the screen.
     """
-    return re.sub(r"<!--.*?-->", "", page)
+    # A Thai word is wrapped in <span class="w"> so a line breaks only between words
+    # (web/lib/thai.ts); the text a person reads is the words without the wrapper.
+    return re.sub(r'<span class="w">(.*?)</span>', r"\1", re.sub(r"<!--.*?-->", "", page))
 
 
 def get(path: str) -> str:
@@ -360,7 +369,7 @@ def main() -> None:
     print("\n0b. the shift lead confirms, through their own screen")
     sign_in(SUPERVISOR, SUPERVISOR_PASSWORD)
     panel = readable(get("/board"))
-    expect("รอคุณยืนยัน" in panel, "the supervisor is asked, by name, about each one")
+    expect("รอคุณตัดสินใจ" in panel, "the supervisor is asked, by name, about each one")
     for ref in proposed:
         submit("/overview/confirm", [("ref", ref)])
     expect("ไม่มีงานรอยืนยัน" in readable(get("/board")), "and the list empties as they answer")
@@ -371,15 +380,17 @@ def main() -> None:
     queue = get("/work")
     shown = readable(queue)
     # Split at the list of what is queued behind it (ADR-093 made it a plain
-    # section rather than a collapsed one).
-    above_the_fold, _, behind = shown.partition("งานถัดไปของคุณ (")
+    # section rather than a collapsed one; ADR-134 heads it as the design does).
+    above_the_fold = above_the_queue(shown)
+    behind = shown.partition(" · ตามลำดับที่ระบบจัด")[2]
     expect("MC-012" in above_the_fold, "the machine the scheduler chose")
     expect(
         "วางแผนซ่อม" in above_the_fold,
         "a predicted job is banded as planned, never as urgent (ADR-020)",
     )
     expect("ด่วน" not in above_the_fold, "and nothing above the fold calls it urgent")
-    expect("คาดว่าจะถึงเกณฑ์" in above_the_fold, "the reason the backend wrote is on it")
+    expect("ถึงเกณฑ์ราว" in above_the_fold, "when it is expected to cross is on it")
+    expect("±" in above_the_fold, "and never without its interval (ADR-123)")
     expect(
         "เกิดซ้ำ" not in above_the_fold,
         "a forecast recomputed on every reading is not shown as repeated failures (ADR-093)",
@@ -388,7 +399,7 @@ def main() -> None:
         "ทำไมต้องทำงานนี้ก่อน" in above_the_fold, "the priority reason is on the first screen (ADR-005)"
     )
     expect(
-        behind.startswith("1)"),
+        above_the_fold.endswith("ถัดไป 1 งาน"),
         "one more job is queued behind it, and visible",
     )
     expect(
@@ -418,15 +429,17 @@ def main() -> None:
     # is not a queue, and the load gate stops meaning anything (ADR-011, ADR-059).
     after = readable(get("/work"))
     expect(
-        after.partition("งานถัดไปของคุณ (")[0] == above_the_fold,
+        above_the_queue(after) == above_the_fold,
         "the job on top is byte-for-byte the one that was there before the objection",
     )
 
     print("\n2. starting the job goes straight to the steps")
     steps = submit("/work", form_with(queue, "รับงานและเริ่มทำ"))
     expect("ขั้นที่ 1 จาก 3" in readable(steps), "the first step of three")
-    expect(STEPS[0] in steps, "and it is the first step of the playbook that was snapshotted")
-    expect("อ่านคู่มือหน้า 142" in readable(steps), "with the page it came from")
+    expect(
+        STEPS[0] in readable(steps), "and it is the first step of the playbook that was snapshotted"
+    )
+    expect("คู่มือหน้า 142" in readable(steps), "with the page it came from")
     cited = re.search(r'href="(/work/[^"]+/manual\?doc=[^"]+?page=142[^"]*)"', steps)
     expect(cited is not None, "read inside the job, not in another tab (third trial)")
     if cited is not None:
@@ -438,9 +451,11 @@ def main() -> None:
     print("\n3. stepping through")
     second = get("/work/" + ref_from(steps) + "/steps?step=2")
     expect("ขั้นที่ 2 จาก 3" in readable(second), "step two")
-    expect(STEPS[1] in second, "shows the second instruction")
+    expect(STEPS[1] in readable(second), "shows the second instruction")
     last = get("/work/" + ref_from(steps) + "/steps?step=3")
-    expect("ครบทุกขั้น ปิดงาน" in last, "and the last one offers closing instead of another step")
+    expect(
+        "ครบทุกขั้น ปิดงาน" in readable(last), "and the last one offers closing instead of another step"
+    )
 
     print("\n3b. a step that names another page lets the technician open it")
     expect(
@@ -526,18 +541,29 @@ def main() -> None:
     next_ref = ref_from(after_closing)
     next_steps = submit("/work", form_with(get("/work"), "รับงานและเริ่มทำ"))
     expect(next_ref in readable(next_steps), "the next job starts")
+    # Handing over is its own screen now, with the lock question on it (ADR-135).
+    handover = get(f"/work/{next_ref}/handover")
     blank = submit(
-        f"/work/{next_ref}/steps",
-        form_with(next_steps, 'name="note"'),
+        f"/work/{next_ref}/handover",
+        form_with(handover, 'name="note"'),
         [("note", "   ")],
     )
     expect("ก่อนส่งต่องาน" in readable(blank), "whitespace is not a handover note (ADR-025)")
-    handed = submit(
-        f"/work/{next_ref}/steps",
-        form_with(next_steps, 'name="note"'),
+    unanswered = submit(
+        f"/work/{next_ref}/handover",
+        form_with(handover, 'name="note"'),
         [("note", "ถอดฝาครอบแล้ว รออะไหล่")],
     )
-    expect("งานของฉัน" in handed, "with a note it goes through")
+    expect(
+        "ตอบสถานะกุญแจ" in readable(unanswered),
+        "and not without an answer about locks (REQ-H-06)",
+    )
+    handed = submit(
+        f"/work/{next_ref}/handover",
+        form_with(handover, 'name="note"'),
+        [("note", "ถอดฝาครอบแล้ว รออะไหล่"), ("lock_state", "not_isolated")],
+    )
+    expect("งานของฉัน" in handed, "with a note and the answer it goes through")
 
     print("\n8. the manual opens at a page rather than downloading whole")
     # The PDF link is on the in-job manual page now, one tap past the step

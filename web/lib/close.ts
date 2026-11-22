@@ -15,12 +15,30 @@ export const BLOCKED_REASONS = ["waiting_parts", "waiting_line_stop", "waiting_h
 export type Outcome = (typeof OUTCOMES)[number];
 export type BlockedReason = (typeof BLOCKED_REASONS)[number];
 
+export const LOCK_STATES = ["released", "released_machine_locked", "still_locked", "not_isolated"] as const;
+export type LockState = (typeof LOCK_STATES)[number];
+
 export type ClosePayload = {
   outcome: Outcome;
   blocked_reason: BlockedReason[];
   blocked_minutes: number;
   technician_feedback: string | null;
+  // Checked by the API against the lock register (REQ-H-06, ADR-135).
+  lock_state?: LockState;
+  lock_reason?: string | null;
 };
+
+export function isLockState(value: string): value is LockState {
+  return (LOCK_STATES as readonly string[]).includes(value);
+}
+
+/** The lock answer out of a form or a JSON body; nothing when it was not given. */
+export function lockAnswer(state: unknown, reason: unknown): Pick<ClosePayload, "lock_state" | "lock_reason"> {
+  const answer = String(state ?? "");
+  if (!isLockState(answer)) return {};
+  const why = String(reason ?? "").trim();
+  return { lock_state: answer, lock_reason: answer === "still_locked" && why !== "" ? why : null };
+}
 
 export function isOutcome(value: string): value is Outcome {
   return (OUTCOMES as readonly string[]).includes(value);
@@ -55,6 +73,7 @@ export function closeFromForm(form: FormData): ClosePayload | null {
     // stray keystroke, and subtracting it would quietly shorten the job.
     blocked_minutes: reasons.length === 0 || !Number.isFinite(minutes) ? 0 : Math.max(0, minutes),
     technician_feedback: note === "" ? null : note,
+    ...lockAnswer(form.get("lock_state"), form.get("lock_reason")),
   };
 }
 

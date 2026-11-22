@@ -270,3 +270,17 @@ jobs:
 # would be the first anybody heard of it.
 sinks:
   destination: own-system
+
+# Before a restore step's locks come off (R-H5, ADR-136). EHS's list, the same on
+# every machine, so no playbook can leave it out. Each is confirmed on the
+# technician's screen before the "release my lock" tile is offered.
+safety:
+  restore_checks:
+    - key: tools_removed
+      label: เก็บเครื่องมือออกจากเครื่องครบ
+    - key: guards_back
+      label: ประกอบฝาครอบและการ์ดกลับครบ
+    - key: people_clear
+      label: ไม่มีใครอยู่ในพื้นที่เครื่อง
+    - key: operator_told
+      label: แจ้งพนักงานประจำสถานีว่าจะจ่ายไฟ

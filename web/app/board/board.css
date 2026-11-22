@@ -1,0 +1,161 @@
+/*
+ * The shift lead's board (ADR-140, ADR-141), built from design/system board_calm.py: one light theme, the line
+ * as a strip, one focal card, one-line rows, everything else behind tabs that open a drawer. Phone first; a desk
+ * from 900 px; a wall from 1600 px, where the type grows by about a quarter so rows read from three metres.
+ */
+.v2.bd { --tap: 56px; }
+.v2.bd .synthetic { justify-content: flex-start; }
+.v2.bd .app { padding: 0 16px 48px; }
+.v2.bd .b { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 0 16px;
+  border: 0; border-radius: var(--r-sm); background: var(--sunk); color: var(--ink); font-weight: 600; line-height: 1.3;
+  white-space: nowrap; text-decoration: none; cursor: pointer; }
+.v2.bd .b.pri { background: var(--ink); color: var(--surface); }
+.v2.bd form { margin: 0; }
+
+/* the header: what this is, where to go, the plant's clock, who is signed in */
+.v2.bd .bhdr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-height: 64px; padding: 4px 0; }
+.v2.bd .bhdr .ttl { line-height: 1.3; }
+.v2.bd .bhdr h1 { font-size: var(--t2); font-weight: 600; }
+.v2.bd .bhdr .shift { display: none; color: var(--ink-2); }
+.v2.bd .bhdr .sp { display: none; }
+.v2.bd .bhdr .clk { margin-left: auto; }
+.v2.bd .bhdr nav { order: 3; width: 100%; display: flex; gap: 8px; }
+.v2.bd .bhdr nav a { display: flex; align-items: center; min-height: var(--tap); padding: 0 8px; font-weight: 600; text-decoration: none;
+  color: var(--ink-2); white-space: nowrap; box-shadow: inset 0 -2px 0 transparent; }
+.v2.bd .bhdr nav a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.v2.bd .clk b { font-size: var(--t3); font-weight: 600; line-height: 1; white-space: nowrap; }
+.v2.bd .me { display: flex; align-items: center; gap: 12px; line-height: 1.3; white-space: nowrap; }
+.v2.bd .me small { display: block; color: var(--ink-2); }
+.v2.bd .stale { align-items: center; gap: 12px; margin: 0 -16px; padding: 8px 16px; background: var(--ink); color: var(--surface);
+  font-weight: 600; line-height: 1.45; }
+
+/* 1 - the line, one quiet strip: the lamps are the only colour on the page */
+.v2.bd .bline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 4px; padding: 12px 16px;
+  border-radius: var(--r); background: var(--surface); }
+.v2.bd .bline h2 { width: 100%; font-weight: 600; line-height: 1.35; white-space: nowrap; }
+.v2.bd .lamps { width: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.v2.bd .lamps li { display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: var(--r-sm);
+  background: var(--sunk); }
+.v2.bd .lamps li b { font-size: var(--t2); line-height: 1; }
+.v2.bd .lamps li.over { background: var(--amber); }
+.v2.bd .lamps li.fc { background: var(--surface); box-shadow: inset 0 0 0 2px var(--amber); }
+.v2.bd .bline .say { flex: 1; min-width: 0; line-height: 1.45; }
+
+.v2.bd .said { margin-top: 12px; }
+/* the smallest phone (360x640, w1 check note 1): the header keeps one row - the name goes, "ออก" stays - and the
+   strip keeps its lamps but drops its heading and sentence, so the focal card's confirm ends above the fold */
+@media (max-width: 899px) and (max-height: 700px) {
+  .v2.bd .bhdr .me > span { display: none; }
+  .v2.bd .bline .say, .v2.bd .bline h2 { display: none; }
+  .v2.bd .dec { margin-top: 16px; }
+}
+
+/* 2 - the decisions: one focal card, then quiet one-line rows */
+.v2.bd .dec { margin-top: 24px; }
+.v2.bd .dec > h2 { font-size: var(--t3); font-weight: 600; line-height: 1.3; }
+.v2.bd .dec > h2 small { display: block; font-size: var(--t1); font-weight: 400; color: var(--ink-2); }
+.v2.bd .dec .bnext { margin-top: 4px; }
+.v2.bd .focal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; padding: 16px; border-radius: var(--r);
+  background: var(--surface); }
+.v2.bd .focal .what { display: block; font-size: var(--t3); font-weight: 600; line-height: 1.35; }
+.v2.bd .focal .where { display: block; margin-top: 4px; color: var(--ink-2); line-height: 1.45; }
+.v2.bd .focal .cost { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 24px; margin-top: 12px; line-height: 1.4; }
+.v2.bd .focal .cost b { font-size: var(--t3); }
+.v2.bd .focal .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2.bd .focal .acts > * { flex: 1 1 auto; }
+.v2.bd .focal .acts .b { width: 100%; }
+.v2.bd .focal.none .what { font-size: var(--t2); }
+
+/* every row and the focal card are a details: tap, click or Enter opens the drawer - no hover (ADR-140 item 4) */
+.v2.bd .sheet { margin: 0; padding: 0; background: none; border-radius: var(--r-sm); }
+.v2.bd .sheet > summary { min-height: var(--tap); padding: 0; display: flex; flex-direction: column; align-items: stretch;
+  justify-content: center; gap: 0; font-weight: 400; }
+.v2.bd .dw > summary:hover .what, .v2.bd .dw > summary:hover b { text-decoration: underline; text-underline-offset: 4px;
+  text-decoration-thickness: 1px; }
+.v2.bd .focal .dw > summary .prio { margin-bottom: 4px; }
+.v2.bd .menu > summary.b { display: flex; flex-direction: row; align-items: center; padding: 0 16px; font-weight: 600; }
+/* open, a summary is the dimmed page behind the drawer: its own words go with it */
+.v2.bd .sheet[open] > summary { color: transparent; }
+
+.v2.bd .brows { margin-top: 12px; border-radius: var(--r); background: var(--surface); }
+.v2.bd .brow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 24px; padding: 8px 16px; }
+.v2.bd .brow + .brow { box-shadow: inset 0 1px 0 var(--hair); }
+.v2.bd .brow .t { display: flex; flex-wrap: wrap; align-items: baseline; align-content: center; gap: 0 12px; line-height: 1.45; }
+.v2.bd .brow .t b { font-weight: 600; }
+.v2.bd .brow .t .prio { align-items: baseline; }
+.v2.bd .brow .t .prio svg { align-self: center; }
+.v2.bd .brow .r { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.v2.bd .brow .n { white-space: nowrap; color: var(--ink-2); }
+.v2.bd .brow .n b { color: var(--ink); }
+
+/* the drawer: a bottom sheet on a phone, from the right on a desk (v2.css), here with the board's bfacts */
+.v2.bd .sheet > .panel { font-size: var(--t2); line-height: 1.5; }
+.v2.bd .panel .dh { margin-top: 8px; font-size: var(--t3); font-weight: 600; line-height: 1.3; }
+.v2.bd .bfacts { margin-top: 12px; }
+.v2.bd .bfacts > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; padding: 12px 0;
+  box-shadow: inset 0 -1px 0 var(--hair); }
+.v2.bd .bfacts dt { color: var(--ink-2); }
+.v2.bd .sub { display: block; margin-top: 4px; }
+.v2.bd .answers { display: grid; gap: 16px; margin-top: 24px; }
+.v2.bd .answers h3, .v2.bd .lh { display: block; font-weight: 600; line-height: 1.35; margin-bottom: 8px; }
+.v2.bd .give { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2.bd .aside { display: grid; gap: 8px; }
+.v2.bd .aside textarea { margin-top: 0; min-height: 88px; }
+.v2.bd .aside .b { justify-self: start; }
+
+/* 3 - everything else, a label and its count on one line, behind a tab row */
+.v2.bd .btabs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 24px; }
+.v2.bd .btab > summary { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px;
+  border-radius: var(--r-sm); background: var(--surface); font-weight: 600; line-height: 1.3; }
+.v2.bd .btab > summary .muted { font-weight: 400; }
+.v2.bd .list li { padding: 12px 0; line-height: 1.5; box-shadow: inset 0 -1px 0 var(--hair); }
+.v2.bd .list li > b, .v2.bd .list li > span > b { display: block; font-weight: 600; }
+.v2.bd .list li > .muted, .v2.bd .list li > span > .muted { display: block; }
+.v2.bd .list li.split { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.v2.bd .list .aside { margin-top: 8px; }
+.v2.bd .foot { margin-top: 12px; }
+
+/* a desk: the same order, side by side where there is room */
+@media (min-width: 900px) {
+  .v2.bd { --t1: 15px; --tap: 48px; }
+  .v2.bd .synthetic, .v2.bd .stale { padding-left: 32px; padding-right: 32px; }
+  .v2.bd .app { max-width: 1440px; margin: 0 auto; padding: 0 32px 48px; }
+  .v2.bd .stale { margin: 0 -32px; }
+  .v2.bd .bhdr { flex-wrap: nowrap; gap: 24px; }
+  .v2.bd .bhdr .shift { display: block; font-size: var(--t1); }
+  .v2.bd .bhdr .sp { display: block; flex: 1; }
+  .v2.bd .bhdr .clk { margin-left: 0; }
+  .v2.bd .bhdr nav { order: 0; width: auto; align-self: stretch; }
+  .v2.bd .bhdr nav a { padding: 0 12px; }
+  .v2.bd .clk b { font-size: 30px; }
+  .v2.bd .me small { font-size: var(--t1); }
+  .v2.bd .bline { flex-wrap: nowrap; margin-top: 8px; }
+  .v2.bd .bline h2 { width: auto; }
+  .v2.bd .lamps { width: auto; flex: none; grid-auto-columns: 48px; }
+  .v2.bd .dec { margin-top: 32px; }
+  .v2.bd .dec > h2 small { display: inline; margin-left: 12px; }
+  .v2.bd .focal { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px 32px; padding: 24px; }
+  .v2.bd .focal .acts > * { flex: none; }
+  .v2.bd .brow { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .v2.bd .brow .t .muted { font-size: var(--t1); }
+  .v2.bd .btabs { display: flex; flex-wrap: wrap; margin-top: 32px; }
+  .v2.bd .btab > summary { justify-content: flex-start; }
+  .v2.bd .sheet[open] > .panel { width: min(520px, 92vw); }
+}
+/* a mouse at a desk or the wall: one segmented row, label and count on a line, hairlines between (round 3 item 6);
+   below 1200 px the tabs stay 8 px apart for a finger */
+@media (min-width: 1200px) {
+  .v2.bd .btabs { gap: 0; border-radius: var(--r); background: var(--surface); }
+  .v2.bd .btabs .btab + .btab { box-shadow: inset 1px 0 0 var(--hair); }
+  .v2.bd .btab > summary { border-radius: 0; background: none; min-height: 56px; padding: 0 20px; }
+}
+/* the wall: read from three metres, the same layout scaled up by a quarter (round 3 item 5) */
+@media (min-width: 1600px) {
+  .v2.bd { --t1: 18px; --t2: 22px; --t3: 30px; }
+  .v2.bd .app { max-width: 1760px; }
+  .v2.bd .focal .what { font-size: 36px; }
+  .v2.bd .clk b { font-size: 36px; }
+  .v2.bd .lamps { grid-auto-columns: 60px; }
+  .v2.bd .lamps li { min-height: 48px; }
+  .v2.bd .brow { padding: 12px 20px; }
+}

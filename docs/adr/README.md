@@ -141,6 +141,18 @@ entries replace parts of earlier ones, and both are kept.
 | [130](0130-tools-in-thai-and-a-skill-picked-by-name.md) | Tools in Thai, and a skill picked by name | |
 | [131](0131-a-predicted-jobs-waiting-costs-less-than-a-stop-already-happening.md) | A predicted job's waiting costs less than a stop already happening | |
 | [132](0132-the-shift-lead-confirms-to-somebody-else.md) | The shift lead confirms to somebody else | |
+| [133](0133-the-screens-are-rebuilt-on-one-design-system.md) | The screens are rebuilt on one design system, with Lucide and React Aria | |
+| [134](0134-the-ticket-carries-what-the-job-page-shows.md) | The ticket carries what the technician's job page shows | |
+| [135](0135-isolation-is-confirmed-point-by-point.md) | Isolation is confirmed point by point, and locks are registered | |
+| [136](0136-each-person-locks-and-the-register-is-the-authority.md) | Each person locks, and the register is the authority on every answer | |
+| [137](0137-a-lock-comes-off-in-the-restore-step-or-witnessed-after-it.md) | A lock comes off in the restore step, or witnessed once the job is gone | |
+| [138](0138-the-witness-is-someone-else-and-is-not-guessed.md) | The witness is someone else and is not guessed; one writer per machine | |
+| [139](0139-a-calmer-look-detail-behind-a-tap.md) | A calmer look, with the detail behind a tap | 140 |
+| [140](0140-one-light-theme-and-a-board-that-asks-first.md) | One light theme, and a board that asks first | |
+| [141](0141-the-board-in-the-app-and-what-a-proposal-carries.md) | The board in the app, and what a proposal carries for it | |
+| [142](0142-the-operator-report-in-the-new-look-with-one-photo.md) | The operator's report in the new look, with one photo | |
+| [143](0143-three-more-real-manuals-measured-as-shipped.md) | Three more real manuals, measured as shipped | |
+| [144](0144-end-to-end-flows-and-an-accessibility-scan-in-the-repo.md) | End-to-end flows and an accessibility scan in the repository | |
 
 ## The invariants these records cite
 

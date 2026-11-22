@@ -18,8 +18,17 @@ export type PendingClose = {
   blocked_reason: string[];
   blocked_minutes: number;
   technician_feedback: string | null;
+  lock_state?: string;
+  lock_reason?: string | null;
   /** ISO 8601, from the device. Shown so somebody can see how stale it is. */
   queued_at: string;
+  /**
+   * The API's sentence when it read the close and refused it - the lock
+   * register disagreeing with the answer, most often (ADR-136). Kept so the
+   * technician is told, and never retried: the same close would be refused
+   * again, and a queue that retries a refusal for ever never drains.
+   */
+  refused?: string;
 };
 
 export const STORAGE_KEY = "pdm.pending-closes";
@@ -100,8 +109,13 @@ export async function drain(
   send: (ref: string, close: PendingClose) => Promise<string>,
 ): Promise<PendingClose[]> {
   for (const one of pending(storage)) {
-    if ((await send(one.ref, one)) === "sent") {
+    if (one.refused !== undefined) continue;
+    const result = await send(one.ref, one);
+    if (result === "sent") {
       settle(storage, one.ref);
+    } else if (result !== "offline") {
+      const queue = pending(storage).map((kept) => (kept.ref === one.ref ? { ...kept, refused: result } : kept));
+      storage.setItem(STORAGE_KEY, JSON.stringify(queue));
     }
   }
   return pending(storage);

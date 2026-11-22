@@ -49,6 +49,24 @@ export type Step = {
   source_doc: string;
   page: number;
   manual: string | null;
+  // As the approving engineer marked it (ADR-135); absent on older tickets.
+  kind?: StepKind;
+  hazards?: string[];
+  isolation_points?: IsolationPoint[];
+  wait_minutes?: number | null;
+};
+
+export type StepKind = "normal" | "isolation" | "verify" | "restore" | "hazard";
+export type IsolationPoint = { point_id: string; label: string; energy: string };
+export type PointConfirmed = { step: number; point_id: string; item: string; by: string; at: string };
+export type LockOn = {
+  point_id: string;
+  lock_no: string;
+  owner: string;
+  owner_name: string;
+  work_order_ref: string;
+  step: number;
+  applied_at: string;
 };
 
 export type Recurrence = {
@@ -91,6 +109,8 @@ export type Ticket = {
   playbook_warning: string | null;
   // How far the last person got before putting the job down (ADR-025, ADR-120).
   handover_note: string | null;
+  /** A photo the reporter kept with it (ADR-142), at /work/<ref>/photo. */
+  photo?: boolean;
   finding_kind: "detected" | "predicted" | null;
   eta: string | null;
   eta_confidence_minutes: number | null;
@@ -103,7 +123,86 @@ export type Ticket = {
   // is on record (fourth trial, finding 11).
   where_to_look_note?: string | null;
   recurrence: Recurrence | null;
+  // What the job page shows besides the steps (ADR-134).
+  station_name?: string | null;
+  machine_model?: string | null;
+  started_at?: string | null;
+  step_reached?: number | null;
+  reading?: Reading | null;
+  history?: PastJob[];
+  approval?: Approval | null;
+  engineer?: string | null;
+  // Isolation, point by point (ADR-135).
+  confirmations?: PointConfirmed[];
+  locks?: LockOn[];
+  your_lock_numbers?: string[];
+  missing_verify?: boolean;
+  unverified_points?: string[];
+  restore_checks?: { key: string; label: string }[];
 };
+
+/** The measurement behind a condition ticket, as its Finding recorded it. */
+export type Reading = {
+  metric_name: string;
+  metric_title: string | null;
+  unit: string | null;
+  value: number | null;
+  measured_at: string | null;
+  threshold: number | null;
+  comparison: string | null;
+  slope_per_hour: number | null;
+};
+
+/** One closed job on the same machine. */
+export type PastJob = {
+  ref: string;
+  title: string;
+  closed_at: string;
+  outcome: "fixed" | "temporary_fix" | "not_fixed" | "no_problem_found";
+  minutes: number;
+  by: string[];
+  page: number | null;
+  note: string | null;
+};
+
+export type Approval = {
+  approved_by: string;
+  approved_at: string;
+  revision: number | null;
+  manual: string | null;
+};
+
+export type Lamp = { seq: number; name: string | null; state: "normal" | "predicted" | "over_threshold" };
+
+export type MyLock = {
+  lock_id: number;
+  job_open: boolean;
+  checks_needed: { key: string; label: string }[];
+  work_order_ref: string;
+  machine_id: string;
+  point_id: string;
+  lock_no: string;
+  step: number;
+  applied_at: string;
+};
+
+/** The reader's own locks still on, on any job (ADR-136); empty when it cannot be read. */
+export async function myLocks(): Promise<MyLock[]> {
+  try {
+    return await read<MyLock[]>("/locks/mine");
+  } catch {
+    return [];
+  }
+}
+
+/** Every station's lamp, for the sign over a job (ADR-134). Null when it cannot be read: the sign then has no strip. */
+export async function lineLamps(): Promise<Lamp[][] | null> {
+  try {
+    return (await read<{ lines: Lamp[][] }>("/line/lamps")).lines;
+  } catch {
+    return null;
+  }
+}
 
 async function read<T>(path: string): Promise<T> {
   const response = await callApi(path);
@@ -161,6 +260,9 @@ export type Proposal = {
   expires_at: string;
   // Who else on this shift could take it, for "ให้คนอื่น" (ADR-132).
   others: { user: string; name: string }[];
+  // Cars lost if it waits, and why this person, both from the API (ADR-141).
+  downtime_units?: number | null;
+  assigned_because?: string | null;
 };
 
 /**

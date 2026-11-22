@@ -34,6 +34,7 @@ import os
 import re
 import sys
 import urllib.request
+from collections.abc import Sequence
 
 from psycopg import connect
 
@@ -53,6 +54,10 @@ PASSWORD = "demo-operator"
 MACHINE = "MC-012"
 SEEN = "มีน้ำมันไหลใต้ฐานเครื่อง ประมาณฝ่ามือ ตั้งแต่ต้นกะ"
 SOMETHING_ELSE = "คนละเรื่องกับใบเดิม: การ์ดนิรภัยไม่ล็อก"
+# The form a machine's QR code opens (ADR-142).
+FORM = f"/report?machine={MACHINE}"
+# Not a picture anybody took: the magic bytes are what the API checks.
+PHOTO = b"\xff\xd8\xff\xe0" + b"\x00" * 2048
 
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -105,13 +110,23 @@ def hidden_fields(page: str) -> list[tuple[str, str]]:
     return fields
 
 
-def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
+def multipart(
+    fields: list[tuple[str, str]],
+    files: Sequence[tuple[str, str, bytes]] = (),
+) -> tuple[bytes, str]:
     boundary = "----pdm-check-reporting"
     body = b""
     for name, value in fields:
         body += (
             f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
         ).encode()
+    for name, filename, content in files:
+        body += (
+            f"--{boundary}\r\nContent-Disposition: form-data; "
+            f'name="{name}"; filename="{filename}"\r\n'
+            f"Content-Type: image/jpeg\r\n\r\n"
+        ).encode()
+        body += content + b"\r\n"
     body += f"--{boundary}--\r\n".encode()
     return body, f"multipart/form-data; boundary={boundary}"
 
@@ -119,7 +134,9 @@ def multipart(fields: list[tuple[str, str]]) -> tuple[bytes, str]:
 def readable(page: str) -> str:
     """The page with React's text-node separators taken out, so the assertions
     below are about what a person reads rather than about the renderer."""
-    return re.sub(r"<!--.*?-->", "", page)
+    # A Thai word is wrapped in <span class="w"> so a line breaks only between words
+    # (web/lib/thai.ts); the text a person reads is the words without the wrapper.
+    return re.sub(r'<span class="w">(.*?)</span>', r"\1", re.sub(r"<!--.*?-->", "", page))
 
 
 def get(path: str) -> str:
@@ -127,8 +144,10 @@ def get(path: str) -> str:
         return str(response.read().decode())
 
 
-def submit(path: str, fields: list[tuple[str, str]]) -> str:
-    body, content_type = multipart(fields)
+def submit(
+    path: str, fields: list[tuple[str, str]], files: Sequence[tuple[str, str, bytes]] = ()
+) -> str:
+    body, content_type = multipart(fields, files)
     request = urllib.request.Request(
         f"{WEB}{path}",
         data=body,
@@ -149,7 +168,7 @@ def sign_in() -> None:
     submit("/sign-in", [*hidden_fields(page), ("user", str(OPERATOR)), ("password", PASSWORD)])
 
 
-def report(page: str, description: str) -> str:
+def report(page: str, description: str, photo: bytes | None = None) -> str:
     """Fill the form on `page` and send it, carrying whatever it already holds.
 
     The hidden fields are read back off the rendered page rather than
@@ -157,13 +176,17 @@ def report(page: str, description: str) -> str:
     reaches the API only if the screen actually put the references back into the
     form (ADR-077 §3).
     """
+    # The machine is a hidden field of the form a QR link opens (ADR-142); the
+    # answers are taps: stopped or not, what was seen, and the typed line.
     fields = [
         *hidden_fields(page),
-        ("machine_id", MACHINE),
+        ("stopped", "no"),
+        ("seen", "รั่ว / ซึม"),
+        ("typed", description),
         ("severity", "medium"),
-        ("description", description),
     ]
-    return readable(submit("/report", fields))
+    files = [("photo", "leak.jpg", photo)] if photo is not None else []
+    return readable(submit(FORM, fields, files))
 
 
 def main() -> None:
@@ -171,13 +194,18 @@ def main() -> None:
 
     print("\n1. an operator can reach the screen at all")
     sign_in()
-    home = readable(get("/"))
-    expect("แจ้งงานเสีย" in home, "the shell offers reporting to an operator (ADR-077 §1)")
+    with opener.open(f"{WEB}/") as landed:
+        home, page = landed.geturl(), readable(landed.read().decode())
+    # "/" opens each role onto its own work (ADR-093); an operator's is the report.
+    expect(
+        home.endswith("/report") and "แจ้งซ่อม" in page, "an operator lands on reporting (ADR-077 §1)"
+    )
 
-    form = readable(get("/report"))
-    expect(MACHINE in form, "the machines on the floor are offered as a list, not typed")
+    stations = readable(get("/report"))
+    expect(MACHINE in stations, "the machines on the floor are offered by station, not typed")
+    form = readable(get(FORM))
     expect('value="critical"' not in form, "critical is not on the screen (ADR-077 §2)")
-    expect("โทรหาหัวหน้ากะ" in form, "and the screen says what to do instead")
+    expect("andon หรือวิทยุ" in form, "and the screen says what to do instead")
 
     print("\n2. what they saw becomes a ticket")
     created = report(form, SEEN)
@@ -187,7 +215,7 @@ def main() -> None:
     expect("หัวหน้ากะยืนยัน" in created, "and says a person still releases it (ADR-071)")
 
     print("\n3. the same machine again is refused, naming what is already open")
-    again = report(readable(get("/report")), SOMETHING_ELSE)
+    again = report(readable(get(FORM)), SOMETHING_ELSE)
     expect(first.group(0) in again, "the refusal names the open ticket (ADR-077 §3)")
     expect(
         f"{MACHINE} แจ้งว่า" in again,
@@ -198,12 +226,18 @@ def main() -> None:
     # that dropped the fields would ask somebody standing at a machine to type it
     # all again before they could say it is something else.
     expect(SOMETHING_ELSE in again, "and what was typed is still in the form")
-    expect(f'value="{MACHINE}" selected' in again, "with the machine still chosen")
+    expect(f'name="machine_id" value="{MACHINE}"' in again, "with the machine still chosen")
 
     print("\n4. saying it is something else gets through, and the ticket says so")
-    different = report(again, SOMETHING_ELSE)
+    different = report(again, SOMETHING_ELSE, photo=PHOTO)
     second = re.search(r"WO-\d+", different)
-    expect("แจ้งเรื่องอื่น" in different, "and offers an empty form for the next fault (finding 19)")
+    expect(
+        "แจ้งอีกเรื่องที่เครื่องนี้" in different, "and offers an empty form for the next fault (finding 19)"
+    )
+    expect(
+        "แนบรูปแล้ว" in different,
+        "the photo sent with it is kept, even with no script to shrink it (ADR-142)",
+    )
     listed = readable(get("/report"))
     expect(
         SEEN in listed and SOMETHING_ELSE in listed,
@@ -233,6 +267,18 @@ def main() -> None:
         all(row[1] == "manual" and row[2] == "queued" for row in rows),
         "both are manual work, queued for a round to propose (ADR-010, ADR-071)",
     )
+
+    print("\n6. one photo, kept with the report it came with (ADR-142)")
+    with connect(os.environ["DATABASE_URL"]) as conn:
+        kept = conn.execute(
+            "SELECT work_order_ref, size_bytes, taken_by FROM work_order_photo"
+        ).fetchall()
+    expect(
+        kept == [(second.group(0), len(PHOTO), str(OPERATOR))],
+        "on the second ticket, by who reported it",
+    )
+    served = opener.open(f"{WEB}/work/{second.group(0)}/photo").read()
+    expect(served == PHOTO, "and served back through this origin unchanged (ADR-058)")
 
     print("\nreporting a fault works end to end")
 

@@ -3,8 +3,8 @@
 Run by hand, never by CI: it needs the embedding model.
 
     DATABASE_URL=postgresql://.../pdm_test FASTEMBED_CACHE_PATH=... \\
-        uv run python scripts/measure_rag.py [corpus|evalset|realdocs] [--rerank] [--candidates=N]
-            [--symptom] [--mismatched]
+        uv run python scripts/measure_rag.py [corpus|evalset|realdocs|realdocs2] [--rerank]
+            [--candidates=N] [--symptom] [--mismatched] [--json=PATH]
 
 `--symptom` hands drafting the symptom's description as well as the question
 (ADR-121), using the other language's query as the description: it measures
@@ -16,7 +16,12 @@ before ADR-121.
 
 `evalset` (the default) is the corpus written for measurement (ADR-096); its
 `test` entries have never been tuned on. `corpus` is the original five-symptom
-corpus, every entry of which has been looked at.
+corpus, every entry of which has been looked at. `realdocs` and `realdocs2` are
+keys for real manufacturer manuals kept outside git (ADR-098, ADR-143); the
+second has manuals that prescribe field repair, so it has `covered` entries.
+
+`--json=PATH` also writes one record per question, for a results file to be
+built from what was measured rather than copied out of the terminal.
 
 Per question (each symptom is asked in English and in Thai):
 
@@ -34,11 +39,13 @@ Per question (each symptom is asked in English and in Thai):
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
 from collections import defaultdict
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +55,7 @@ from fixtures.corpus.answers import AbsentSymptom, Answer, Corpus, DocumentedOnl
 from pdm.authoring.drafting import DraftOutcome, DraftResult
 from pdm.authoring.service import Drafting, Ingest
 from pdm.contracts import MachineModel, UserId
+from pdm.contracts.wording import figures
 from pdm.llm.extractive import ExtractiveDrafter
 from pdm.platform.clock import SystemClock
 from pdm.platform.config import load_config
@@ -63,17 +71,41 @@ CORPORA = {
     "corpus": Path("fixtures/corpus"),
     "evalset": Path("fixtures/evalset"),
     "realdocs": Path("fixtures/realdocs"),
+    "realdocs2": Path("fixtures/realdocs2"),
 }
 # The real manuals are not in the repository (ADR-098); their key is.
 REALDOCS_DIR = Path(os.environ.get("REALDOCS_DIR", "ตัวอย่างเอกสารจริง"))
 Entry = Answer | DocumentedOnly | AbsentSymptom
 
 
+def _figures_found(entry: Entry, result: DraftResult) -> dict[str, bool] | None:
+    """For a covered entry, whether each figure the key names is in the draft.
+
+    Reported beside the verdict, not folded into it: the verdict is about the
+    page, and a draft from the right page that drops a torque value is a
+    different finding from one that cites the wrong page.
+    """
+    if not isinstance(entry, Answer) or not entry.correct_figures:
+        return None
+    drafted = (
+        set().union(*(figures(step.text) for step in result.draft.steps))
+        if result.draft is not None
+        else set()
+    )
+    found: dict[str, bool] = {}
+    for name, value in entry.correct_figures.items():
+        wanted = value if isinstance(value, list) else [value]
+        found[name] = all(Decimal(str(one)).normalize() in drafted for one in wanted)
+    return found
+
+
 def _load(
     conn: Connection[Any], hybrid: HybridSearch, corpus: Corpus, root: Path, here: Path
-) -> None:
+) -> dict[str, dict[str, Any]]:
+    """Ingest every manual; what each one gave up travels with the figures (ADR-034)."""
     library = DocumentLibrary(FilesystemObjectStore(root), SystemClock())
     ingest = Ingest(library, hybrid)
+    coverage: dict[str, dict[str, Any]] = {}
     for document in corpus.documents:
         row = library.add(
             conn,
@@ -85,7 +117,15 @@ def _load(
             uploaded_by=OPERATOR,
             edition=document.edition,
         )
-        ingest.run(conn, row.document_id)
+        report = ingest.run(conn, row.document_id)
+        coverage[document.filename] = {
+            "pages": report.pages,
+            "pages_with_text": report.pages_with_text,
+            "pages_needing_ocr": list(report.pages_needing_ocr),
+            "chunks": report.chunks,
+        }
+        print(f"ingested {document.filename}: {report.pages_with_text}/{report.pages} pages")
+    return coverage
 
 
 def _key_pages(entry: Entry) -> tuple[int, ...]:
@@ -126,9 +166,13 @@ def main() -> int:
     rerank = "--rerank" in sys.argv
     with_symptom = "--symptom" in sys.argv
     mismatched = "--mismatched" in sys.argv
+    json_path = next(
+        (Path(arg.split("=", 1)[1]) for arg in sys.argv[1:] if arg.startswith("--json=")), None
+    )
+    records: list[dict[str, Any]] = []
     here = CORPORA[name]
     corpus = load(here / "manifest.yaml")
-    if name == "realdocs":
+    if name.startswith("realdocs"):
         here = REALDOCS_DIR
     url = os.environ.get("DATABASE_URL", "")
     if not url.rsplit("/", 1)[-1].endswith("_test"):
@@ -158,7 +202,7 @@ def main() -> int:
     try:
         conn.execute("TRUNCATE chunk, document_page, document CASCADE")
         conn.commit()
-        _load(conn, hybrid, corpus, Path(tempfile.mkdtemp()), here)
+        coverage = _load(conn, hybrid, corpus, Path(tempfile.mkdtemp()), here)
         conn.commit()
         by_hash: dict[str, str] = {
             str(document.sha256): document.filename for document in corpus.documents
@@ -223,6 +267,30 @@ def main() -> int:
                     f"{rank if rank is not None else '-':4} {result.outcome.value:10} "
                     f"{'✓' if ok else '✗':3} {'UNSAFE' if unsafe else ''} {' '.join(cited)}"
                 )
+                records.append(
+                    {
+                        "symptom_code": entry.symptom_code,
+                        "language": language,
+                        "split": entry.split,
+                        "kind": kind,
+                        "machine_model": entry.machine_model,
+                        "query": query,
+                        "rank": rank,
+                        "outcome": result.outcome.value,
+                        "ok": ok,
+                        "unsafe": unsafe,
+                        "cited": [
+                            {
+                                "document": by_hash.get(str(step.source_doc), "?"),
+                                "page": step.page,
+                                "confidence": round(step.confidence, 3),
+                            }
+                            for step in (result.draft.steps if result.draft is not None else ())
+                        ],
+                        "figures": _figures_found(entry, result),
+                        "reason": result.reason,
+                    }
+                )
                 row = tally[(entry.split, language)]
                 row[0] += 1
                 row[1] += int(ok)
@@ -242,6 +310,26 @@ def main() -> int:
             )
     finally:
         conn.close()
+    if json_path is not None:
+        json_path.write_text(
+            json.dumps(
+                {
+                    "set": name,
+                    "measured": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "embedder": embedder.model_name,
+                    "reranker": reranker.model_name if reranker else None,
+                    "min_relevance": authoring.min_relevance if reranker else None,
+                    "candidates": authoring.candidates,
+                    "symptom_described": with_symptom,
+                    "mismatched": mismatched,
+                    "coverage": coverage,
+                    "questions": records,
+                },
+                ensure_ascii=False,
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
     return 0
 
 

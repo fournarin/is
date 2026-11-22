@@ -408,6 +408,58 @@ def add_assignee(conn: Connection[Any], work_order_ref: str, assignee: Assignee)
         return cur.rowcount == 1
 
 
+def record_step(
+    conn: Connection[Any], work_order_ref: str, *, step: int, user: UserId, now: datetime
+) -> None:
+    """Where this order's steps have got to, overwriting the last mark (ADR-134)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO work_step_reached (work_order_ref, step, recorded_by, recorded_at)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (work_order_ref) DO UPDATE
+               SET step = EXCLUDED.step,
+                   recorded_by = EXCLUDED.recorded_by,
+                   recorded_at = EXCLUDED.recorded_at
+            """,
+            (work_order_ref, step, user, now),
+        )
+
+
+def step_reached(conn: Connection[Any], work_order_ref: str) -> int | None:
+    """The step somebody last moved this order to, or None if nobody has."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT step FROM work_step_reached WHERE work_order_ref = %s", (work_order_ref,)
+        )
+        row = cur.fetchone()
+    return int(row[0]) if row else None
+
+
+def closed_on_machine(
+    conn: Connection[Any], machine_id: MachineId, *, besides: str, limit: int
+) -> list[tuple[str, WorkOrder, datetime]]:
+    """The last jobs closed on one machine, newest first (ADR-134).
+
+    What the technician walking to it would ask the last person: what was it
+    last time, and did it hold. `besides` is the order being read, which is not
+    its own history.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            SELECT work_order_ref, closed_at, {_COLUMNS} FROM work_order
+             WHERE status = 'closed' AND closed_at IS NOT NULL
+               AND machine_id = %s AND work_order_ref <> %s
+             ORDER BY closed_at DESC, work_order_ref
+             LIMIT %s
+            """,
+            (machine_id, besides, limit),
+        )
+        rows = cur.fetchall()
+    return [(str(row["work_order_ref"]), _to_order(dict(row)), row["closed_at"]) for row in rows]
+
+
 def remove_assignee(conn: Connection[Any], work_order_ref: str, user: UserId) -> bool:
     """Take one person off the order (ADR-056).
 

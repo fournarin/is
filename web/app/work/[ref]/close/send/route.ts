@@ -12,7 +12,7 @@
 import type { NextRequest } from "next/server";
 
 import { ApiUnreachable, UNREACHABLE, callApi } from "@/lib/api";
-import { type ClosePayload, closeFromForm, isBlockedReason, isOutcome } from "@/lib/close";
+import { type ClosePayload, closeFromForm, isBlockedReason, isOutcome, lockAnswer } from "@/lib/close";
 import { seeOther } from "@/lib/redirect";
 
 async function sendClose(ref: string, close: ClosePayload): Promise<Response> {
@@ -42,6 +42,7 @@ function fromJson(body: unknown): ClosePayload | null {
     blocked_reason: reasons,
     blocked_minutes: reasons.length === 0 || !Number.isFinite(minutes) ? 0 : Math.max(0, minutes),
     technician_feedback: note === "" ? null : note,
+    ...lockAnswer(one.lock_state, one.lock_reason),
   };
 }
 

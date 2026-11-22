@@ -467,3 +467,63 @@ class TestTheListOfMachinesToReportAgainst:
 
     def test_it_needs_a_session_like_everything_else(self, client: TestClient) -> None:
         assert client.get("/machines").status_code == 401
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+
+
+class TestOnePhotoWithTheReport:
+    """ADR-142: one photo kept with a report, from the person who reported it."""
+
+    def _reported(self, client: TestClient) -> str:
+        _signed_in(client, Role.OPERATOR)
+        response = _report(client)
+        assert response.status_code == 201, response.text
+        return str(response.json()["ref"])
+
+    def test_the_reporter_attaches_one_and_everyone_can_see_it(self, client: TestClient) -> None:
+        ref = self._reported(client)
+        files = {"file": ("leak.jpg", JPEG, "image/jpeg")}
+        response = client.post(f"/work-orders/{ref}/photo", files=files)
+        assert response.status_code == 201, response.text
+
+        served = client.get(f"/work-orders/{ref}/photo")
+        assert served.status_code == 200
+        assert served.content == JPEG
+        assert served.headers["content-type"] == "image/jpeg"
+        assert client.get(f"/work-orders/{ref}").json()["photo"] is True
+        mine = client.get("/work-orders/reported").json()
+        assert mine[0]["photo"] is True
+
+        again = client.post(f"/work-orders/{ref}/photo", files=files)
+        assert again.status_code == 409
+
+    def test_only_the_reporter_may_attach(self, client: TestClient) -> None:
+        ref = self._reported(client)
+        _signed_in(client, Role.TECHNICIAN)
+        response = client.post(
+            f"/work-orders/{ref}/photo", files={"file": ("x.jpg", JPEG, "image/jpeg")}
+        )
+        assert response.status_code == 403
+
+    def test_a_file_that_is_not_a_picture_is_refused(self, client: TestClient) -> None:
+        ref = self._reported(client)
+        response = client.post(
+            f"/work-orders/{ref}/photo", files={"file": ("x.jpg", b"%PDF-1.4", "image/jpeg")}
+        )
+        assert response.status_code == 415
+
+    def test_a_picture_nobody_shrank_is_refused(self, client: TestClient) -> None:
+        ref = self._reported(client)
+        big = JPEG + b"\x00" * (2 * 1024 * 1024)
+        response = client.post(
+            f"/work-orders/{ref}/photo", files={"file": ("x.jpg", big, "image/jpeg")}
+        )
+        assert response.status_code == 413
+
+    def test_the_track_has_four_stages_and_names_nobody(self, client: TestClient) -> None:
+        self._reported(client)
+        mine = client.get("/work-orders/reported").json()[0]
+        assert mine["stages"] == ["รับเรื่องแล้ว", "หัวหน้ากะส่งช่างแล้ว", "ช่างกำลังซ่อม", "เสร็จแล้ว"]
+        assert mine["stage"] == 1
+        assert mine["photo"] is False

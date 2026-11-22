@@ -87,6 +87,9 @@ class StationConfig(BaseModel):
 
     station_id: StationId
     seq: int = Field(ge=0)
+    # What the floor calls the station ("ติดตั้งหลังคา"), for the sign over it on
+    # a technician's screen (ADR-134). A label, never a key.
+    name: str | None = Field(default=None, min_length=1)
     buffer_units: int = Field(default=0, ge=0)
     bottleneck_multiplier: float = Field(default=1.0, gt=0)
     machines: tuple[MachineConfig, ...] = ()
@@ -172,6 +175,9 @@ class RuleConfig(BaseModel):
     title: str | None = Field(default=None, min_length=1)
 
     metric_name: str
+    # The reading as a technician names it ("อุณหภูมิมอเตอร์"), above the value
+    # on the ticket (ADR-134).
+    metric_title: str | None = Field(default=None, min_length=1)
     comparison: str = Field(pattern="^(above|below)$")
     threshold: float
     # How long the condition must hold before it counts. Without it a single
@@ -482,6 +488,29 @@ class SinkPolicy(BaseModel):
     destination: Literal["own-system", "file", "cmms"]
 
 
+class RestoreCheck(BaseModel):
+    """One check before energy goes back on, as the plant's EHS wrote it (ADR-136)."""
+
+    model_config = _STRICT
+
+    key: str = Field(pattern="^[a-z_]+$")
+    label: str = Field(min_length=1)
+
+
+class SafetyPolicy(BaseModel):
+    """Plant rules for energy work that belong to EHS, not to any one playbook.
+
+    R-H5: before a restore step's locks come off - tools removed, guards back,
+    people clear, the station's operator told. They are the same on every
+    machine, so they are configured once rather than repeated in every step,
+    and a playbook cannot leave them out.
+    """
+
+    model_config = _STRICT
+
+    restore_checks: tuple[RestoreCheck, ...] = ()
+
+
 class PolicyConfig(BaseModel):
     model_config = _STRICT
 
@@ -498,3 +527,4 @@ class PolicyConfig(BaseModel):
     # a duration and stays in the queue instead of vanishing (design.md 3.2).
     fallback_minutes: dict[MachineModel, dict[Severity, int]]
     jobs: JobPolicy
+    safety: SafetyPolicy = SafetyPolicy()

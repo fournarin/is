@@ -32,6 +32,7 @@ from pdm.playbooks.domain import (
     ProposalStatus,
     StepEdit,
     cited_documents,
+    energy_problems,
 )
 
 _PLAYBOOK_COLUMNS = """
@@ -85,6 +86,23 @@ def get(
         )
         row = cur.fetchone()
     return _to_playbook(row) if row else None
+
+
+def last_approver(conn: Connection[Any], machine_model: MachineModel) -> UserId | None:
+    """The engineer to ask about a job with no steps (ADR-134).
+
+    Whoever last approved a playbook for this model, since they have read its
+    manual; for a model nobody has written for yet, whoever approves playbooks
+    here at all.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT approved_by FROM playbook WHERE approved_by IS NOT NULL "
+            "ORDER BY machine_model = %s DESC, approved_at DESC LIMIT 1",
+            (machine_model,),
+        )
+        row = cur.fetchone()
+    return UserId(row[0]) if row else None
 
 
 def needing_review(conn: Connection[Any]) -> list[tuple[Playbook, str | None]]:
@@ -178,6 +196,12 @@ def save_approved(
             f"the playbook table holds no {playbook.status.value} rows: a draft is a proposal "
             "and lives in the queue (ADR-038, invariant 3)"
         )
+    # Every approved playbook passes here - approval, seeds, anything set through
+    # the contract - so the energy marks are checked here and not only at the
+    # review screen (REQ-H-05, ADR-137 B5).
+    problems = energy_problems(playbook.steps)
+    if problems:
+        raise ValueError("; ".join(problems))
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(

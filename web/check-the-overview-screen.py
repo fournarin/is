@@ -82,7 +82,9 @@ def expect(condition: bool, message: str) -> None:
 
 def readable(page: str) -> str:
     """The page without React's text-node separators. See the sibling check."""
-    return re.sub(r"<!--.*?-->", "", page)
+    # A Thai word is wrapped in <span class="w"> so a line breaks only between words
+    # (web/lib/thai.ts); the text a person reads is the words without the wrapper.
+    return re.sub(r'<span class="w">(.*?)</span>', r"\1", re.sub(r"<!--.*?-->", "", page))
 
 
 def shift_now(config: object, now: datetime) -> tuple[ShiftId, datetime]:

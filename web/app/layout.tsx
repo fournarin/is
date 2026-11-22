@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans_Thai } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans_Thai, IBM_Plex_Sans_Thai_Looped } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
@@ -10,6 +10,24 @@ const thai = IBM_Plex_Sans_Thai({
   subsets: ["thai", "latin"],
   weight: ["400", "600", "700"],
   variable: "--font-thai",
+  display: "swap",
+});
+
+// The looped face of the same family for the rebuilt screens (ADR-133): looped
+// Thai reads better at a glance (design/REQUIREMENTS.md), 400 and 600 only.
+const looped = IBM_Plex_Sans_Thai_Looped({
+  subsets: ["thai", "latin"],
+  weight: ["400", "600"],
+  variable: "--font-looped",
+  display: "swap",
+});
+
+// Codes and figures in one mono weight (visual refresh, ADR-139): machine ids,
+// work orders and lock numbers read as identifiers, digits line up.
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -30,7 +48,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="th" className={thai.variable}>
+    <html lang="th" className={`${thai.variable} ${looped.variable} ${mono.variable}`}>
       <body>{children}</body>
     </html>
   );

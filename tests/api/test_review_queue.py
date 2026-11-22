@@ -559,3 +559,54 @@ class TestAskingForADraft:
         )
 
         assert response.status_code == 422
+
+
+class TestEnergyMarksAtApproval:
+    """REQ-H-05, ADR-137 B5: a playbook whose energy marks would put a hand in a
+    machine that can start is not approved, whatever the reviewer clicks."""
+
+    def test_a_restore_step_that_also_runs_the_machine_is_not_approved(
+        self, client: TestClient, conn: Connection[Any], setup: dict[str, Any]
+    ) -> None:
+        from pdm.contracts import IsolationPoint, StepKind
+
+        cp3 = IsolationPoint(point_id="CP-3", label="breaker CP-3", energy="electrical")
+        doc = DocumentId(setup["document_id"])
+
+        def marked(text: str, kind: StepKind) -> PlaybookStep:
+            return PlaybookStep(
+                text=text,
+                source_doc=doc,
+                page=2,
+                confidence=0.8,
+                kind=kind,
+                isolation_points=(cp3,),
+            )
+
+        proposal = playbooks.add_proposal(
+            conn,
+            symptom_code=SymptomCode("SYM-021"),
+            machine_model=R2000IC,
+            origin=ProposalOrigin.DRAFTED,
+            outcome="repair",
+            steps=(
+                marked("Open breaker CP-3 and apply a personal lock.", StepKind.ISOLATION),
+                marked("Verify zero energy at CP-3.", StepKind.VERIFY),
+                marked("Refit the guard, remove locks, and run the axis.", StepKind.RESTORE),
+            ),
+            tools=(),
+            proposed_skill=SkillId("robot_mechanical"),
+            proposed_minutes=45,
+            rejected=(),
+            reason="a combined restore step",
+            created_at=START,
+            created_by=None,
+        )
+        conn.commit()
+        _log_in(client, Role.ENGINEER)
+
+        response = client.post(f"/playbooks/queue/{proposal.proposal_id}/approve", json={})
+
+        assert response.status_code == 422
+        assert "เดินเครื่องในขั้นเดียว" in response.json()["detail"]
+        assert playbooks.get(conn, SymptomCode("SYM-021"), R2000IC) is None

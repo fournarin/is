@@ -780,6 +780,58 @@ def line_overview(
     )
 
 
+class Lamp(BaseModel):
+    """One station as the sign over a technician's job draws it (ADR-134)."""
+
+    model_config = _FROZEN
+
+    seq: int
+    name: str | None = None
+    state: StationState
+
+
+class LineLamps(BaseModel):
+    """Every station's state and nothing else: no load, no queue, no shift.
+
+    The technician's job page draws the line as a row of lamps with their own
+    station lit. `/overview/line` carries the shift's load and the held work,
+    which is a lead's to read, so this is the same fold of live Findings onto
+    the layout with everything but the lamp left out.
+    """
+
+    model_config = _FROZEN
+
+    lines: tuple[tuple[Lamp, ...], ...]
+
+
+@router.get("/line/lamps", response_model=LineLamps)
+def line_lamps(
+    conn: Db,
+    clock: Time,
+    plant: Plant,
+    account: Annotated[Account, Depends(requires(*Role, action="read_line_lamps"))],
+) -> LineLamps:
+    known = {
+        machine_id for station in plant.stations.values() for machine_id in station.machine_ids
+    }
+    grouped, _ = group_by_machine(triggers.live(conn).values(), known=known)
+    now = clock.now()
+    return LineLamps(
+        lines=tuple(
+            tuple(
+                Lamp(seq=view.seq, name=plant.stations[view.station_id].name, state=view.state)
+                for view in read_the_line(
+                    line,
+                    [one for one in plant.stations.values() if one.line_id == line_id],
+                    live=grouped,
+                    now=now,
+                )
+            )
+            for line_id, line in sorted(plant.lines.items())
+        )
+    )
+
+
 # ─────────────────────────────────────────────────────────────
 # Machine health (ADR-072, ADR-076, ADR-081)
 # ─────────────────────────────────────────────────────────────

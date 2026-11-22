@@ -22,6 +22,7 @@ from pdm.contracts import (
     BlockedReason,
     Finding,
     FindingRef,
+    LockState,
     MachineId,
     MachineModel,
     Playbook,
@@ -29,6 +30,7 @@ from pdm.contracts import (
     PMTask,
     PMTaskRef,
     Severity,
+    StepKind,
     SymptomCode,
     UserId,
     WorkOrder,
@@ -39,7 +41,7 @@ from pdm.contracts import (
 from pdm.contracts.wording import Wording
 from pdm.platform.clock import Clock
 from pdm.playbooks import repo as playbooks
-from pdm.work import domain, repo
+from pdm.work import domain, locks, repo
 
 
 class NoSuchOrder(LookupError):
@@ -147,8 +149,11 @@ class WorkOrders:
         *,
         fallback_minutes: dict[str, dict[Severity, int]],
         wording: Wording | None = None,
+        restore_checks: Sequence[str] = (),
     ) -> None:
         self.clock = clock
+        # EHS's checks before a restore step's locks come off (policy.yaml safety, ADR-136).
+        self.restore_checks = tuple(restore_checks)
         # The plant's clock and names for every reason this writes (ADR-093).
         self.wording = wording or Wording()
         # From policy.yaml, held rather than read: a second reader would be a
@@ -415,7 +420,260 @@ class WorkOrders:
         repo.set_status(conn, ref, status=WorkOrderStatus.IN_PROGRESS)
         return self._reread(conn, ref)
 
-    def hand_over(self, conn: Connection[Any], ref: str, *, user: UserId, note: str) -> WorkOrder:
+    def reach_step(self, conn: Connection[Any], ref: str, *, user: UserId, step: int) -> int:
+        """Mark the step this person has moved on to (ADR-134).
+
+        Only by somebody on the job, only to a step the snapshot has, and only
+        past steps that are finished for this person (ADR-135, ADR-136): every
+        isolated point off and their own lock on it now, every verify theirs,
+        the restore checks done and the locks off, every wait over. Checked here,
+        not only by a disabled button.
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
+        if not 1 <= step <= len(order.playbook_snapshot):
+            raise ValueError(f"ใบงาน {ref} มี {len(order.playbook_snapshot)} ขั้น ไม่มีขั้นที่ {step}")
+        now = self.clock.now()
+        # C5: moving past a step reads the register; nobody changes it meanwhile.
+        locks.hold_machine(conn, order.machine_id)
+        blocked = self._unfinished(conn, ref, order, user, before=step, now=now)
+        if blocked is not None:
+            raise TransitionRefused(f"ขั้นที่ {blocked} ยังยืนยันไม่ครบ ไปขั้นถัดไปไม่ได้")
+        repo.record_step(conn, ref, step=step, user=user, now=now)
+        # A wait starts when the step is reached, so leaving the page does not stop the clock.
+        if order.playbook_snapshot[step - 1].wait_minutes is not None:
+            locks.confirm(
+                conn, ref, step=step, point_id="", item=locks.WAIT_STARTED, user=user, now=now
+            )
+        return step
+
+    def _unfinished(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        order: WorkOrder,
+        user: UserId,
+        *,
+        before: int,
+        now: datetime,
+        restoring: frozenset[str] = frozenset(),
+    ) -> int | None:
+        found = locks.first_unfinished(
+            order.playbook_snapshot,
+            locks.confirmations(conn, ref),
+            before=before,
+            now=now,
+            user=user,
+            locks_on=locks.open_locks(conn, work_order_ref=ref),
+            checks=self.restore_checks,
+            restoring=restoring,
+        )
+        return None if found is None else found[0]
+
+    def confirm(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        *,
+        user: UserId,
+        step: int,
+        point_id: str,
+        item: str,
+        lock_no: str | None = None,
+    ) -> list[locks.Confirmation]:
+        """One point of an energy step, confirmed by the person doing it (REQ-H-04).
+
+        Only on a step the job has reached, with everything before it finished
+        for this person (ADR-136, B1): a lock cannot be released at step 2, a
+        zero-energy check cannot come before the lock, a wait cannot start early.
+        Inside the step, in order: a point is locked after it is off, the
+        restore checks come before any lock comes off, and a lock comes off only
+        by its owner. A lock goes into the register as it is confirmed.
+        """
+        order = self._live(conn, ref)
+        if not domain.holds_it(order, user):
+            raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
+        if not 1 <= step <= len(order.playbook_snapshot):
+            raise ValueError(f"ใบงาน {ref} ไม่มีขั้นที่ {step}")
+        reached = repo.step_reached(conn, ref) or 1
+        if step > reached:
+            raise TransitionRefused(f"งานยังไม่ถึงขั้นที่ {step} ยืนยันล่วงหน้าไม่ได้")
+        now = self.clock.now()
+        marked = order.playbook_snapshot[step - 1]
+        # Inside a restore step its own points are being restored: the isolation
+        # behind it stops asking for their locks (ADR-137, N4).
+        restoring = (
+            frozenset(point.point_id for point in marked.isolation_points)
+            if marked.kind is StepKind.RESTORE
+            else frozenset()
+        )
+        earlier = self._unfinished(
+            conn, ref, order, user, before=step, now=now, restoring=restoring
+        )
+        if earlier is not None:
+            raise TransitionRefused(f"ขั้นที่ {earlier} ยังยืนยันไม่ครบ ทำขั้นนั้นก่อน")
+        locks.hold_machine(conn, order.machine_id)
+        if item == locks.WAIT_STARTED:
+            if marked.wait_minutes is None or point_id != "":
+                raise ValueError(f"ขั้นที่ {step} ไม่มีเวลารอ")
+            locks.confirm(conn, ref, step=step, point_id="", item=item, user=user, now=now)
+            return locks.confirmations(conn, ref)
+        if item not in locks.ITEMS.get(marked.kind, ()):
+            raise ValueError(f"ขั้นที่ {step} ไม่มีการยืนยัน “{item}”")
+        known = (
+            set(self.restore_checks)
+            if item == "checked"
+            else {point.point_id for point in marked.isolation_points}
+        )
+        if point_id not in known:
+            raise ValueError(f"ขั้นที่ {step} ไม่มี {point_id}")
+
+        on_job = locks.open_locks(conn, work_order_ref=ref)
+        done = locks.confirmations(conn, ref)
+        needed = locks.still_needed(
+            marked, step, done, now=now, user=user, locks_on=on_job, checks=self.restore_checks
+        )
+        if (point_id, item) not in needed:
+            return done  # already confirmed: a second tap is not a second statement
+        # What this person can do next. Somebody else's lock is theirs to take off.
+        mine_on = {one.point_id for one in on_job if one.owner == user}
+        doable = [one for one in needed if not (one[1] == "released" and one[0] not in mine_on)]
+        if item == "released" and point_id not in mine_on:
+            raise TransitionRefused(f"กุญแจที่ {point_id} ไม่ใช่ของคุณ ปลดได้เฉพาะเจ้าของกุญแจ")
+        if doable and doable[0] != (point_id, item):
+            first_point, first_item = doable[0]
+            raise TransitionRefused(f"ยืนยันตามลำดับ: {first_point} ก่อน ({_SAID[first_item]})")
+
+        if item == "locked":
+            if not lock_no or not lock_no.strip():
+                raise ValueError("เลือกเลขกุญแจที่ใส่")
+            if not locks.apply_lock(
+                conn,
+                work_order_ref=ref,
+                machine_id=order.machine_id,
+                point_id=point_id,
+                lock_no=lock_no,
+                owner=user,
+                step=step,
+                now=now,
+            ):
+                raise TransitionRefused(f"กุญแจ {lock_no.strip()} ล็อกอยู่ที่จุดอื่นแล้ว")
+        if item == "released":
+            locks.release_lock(conn, work_order_ref=ref, point_id=point_id, owner=user, now=now)
+        locks.confirm(conn, ref, step=step, point_id=point_id, item=item, user=user, now=now)
+        return locks.confirmations(conn, ref)
+
+    def release_own_lock(
+        self,
+        conn: Connection[Any],
+        lock_id: int,
+        *,
+        user: UserId,
+        reason: str,
+        witness: UserId,
+        checks: Sequence[str] = (),
+    ) -> locks.Lock:
+        """The owner takes their own lock off outside the restore step, witnessed
+        by a shift lead (ADR-136 B3, ADR-137).
+
+        Only for a job the owner no longer holds - after a handover, or a "still
+        locked" close. A job they still hold is restored in its restore step, with
+        the plant's checks (N1). And while that job is still open, only once
+        somebody else's lock is on the same point: lock-on before lock-off, so the
+        machine is never left unlocked between two people (N2).
+        """
+        if not reason.strip():
+            raise ValueError("บอกเหตุที่ปลดกุญแจ เช่น คนรับงานใส่กุญแจของตัวเองแล้ว")
+        # C1: the person who saw it is somebody else - nobody witnesses their own release.
+        if witness == user:
+            raise TransitionRefused("พยานต้องเป็นหัวหน้ากะคนอื่น ไม่ใช่เจ้าของกุญแจ")
+        lock = locks.lock_by_id(conn, lock_id)
+        if lock is None or lock.owner != user:
+            raise TransitionRefused("ไม่มีกุญแจนี้ในชื่อคุณที่ยังล็อกอยู่")
+        locks.hold_machine(conn, lock.machine_id)
+        order = repo.get(conn, lock.work_order_ref)
+        live = order is not None and order.status in domain.STILL_LIVE
+        # C3: a job that has closed has no restore step left; the plant's checks
+        # before energy goes back are made on the release itself.
+        if not live and not set(self.restore_checks) <= set(checks):
+            raise ValueError("งานนี้ปิดไปแล้ว ตรวจก่อนจ่ายไฟคืนให้ครบก่อนปลด (เครื่องมือ ฝาครอบ คน พนักงาน)")
+        if order is not None and live:
+            if domain.holds_it(order, user):
+                raise TransitionRefused(
+                    f"คุณยังถืองาน {lock.work_order_ref} อยู่ ปลดกุญแจในขั้นคืนพลังงาน ซึ่งมีรายการตรวจก่อนจ่ายไฟ"
+                )
+            others = [
+                one
+                for one in locks.open_locks(conn, machine_id=lock.machine_id)
+                if one.point_id == lock.point_id and one.lock_id != lock.lock_id
+            ]
+            if not others:
+                raise TransitionRefused(
+                    f"ยังไม่มีกุญแจของคนรับงานที่ {lock.point_id} ให้คนรับงานใส่กุญแจของตัวเองก่อน "
+                    "เครื่องต้องไม่ว่างกุญแจระหว่างส่งต่อ"
+                )
+        released = locks.release_own(
+            conn,
+            lock_id,
+            owner=user,
+            now=self.clock.now(),
+            reason=reason,
+            witness=witness,
+            checks=() if live else checks,
+        )
+        if released is None:
+            raise TransitionRefused("ไม่มีกุญแจนี้ในชื่อคุณที่ยังล็อกอยู่")
+        return released
+
+    def _lock_answer(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        order: WorkOrder,
+        user: UserId,
+        answer: LockState | None,
+        reason: str | None,
+        note: str | None,
+    ) -> str | None:
+        """Check the answer about locks against the register; return the note with it on top."""
+        locks.hold_machine(conn, order.machine_id)
+        on_job = locks.open_locks(conn, work_order_ref=ref)
+        on_machine = locks.open_locks(conn, machine_id=order.machine_id)
+        done = locks.confirmations(conn, ref)
+        lockers = {one.confirmed_by for one in done if one.item == "locked"}
+        # The plant's checks before energy goes back, confirmed in a restore step of this job (N1).
+        checked = {one.point_id for one in done if one.item == "checked"}
+        restore_checked = not self.restore_checks or (
+            any(step.kind is StepKind.RESTORE for step in order.playbook_snapshot)
+            and set(self.restore_checks) <= checked
+        )
+        refused = locks.lock_state_refused(
+            answer,
+            on_job=on_job,
+            on_machine=on_machine,
+            you_locked_here=user in lockers,
+            anybody_locked_here=bool(lockers),
+            restore_checked=restore_checked,
+        )
+        if refused is not None:
+            raise TransitionRefused(refused)
+        line = locks.lock_line(answer, reason, on_job, on_machine)
+        text = (note or "").strip()
+        if line is None:
+            return text or None
+        return f"{line}\n{text}" if text else line
+
+    def hand_over(
+        self,
+        conn: Connection[Any],
+        ref: str,
+        *,
+        user: UserId,
+        note: str,
+        lock_state: LockState | None = None,
+        lock_reason: str | None = None,
+    ) -> WorkOrder:
         """Put the job down for somebody else, and say how far it got.
 
         The note is checked before anything is written. ADR-025 asks for it
@@ -436,6 +694,8 @@ class WorkOrders:
             raise TransitionRefused(f"คุณยังไม่ได้รับงาน {ref} กด “รับงานและเริ่มทำ” ก่อน")
         if not note.strip():
             raise ValueError("ส่งต่องานต้องเขียนว่าทำถึงไหนแล้ว ไม่อย่างนั้นคนถัดไปต้องเริ่มใหม่ตั้งแต่ขั้นแรก")
+        # A lock left on goes over with the job and stays its owner's (ADR-135).
+        note = self._lock_answer(conn, ref, order, user, lock_state, lock_reason, note) or note
 
         repo.close_segments(conn, ref, user=user, now=self.clock.now())
         repo.remove_assignee(conn, ref, user)
@@ -458,6 +718,8 @@ class WorkOrders:
         blocked_minutes: int = 0,
         blocked_reason: tuple[BlockedReason, ...] = (),
         technician_feedback: str | None = None,
+        lock_state: LockState | None = None,
+        lock_reason: str | None = None,
     ) -> WorkOrder:
         """End the job, with how it ended and what held it up.
 
@@ -486,6 +748,10 @@ class WorkOrders:
             )
         if blocked_minutes > 0 and not blocked_reason:
             raise ValueError("ถ้ามีเวลารอ ต้องเลือกเหตุผลด้วย: รออะไหล่ รอสายหยุด หรือรอคนช่วย")
+        # Agreed with the register, and carried at the top of the note (REQ-H-06, ADR-135).
+        technician_feedback = self._lock_answer(
+            conn, ref, order, user, lock_state, lock_reason, technician_feedback
+        )
 
         repo.close_segments(conn, ref, now=now)
         repo.close(
@@ -550,3 +816,14 @@ class WorkOrders:
         order somebody has accepted is left where it is (ADR-044 §7).
         """
         return repo.cancel_untouched_for_finding(conn, finding_ref, now=self.clock.now())
+
+
+# How a confirmation is said back, for the refusal that names the one to do first.
+_SAID = {
+    "off": "ตัดพลังงาน",
+    "locked": "ใส่กุญแจ",
+    "verified": "ตรวจว่าพลังงานเป็นศูนย์",
+    "checked": "ตรวจก่อนคืนพลังงาน",
+    "released": "ปลดกุญแจ",
+    locks.WAIT_STARTED: "รอให้ครบเวลา",
+}
