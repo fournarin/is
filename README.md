@@ -111,6 +111,20 @@ engineer's review screen and the line overview are designed but not built. The d
 record is in [`docs/design/`](docs/design/README.md); no technician has used the new
 screens yet.
 
+<table>
+<tr>
+<td width="70%"><img src="docs/images/shift-lead-board.png" alt="The shift lead's board: seven decisions waiting, the critical one first with the line-stop cost and the proposed technician"></td>
+<td width="30%"><img src="docs/images/technician-step.png" alt="A technician's step on a phone: a danger-marked isolation step with the manual page it comes from"></td>
+</tr>
+<tr>
+<td>The shift lead's board - what waits for a decision, the critical job first, with what waiting costs and who the round proposes.</td>
+<td>A technician's step - isolation marked as danger, cited to the manual page.</td>
+</tr>
+</table>
+
+Renders from the design system the built screens follow (from PR #192),
+on synthetic data - the banner on both says so.
+
 ## What this cannot do yet
 
 Better said here than found later.
