@@ -20,6 +20,7 @@ from alembic import command
 from alembic.config import Config
 from psycopg import connect
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
+from sqlalchemy.engine import URL
 
 from pdm.contracts import MachineId, MachineModel, Severity, UserId
 from pdm.platform.clock import SimulatedClock
@@ -49,12 +50,18 @@ def scratch() -> Iterator[str]:
 
 def _alembic(dsn: str) -> Config:
     config = Config(str(Path("alembic.ini")))
-    params = conninfo_to_dict(dsn)
-    url = (
-        f"postgresql+psycopg://{params.get('user', '')}@{params.get('host', 'localhost')}:"
-        f"{params.get('port', 5432)}/{params['dbname']}"
-    )
-    config.set_main_option("sqlalchemy.url", url)
+    params = {k: str(v) for k, v in conninfo_to_dict(dsn).items() if v is not None}
+    # Keep the password: CI's PostgreSQL asks for one, a laptop's often does not.
+    url = URL.create(
+        "postgresql+psycopg",
+        username=params.get("user") or None,
+        password=params.get("password") or None,
+        host=params.get("host") or "localhost",
+        port=int(params.get("port") or 5432),
+        database=params["dbname"],
+    ).render_as_string(hide_password=False)
+    # alembic's config is a ConfigParser, where a bare % starts an interpolation.
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     return config
 
 
