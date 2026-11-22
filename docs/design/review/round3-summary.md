@@ -16,7 +16,7 @@ GATE 2 waits for [M] items + a checker re-check (engineer re-check on items 1-3)
 4. eng-review step 6 edit field clips Thai (scrollWidth 681 > 530 at 1280) -> auto-growing textarea.
 5. Primary action below the fold at 360x640: sign-in-error (659), unreachable-wifi (658),
    unreachable-server (686), eng-review-queue (686) -> compact stack or sticky action.
-6. Reproducibility: base.py reads /Users/narinthon/...; data/seed1/eng.json not in data/ -> relative
+6. Reproducibility: base.py reads an absolute local path; data/seed1/eng.json not in data/ -> relative
    paths, copy the data in. Reconcile PM overdue "1 วัน" (eng-health) vs "เลย 2 วัน" (board/fixture).
 7. S-01 counted the handover row: real proposals visible are 7 at 1280 and 14 at 1920. Gain ~10 px /
    ~40 px so 8 and 15 proposals fit, or restate S-01 honestly.
