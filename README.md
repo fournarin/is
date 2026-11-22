@@ -1,5 +1,7 @@
 # Predictive maintenance with automatic work-order dispatch
 
+[![ci](https://github.com/fournarin/predictive-maintenance-dispatch/actions/workflows/ci.yml/badge.svg)](https://github.com/fournarin/predictive-maintenance-dispatch/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/Python-FastAPI-3776AB) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-plain%20SQL-336791) ![OR-Tools](https://img.shields.io/badge/OR--Tools-CP--SAT-4285F4) ![Next.js](https://img.shields.io/badge/Next.js-web-000000)
+
 A maintenance system for a vehicle assembly plant moving towards full
 automation. It watches machine signals for faults that have happened and for
 trends heading towards one, assembles a work order carrying the repair steps from
@@ -29,25 +31,17 @@ bottom.
 
 ## The four layers
 
-```
-Three sources of work
- ├── machine signals (SignalSource) → layer 1 · Trigger
- │      detect:  rules and thresholds     → Finding (detected)
- │      predict: trend → time to threshold → Finding (predicted + ETA)
- ├── the PM schedule → lower-priority work (origin = scheduled)
- └── a technician or supervisor reporting it (origin = manual)
-                    │
-                    ▼
-layer 2 · Content - assemble the ticket with steps from a playbook
-        │                    ▲
-        │                    └── playbook store (drafted from manuals with RAG)
-        ▼
-layer 3 · Dispatch - queue by priority against the shift's load
-        │      a round proposes; the shift lead confirms
-        ▼
-layer 4 · Destination - an existing CMMS, our own screens, or a file
-        ▼
-     technician - accept, close, propose corrections → back into the store
+```mermaid
+flowchart TD
+    S1["Machine signals<br/>(SignalSource)"] --> L1
+    S2["PM schedule<br/>(origin = scheduled)"] --> L2
+    S3["A technician or supervisor<br/>reports it (origin = manual)"] --> L2
+    L1["<b>Layer 1 · Trigger</b><br/>detect: rules and thresholds<br/>predict: trend → time to threshold"] -- "Finding<br/>(detected / predicted + ETA)" --> L2
+    PB[("Playbook store<br/>drafted from manuals with RAG,<br/>approved by a person")] --> L2
+    L2["<b>Layer 2 · Content</b><br/>the ticket, with cited steps<br/>from an approved playbook"] --> L3
+    L3["<b>Layer 3 · Dispatch</b><br/>rank against the shift's load;<br/>a round proposes, the shift lead confirms"] --> L4
+    L4["<b>Layer 4 · Destination</b><br/>our screens · an existing CMMS · a file"] --> T
+    T(["Technician<br/>accept · close · propose a correction"]) -. "corrections" .-> PB
 ```
 
 Each layer is separately buildable and layers 2 and 3 never block on layer 1.
