@@ -113,7 +113,7 @@ for s in check_no_wall_clock check_llm_isolation check_no_blob_deletion \
          check_the_stylesheets_close_every_rule check_doc_links check_config_is_read; do
   uv run python scripts/$s.py || break; done
 uv run pytest -m "not db"
-DATABASE_URL=postgresql://narinthon@localhost:5432/pdm_test uv run pytest -m db
+DATABASE_URL=postgresql://localhost:5432/pdm_test uv run pytest -m db
 (cd web && npm run lint && npm test && npm run build)          # when web/ changed
 
 uv run python scripts/rehearse.py --fresh      # whole stack in Docker, seeded, screen-checked

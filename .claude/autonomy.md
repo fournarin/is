@@ -16,7 +16,7 @@ scheduled loop any more: an interactive session owns the work and finishes it.
    the repository's own process come last and are usually not worth writing.
 
 3. **Your own worktree, one change, one PR.** Several sessions may be open on
-   this repository at once and share `/Users/narinthon/is`. Never switch
+   this repository at once and share one main checkout. Never switch
    branches there. Work in `git worktree add ../is-<topic> -b <branch>
    origin/main`, named `feat/…`, `fix/…`, `docs/…` or `chore/…`, with
    conventional-commit titles.

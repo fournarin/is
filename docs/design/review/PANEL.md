@@ -1,7 +1,7 @@
 # Phase 1 review panel (GATE 1 input)
 
 Each reviewer is a fresh agent that has NOT seen the concepts being made. Reviewers judge
-the three concepts A, B, C in /Users/narinthon/is/ui-redesign-work/design/concepts/<X>/ (HTML + png/). They must
+the three concepts A, B, C in ui-redesign-work/design/concepts/<X>/ (HTML + png/). They must
 open the HTML themselves with Playwright (Playwright's bundled chromium)
 at the viewports they care about and LOOK at the screenshots; they must not trust the
 designer's rationale.md - read it only after forming their own view, to check its claims.
@@ -12,9 +12,9 @@ Common rules
 - Every score below 4 must cite the exact screen, viewport and element, and say what would fix it.
 - Name the single best idea in each concept (to steal) and the single worst.
 - Rank A/B/C and say whether ANY of them is good enough to build on, or all should be redone.
-- Write the review to /Users/narinthon/is/ui-redesign-work/design/review/<role>.md (Thai or English).
+- Write the review to ui-redesign-work/design/review/<role>.md (Thai or English).
 
-Roles (interview file in /Users/narinthon/is/ui-redesign-work/design/interviews/)
+Roles (interview file in ui-redesign-work/design/interviews/)
 1. technician  (technician.md)  - phone, gloves, glare, noise; reads Thai; 30 jobs a shift.
 2. shift-lead  (shift-lead.md)  - the board at 1280 and 1920; decides 6 proposals in < 2 min.
 3. safety      (safety.md)      - EHS / จป.: LOTO, wording, false reassurance, what is NOT shown.
