@@ -18,7 +18,7 @@ release. Built as an Individual Study project: one student, one term.
 - **Repair steps** - drafted from manuals at build time, approved by a person,
   cited to a page on every step; no language model writes instructions while a
   technician waits ([ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md)).
-- **Engineering** - 127 append-only decision records, CI gates for format,
+- **Engineering** - 139 append-only decision records, CI gates for format,
   types, import boundaries and real-PostgreSQL tests, and a whole-stack
   rehearsal in Docker.
 
@@ -98,6 +98,24 @@ reproduced from a clean checkout. All of it runs on generated data.
 | Retrieval quality | [`docs/retrieval-baseline.md`](docs/retrieval-baseline.md) | on the first synthetic corpus (9 Aug, before the reranker) the answer page was in the top three every time; on the 456-page real manual the first stage placed it in the top three for 4 of 7 English questions, which is why 120 candidates reach the reranker (ADR-099) |
 | Machine health ranking | [`docs/results/health.md`](docs/results/health.md) | the history half ranks the degraded machines first in 39 of 40 draws |
 | Shift lead against scheduler agreement | [`docs/results/confirmations.md`](docs/results/confirmations.md) | **no figures yet** - needs a trial with a person |
+| Drafting on three more real manuals, and all five together | [`docs/results/realdocs2.md`](docs/results/realdocs2.md) | three manuals not seen before, measured as shipped with nothing tuned: 8/18 EN and 7/18 TH; five real manuals together 30/54 (56 %) with 2 unsafe drafts (4 %), both from one question answered from another gear family's page in the same manual |
+| The whole system at one commit | [`docs/results/final-check.md`](docs/results/final-check.md) | every gate green; 1,763 Python tests (1,067 without a database, 696 with one), 60 web unit tests, the web build |
+| End-to-end flows and accessibility | [`docs/results/e2e.md`](docs/results/e2e.md) | 7 of 7 Playwright flows through a real browser, 0 axe violations on 11 screens; one flow found a defect that kept a technician from closing a job, fixed (ADR-144) |
+| Old screens against the second generation | [`docs/results/before-after.md`](docs/results/before-after.md) | the same three tasks counted on both: 78 % fewer words on the shift lead's board; a UI measurement, not a usability result |
+
+## The second-generation screens
+
+The first person from outside the project to try the system, an engineer who runs a
+real production line, found the original screens hard to use (17 November 2026). The
+screens were rebuilt on one design system against 107 requirements that each have a
+check, of which 53 are built: the technician's job and step pages with point-by-point
+isolation and a lock register, the shift lead's board that asks first and says why a
+job went to whom, and the operator's report with one photo
+([ADR-133](docs/adr/0133-the-screens-are-rebuilt-on-one-design-system.md) to
+[ADR-142](docs/adr/0142-the-operator-report-in-the-new-look-with-one-photo.md)). The
+engineer's review screen and the line overview are designed but not built. The design
+record is in [`docs/design/`](docs/design/README.md); no technician has used the new
+screens yet.
 
 ## What this cannot do yet
 
