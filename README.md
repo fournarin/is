@@ -100,7 +100,23 @@ flowchart LR
         L["llm-server<br/>Ollama"]
     end
     AU -.->|build time only| L
+
+    classDef client fill:#E3F2FD,stroke:#1E88E5,color:#0D47A1
+    classDef app fill:#E8F5E9,stroke:#43A047,color:#1B5E20
+    classDef worker fill:#FFF3E0,stroke:#FB8C00,color:#E65100
+    classDef store fill:#F3E5F5,stroke:#8E24AA,color:#4A148C
+    classDef io fill:#ECEFF1,stroke:#78909C,color:#263238
+    classDef llm fill:#FFEBEE,stroke:#E53935,color:#B71C1C,stroke-dasharray:4 3
+    class U client
+    class W,A app
+    class RT,AU worker
+    class PG,Q store
+    class SIG,M,D io
+    class L llm
+    style llm fill:transparent,stroke:#E53935,stroke-dasharray:4 3,color:#E53935
 ```
+
+<sub>🟦 browser · 🟩 web and API · 🟧 workers · 🟪 data stores · ⬜ data in and out · 🟥 language model, isolated</sub>
 
 Eight Compose services, on-premise only. The **web** app is the only thing a browser reaches;
 the **api** listens on loopback. **worker-runtime** turns signals and the PM
