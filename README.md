@@ -7,6 +7,21 @@ the machine's manual with a page citation on every step, ranks the queue against
 what the shift can actually absorb, and hands each placement to a shift lead to
 release. Built as an Individual Study project: one student, one term.
 
+**At a glance**, all on generated data (details and caveats below):
+
+- **Forecasting** - time to a threshold within 5.4 minutes (MAE) up to an hour
+  ahead, against 13.5 for a two-point baseline, over 21 seeds
+  ([prediction baseline](docs/prediction-baseline.md)).
+- **Dispatch** - four policies compared over 7,800 simulated shifts and tested
+  at the level of the seed with a Holm correction. The honest headline is mostly
+  negative, and it is stated as such ([results](docs/results/README.md)).
+- **Repair steps** - drafted from manuals at build time, approved by a person,
+  cited to a page on every step; no language model writes instructions while a
+  technician waits ([ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md)).
+- **Engineering** - 127 append-only decision records, CI gates for format,
+  types, import boundaries and real-PostgreSQL tests, and a whole-stack
+  rehearsal in Docker.
+
 **No plant data has been seen.** Every figure here was measured on generated
 signals and synthetic manuals, and [what this cannot do
 yet](#what-this-cannot-do-yet) is near the top of this page rather than the
@@ -75,8 +90,8 @@ reproduced from a clean checkout. All of it runs on generated data.
 
 | | where | what it says |
 |---|---|---|
-| ETA accuracy, per forecast horizon | [`docs/prediction-baseline.md`](docs/prediction-baseline.md) | under three minutes of error inside three hours; about ten hours late at the twelve-hour horizon |
-| Four scheduling policies over 1,440 simulated runs | [`docs/results/README.md`](docs/results/README.md) | CP-SAT loses the least production in 11 of the 18 cells of the sweep; first-come-first-served in the other 7 |
+| ETA accuracy, per forecast horizon | [`docs/prediction-baseline.md`](docs/prediction-baseline.md) | over 21 seeds, after a Hampel filter: mean absolute error 5.4 minutes inside one hour and 15.2 at one to three hours, against 13.5 and 41.4 for a two-point baseline; about ten hours late beyond twelve hours, where a straight line reaches an exponential channel late by construction |
+| Four scheduling policies over 7,800 simulated shifts (three roster sizes, plus an oracle in which nobody waits) | [`docs/results/README.md`](docs/results/README.md) | with the shipped roster of three, every policy is within about 3% of the oracle and none differs from another after a Holm correction; with one technician CP-SAT loses significantly less than the greedy score, and no policy significantly beats first-come-first-served |
 | Why that table came out as it did | [`docs/results/diagnosis.md`](docs/results/diagnosis.md) | ranking work well does not by itself save production here, and whether it would depends on a parameter nobody has measured |
 | What the drafter gets right and wrong | [`docs/drafting-baseline.md`](docs/drafting-baseline.md) | the outcome the answer key implies for all five symptoms, in Thai and English; a symptom the manuals never mention comes back "not found" |
 | Drafting on synthetic and real manuals | [`docs/results/rag-evaluation.md`](docs/results/rag-evaluation.md) | evaluation set's test split (never tuned on) 12/12 EN and 10/12 TH; two real manuals 9/9 and 8/9, **after fixes made on those same questions**; no unsafe draft on either |
