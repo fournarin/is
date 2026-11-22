@@ -18,17 +18,15 @@ technician gets tickets with real steps and page citations, a shift lead
 releases them, and **the day real data exists it can be loaded without code
 changes** - signals from a file, technicians and shifts from a file.
 
-Dates: on 2026-09-28 the owner moved the close to **30 September 2026**: the
-system, its verification and the bound report (in Thai) all finish by then. The
-original freeze (22 October) and report weeks (30 Oct - 12 Nov) still bound
-anything after that. The written report is what gets graded. A real technician trying the system
+Status: submitted in November 2026 (tag `submission-2026-11`). The written
+report, in Thai, is what gets graded. A real technician trying the system
 (ADR-014, `docs/trial-protocol.md`) is the one piece of evidence that cannot be
 generated.
 
 ## How an agent works here
 
 The owner has handed this project to the agent to run (2026-09-27, ADR-090).
-Usage is scarce. Read [`.claude/autonomy.md`](.claude/autonomy.md) - it is
+Read [`.claude/autonomy.md`](.claude/autonomy.md) - it is
 short - and follow it. In one line: **decide, build, test, merge; spend effort
 on what a technician or the report will see, not on documents about process.**
 
