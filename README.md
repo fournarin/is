@@ -18,7 +18,7 @@ release. Built as an Individual Study project: one student, one term.
 - **Repair steps** - drafted from manuals at build time, approved by a person,
   cited to a page on every step; no language model writes instructions while a
   technician waits ([ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md)).
-- **Engineering** - 127 append-only decision records, CI gates for format,
+- **Engineering** - 139 append-only decision records, CI gates for format,
   types, import boundaries and real-PostgreSQL tests, and a whole-stack
   rehearsal in Docker.
 
@@ -67,6 +67,29 @@ Each layer is separately buildable and layers 2 and 3 never block on layer 1.
    where it is ([ADR-005](docs/adr/0005-every-ticket-carries-its-reason.md)).
 4. **When the evidence is thin, the system says so.** "Not found - see manual
    page X or ask an engineer" beats a guess.
+
+## The screens, second generation
+
+The first screens went to a technician for an unobserved trial and came back
+with one complaint: too much to read, too many places to look. The second
+generation ([ADR-133](docs/adr/0133-the-screens-are-rebuilt-on-one-design-system.md)
+to [ADR-144](docs/adr/0144-end-to-end-flows-and-an-accessibility-scan-in-the-repo.md))
+rebuilds the technician's job and step screens, the shift lead's board and the
+operator's report on one design system, in one light theme, with the detail
+behind a tap. Isolation is confirmed point by point against a lock register,
+and a lock comes off in the restore step, or witnessed by another person once
+the job is gone ([ADR-135](docs/adr/0135-isolation-is-confirmed-point-by-point.md) to
+[ADR-138](docs/adr/0138-the-witness-is-someone-else-and-is-not-guessed.md)).
+
+- **Design record** - [`docs/design/`](docs/design/): the 107 requirements, the
+  [traceability table](docs/design/TRACEABILITY.md) from requirement to screen
+  to test, the design system and screen specs, and every review round.
+- **Measured, not tested on people** - confirming the job the board puts first
+  shows 426 words across its two screens where it showed 1,862, for the same tap
+  ([before and after](docs/results/before-after.md)); seven end-to-end flows
+  pass and axe finds no violations on eleven screens ([e2e](docs/results/e2e.md));
+  every gate at one commit is in [final-check](docs/results/final-check.md).
+  Whether a person finds it easier is what the second trial is for.
 
 ## Running it
 

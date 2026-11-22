@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icons: Lucide 1.49.0, ISC License, Copyright (c) Lucide Icons and Contributors (lucide.dev). Fonts: IBM Plex Sans Thai Looped, SIL OFL 1.1. -->
+<title>ใบงาน WO-000101 · พิมพ์</title>
+<style>
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-Regular.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-SemiBold.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"Plex Mono";src:url(../fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400}
+:root{
+  /* surfaces: one canvas, one raised work surface, one sunk tone. Outlines are for inputs only. */
+  --canvas:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF0;   /* refresh (Q13): paler canvas, calmer sunk */
+  --ink:#111418;      /* text + the one action colour        16.2:1 canvas, 18.5:1 surface */
+  --ink-2:#3D434B;    /* secondary text                       8.7:1 canvas, 7.9:1 sunk */
+  --line:#7D858E;     /* input outlines only (non-text 3.3:1)  */
+  --hair:#E3E6EA;     /* 1 px separators inside a surface     */
+  /* the andon display: dark, lit only by state */
+  --andon:#16191D; --lamp-off:#2A2F36; --on-andon:#FFFFFF; --on-andon-2:#BAC1C9;
+  /* state colours - nothing else may use them */
+  --stop:#A3121A;     /* critical priority. white on it 7.9:1 */
+  --amber:#E8890C;    /* over threshold (solid) / forecast (outline). ink on it 7.05:1 */
+  --on-amber:#111418; /* text on amber or ISO yellow: always dark, in either theme */
+  --done:#1E6B3A;     /* small "done/confirmed" marks only */
+  /* ISO 3864 colours - only inside drawn ISO 7010 signs */
+  --iso-blue:#005387; --iso-yellow:#F9A800; --iso-red:#B71E1E;
+  --r:12px; --r-sm:8px;
+  /* one elevation, for sheets and drawers only; everything else is flat with hairlines */
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+  /* type scale: 15 / 18 / 24 / 36 (one more, 30, only for the board clock and station numbers) */
+  --t1:15px; --t2:18px; --t3:24px; --t4:36px;
+  --sans:"Plex Looped",sans-serif; --mono:"Plex Mono",ui-monospace,monospace;
+}
+/* one light theme everywhere, wall included (owner Q14: the dark wall read as busy and confusing) */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-weight:400;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+.w{white-space:nowrap}
+h1,h2,.ttl{text-wrap:balance} p,li,dd{text-wrap:pretty}   /* Chrome 114+/117+; ignored by 109 */
+.code{font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}
+b,strong,h1,h2,h3,h4{font-weight:600}   /* the font has 400 and 600 only; never let the browser synthesise 700/900 */
+/* the one callout: white surface, a leading Lucide icon whose colour carries the meaning, a bold word. No stripes. */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:var(--r);background:var(--surface);line-height:1.5}
+.callout>.ic{flex:none;margin-top:3px;color:var(--ink-2)}
+.callout.bad>.ic{color:var(--stop)} .callout.ok>.ic{color:var(--done)} .callout.lock>.ic{color:var(--ink)}
+.callout>div{flex:1;min-width:0}
+.callout .act{margin-top:12px}
+.muted{color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.ic{flex:none;display:block}
+.synthetic{display:flex;justify-content:space-between;gap:8px;background:var(--sunk);padding:4px 16px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.synthetic b{font-weight:600;color:var(--ink)}
+
+/* motion: 150-200 ms fades and slides for what opens; nothing for people who asked for none */
+@keyframes rise{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slide{from{transform:translateX(32px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* bottom sheet (phones): details behind a tap. The summary becomes the dimmed backdrop, so a tap
+   outside closes it with no script; the panel rises from the bottom with the one elevation. */
+.bs>summary{list-style:none;cursor:pointer}
+.bs>summary::-webkit-details-marker{display:none}
+.bs[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.45);color:transparent;animation:fade var(--dur) var(--ease)}
+.bs[open]>summary *{visibility:hidden}
+.bs>.panel{display:none}
+.bs[open]>.panel{display:block;position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;overflow:auto;
+  padding:8px 16px 24px;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:var(--lift);animation:rise var(--dur) var(--ease)}
+.bs>.panel::before{content:"";display:block;width:40px;height:4px;margin:4px auto 12px;border-radius:2px;background:var(--hair)}
+/* drawer (desk): the same content from the right edge */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(480px,92vw);overflow:auto;padding:24px;
+  background:var(--surface);box-shadow:var(--lift);animation:slide var(--dur) var(--ease)}
+/* hover preview (desk): a row's detail without opening anything; keyboard focus shows it too */
+.peek{display:none}
+.has-peek{position:relative}
+.has-peek:hover>.peek,.has-peek:focus-within>.peek{display:block;position:absolute;z-index:30;left:0;top:calc(100% + 4px);
+  width:min(520px,80vw);padding:12px 16px;border-radius:var(--r);background:var(--surface);box-shadow:var(--lift);
+  font-size:var(--t1);line-height:1.5;animation:fade var(--dur) var(--ease)}
+
+/* priority: shape + word, same on every screen. Colour only on the top level. */
+.prio{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;font-size:var(--t1);line-height:1.3}
+.prio svg{flex:none;display:block}
+/* ISO 3864-2 signal word panels: only beside an ISO 7010 sign */
+.sig{display:inline-block;padding:2px 12px;border-radius:4px;font-weight:600;line-height:1.35}
+.sig-danger{background:var(--stop);color:#fff} .sig-warn{background:var(--amber);color:var(--on-amber)} .sig-caution{background:var(--iso-yellow);color:var(--on-amber)}
+
+@page{size:A4;margin:10mm}
+body{background:#fff;color:#000;font-size:11pt;line-height:1.35}
+.sheet{width:186mm;margin:0 auto;padding:0}
+@media screen{.sheet{padding:10mm 0}}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8mm;border-bottom:1.5pt solid #000;padding-bottom:3mm}
+.top h1{font-size:15pt;font-weight:600;line-height:1.3}
+.top .wo{text-align:right;white-space:nowrap}
+.top .wo b{display:block;font-size:17pt;font-weight:600;letter-spacing:.02em}
+.meta{display:grid;grid-template-columns:repeat(4,auto);gap:1mm 6mm;margin-top:3mm}
+.meta dt{font-size:10.5pt} .meta dd{font-weight:600}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:6mm;align-items:start}
+.cols table{margin-top:1.5mm}
+.row{flex-direction:column;gap:1.2mm}
+.prov{margin-top:2mm;font-size:10.5pt}
+.warn{margin-top:2mm;padding:2mm 3mm;border:1pt solid #000;font-size:10.5pt}
+table{width:100%;border-collapse:collapse;margin-top:3mm}
+th,td{border:0.75pt solid #000;padding:1.1mm 1.8mm;vertical-align:top;text-align:left}
+td.pg{white-space:nowrap;width:15mm}
+.locks td{height:7mm}
+th{font-weight:600;font-size:10.5pt}
+td.n{width:8mm;text-align:center;font-weight:600}
+td.ok{width:14mm}
+td .en{display:block;font-size:10.5pt;line-height:1.3;margin-top:.3mm}
+.k{display:inline-block;margin-left:2mm;padding:0 1.5mm;border:0.75pt solid #000;font-size:10.5pt;font-weight:600}
+.box{display:inline-block;width:4.2mm;height:4.2mm;border:1pt solid #000;vertical-align:-.8mm;margin-right:1.5mm}
+.row{display:flex;flex-wrap:wrap;gap:2mm 7mm;margin-top:2mm}
+.h{font-weight:600;margin-top:2.5mm}
+.line{display:inline-block;min-width:24mm;border-bottom:0.75pt solid #000;height:5mm;vertical-align:bottom}
+.sig{display:grid;grid-template-columns:1fr 1fr;gap:8mm;margin-top:4mm}
+.sig div{border-top:0.75pt solid #000;padding-top:1mm;font-size:10.5pt}
+.foot{margin-top:3mm;font-size:10.5pt;border-top:0.75pt solid #000;padding-top:1.5mm}
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="top"><div><h1><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></h1><div>ข้อมูลจำลอง · ไม่ใช่ข้อมูลโรงงานจริง</div></div><div class="wo">ใบงาน<b class="code">WO-000101</b></div></div>
+<dl class="meta"><div><dt>เครื่อง</dt><dd class="code">MC-012 · <span><span class="w">R-2000iC</span></span></dd></div><div><dt>สถานี</dt><dd><span><span class="w">สถานี</span> <span class="w">3</span> <span class="w">·</span> <span class="w">ติดตั้งหลังคา</span></span></dd></div>
+<div><dt>ช่าง</dt><dd><span class="w">พิมพ์ชนก</span></dd></div><div><dt>เวลาประมาณ</dt><dd>45 นาที</dd></div></dl>
+<p class="prov">ขั้นตอนฉบับที่ 3 · อนุมัติโดย <span><span class="w">ปราณี</span> <span class="w">(</span><span class="w">วิศวกร</span><span class="w">)</span></span> <span><span class="w">2 พ.ย. 2026</span> <span class="w">14:10 น.</span></span> · คู่มือ <span lang="en"><span><span class="w">R-2000iC</span> Maintenance Manual</span></span> · ข้อความอังกฤษเป็นตัวอย่าง (จำลอง)</p>
+<p class="warn">คำเตือนจากวิศวกร: <span><span class="w">ไม่มี</span><span class="w">คำ</span><span class="w">เตือน</span><span class="w">จาก</span><span class="w">วิศวกร</span><span class="w">สำหรับ</span><span class="w">ขั้นตอน</span><span class="w">นี้</span></span></p>
+<table><thead><tr><th>ขั้น</th><th>ทำอะไร (ไทย / ข้อความคู่มือ)</th><th>คู่มือ</th><th>ทำแล้ว</th></tr></thead><tbody><tr><td class="n">1</td><td><span><span class="w">กด</span><span class="w">ปุ่ม</span><span class="w">หยุดฉุกเฉิน</span><span class="w">ที่</span> <span class="w">teach</span> <span class="w">pendant</span> <span class="w">แล้ว</span><span class="w">แจ้ง</span><span class="w">หัวหน้ากะ</span><span class="w">ว่า</span><span class="w">สถานี</span> <span class="w">3</span> <span class="w">หยุด</span></span><span class="en" lang="en">Press the EMERGENCY STOP button on the teach pendant and inform the cell leader.</span></td><td class="pg">หน้า 142</td><td class="ok"><span class="box"></span></td></tr><tr><td class="n">2</td><td><span><span class="w">ปิด</span><span class="w">เบรกเกอร์</span> <span class="w">CP-3</span> <span class="w">ที่</span><span class="w">ตู้ควบคุม</span> <span class="w">แล้ว</span><span class="w">ใส่กุญแจ</span><span class="w">ล็อก</span><span class="w">และ</span><span class="w">ป้าย</span><span class="w">ของตัวเอง</span> <span class="w">ตาม</span><span class="w">ขั้นตอน</span><span class="w">ล็อกเอาต์</span><span class="w">หน้า</span> <span class="w">2</span></span><span class=k>ตัดพลังงาน · วิศวกรกำหนด</span><span class="en" lang="en"><span>Turn off breaker <span class="w">CP-3</span> on the robot controller and apply your personal lock and tag. See the lockout procedure on page 2.</span></span></td><td class="pg">หน้า 143</td><td class="ok"><span class="box"></span></td></tr><tr><td class="n">3</td><td><span><span class="w">รอ</span><span class="w">ให้</span><span class="w">มอเตอร์</span><span class="w">แกน</span> <span class="w">J2</span> <span class="w">เย็น</span><span class="w">ลง</span><span class="w">อย่าง</span><span class="w">น้อย</span> <span class="w">30 นาที</span> <span class="w">ห้าม</span><span class="w">แตะ</span><span class="w">ฝาครอบ</span><span class="w">มอเตอร์</span><span class="w">ขณะ</span><span class="w">ร้อน</span></span><span class=k>พื้นผิวร้อน · วิศวกรกำหนด</span><span class="en" lang="en"><span>Wait until the <span class="w">J2</span> motor has cooled (at least 30 minutes). Do not touch the motor cover while hot.</span></span></td><td class="pg">หน้า 144</td><td class="ok"><span class="box"></span></td></tr><tr><td class="n">4</td><td><span><span class="w">ถอด</span><span class="w">สกรู</span> <span class="w">M6</span> <span class="w">สี่</span><span class="w">ตัว</span> <span class="w">แล้ว</span><span class="w">ถอด</span><span class="w">ฝาครอบ</span><span class="w">พัดลม</span><span class="w">มอเตอร์</span><span class="w">แกน</span> <span class="w">J2</span></span><span class="en" lang="en"><span>Remove the four <span class="w">M6</span> bolts and the <span class="w">J2</span> motor fan cover.</span></span></td><td class="pg">หน้า 145</td><td class="ok"><span class="box"></span></td></tr><tr><td class="n">5</td><td><span><span class="w">ทำความสะอาด</span><span class="w">ครีบ</span><span class="w">ระบายความร้อน</span><span class="w">และ</span><span class="w">ตะแกรง</span><span class="w">พัดลม</span> <span class="w">หมุน</span><span class="w">พัดลม</span><span class="w">ด้วย</span><span class="w">มือ</span> <span class="w">ตรวจ</span><span class="w">ว่า</span><span class="w">หมุน</span><span class="w">คล่อง</span></span><span class="en" lang="en">Clean the cooling fins and fan guard. Rotate the fan by hand and check it turns freely.</span></td><td class="pg">หน้า 146</td><td class="ok"><span class="box"></span></td></tr><tr><td class="n">6</td><td><span><span class="w">ประกอบ</span><span class="w">ฝาครอบ</span><span class="w">กลับ</span> <span class="w">ขัน</span><span class="w">สกรู</span> <span class="w">M6</span> <span class="w">ที่</span> <span class="w">10 N·m</span> <span class="w">แล้ว</span><span class="w">ปลด</span><span class="w">ล็อก</span><span class="w">ของตัวเอง</span><span class="w">และ</span><span class="w">ทดลองเดิน</span><span class="w">แกน</span><span class="w">ช้า</span></span><span class=k>คืนพลังงาน · วิศวกรกำหนด</span><span class="en" lang="en"><span>Refit the cover, tighten the <span class="w">M6</span> bolts to <span class="w">10 N·m</span>, remove your lock and run the axis at low speed.</span></span></td><td class="pg">หน้า 147</td><td class="ok"><span class="box"></span></td></tr></tbody></table>
+<div class="cols"><div><p class="h">ตารางกุญแจ (กรอกด้วยมือ)</p>
+<table class="locks"><thead><tr><th>จุด</th><th>เลขกุญแจ</th><th>ใส่โดย · เวลา</th><th>ปลดโดย · เวลา</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></tbody></table>
+<p class="h">รอไปกี่นาที <span class="line"></span> นาที</p><p class="h">เพราะ <span class="line" style="min-width:70mm"></span></p></div>
+<div><p class="h">ผลการซ่อม</p><div class="row" style="flex-direction:row;flex-wrap:wrap;gap:1.2mm 5mm"><span><span class="box"></span><span><span class="w">แก้</span><span class="w">แล้ว</span></span></span><span><span class="box"></span><span class="w">ซ่อมชั่วคราว</span></span><span><span class="box"></span><span><span class="w">ยัง</span><span class="w">ไม่</span><span class="w">หาย</span></span></span><span><span class="box"></span><span class="w">ไม่พบอาการ</span></span></div>
+<p class="h">สถานะกุญแจตอนปิดงาน</p><div class="row"><span><span class="box"></span><span><span class="w">ปลดกุญแจ</span><span class="w">ของ</span><span class="w">ฉัน</span><span class="w">แล้ว</span> <span class="w">เครื่อง</span><span class="w">คืน</span><span class="w">สู่</span><span class="w">การ</span><span class="w">ผลิต</span></span></span><span><span class="box"></span><span><span class="w">ยัง</span><span class="w">ล็อก</span><span class="w">อยู่</span> <span class="w">(</span><span class="w">ระบุ</span><span class="w">จุด</span><span class="w">และ</span><span class="w">เหตุ</span><span class="w">)</span></span></span><span><span class="box"></span><span><span class="w">งาน</span><span class="w">นี้</span><span class="w">ไม่</span><span class="w">ได้</span><span class="w">ตัด</span><span class="w">พลังงาน</span></span></span></div></div></div>
+<div class="sig"><div>ลงชื่อช่าง / วันเวลา</div><div>ลงชื่อหัวหน้ากะ / วันเวลา</div></div>
+<p class="foot">ฉบับพิมพ์ ณ 15 พ.ย. 2026 10:42 น. · สำเนาไม่ควบคุม ตรวจสถานะล่าสุดในระบบ · WO-000101</p>
+</div>
+</body>
+</html>

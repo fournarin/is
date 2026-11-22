@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icons: Lucide 1.49.0, ISC License, Copyright (c) Lucide Icons and Contributors (lucide.dev). Fonts: IBM Plex Sans Thai Looped, SIL OFL 1.1. -->
+<title>ภาพรวมสาย</title>
+<style>
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-Regular.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-SemiBold.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"Plex Mono";src:url(../fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400}
+:root{
+  /* surfaces: one canvas, one raised work surface, one sunk tone. Outlines are for inputs only. */
+  --canvas:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF0;   /* refresh (Q13): paler canvas, calmer sunk */
+  --ink:#111418;      /* text + the one action colour        16.2:1 canvas, 18.5:1 surface */
+  --ink-2:#3D434B;    /* secondary text                       8.7:1 canvas, 7.9:1 sunk */
+  --line:#7D858E;     /* input outlines only (non-text 3.3:1)  */
+  --hair:#E3E6EA;     /* 1 px separators inside a surface     */
+  /* the andon display: dark, lit only by state */
+  --andon:#16191D; --lamp-off:#2A2F36; --on-andon:#FFFFFF; --on-andon-2:#BAC1C9;
+  /* state colours - nothing else may use them */
+  --stop:#A3121A;     /* critical priority. white on it 7.9:1 */
+  --amber:#E8890C;    /* over threshold (solid) / forecast (outline). ink on it 7.05:1 */
+  --on-amber:#111418; /* text on amber or ISO yellow: always dark, in either theme */
+  --done:#1E6B3A;     /* small "done/confirmed" marks only */
+  /* ISO 3864 colours - only inside drawn ISO 7010 signs */
+  --iso-blue:#005387; --iso-yellow:#F9A800; --iso-red:#B71E1E;
+  --r:12px; --r-sm:8px;
+  /* one elevation, for sheets and drawers only; everything else is flat with hairlines */
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+  /* type scale: 15 / 18 / 24 / 36 (one more, 30, only for the board clock and station numbers) */
+  --t1:15px; --t2:18px; --t3:24px; --t4:36px;
+  --sans:"Plex Looped",sans-serif; --mono:"Plex Mono",ui-monospace,monospace;
+}
+/* one light theme everywhere, wall included (owner Q14: the dark wall read as busy and confusing) */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-weight:400;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+.w{white-space:nowrap}
+h1,h2,.ttl{text-wrap:balance} p,li,dd{text-wrap:pretty}   /* Chrome 114+/117+; ignored by 109 */
+.code{font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}
+b,strong,h1,h2,h3,h4{font-weight:600}   /* the font has 400 and 600 only; never let the browser synthesise 700/900 */
+/* the one callout: white surface, a leading Lucide icon whose colour carries the meaning, a bold word. No stripes. */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:var(--r);background:var(--surface);line-height:1.5}
+.callout>.ic{flex:none;margin-top:3px;color:var(--ink-2)}
+.callout.bad>.ic{color:var(--stop)} .callout.ok>.ic{color:var(--done)} .callout.lock>.ic{color:var(--ink)}
+.callout>div{flex:1;min-width:0}
+.callout .act{margin-top:12px}
+.muted{color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.ic{flex:none;display:block}
+.synthetic{display:flex;justify-content:space-between;gap:8px;background:var(--sunk);padding:4px 16px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.synthetic b{font-weight:600;color:var(--ink)}
+
+/* motion: 150-200 ms fades and slides for what opens; nothing for people who asked for none */
+@keyframes rise{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slide{from{transform:translateX(32px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* bottom sheet (phones): details behind a tap. The summary becomes the dimmed backdrop, so a tap
+   outside closes it with no script; the panel rises from the bottom with the one elevation. */
+.bs>summary{list-style:none;cursor:pointer}
+.bs>summary::-webkit-details-marker{display:none}
+.bs[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.45);color:transparent;animation:fade var(--dur) var(--ease)}
+.bs[open]>summary *{visibility:hidden}
+.bs>.panel{display:none}
+.bs[open]>.panel{display:block;position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;overflow:auto;
+  padding:8px 16px 24px;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:var(--lift);animation:rise var(--dur) var(--ease)}
+.bs>.panel::before{content:"";display:block;width:40px;height:4px;margin:4px auto 12px;border-radius:2px;background:var(--hair)}
+/* drawer (desk): the same content from the right edge */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(480px,92vw);overflow:auto;padding:24px;
+  background:var(--surface);box-shadow:var(--lift);animation:slide var(--dur) var(--ease)}
+/* hover preview (desk): a row's detail without opening anything; keyboard focus shows it too */
+.peek{display:none}
+.has-peek{position:relative}
+.has-peek:hover>.peek,.has-peek:focus-within>.peek{display:block;position:absolute;z-index:30;left:0;top:calc(100% + 4px);
+  width:min(520px,80vw);padding:12px 16px;border-radius:var(--r);background:var(--surface);box-shadow:var(--lift);
+  font-size:var(--t1);line-height:1.5;animation:fade var(--dur) var(--ease)}
+
+/* priority: shape + word, same on every screen. Colour only on the top level. */
+.prio{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;font-size:var(--t1);line-height:1.3}
+.prio svg{flex:none;display:block}
+/* ISO 3864-2 signal word panels: only beside an ISO 7010 sign */
+.sig{display:inline-block;padding:2px 12px;border-radius:4px;font-weight:600;line-height:1.35}
+.sig-danger{background:var(--stop);color:#fff} .sig-warn{background:var(--amber);color:var(--on-amber)} .sig-caution{background:var(--iso-yellow);color:var(--on-amber)}
+
+body{font-size:var(--t1);line-height:1.5}
+.synthetic{padding:4px 24px}
+.app{padding:0 24px 32px}
+.hdr{display:flex;align-items:center;gap:24px;min-height:56px}
+.hdr h1{font-size:var(--t2);font-weight:600;line-height:1.3}
+.hdr .sub{color:var(--ink-2);line-height:1.35}
+.hdr nav{display:flex;gap:8px;align-self:stretch;flex-wrap:wrap}
+.hdr nav a{display:flex;align-items:center;min-height:48px;padding:0 12px;text-decoration:none;font-weight:600;color:var(--ink-2);box-shadow:inset 0 -3px 0 transparent;white-space:nowrap}
+.hdr nav a[aria-current=page]{color:var(--ink);box-shadow:inset 0 -3px 0 var(--ink)}
+.hdr .sp{flex:1}
+.hdr .clk{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.hdr .clk b{font-size:var(--t3);font-weight:600;line-height:1}
+.hdr .clk span{color:var(--ink-2);line-height:1.35;text-align:right}
+.hdr .me{display:flex;align-items:center;gap:12px;white-space:nowrap;line-height:1.3}
+.hdr .me small{display:block;color:var(--ink-2);font-size:var(--t1)}
+.b{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;border:0;border-radius:var(--r);
+  background:var(--surface);color:var(--ink);font:inherit;font-weight:600;line-height:1.3;white-space:nowrap;text-decoration:none;cursor:pointer}
+.b.pri{background:var(--ink);color:var(--surface)} .b.sec{background:var(--sunk)}
+.b.off{background:transparent;color:var(--ink-2);box-shadow:inset 0 0 0 2px var(--sunk);cursor:not-allowed}
+.surface{background:var(--surface);border-radius:var(--r)}
+.lead{color:var(--ink-2);margin-top:4px}
+.pg-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 24px;margin:16px 0 8px}
+.pg-h h2{font-size:var(--t3);font-weight:600;line-height:1.3}
+.pg-h p{color:var(--ink-2)}
+.chip,.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:4px;background:var(--sunk);color:var(--ink);font-weight:600;line-height:1.4;white-space:nowrap}
+.tag.draft{background:var(--ink);color:var(--surface)}
+.tag.ok{background:var(--sunk);color:var(--ink)}
+.dt{width:100%;border-collapse:collapse}
+.dt th{font-weight:400;color:var(--ink-2);text-align:left;padding:8px 12px;border-bottom:1px solid var(--hair);white-space:nowrap;vertical-align:bottom}
+.dt td{padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+.dt tr:last-child td{border-bottom:0}
+.dt td.n,.dt th.n{text-align:right;font-variant-numeric:tabular-nums}
+.dt b{font-weight:600}
+.muted{color:var(--ink-2)}
+/* callouts come from base.callout(); no coloured stripes */
+.note b{font-weight:600}
+.empty{color:var(--ink-2);padding:8px 0}
+@media (max-width:699px){
+  :root{--t1:18px}
+  .synthetic{padding:4px 16px} .app{padding:0 16px 24px}
+  .hdr{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;padding:8px 0;align-items:center}
+  .hdr{row-gap:8px} .hdr nav{grid-column:1/-1;grid-row:2;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:-16px;padding-right:32px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)}
+  .hdr nav a{padding:0 12px 0 0;min-height:56px}
+  .b{min-height:56px}
+  .kv div{grid-template-columns:1fr;gap:0} .search{flex-wrap:wrap} .search input{min-height:56px;min-width:0}
+  .hdr .sp,.hdr .clk span,.hdr .me>span{display:none}
+  .dt thead{display:none} .dt,.dt tbody,.dt tr,.dt td{display:block} .dt tr{padding:8px 0;border-bottom:1px solid var(--hair)}
+  .dt td{border:0;padding:2px 16px} .dt td.n{text-align:left}
+  .dt td[data-l]::before{content:attr(data-l) " ";color:var(--ink-2);font-weight:400}
+}
+
+/* Round 3 (calm): the board's number strip on top, the plan the one focus (lamps only, codes on tap), one line
+   per station that needs a look, machines behind a tab. Station numbers appear once: in the strip. */
+.ls{display:flex;align-items:center;gap:16px;margin-top:8px;padding:12px 16px;border-radius:var(--r);background:var(--surface)}
+.ls h2{font-size:var(--t1);font-weight:600;white-space:nowrap}
+.ls ol{flex:0 1 auto;display:grid;grid-auto-flow:column;grid-auto-columns:48px;gap:6px}
+.ls li{display:flex;align-items:center;justify-content:center;min-height:40px;border-radius:var(--r-sm);background:var(--sunk)}
+.ls li b{font-size:var(--t2)}
+.ls li.over{background:var(--amber)} .ls li.fc{background:var(--surface);box-shadow:inset 0 0 0 2px var(--amber)}
+.ls .say{flex:1;min-width:0}
+.ls .load{white-space:nowrap;color:var(--ink-2)} .ls .load b{color:var(--ink)}
+.sw{flex:none;display:inline-block;width:20px;height:14px;border-radius:4px;background:var(--sunk)}
+.sw.over{background:var(--amber)} .sw.fc{background:var(--surface);box-shadow:inset 0 0 0 2px var(--amber)}
+.lookcol .rows{margin-top:8px;border-radius:var(--r);background:var(--surface)}
+.lk{padding:4px 16px} .lk+.lk{box-shadow:inset 0 1px 0 var(--hair)}
+.dw>summary{list-style:none;cursor:pointer;min-height:56px;display:flex;align-items:center;gap:12px}
+.dw>summary::-webkit-details-marker{display:none}
+.dw>summary b{flex:1;min-width:0;font-weight:600}
+.dw>summary .muted{white-space:nowrap}
+.dw[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.32);color:transparent}
+.dw[open]>summary *{visibility:hidden}
+.dw>.drawer{display:none}
+.dw[open]>.drawer{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(520px,92vw);overflow:auto;padding:24px;background:var(--surface);font-size:var(--t2);box-shadow:var(--lift)}
+.drawer .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.lookcol .drawer h2{font-size:var(--t3);font-weight:600;line-height:1.3;margin-bottom:4px}
+.drawer .top .b{display:inline-flex;align-items:center;justify-content:center;min-height:56px;min-width:56px;padding:0 16px;border-radius:var(--r-sm);background:var(--sunk);font-weight:600}
+.drawer li{padding:12px 0;box-shadow:inset 0 -1px 0 var(--hair)}
+.drawer li .muted,.drawer .mlist li .muted{display:block}
+.drawer p.muted{margin-top:12px}
+.tabs{display:flex;flex-wrap:wrap;margin-top:12px;border-radius:var(--r);background:var(--surface)}
+.tabs .dw>summary{padding:0 16px;font-weight:600;white-space:nowrap}
+.tabs .dw+.dw{box-shadow:inset 1px 0 0 var(--hair)}
+.tabs .dw>summary .muted{font-weight:400}
+.mlist li{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.chip{flex:none;padding:2px 8px;border-radius:6px;background:var(--sunk);font-weight:600;white-space:nowrap}
+/* a machine on the plan: a light dot, its code on tap or focus (no hover needed) */
+.plan svg a{cursor:pointer;outline:none}
+.plan svg .tip{display:none}
+.plan svg a:focus .tip,.plan svg a:hover .tip,.v-tip .plan svg a.t0 .tip{display:inline}
+.plan svg a:focus-visible .ring{stroke:var(--ink);stroke-width:3}
+.main{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr);gap:24px;margin-top:16px;align-items:start}
+.main .plan{margin-top:0}
+.main>*,.below>*{min-width:0}
+.lookcol h2{font-size:var(--t2);font-weight:600}
+.lookcol .look:first-of-type{margin-top:8px}
+.below{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;margin-top:24px;align-items:start}
+.below h2{font-size:var(--t2);font-weight:600}
+.plan{margin-top:16px}
+.below>*{min-width:0}
+.plan,.mlist{background:var(--surface);border-radius:var(--r);padding:16px}
+.plan h2,.mlist h2{font-size:var(--t2);font-weight:600;line-height:1.35}
+.plan p.muted{margin-top:2px}
+.plan .pan{margin-top:12px}
+.plan svg{display:block;width:100%;height:auto}
+.plan text{font-family:var(--sans)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid var(--ink-2);margin-right:8px;vertical-align:0}
+.dot.on{background:var(--ink)}
+@media (max-width:1199px){.main{grid-template-columns:minmax(0,1fr)}.lookcol{order:-1}}
+@media (max-width:899px){.ls{flex-wrap:wrap}.ls h2{width:100%}.ls .say{flex-basis:100%}.ls ol{width:100%;grid-auto-columns:minmax(0,1fr)}
+  .tabs .dw{flex:1}.drawer{width:100%;top:auto;max-height:86vh;border-radius:16px 16px 0 0}}
+@media (max-width:699px){.plan .pan{overflow-x:auto;margin:12px -16px 0;padding:0 16px}.plan .pan svg{min-width:960px}}
+</style>
+</head>
+<body>
+<div class="synthetic" role="note"><span><b>ข้อมูลจำลอง</b> · สัญญาณ ชื่อเครื่อง และชื่อคนในหน้านี้ไม่ใช่ข้อมูลจากโรงงานจริง</span></div><div class="app"><header class="hdr"><div><h1><span><span class="w">ภาพ</span><span class="w">รวม</span><span class="w">สาย</span></span></h1></div><nav aria-label="หน้าหลัก"><a href="board.html"><span><span class="w">กระดาน</span><span class="w">กะ</span></span></a><a href="line-overview.html" aria-current=page><span><span class="w">ภาพ</span><span class="w">รวม</span><span class="w">สาย</span></span></a><a href="report.html"><span><span class="w">แจ้ง</span><span class="w">ซ่อม</span></span></a></nav><span class="sp"></span><div class="clk" aria-label="เวลาโรงงาน"><span>อัปเดต 10:42:00<br>วันนี้ 15 พ.ย.</span><b>10:42</b></div><div class="me"><span><span class="w">อนันต์</span><small><span class="w">หัวหน้ากะ</span></small></span><a class="b" href="sign-in.html">ออก</a></div></header><p class="lead"><span><span class="w">สายประกอบ</span><span class="w">ตัวถัง</span> <span class="w">A</span> <span class="w">·</span> <span class="w">กะเช้า</span> <span class="w">07</span><span class="w">:</span><span class="w">00</span><span class="w">–</span><span class="w">15</span><span class="w">:</span><span class="w">00</span></span></p>
+<section class="ls" aria-label="สายการผลิต"><h2><span><span class="w">สายประกอบ</span><span class="w">ตัวถัง</span> <span class="w">A</span></span></h2><ol><li class="" aria-label="สถานี 1 เชื่อมพื้นตัวถัง"><b>1</b></li><li class="fc" aria-label="สถานี 2 เชื่อมด้านข้าง"><b>2</b></li><li class="fc" aria-label="สถานี 3 ติดตั้งหลังคา"><b>3</b></li><li class="over" aria-label="สถานี 4 เชื่อมเสริมความแข็งแรง"><b>4</b></li><li class="" aria-label="สถานี 5 ติดตั้งประตู"><b>5</b></li><li class="" aria-label="สถานี 6 ซีลตะเข็บ"><b>6</b></li><li class="" aria-label="สถานี 7 ตรวจขนาด"><b>7</b></li><li class="" aria-label="สถานี 8 ส่งออกตัวถัง"><b>8</b></li></ol><span class="say"><b><span><span class="w">เชื่อมเสริม</span><span class="w">ความแข็งแรง</span></span></b> <span class="muted">เกินเกณฑ์</span> · <span class="muted">คาดว่าจะเกิน</span> <span><span class="w">เชื่อม</span><span class="w">ด้านข้าง</span><span class="w">,</span> <span class="w">ติดตั้งหลังคา</span></span></span><span class="load">ภาระกะ <b><span><span class="w">งาน</span><span class="w">ปกติ</span></span></b></span></section>
+<div class="main">
+<section class="plan" aria-labelledby="fp"><h2 id="fp">ผังพื้น</h2><p class="muted">ผังจำลองสำหรับออกแบบ · ซ้ายไปขวาตามเลขสถานีข้างบน · แตะสถานีเพื่อดูชื่อและรหัสเครื่อง · จุดทึบ = มีใบงานเปิด</p><div class="pan" tabindex="0" aria-label="ผังพื้น"><svg viewBox="0 50.0 1280 430.0" role="img" aria-label="ผังพื้นจำลอง สายประกอบตัวถัง A"><rect x="1" y="51.0" width="1278" height="428.0" rx="4" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="2" y="340.0" width="1276" height="20" style="fill:var(--canvas)"/><text x="540" y="356.0" font-size="18" style="fill:var(--ink-2)">ทางเดินหลัก</text><rect x="80" y="390.0" width="240" height="80" rx="8" fill="none" stroke-width="2" style="stroke:var(--hair)"/><text x="92.0" y="436.0" font-size="18" style="fill:var(--ink-2)">ห้องซ่อมบำรุง</text><rect x="960" y="390.0" width="240" height="80" rx="8" fill="none" stroke-width="2" style="stroke:var(--hair)"/><text x="972.0" y="436.0" font-size="18" style="fill:var(--ink-2)">คลังอะไหล่</text><rect x="440" y="477" width="48.0" height="6" style="fill:var(--surface)"/><path d="M440 478 a48.0 48.0 0 0 1 48.0 -48.0" fill="none" stroke-width="2" style="stroke:var(--hair)"/><rect x="840" y="477" width="48.0" height="6" style="fill:var(--surface)"/><path d="M840 478 a48.0 48.0 0 0 1 48.0 -48.0" fill="none" stroke-width="2" style="stroke:var(--hair)"/><rect x="0" y="192.0" width="1280" height="16.0" style="fill:var(--canvas)"/><path d="M36.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M211.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M361.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M511.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M661.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M811.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M961.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M1111.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><path d="M1261.0 194 l8 6 -8 6" fill="none" stroke-width="2" style="stroke:var(--ink-2)"/><a href="#" class="" aria-label="เชื่อมพื้นตัวถัง · MC-001 รอยืนยัน · MC-002 กำลังทำ"><title>เชื่อมพื้นตัวถัง · MC-001 รอยืนยัน · MC-002 กำลังทำ</title><rect class="ring" x="80.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="88.0" y="128" width="104" height="12" rx="4" style="fill:var(--sunk)"/><circle cx="140.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="140.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><circle cx="140.0" cy="236.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="140.0" cy="236.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="4" y="84" width="302.79999999999995" height="30" rx="6" style="fill:var(--ink)"/><text x="155.39999999999998" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">เชื่อมพื้นตัวถัง · MC-001 · MC-002</text></g></a><a href="#" class="" aria-label="เชื่อมด้านข้าง · MC-004 รอยืนยัน · MC-005 ส่งต่อ"><title>เชื่อมด้านข้าง · MC-004 รอยืนยัน · MC-005 ส่งต่อ</title><rect class="ring" x="230.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="238.0" y="128" width="104" height="12" rx="4" stroke-width="3" style="fill:var(--surface);stroke:var(--amber)"/><circle cx="290.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="290.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><circle cx="290.0" cy="236.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="290.0" cy="236.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="146.8" y="84" width="286.4" height="30" rx="6" style="fill:var(--ink)"/><text x="290.0" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">เชื่อมด้านข้าง · MC-004 · MC-005</text></g></a><a href="#" class="" aria-label="ติดตั้งหลังคา · MC-012 กำลังทำ"><title>ติดตั้งหลังคา · MC-012 กำลังทำ</title><rect class="ring" x="380.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="388.0" y="128" width="104" height="12" rx="4" stroke-width="3" style="fill:var(--surface);stroke:var(--amber)"/><circle cx="440.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="440.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="337.8" y="84" width="204.39999999999998" height="30" rx="6" style="fill:var(--ink)"/><text x="440.0" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">ติดตั้งหลังคา · MC-012</text></g></a><a href="#" class="t0" aria-label="เชื่อมเสริมความแข็งแรง · MC-018 รอยืนยัน · MC-019 กำลังทำ"><title>เชื่อมเสริมความแข็งแรง · MC-018 รอยืนยัน · MC-019 กำลังทำ</title><rect class="ring" x="530.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="538.0" y="128" width="104" height="12" rx="4" style="fill:var(--amber)"/><circle cx="590.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="590.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><circle cx="590.0" cy="236.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="590.0" cy="236.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="414.0" y="84" width="352.0" height="30" rx="6" style="fill:var(--ink)"/><text x="590.0" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">เชื่อมเสริมความแข็งแรง · MC-018 · MC-019</text></g></a><a href="#" class="" aria-label="ติดตั้งประตู · MC-021 กำลังทำ"><title>ติดตั้งประตู · MC-021 กำลังทำ</title><rect class="ring" x="680.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="688.0" y="128" width="104" height="12" rx="4" style="fill:var(--sunk)"/><circle cx="740.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="740.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="641.9" y="84" width="196.2" height="30" rx="6" style="fill:var(--ink)"/><text x="740.0" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">ติดตั้งประตู · MC-021</text></g></a><a href="#" class="" aria-label="ซีลตะเข็บ · MC-024 ระบบกันไว้ · MC-025 รอยืนยัน"><title>ซีลตะเข็บ · MC-024 ระบบกันไว้ · MC-025 รอยืนยัน</title><rect class="ring" x="830.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="838.0" y="128" width="104" height="12" rx="4" style="fill:var(--sunk)"/><circle cx="890.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="890.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><circle cx="890.0" cy="236.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="890.0" cy="236.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="767.3" y="84" width="245.39999999999998" height="30" rx="6" style="fill:var(--ink)"/><text x="890.0" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">ซีลตะเข็บ · MC-024 · MC-025</text></g></a><a href="#" class="" aria-label="ตรวจขนาด · MC-028 รอยืนยัน"><title>ตรวจขนาด · MC-028 รอยืนยัน</title><rect class="ring" x="980.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="988.0" y="128" width="104" height="12" rx="4" style="fill:var(--sunk)"/><circle cx="1040.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="1040.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="958.3" y="84" width="163.39999999999998" height="30" rx="6" style="fill:var(--ink)"/><text x="1040.0" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">ตรวจขนาด · MC-028</text></g></a><a href="#" class="" aria-label="ส่งออกตัวถัง · MC-030 ระบบกันไว้"><title>ส่งออกตัวถัง · MC-030 ระบบกันไว้</title><rect class="ring" x="1130.0" y="120" width="120" height="160" rx="8" stroke-width="2" style="fill:var(--surface);stroke:var(--hair)"/><rect x="1138.0" y="128" width="104" height="12" rx="4" style="fill:var(--sunk)"/><circle cx="1190.0" cy="184.0" r="12.0" fill="none" stroke-width="1.5" style="stroke:var(--hair)"/><circle cx="1190.0" cy="184.0" r="4" style="fill:var(--ink-2)"/><g class="tip"><rect x="1079.8" y="84" width="196.2" height="30" rx="6" style="fill:var(--ink)"/><text x="1177.8999999999999" y="105" text-anchor="middle" font-size="16" font-weight="600" style="fill:var(--surface)">ส่งออกตัวถัง · MC-030</text></g></a><path d="M1140 356.0 h100" stroke-width="3" style="stroke:var(--ink)"/><text x="1140" y="346.0" font-size="18" style="fill:var(--ink-2)">5 ม.</text></svg></div></section>
+<section class="lookcol" aria-labelledby="lk"><h2 id="lk">สถานีที่ต้องดู 3</h2><div class="rows"><details class="dw lk"><summary><i class="sw fc" aria-hidden="true"></i><b><span><span class="w">เชื่อม</span><span class="w">ด้านข้าง</span></span></b><span class="muted">คาดว่าจะเกิน</span></summary><aside class="drawer" aria-label="เชื่อมด้านข้าง"><div class="top"><b>รายละเอียด</b><span class="b">ปิด</span></div><h2><span><span class="w">เชื่อม</span><span class="w">ด้านข้าง</span></span></h2><ul><li><b><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span class="code">MC-004</span> · <span><span class="w">รอ</span><span class="w">ยืนยัน</span></span> · ถึงเกณฑ์ราว <span><span class="w">15 พ.ย.</span> <span class="w">21</span><span class="w">:</span><span class="w">10</span> <span class="w">±2 ชม.</span></span></span></li><li><b><span><span class="w">กระแส</span><span class="w">มอเตอร์</span><span class="w">แกน</span> <span class="w">1</span> <span class="w">สูง</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span class="code">MC-005</span> · <span><span class="w">ส่ง</span><span class="w">ต่อ</span></span></span></li></ul><p class="muted">ถ้าหยุด สายทนได้ราว 20 นาที (บัฟเฟอร์ 20 คัน)</p></aside></details><details class="dw lk"><summary><i class="sw fc" aria-hidden="true"></i><b><span class="w">ติดตั้งหลังคา</span></b><span class="muted">คาดว่าจะเกิน</span></summary><aside class="drawer" aria-label="ติดตั้งหลังคา"><div class="top"><b>รายละเอียด</b><span class="b">ปิด</span></div><h2><span class="w">ติดตั้งหลังคา</span></h2><ul><li><b><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span class="code">MC-012</span> · <span><span class="w">กำลัง</span><span class="w">ทำ</span></span> · ถึงเกณฑ์ราว <span><span class="w">15 พ.ย.</span> <span class="w">14:20 น.</span> <span class="w">±2 ชม.</span></span></span></li></ul><p class="muted">ถ้าหยุด สายทนได้ราว 8 นาที (บัฟเฟอร์ 8 คัน)</p><p class="muted">คอขวด · หยุดแล้วสายหยุดตาม</p></aside></details><details class="dw lk"><summary><i class="sw over" aria-hidden="true"></i><b><span><span class="w">เชื่อมเสริม</span><span class="w">ความแข็งแรง</span></span></b><span class="muted">เกินเกณฑ์</span></summary><aside class="drawer" aria-label="เชื่อมเสริมความแข็งแรง"><div class="top"><b>รายละเอียด</b><span class="b">ปิด</span></div><h2><span><span class="w">เชื่อมเสริม</span><span class="w">ความแข็งแรง</span></span></h2><ul><li><b><span><span class="w">ระบบ</span><span class="w">ล็อกนิรภัย</span><span class="w">แจ้ง</span><span class="w">ว่า</span><span class="w">ประตู</span><span class="w">เปิด</span><span class="w">อยู่</span></span></b><span class="muted"><span class="code">MC-018</span> · <span><span class="w">รอ</span><span class="w">ยืนยัน</span></span></span></li><li><b><span><span class="w">ตรวจ</span><span class="w">รั่ว</span><span class="w">ระบบ</span><span class="w">ไฮดรอลิก</span><span class="w">จับชิ้นงาน</span> <span class="w">(</span><span class="w">แจ้ง</span><span class="w">โดย</span><span class="w">พนักงาน</span><span class="w">)</span></span></b><span class="muted"><span class="code">MC-019</span> · <span><span class="w">กำลัง</span><span class="w">ทำ</span></span></span></li></ul><p class="muted">ถ้าหยุด สายทนได้ราว 0 นาที (บัฟเฟอร์ 0 คัน)</p></aside></details></div><nav class="tabs" aria-label="อื่น ๆ"><details class="dw"><summary>เครื่องที่มีงานเปิด <span class="muted">12 จาก 12</span></summary><aside class="drawer" aria-label="เครื่องที่มีงานเปิด"><div class="top"><b>รายละเอียด</b><span class="b">ปิด</span></div><h2><span><span class="w">เครื่อง</span><span class="w">ที่</span><span class="w">มี</span><span class="w">งาน</span><span class="w">เปิด</span></span></h2><ul class="mlist"><li><span><b><span><span class="w">เปลี่ยน</span><span class="w">สายพาน</span><span class="w">ฟัน</span> <span class="w">(</span><span class="w">ครบ</span><span class="w">รอบ</span><span class="w">บำรุงรักษา</span><span class="w">)</span></span></b><span class="muted"><span><span class="w">เชื่อม</span><span class="w">พื้น</span><span class="w">ตัวถัง</span></span> · <span class="code">MC-001</span></span></span><span class="chip"><span><span class="w">รอ</span><span class="w">ยืนยัน</span></span></span></li><li><span><b><span><span class="w">กระแส</span><span class="w">มอเตอร์</span><span class="w">แกน</span> <span class="w">1</span> <span class="w">สูง</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span><span class="w">เชื่อม</span><span class="w">พื้น</span><span class="w">ตัวถัง</span></span> · <span class="code">MC-002</span></span></span><span class="chip"><span><span class="w">กำลัง</span><span class="w">ทำ</span></span></span></li><li><span><b><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span><span class="w">เชื่อม</span><span class="w">ด้านข้าง</span></span> · <span class="code">MC-004</span></span></span><span class="chip"><span><span class="w">รอ</span><span class="w">ยืนยัน</span></span></span></li><li><span><b><span><span class="w">กระแส</span><span class="w">มอเตอร์</span><span class="w">แกน</span> <span class="w">1</span> <span class="w">สูง</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span><span class="w">เชื่อม</span><span class="w">ด้านข้าง</span></span> · <span class="code">MC-005</span></span></span><span class="chip"><span><span class="w">ส่ง</span><span class="w">ต่อ</span></span></span></li><li><span><b><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span class="w">ติดตั้งหลังคา</span> · <span class="code">MC-012</span></span></span><span class="chip"><span><span class="w">กำลัง</span><span class="w">ทำ</span></span></span></li><li><span><b><span><span class="w">ระบบ</span><span class="w">ล็อกนิรภัย</span><span class="w">แจ้ง</span><span class="w">ว่า</span><span class="w">ประตู</span><span class="w">เปิด</span><span class="w">อยู่</span></span></b><span class="muted"><span><span class="w">เชื่อมเสริม</span><span class="w">ความแข็งแรง</span></span> · <span class="code">MC-018</span></span></span><span class="chip"><span><span class="w">รอ</span><span class="w">ยืนยัน</span></span></span></li><li><span><b><span><span class="w">ตรวจ</span><span class="w">รั่ว</span><span class="w">ระบบ</span><span class="w">ไฮดรอลิก</span><span class="w">จับชิ้นงาน</span> <span class="w">(</span><span class="w">แจ้ง</span><span class="w">โดย</span><span class="w">พนักงาน</span><span class="w">)</span></span></b><span class="muted"><span><span class="w">เชื่อมเสริม</span><span class="w">ความแข็งแรง</span></span> · <span class="code">MC-019</span></span></span><span class="chip"><span><span class="w">กำลัง</span><span class="w">ทำ</span></span></span></li><li><span><b><span><span class="w">เปลี่ยน</span><span class="w">สายพาน</span><span class="w">ฟัน</span> <span class="w">(</span><span class="w">ครบ</span><span class="w">รอบ</span><span class="w">บำรุงรักษา</span><span class="w">)</span></span></b><span class="muted"><span class="w">ติดตั้งประตู</span> · <span class="code">MC-021</span></span></span><span class="chip"><span><span class="w">กำลัง</span><span class="w">ทำ</span></span></span></li><li><span><b><span><span class="w">รอบ</span><span class="w">การ</span><span class="w">ทำงาน</span><span class="w">ช้ากว่ากำหนด</span></span></b><span class="muted"><span class="w">ซีลตะเข็บ</span> · <span class="code">MC-024</span></span></span><span class="chip"><span><span class="w">ระบบ</span><span class="w">กัน</span><span class="w">ไว้</span></span></span></li><li><span><b><span><span class="w">น้ำมันซึม</span><span class="w">ที่</span><span class="w">ข้อต่อ</span><span class="w">แกน</span> <span class="w">3</span> <span class="w">(</span><span class="w">แจ้ง</span><span class="w">โดย</span><span class="w">พนักงาน</span><span class="w">)</span></span></b><span class="muted"><span class="w">ซีลตะเข็บ</span> · <span class="code">MC-025</span></span></span><span class="chip"><span><span class="w">รอ</span><span class="w">ยืนยัน</span></span></span></li><li><span><b><span><span class="w">พัดลม</span><span class="w">ระบายความร้อน</span><span class="w">ตู้ควบคุม</span><span class="w">หมุน</span><span class="w">ช้า</span><span class="w">เกินกำหนด</span></span></b><span class="muted"><span class="w">ตรวจขนาด</span> · <span class="code">MC-028</span></span></span><span class="chip"><span><span class="w">รอ</span><span class="w">ยืนยัน</span></span></span></li><li><span><b><span><span class="w">ตรวจ</span><span class="w">สภาพ</span><span class="w">สายเคเบิล</span><span class="w">แกน</span> <span class="w">6</span> <span class="w">(</span><span class="w">ตามแผน</span><span class="w">)</span></span></b><span class="muted"><span class="w">ส่งออกตัวถัง</span> · <span class="code">MC-030</span></span></span><span class="chip"><span><span class="w">ระบบ</span><span class="w">กัน</span><span class="w">ไว้</span></span></span></li></ul><p class="muted">เครื่องอื่นอีก 0 เครื่องไม่มีงานเปิด</p></aside></details></nav></section>
+</div></div>
+</body>
+</html>

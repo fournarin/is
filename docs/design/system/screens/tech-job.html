@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icons: Lucide 1.49.0, ISC License, Copyright (c) Lucide Icons and Contributors (lucide.dev). Fonts: IBM Plex Sans Thai Looped, SIL OFL 1.1. -->
+<title>มอเตอร์สายพานร้อนเกินกำหนด · สถานี 3 · งานของฉัน</title>
+<style>
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-Regular.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-SemiBold.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"Plex Mono";src:url(../fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400}
+:root{
+  /* surfaces: one canvas, one raised work surface, one sunk tone. Outlines are for inputs only. */
+  --canvas:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF0;   /* refresh (Q13): paler canvas, calmer sunk */
+  --ink:#111418;      /* text + the one action colour        16.2:1 canvas, 18.5:1 surface */
+  --ink-2:#3D434B;    /* secondary text                       8.7:1 canvas, 7.9:1 sunk */
+  --line:#7D858E;     /* input outlines only (non-text 3.3:1)  */
+  --hair:#E3E6EA;     /* 1 px separators inside a surface     */
+  /* the andon display: dark, lit only by state */
+  --andon:#16191D; --lamp-off:#2A2F36; --on-andon:#FFFFFF; --on-andon-2:#BAC1C9;
+  /* state colours - nothing else may use them */
+  --stop:#A3121A;     /* critical priority. white on it 7.9:1 */
+  --amber:#E8890C;    /* over threshold (solid) / forecast (outline). ink on it 7.05:1 */
+  --on-amber:#111418; /* text on amber or ISO yellow: always dark, in either theme */
+  --done:#1E6B3A;     /* small "done/confirmed" marks only */
+  /* ISO 3864 colours - only inside drawn ISO 7010 signs */
+  --iso-blue:#005387; --iso-yellow:#F9A800; --iso-red:#B71E1E;
+  --r:12px; --r-sm:8px;
+  /* one elevation, for sheets and drawers only; everything else is flat with hairlines */
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+  /* type scale: 15 / 18 / 24 / 36 (one more, 30, only for the board clock and station numbers) */
+  --t1:15px; --t2:18px; --t3:24px; --t4:36px;
+  --sans:"Plex Looped",sans-serif; --mono:"Plex Mono",ui-monospace,monospace;
+}
+/* one light theme everywhere, wall included (owner Q14: the dark wall read as busy and confusing) */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-weight:400;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+.w{white-space:nowrap}
+h1,h2,.ttl{text-wrap:balance} p,li,dd{text-wrap:pretty}   /* Chrome 114+/117+; ignored by 109 */
+.code{font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}
+b,strong,h1,h2,h3,h4{font-weight:600}   /* the font has 400 and 600 only; never let the browser synthesise 700/900 */
+/* the one callout: white surface, a leading Lucide icon whose colour carries the meaning, a bold word. No stripes. */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:var(--r);background:var(--surface);line-height:1.5}
+.callout>.ic{flex:none;margin-top:3px;color:var(--ink-2)}
+.callout.bad>.ic{color:var(--stop)} .callout.ok>.ic{color:var(--done)} .callout.lock>.ic{color:var(--ink)}
+.callout>div{flex:1;min-width:0}
+.callout .act{margin-top:12px}
+.muted{color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.ic{flex:none;display:block}
+.synthetic{display:flex;justify-content:space-between;gap:8px;background:var(--sunk);padding:4px 16px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.synthetic b{font-weight:600;color:var(--ink)}
+
+/* motion: 150-200 ms fades and slides for what opens; nothing for people who asked for none */
+@keyframes rise{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slide{from{transform:translateX(32px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* bottom sheet (phones): details behind a tap. The summary becomes the dimmed backdrop, so a tap
+   outside closes it with no script; the panel rises from the bottom with the one elevation. */
+.bs>summary{list-style:none;cursor:pointer}
+.bs>summary::-webkit-details-marker{display:none}
+.bs[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.45);color:transparent;animation:fade var(--dur) var(--ease)}
+.bs[open]>summary *{visibility:hidden}
+.bs>.panel{display:none}
+.bs[open]>.panel{display:block;position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;overflow:auto;
+  padding:8px 16px 24px;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:var(--lift);animation:rise var(--dur) var(--ease)}
+.bs>.panel::before{content:"";display:block;width:40px;height:4px;margin:4px auto 12px;border-radius:2px;background:var(--hair)}
+/* drawer (desk): the same content from the right edge */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(480px,92vw);overflow:auto;padding:24px;
+  background:var(--surface);box-shadow:var(--lift);animation:slide var(--dur) var(--ease)}
+/* hover preview (desk): a row's detail without opening anything; keyboard focus shows it too */
+.peek{display:none}
+.has-peek{position:relative}
+.has-peek:hover>.peek,.has-peek:focus-within>.peek{display:block;position:absolute;z-index:30;left:0;top:calc(100% + 4px);
+  width:min(520px,80vw);padding:12px 16px;border-radius:var(--r);background:var(--surface);box-shadow:var(--lift);
+  font-size:var(--t1);line-height:1.5;animation:fade var(--dur) var(--ease)}
+
+/* priority: shape + word, same on every screen. Colour only on the top level. */
+.prio{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;font-size:var(--t1);line-height:1.3}
+.prio svg{flex:none;display:block}
+/* ISO 3864-2 signal word panels: only beside an ISO 7010 sign */
+.sig{display:inline-block;padding:2px 12px;border-radius:4px;font-weight:600;line-height:1.35}
+.sig-danger{background:var(--stop);color:#fff} .sig-warn{background:var(--amber);color:var(--on-amber)} .sig-caution{background:var(--iso-yellow);color:var(--on-amber)}
+
+:root{--t1:18px}   /* REQ-G-06: nothing on a phone below 18 px */
+body{font-size:var(--t2);line-height:1.6}
+.wrap{padding:0 16px 48px}
+.top{display:flex;align-items:center;gap:8px;padding:8px 16px;min-height:64px}
+.top .clock{margin-left:4px}
+.top .who{flex:1;min-width:0;font-size:var(--t2);line-height:1.3;font-weight:600}
+.top .who small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+.clock{text-align:right;white-space:nowrap;line-height:1.2}
+.clock b{display:block;font-size:var(--t3);font-weight:600}
+.clock span{font-size:var(--t1);color:var(--ink-2)}
+.back{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:56px;padding:0 12px 0 8px;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:600;line-height:1.3;text-decoration:none}
+.stile{flex:none;width:40px;height:48px;display:flex;align-items:center;justify-content:center;background:var(--andon);color:var(--on-andon);
+  font-size:var(--t3);font-weight:600;line-height:1}
+.anc{flex:1;min-width:0;font-size:var(--t2);font-weight:600;line-height:1.3}
+.anc small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+
+/* the andon plate: the sign over the station, with the line under it (8 lamps, this one lit) */
+.aplate{margin:0 -16px;padding:16px 16px 12px;background:var(--andon);color:var(--on-andon)}
+.pl{display:flex;align-items:center;gap:16px}
+.pl .no{flex:none;width:72px;height:72px;background:var(--surface);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.pl .no small{font-size:var(--t1);font-weight:600;line-height:1.2}
+.pl .no b{font-size:var(--t4);font-weight:600;line-height:1}
+.pl .nm{flex:1;min-width:0}
+.pl .st{display:block;font-size:var(--t3);font-weight:600;line-height:1.3}
+.pl .mc{display:block;font-size:var(--t1);line-height:1.5;color:var(--on-andon-2)}
+.pl .mc .code{color:var(--on-andon)}
+.pos{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:12px}
+.pos li{height:24px;display:flex;align-items:center;justify-content:center;background:var(--lamp-off);color:var(--on-andon-2);font-size:var(--t1);font-weight:600;line-height:1}
+.pos li.me{background:var(--surface);color:var(--ink)}
+.btn-dk{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:4px 16px;border-radius:var(--r);
+  background:var(--lamp-off);color:var(--on-andon);font-size:var(--t1);font-weight:600;line-height:1.35;text-align:center;text-decoration:none}
+
+/* surfaces and buttons */
+.card{background:var(--surface);border-radius:var(--r);padding:16px}
+.btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:56px;padding:8px 16px;border:0;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:600;line-height:1.3;text-align:center;text-decoration:none}
+.btn.pri{background:var(--ink);color:var(--surface);min-height:64px}
+.btn.off{background:transparent;color:var(--ink-2);box-shadow:inset 0 0 0 2px var(--sunk);cursor:not-allowed}
+.btn.left{justify-content:flex-start;text-align:left}
+.btn .t small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+.miss{margin-top:8px;font-size:var(--t1);line-height:1.5;font-weight:600}
+.rows{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.rows .rw{border-radius:0}
+.rows{padding:4px 0}
+.rows .rw{position:relative}
+.rows .rw+.rw{margin-top:8px}
+.rows .rw+.rw::before{content:"";position:absolute;left:16px;right:0;top:-4px;height:1px;background:var(--hair)}
+.rw{display:flex;align-items:center;gap:16px;min-height:64px;padding:8px 16px;border-radius:var(--r);background:var(--surface);text-decoration:none;color:var(--ink)}
+.rw .t{flex:1;min-width:0;font-size:var(--t2);font-weight:600;line-height:1.3}
+.rw .t small{display:block;font-size:var(--t1);font-weight:400;line-height:1.45;color:var(--ink-2)}
+.sec{margin-top:32px}
+.sec>h2{display:flex;align-items:baseline;gap:8px;font-size:var(--t1);font-weight:600;line-height:1.35;color:var(--ink-2);margin-bottom:8px}
+.sec>h2 .r{margin-left:auto;color:var(--ink)}
+.prov{margin-top:24px;font-size:var(--t1);line-height:1.6;color:var(--ink-2)}
+.prov b{font-weight:600;color:var(--ink)}
+
+/* questions and choice tiles. One selection style everywhere: a 2 px ink ring + a filled mark. */
+.q{margin-top:24px}
+.qh{display:flex;align-items:baseline;gap:12px;font-size:var(--t2);font-weight:600;line-height:1.35;margin-bottom:8px}
+.qh .n{flex:none;color:var(--ink-2)}
+.qh .tag{margin-left:auto;font-size:var(--t1);font-weight:400;color:var(--ink-2);white-space:nowrap}
+.qh .tag.req{font-weight:600;color:var(--ink)}
+.ch{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 16px;text-align:left;border:0;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:400;line-height:1.35}
+.ch .mk{flex:none;width:24px;height:24px;border:2px solid var(--ink-2);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ch[role=checkbox] .mk{border-radius:4px}
+.ch .mk i,.ch .mk .ic{display:none}
+.ch .mk i{width:12px;height:12px;border-radius:50%;background:var(--ink)}
+.ch[aria-checked=true]{box-shadow:inset 0 0 0 2px var(--ink);font-weight:600}
+.ch[aria-checked=true] .mk{border-color:var(--ink)}
+.ch[aria-checked=true][role=radio] .mk i{display:block}
+.ch[aria-checked=true][role=checkbox] .mk{background:var(--ink);color:var(--surface)}
+.ch[aria-checked=true][role=checkbox] .mk .ic{display:block}
+.card .ch:not([aria-checked=true]):not([aria-disabled=true]){background:var(--canvas)}
+.ch>span{text-wrap:balance}
+.ch small{display:block;font-size:var(--t1);font-weight:400;line-height:1.45;color:var(--ink-2)}
+.ch[aria-disabled=true]{background:var(--sunk);color:var(--ink-2);cursor:not-allowed}
+.ch[aria-disabled=true] .mk{border-color:var(--line)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g1{display:grid;gap:8px}
+.lbl{font-size:var(--t1);line-height:1.5;color:var(--ink-2)}
+textarea{display:block;width:100%;min-height:104px;padding:12px 16px;border:1.5px solid var(--line);border-radius:var(--r);
+  font:inherit;font-size:var(--t2);line-height:1.6;resize:vertical;background:var(--surface);color:var(--ink)}
+
+/* lock ownership: a dark strip, the same andon voice as the plate */
+.lockbar{display:flex;align-items:center;gap:12px;margin:0 -16px;padding:8px 16px;background:var(--andon);color:var(--on-andon);font-size:var(--t1);line-height:1.45}
+.lockbar b{font-weight:600}
+.stopbox{display:flex;gap:12px;padding:16px;border-radius:var(--r);background:var(--surface);font-size:var(--t2);line-height:1.55}
+.stopbox>.ic{color:var(--stop);margin-top:2px}
+.stopbox b{font-weight:600}
+.state-note{font-size:var(--t1);line-height:1.5;color:var(--ink-2);margin-bottom:8px}
+.state-note b{color:var(--ink);font-weight:600}
+/* desk widths: a phone screen opened on a desk keeps its phone column, centred on the canvas */
+@media (min-width:900px){.top,.wrap{max-width:600px;margin-left:auto;margin-right:auto}.synthetic{justify-content:center}}
+
+.job{margin-top:16px}
+.sym{font-size:var(--t3);font-weight:600;line-height:1.35}
+.meta{display:flex;align-items:center;gap:12px;margin-top:8px;font-size:var(--t1);line-height:1.4}
+.state{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;background:var(--sunk);font-weight:600;line-height:1.35}
+.prog1{margin-left:auto;line-height:1.4;white-space:nowrap}
+.prog1 b{font-weight:600}
+.hist{background:var(--surface);border-radius:var(--r);padding:0 16px}
+.hist li{padding:12px 0;line-height:1.5}
+.hist li+li{box-shadow:inset 0 1px 0 var(--hair)}
+.hist .h1{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.hist .h1 b{font-weight:600}
+.hist .h1 .m{margin-left:auto;color:var(--ink-2)}
+.hist p{color:var(--ink-2)}
+.hist p q{color:var(--ink)}
+.meta .code{margin-left:auto;color:var(--ink-2)}
+.when{margin-top:12px;font-size:var(--t2);line-height:1.55;font-weight:600}
+.why{margin-top:4px;font-size:var(--t2);line-height:1.6}
+.go{margin-top:12px}
+.nxt{display:flex;align-items:center;gap:12px;margin-top:8px;min-height:56px;padding:8px 16px;border-radius:var(--r);background:var(--surface);text-decoration:none;font-size:var(--t1);line-height:1.4}
+.nxt b{font-weight:600}
+.nxt .t{flex:1;min-width:0}
+.upd{margin-top:8px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--surface);border-radius:var(--r)}
+.stats div{padding:12px 16px}
+.stats div+div{border-left:1px solid var(--hair)}
+.stats dt{font-size:var(--t1);line-height:1.35;color:var(--ink-2)}
+.stats dd{font-size:var(--t3);font-weight:600;line-height:1.3;white-space:nowrap}
+.stats dd small{font-size:var(--t1);font-weight:400;margin-left:2px}
+.fc{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+.fc i{width:16px;height:12px;border:2px solid var(--amber);box-shadow:inset 0 0 0 1px var(--ink)}
+.facts{background:var(--surface);border-radius:var(--r);padding:0 16px}
+.facts div{display:grid;grid-template-columns:88px 1fr;gap:12px;padding:12px 0;font-size:var(--t2);line-height:1.5}
+.facts div+div{border-top:1px solid var(--hair)}
+.facts dt{color:var(--ink-2);font-size:var(--t1);padding-top:2px}
+.qrow{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--r)}
+.qrow .t{flex:1;min-width:0;font-size:var(--t2);line-height:1.45;font-weight:600}
+.qrow .code{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<div class="synthetic" role="note"><span><b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง</span></div>
+<header class="top"><div class="who">งานของฉัน<small><span class="w">พิมพ์ชนก</span> · ช่าง</small></div><div class="clock" aria-label="เวลาโรงงาน"><b>10:42</b><span>วันนี้ 15 พ.ย.</span></div></header>
+<main class="wrap">
+  <div class="aplate"><div class="pl"><div class="no"><small>สถานี</small><b>3</b></div><div class="nm"><span class="st"><span class="w">ติดตั้งหลังคา</span></span><span class="mc"><span class="code"><span><span class="w">MC-012</span></span></span> · <span><span class="w">R-2000iC</span></span> · <span><span class="w">WO-000101</span></span></span></div></div><ol class="pos" aria-label="ตำแหน่งในสาย: สถานี 3 จาก 8"><li class="">1</li><li class="">2</li><li class="me">3</li><li class="">4</li><li class="">5</li><li class="">6</li><li class="">7</li><li class="">8</li></ol></div>
+  <div class="job">
+    <h1 class="sym"><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></h1>
+    <div class="meta"><span class="prio p3"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" style="fill:var(--amber);stroke:var(--ink)"/></svg><span>สูง</span></span><span class="state">กำลังทำ</span><span class="prog1"><b>ขั้น 2/6</b> · เริ่ม 10:05</span></div>
+    <p class="when"><span><span class="w">คาด</span><span class="w">ว่า</span><span class="w">จะ</span><span class="w">ถึงเกณฑ์</span><span class="w">ราว</span> <span class="w">15 พ.ย.</span> <span class="w">14:20 น.</span> <span class="w">(</span><span class="w">คลาดเคลื่อน</span><span class="w">ได้</span> <span class="w">± 2 ชม.</span><span class="w">)</span></span></p>
+    <p class="why"><span><span class="w">ยัง</span><span class="w">ไม่</span><span class="w">เกินเกณฑ์</span> <span class="w">แต่</span><span class="w">แนวโน้ม</span><span class="w">ชี้</span><span class="w">ว่า</span><span class="w">จะ</span><span class="w">ถึงเกณฑ์</span></span></p>
+  </div>
+  <div class="go"><a class="btn pri" href="tech-step.html">ทำต่อขั้น 2<svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /> <path d="m12 5 7 7-7 7" /></svg></a></div>
+  <a class="nxt" href="#q-h"><span class="t"><b>ถัดไป 1 งาน</b> · <span class="code"><span><span class="w">MC-021</span></span></span></span><span class="prio p1"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" style="stroke:var(--ink)"/></svg><span>ต่ำ</span></span><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></a>
+  <p class="upd">อัปเดต 10:42:00 · หน้านี้อัปเดตเอง</p>
+
+  <section class="sec" aria-labelledby="sig-h"><h2 id="sig-h"><span><span class="w">อุณหภูมิ</span><span class="w">มอเตอร์</span></span><span class="r fc"><i></i>คาดว่าจะเกินเกณฑ์</span></h2>
+    <dl class="stats">
+      <div><dt>ตอนนี้</dt><dd>78<small>°C</small></dd></div>
+      <div><dt>เกณฑ์</dt><dd>85<small>°C</small></dd></div>
+      <div><dt>เพิ่มขึ้น</dt><dd>1.4<small>°C/ชม.</small></dd></div>
+    </dl></section>
+
+  <section class="sec" aria-labelledby="hist-h"><h2 id="hist-h">ครั้งก่อนที่เครื่องนี้<span class="r unap" style="margin-top:0">จำลอง</span></h2>
+    <ol class="hist"><li><div class="h1"><span class="state"><span><span class="w">แก้</span><span class="w">แล้ว</span></span></span><b><span class="w">28 ต.ค. 2026</span></b> · 40 นาที · <span class="w">สมชาย</span><span class="m">คู่มือหน้า 145</span></div><p><q><span><span class="w">พัดลม</span><span class="w">มอเตอร์</span> <span class="w">J2</span> <span class="w">มี</span><span class="w">ฝุ่น</span><span class="w">อุด</span> <span class="w">ทำความสะอาด</span><span class="w">แล้ว</span><span class="w">อุณหภูมิ</span><span class="w">ลง</span></span></q></p></li><li><div class="h1"><span class="state"><span class="w">ซ่อมชั่วคราว</span></span><b><span><span class="w">3</span> <span class="w">ก</span><span class="w">.</span><span class="w">ย</span><span class="w">.</span> <span class="w">2026</span></span></b> · 55 นาที · <span class="w">ธนพล</span><span class="m">คู่มือหน้า 145</span></div><p><q><span><span class="w">ฝาครอบ</span><span class="w">พัดลม</span><span class="w">แตก</span> <span class="w">ยึด</span><span class="w">ไว้</span><span class="w">ชั่วคราว</span> <span class="w">สั่ง</span><span class="w">อะไหล่</span><span class="w">แล้ว</span></span></q></p></li></ol></section>
+
+  <section class="sec" aria-labelledby="prep-h"><h2 id="prep-h">เตรียมก่อนเดินไปเครื่อง</h2>
+    <dl class="facts">
+      <div><dt>เครื่องมือ</dt><dd><ul><li><span><span class="w">ประแจ</span><span class="w">ปอนด์</span> <span class="w">5</span><span class="w">–</span><span class="w">25 N·m</span></span></li><li><span><span class="w">ไขควง</span><span class="w">หก</span><span class="w">เหลี่ยม</span> <span class="w">5 มม.</span></span></li><li><span><span class="w">กุญแจล็อก</span><span class="w">และ</span><span class="w">ป้าย</span><span class="w">ส่วน</span><span class="w">ตัว</span></span></li></ul></dd></div>
+      <div><dt>เวลา</dt><dd><span class="w">45 นาที</span></dd></div>
+      <div><dt>ทักษะ</dt><dd><span><span class="w">ช่าง</span><span class="w">กล</span><span class="w">หุ่นยนต์</span></span> · 1 คน</dd></div>
+    </dl></section>
+
+  <nav class="sec rows" aria-label="ทางเลือกอื่น">
+    <a class="rw" href="#"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5h10" /> <path d="M11 12h10" /> <path d="M11 19h10" /> <path d="M4 4h1v5" /> <path d="M4 9h2" /> <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" /></svg><span class="t"><span><span class="w">ดู</span><span class="w">ทุก</span><span class="w">ขั้น</span></span><small><span><span class="w">6 ขั้น</span> <span class="w">·</span> <span class="w">ขั้น</span> <span class="w">2</span><span class="w">,</span> <span class="w">3</span> <span class="w">และ</span> <span class="w">6</span> <span class="w">มี</span><span class="w">เครื่องหมาย</span><span class="w">จาก</span><span class="w">วิศวกร</span></span></small></span></a>
+    <a class="rw" href="#"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" /> <path d="m14.5 8.5-5 5" /> <path d="m9.5 8.5 5 5" /></svg><span class="t"><span><span class="w">ไม่</span><span class="w">เห็น</span><span class="w">ด้วย</span><span class="w">กับ</span><span class="w">ลำดับ</span></span><small><span><span class="w">เลือก</span><span class="w">เหตุผล</span><span class="w">สำเร็จรูป</span> <span class="w">ไม่</span><span class="w">ต้อง</span><span class="w">พิมพ์</span></span></small></span></a>
+    <a class="rw" href="report.html"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" /> <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14" /> <path d="M8 6v8" /></svg><span class="t"><span><span class="w">แจ้ง</span><span class="w">ซ่อม</span><span class="w">เครื่อง</span><span class="w">อื่น</span></span><small><span><span class="w">เครื่อง</span><span class="w">ที่</span><span class="w">เจอ</span><span class="w">ปัญหา</span><span class="w">ระหว่าง</span><span class="w">ทาง</span></span></small></span></a>
+  </nav>
+
+  <section class="sec" aria-labelledby="q-h"><h2 id="q-h">ถัดไป 1 งาน · ตามลำดับที่ระบบจัด</h2><div class="qrow"><span class="t"><span><span class="w">รอบ</span><span class="w">การ</span><span class="w">ทำงาน</span><span class="w">ช้ากว่ากำหนด</span></span><span class="code"><span><span class="w">MC-021</span></span> · <span><span class="w">WO-000107</span></span></span></span><span class="prio p1"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" style="stroke:var(--ink)"/></svg><span>ต่ำ</span></span></div></section>
+  <p class="prov">ขั้นตอน<b>ฉบับที่ 3</b> · อนุมัติโดย <b><span><span class="w">ปราณี</span> <span class="w">(</span><span class="w">วิศวกร</span><span class="w">)</span></span></b> <span><span class="w">2 พ.ย. 2026</span> <span class="w">14:10 น.</span></span> · <span lang="en"><span><span class="w">R-2000iC</span> Maintenance Manual</span></span></p>
+</main>
+</body>
+</html>

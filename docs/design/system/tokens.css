@@ -1,0 +1,32 @@
+/* generated from _src/base.py CSS_BASE - edit there */
+:root{
+  --canvas:#F4F5F7;
+  --surface:#FFFFFF;
+  --sunk:#EBEDF0;
+  --ink:#111418;
+  --ink-2:#3D434B;
+  --line:#7D858E;
+  --hair:#E3E6EA;
+  --andon:#16191D;
+  --lamp-off:#2A2F36;
+  --on-andon:#FFFFFF;
+  --on-andon-2:#BAC1C9;
+  --stop:#A3121A;
+  --amber:#E8890C;
+  --on-amber:#111418;
+  --done:#1E6B3A;
+  --iso-blue:#005387;
+  --iso-yellow:#F9A800;
+  --iso-red:#B71E1E;
+  --r:12px;
+  --r-sm:8px;
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --t1:15px;
+  --t2:18px;
+  --t3:24px;
+  --t4:36px;
+  --sans:"Plex Looped",sans-serif;
+  --mono:"Plex Mono",ui-monospace,monospace;
+}

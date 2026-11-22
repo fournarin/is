@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icons: Lucide 1.49.0, ISC License, Copyright (c) Lucide Icons and Contributors (lucide.dev). Fonts: IBM Plex Sans Thai Looped, SIL OFL 1.1. -->
+<title>ระบบออกแบบ · ส่วนประกอบ</title>
+<style>
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-Regular.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-SemiBold.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"Plex Mono";src:url(../fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400}
+:root{
+  /* surfaces: one canvas, one raised work surface, one sunk tone. Outlines are for inputs only. */
+  --canvas:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF0;   /* refresh (Q13): paler canvas, calmer sunk */
+  --ink:#111418;      /* text + the one action colour        16.2:1 canvas, 18.5:1 surface */
+  --ink-2:#3D434B;    /* secondary text                       8.7:1 canvas, 7.9:1 sunk */
+  --line:#7D858E;     /* input outlines only (non-text 3.3:1)  */
+  --hair:#E3E6EA;     /* 1 px separators inside a surface     */
+  /* the andon display: dark, lit only by state */
+  --andon:#16191D; --lamp-off:#2A2F36; --on-andon:#FFFFFF; --on-andon-2:#BAC1C9;
+  /* state colours - nothing else may use them */
+  --stop:#A3121A;     /* critical priority. white on it 7.9:1 */
+  --amber:#E8890C;    /* over threshold (solid) / forecast (outline). ink on it 7.05:1 */
+  --on-amber:#111418; /* text on amber or ISO yellow: always dark, in either theme */
+  --done:#1E6B3A;     /* small "done/confirmed" marks only */
+  /* ISO 3864 colours - only inside drawn ISO 7010 signs */
+  --iso-blue:#005387; --iso-yellow:#F9A800; --iso-red:#B71E1E;
+  --r:12px; --r-sm:8px;
+  /* one elevation, for sheets and drawers only; everything else is flat with hairlines */
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+  /* type scale: 15 / 18 / 24 / 36 (one more, 30, only for the board clock and station numbers) */
+  --t1:15px; --t2:18px; --t3:24px; --t4:36px;
+  --sans:"Plex Looped",sans-serif; --mono:"Plex Mono",ui-monospace,monospace;
+}
+/* one light theme everywhere, wall included (owner Q14: the dark wall read as busy and confusing) */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-weight:400;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+.w{white-space:nowrap}
+h1,h2,.ttl{text-wrap:balance} p,li,dd{text-wrap:pretty}   /* Chrome 114+/117+; ignored by 109 */
+.code{font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}
+b,strong,h1,h2,h3,h4{font-weight:600}   /* the font has 400 and 600 only; never let the browser synthesise 700/900 */
+/* the one callout: white surface, a leading Lucide icon whose colour carries the meaning, a bold word. No stripes. */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:var(--r);background:var(--surface);line-height:1.5}
+.callout>.ic{flex:none;margin-top:3px;color:var(--ink-2)}
+.callout.bad>.ic{color:var(--stop)} .callout.ok>.ic{color:var(--done)} .callout.lock>.ic{color:var(--ink)}
+.callout>div{flex:1;min-width:0}
+.callout .act{margin-top:12px}
+.muted{color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.ic{flex:none;display:block}
+.synthetic{display:flex;justify-content:space-between;gap:8px;background:var(--sunk);padding:4px 16px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.synthetic b{font-weight:600;color:var(--ink)}
+
+/* motion: 150-200 ms fades and slides for what opens; nothing for people who asked for none */
+@keyframes rise{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slide{from{transform:translateX(32px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* bottom sheet (phones): details behind a tap. The summary becomes the dimmed backdrop, so a tap
+   outside closes it with no script; the panel rises from the bottom with the one elevation. */
+.bs>summary{list-style:none;cursor:pointer}
+.bs>summary::-webkit-details-marker{display:none}
+.bs[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.45);color:transparent;animation:fade var(--dur) var(--ease)}
+.bs[open]>summary *{visibility:hidden}
+.bs>.panel{display:none}
+.bs[open]>.panel{display:block;position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;overflow:auto;
+  padding:8px 16px 24px;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:var(--lift);animation:rise var(--dur) var(--ease)}
+.bs>.panel::before{content:"";display:block;width:40px;height:4px;margin:4px auto 12px;border-radius:2px;background:var(--hair)}
+/* drawer (desk): the same content from the right edge */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(480px,92vw);overflow:auto;padding:24px;
+  background:var(--surface);box-shadow:var(--lift);animation:slide var(--dur) var(--ease)}
+/* hover preview (desk): a row's detail without opening anything; keyboard focus shows it too */
+.peek{display:none}
+.has-peek{position:relative}
+.has-peek:hover>.peek,.has-peek:focus-within>.peek{display:block;position:absolute;z-index:30;left:0;top:calc(100% + 4px);
+  width:min(520px,80vw);padding:12px 16px;border-radius:var(--r);background:var(--surface);box-shadow:var(--lift);
+  font-size:var(--t1);line-height:1.5;animation:fade var(--dur) var(--ease)}
+
+/* priority: shape + word, same on every screen. Colour only on the top level. */
+.prio{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;font-size:var(--t1);line-height:1.3}
+.prio svg{flex:none;display:block}
+/* ISO 3864-2 signal word panels: only beside an ISO 7010 sign */
+.sig{display:inline-block;padding:2px 12px;border-radius:4px;font-weight:600;line-height:1.35}
+.sig-danger{background:var(--stop);color:#fff} .sig-warn{background:var(--amber);color:var(--on-amber)} .sig-caution{background:var(--iso-yellow);color:var(--on-amber)}
+
+:root{--t1:18px}   /* REQ-G-06: nothing on a phone below 18 px */
+body{font-size:var(--t2);line-height:1.6}
+.wrap{padding:0 16px 48px}
+.top{display:flex;align-items:center;gap:8px;padding:8px 16px;min-height:64px}
+.top .clock{margin-left:4px}
+.top .who{flex:1;min-width:0;font-size:var(--t2);line-height:1.3;font-weight:600}
+.top .who small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+.clock{text-align:right;white-space:nowrap;line-height:1.2}
+.clock b{display:block;font-size:var(--t3);font-weight:600}
+.clock span{font-size:var(--t1);color:var(--ink-2)}
+.back{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:56px;padding:0 12px 0 8px;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:600;line-height:1.3;text-decoration:none}
+.stile{flex:none;width:40px;height:48px;display:flex;align-items:center;justify-content:center;background:var(--andon);color:var(--on-andon);
+  font-size:var(--t3);font-weight:600;line-height:1}
+.anc{flex:1;min-width:0;font-size:var(--t2);font-weight:600;line-height:1.3}
+.anc small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+
+/* the andon plate: the sign over the station, with the line under it (8 lamps, this one lit) */
+.aplate{margin:0 -16px;padding:16px 16px 12px;background:var(--andon);color:var(--on-andon)}
+.pl{display:flex;align-items:center;gap:16px}
+.pl .no{flex:none;width:72px;height:72px;background:var(--surface);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.pl .no small{font-size:var(--t1);font-weight:600;line-height:1.2}
+.pl .no b{font-size:var(--t4);font-weight:600;line-height:1}
+.pl .nm{flex:1;min-width:0}
+.pl .st{display:block;font-size:var(--t3);font-weight:600;line-height:1.3}
+.pl .mc{display:block;font-size:var(--t1);line-height:1.5;color:var(--on-andon-2)}
+.pl .mc .code{color:var(--on-andon)}
+.pos{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:12px}
+.pos li{height:24px;display:flex;align-items:center;justify-content:center;background:var(--lamp-off);color:var(--on-andon-2);font-size:var(--t1);font-weight:600;line-height:1}
+.pos li.me{background:var(--surface);color:var(--ink)}
+.btn-dk{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:4px 16px;border-radius:var(--r);
+  background:var(--lamp-off);color:var(--on-andon);font-size:var(--t1);font-weight:600;line-height:1.35;text-align:center;text-decoration:none}
+
+/* surfaces and buttons */
+.card{background:var(--surface);border-radius:var(--r);padding:16px}
+.btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:56px;padding:8px 16px;border:0;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:600;line-height:1.3;text-align:center;text-decoration:none}
+.btn.pri{background:var(--ink);color:var(--surface);min-height:64px}
+.btn.off{background:transparent;color:var(--ink-2);box-shadow:inset 0 0 0 2px var(--sunk);cursor:not-allowed}
+.btn.left{justify-content:flex-start;text-align:left}
+.btn .t small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+.miss{margin-top:8px;font-size:var(--t1);line-height:1.5;font-weight:600}
+.rows{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.rows .rw{border-radius:0}
+.rows{padding:4px 0}
+.rows .rw{position:relative}
+.rows .rw+.rw{margin-top:8px}
+.rows .rw+.rw::before{content:"";position:absolute;left:16px;right:0;top:-4px;height:1px;background:var(--hair)}
+.rw{display:flex;align-items:center;gap:16px;min-height:64px;padding:8px 16px;border-radius:var(--r);background:var(--surface);text-decoration:none;color:var(--ink)}
+.rw .t{flex:1;min-width:0;font-size:var(--t2);font-weight:600;line-height:1.3}
+.rw .t small{display:block;font-size:var(--t1);font-weight:400;line-height:1.45;color:var(--ink-2)}
+.sec{margin-top:32px}
+.sec>h2{display:flex;align-items:baseline;gap:8px;font-size:var(--t1);font-weight:600;line-height:1.35;color:var(--ink-2);margin-bottom:8px}
+.sec>h2 .r{margin-left:auto;color:var(--ink)}
+.prov{margin-top:24px;font-size:var(--t1);line-height:1.6;color:var(--ink-2)}
+.prov b{font-weight:600;color:var(--ink)}
+
+/* questions and choice tiles. One selection style everywhere: a 2 px ink ring + a filled mark. */
+.q{margin-top:24px}
+.qh{display:flex;align-items:baseline;gap:12px;font-size:var(--t2);font-weight:600;line-height:1.35;margin-bottom:8px}
+.qh .n{flex:none;color:var(--ink-2)}
+.qh .tag{margin-left:auto;font-size:var(--t1);font-weight:400;color:var(--ink-2);white-space:nowrap}
+.qh .tag.req{font-weight:600;color:var(--ink)}
+.ch{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 16px;text-align:left;border:0;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:400;line-height:1.35}
+.ch .mk{flex:none;width:24px;height:24px;border:2px solid var(--ink-2);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ch[role=checkbox] .mk{border-radius:4px}
+.ch .mk i,.ch .mk .ic{display:none}
+.ch .mk i{width:12px;height:12px;border-radius:50%;background:var(--ink)}
+.ch[aria-checked=true]{box-shadow:inset 0 0 0 2px var(--ink);font-weight:600}
+.ch[aria-checked=true] .mk{border-color:var(--ink)}
+.ch[aria-checked=true][role=radio] .mk i{display:block}
+.ch[aria-checked=true][role=checkbox] .mk{background:var(--ink);color:var(--surface)}
+.ch[aria-checked=true][role=checkbox] .mk .ic{display:block}
+.card .ch:not([aria-checked=true]):not([aria-disabled=true]){background:var(--canvas)}
+.ch>span{text-wrap:balance}
+.ch small{display:block;font-size:var(--t1);font-weight:400;line-height:1.45;color:var(--ink-2)}
+.ch[aria-disabled=true]{background:var(--sunk);color:var(--ink-2);cursor:not-allowed}
+.ch[aria-disabled=true] .mk{border-color:var(--line)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g1{display:grid;gap:8px}
+.lbl{font-size:var(--t1);line-height:1.5;color:var(--ink-2)}
+textarea{display:block;width:100%;min-height:104px;padding:12px 16px;border:1.5px solid var(--line);border-radius:var(--r);
+  font:inherit;font-size:var(--t2);line-height:1.6;resize:vertical;background:var(--surface);color:var(--ink)}
+
+/* lock ownership: a dark strip, the same andon voice as the plate */
+.lockbar{display:flex;align-items:center;gap:12px;margin:0 -16px;padding:8px 16px;background:var(--andon);color:var(--on-andon);font-size:var(--t1);line-height:1.45}
+.lockbar b{font-weight:600}
+.stopbox{display:flex;gap:12px;padding:16px;border-radius:var(--r);background:var(--surface);font-size:var(--t2);line-height:1.55}
+.stopbox>.ic{color:var(--stop);margin-top:2px}
+.stopbox b{font-weight:600}
+.state-note{font-size:var(--t1);line-height:1.5;color:var(--ink-2);margin-bottom:8px}
+.state-note b{color:var(--ink);font-weight:600}
+/* desk widths: a phone screen opened on a desk keeps its phone column, centred on the canvas */
+@media (min-width:900px){.top,.wrap{max-width:600px;margin-left:auto;margin-right:auto}.synthetic{justify-content:center}}
+
+
+.synthetic{padding:4px 24px}
+.app{padding:0 24px 32px}
+.hdr{display:flex;align-items:center;gap:24px;min-height:56px}
+.hdr h1{font-size:var(--t2);font-weight:600;line-height:1.3}
+.hdr .sub{color:var(--ink-2);line-height:1.35}
+.hdr nav{display:flex;gap:8px;align-self:stretch;flex-wrap:wrap}
+.hdr nav a{display:flex;align-items:center;min-height:48px;padding:0 12px;text-decoration:none;font-weight:600;color:var(--ink-2);box-shadow:inset 0 -3px 0 transparent;white-space:nowrap}
+.hdr nav a[aria-current=page]{color:var(--ink);box-shadow:inset 0 -3px 0 var(--ink)}
+.hdr .sp{flex:1}
+.hdr .clk{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.hdr .clk b{font-size:var(--t3);font-weight:600;line-height:1}
+.hdr .clk span{color:var(--ink-2);line-height:1.35;text-align:right}
+.hdr .me{display:flex;align-items:center;gap:12px;white-space:nowrap;line-height:1.3}
+.hdr .me small{display:block;color:var(--ink-2);font-size:var(--t1)}
+.b{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;border:0;border-radius:var(--r);
+  background:var(--surface);color:var(--ink);font:inherit;font-weight:600;line-height:1.3;white-space:nowrap;text-decoration:none;cursor:pointer}
+.b.pri{background:var(--ink);color:var(--surface)} .b.sec{background:var(--sunk)}
+.b.off{background:transparent;color:var(--ink-2);box-shadow:inset 0 0 0 2px var(--sunk);cursor:not-allowed}
+.surface{background:var(--surface);border-radius:var(--r)}
+.lead{color:var(--ink-2);margin-top:4px}
+.pg-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 24px;margin:16px 0 8px}
+.pg-h h2{font-size:var(--t3);font-weight:600;line-height:1.3}
+.pg-h p{color:var(--ink-2)}
+.chip,.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:4px;background:var(--sunk);color:var(--ink);font-weight:600;line-height:1.4;white-space:nowrap}
+.tag.draft{background:var(--ink);color:var(--surface)}
+.tag.ok{background:var(--sunk);color:var(--ink)}
+.dt{width:100%;border-collapse:collapse}
+.dt th{font-weight:400;color:var(--ink-2);text-align:left;padding:8px 12px;border-bottom:1px solid var(--hair);white-space:nowrap;vertical-align:bottom}
+.dt td{padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+.dt tr:last-child td{border-bottom:0}
+.dt td.n,.dt th.n{text-align:right;font-variant-numeric:tabular-nums}
+.dt b{font-weight:600}
+.muted{color:var(--ink-2)}
+/* callouts come from base.callout(); no coloured stripes */
+.note b{font-weight:600}
+.empty{color:var(--ink-2);padding:8px 0}
+@media (max-width:699px){
+  :root{--t1:18px}
+  .synthetic{padding:4px 16px} .app{padding:0 16px 24px}
+  .hdr{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;padding:8px 0;align-items:center}
+  .hdr{row-gap:8px} .hdr nav{grid-column:1/-1;grid-row:2;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:-16px;padding-right:32px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)}
+  .hdr nav a{padding:0 12px 0 0;min-height:56px}
+  .b{min-height:56px}
+  .kv div{grid-template-columns:1fr;gap:0} .search{flex-wrap:wrap} .search input{min-height:56px;min-width:0}
+  .hdr .sp,.hdr .clk span,.hdr .me>span{display:none}
+  .dt thead{display:none} .dt,.dt tbody,.dt tr,.dt td{display:block} .dt tr{padding:8px 0;border-bottom:1px solid var(--hair)}
+  .dt td{border:0;padding:2px 16px} .dt td.n{text-align:left}
+  .dt td[data-l]::before{content:attr(data-l) " ";color:var(--ink-2);font-weight:400}
+}
+
+:root{--t1:15px}
+body{font-size:15px}
+.g{max-width:1200px;margin:0 auto;padding:0 24px 48px}
+.g h1{font-size:var(--t4);font-weight:600;line-height:1.2;margin-top:24px}
+.g>section{margin-top:40px}
+.g>section>h2{font-size:var(--t3);font-weight:600;line-height:1.3;margin-bottom:4px}
+.g>section>p.d{color:var(--ink-2);margin-bottom:16px}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.sw div{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.sw i{display:block;height:56px}
+.sw p{padding:8px 12px;line-height:1.4} .sw p b{display:block;font-weight:600} .sw p>span{display:block;color:var(--ink-2)}
+.ty div{display:flex;align-items:baseline;gap:24px;padding:8px 0;border-bottom:1px solid var(--hair)}
+.ty span{width:180px;flex:none;color:var(--ink-2)}
+.sp div{display:flex;align-items:center;gap:16px;padding:4px 0}.sp i{display:block;height:16px;background:var(--ink)}
+.ics{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ics div{display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface);border-radius:var(--r)}
+.ics small{font-size:15px}
+.row2{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.row2>*{flex:0 1 340px}
+.lbl2{display:block;color:var(--ink-2);margin-bottom:6px;font-size:15px}
+.ph{width:360px;background:var(--canvas);padding:16px;border-radius:var(--r);box-shadow:inset 0 0 0 1px var(--hair)}
+.ph{--t1:18px;font-size:18px}
+.sk{height:16px;border-radius:4px;background:linear-gradient(90deg,var(--sunk),var(--canvas),var(--sunk));margin:8px 0}
+.isos{display:flex;gap:24px;align-items:center}
+</style>
+</head>
+<body>
+<div class="synthetic" role="note"><span><b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง</span></div><main class="g">
+<h1>ระบบออกแบบ · ส่วนประกอบ</h1><p class="muted">ทุกชิ้นวาดด้วย CSS เดียวกับหน้าจอจริง (design/system/_src) · ตัวเลข contrast คำนวณจาก token</p>
+
+<section><h2>สี</h2><p class="d">สีสถานะใช้กับสถานะเท่านั้น · สี ISO อยู่ในป้าย ISO เท่านั้น · ตัวอักษรทุกคู่ ≥ 7:1</p><div class="sw"><div><i style="background:#F4F5F7"></i><p><b>--canvas</b><span>#F4F5F7</span><span><span><span class="w">พื้น</span><span class="w">หลัง</span><span class="w">หน้า</span></span></span><span>ink บนสีนี้ 16.93:1 · ขาว 1.09:1</span></p></div><div><i style="background:#FFFFFF"></i><p><b>--surface</b><span>#FFFFFF</span><span><span><span class="w">พื้น</span><span class="w">งาน</span></span></span><span>ink บนสีนี้ 18.47:1 · ขาว 1.00:1</span></p></div><div><i style="background:#EBEDF0"></i><p><b>--sunk</b><span>#EBEDF0</span><span><span><span class="w">พื้น</span><span class="w">ลึก</span> <span class="w">/</span> <span class="w">ปุ่ม</span><span class="w">รอง</span></span></span><span>ink บนสีนี้ 15.75:1 · ขาว 1.17:1</span></p></div><div><i style="background:#111418"></i><p><b>--ink</b><span>#111418</span><span><span><span class="w">ตัว</span><span class="w">อักษร</span> <span class="w">+</span> <span class="w">สี</span><span class="w">ปุ่ม</span><span class="w">หลัก</span></span></span><span>ink บนสีนี้ 1.00:1 · ขาว 18.47:1</span></p></div><div><i style="background:#3D434B"></i><p><b>--ink-2</b><span>#3D434B</span><span><span><span class="w">ตัว</span><span class="w">อักษร</span><span class="w">รอง</span></span></span><span>ink บนสีนี้ 1.85:1 · ขาว 9.99:1</span></p></div><div><i style="background:#7D858E"></i><p><b>--line</b><span>#7D858E</span><span><span><span class="w">เส้น</span><span class="w">ขอบ</span><span class="w">ช่อง</span><span class="w">กรอก</span><span class="w">เท่านั้น</span></span></span><span>ink บนสีนี้ 4.94:1 · ขาว 3.74:1</span></p></div><div><i style="background:#E3E6EA"></i><p><b>--hair</b><span>#E3E6EA</span><span><span><span class="w">เส้น</span><span class="w">แบ่ง</span><span class="w">ใน</span><span class="w">พื้น</span><span class="w">งาน</span></span></span><span>ink บนสีนี้ 14.75:1 · ขาว 1.25:1</span></p></div><div><i style="background:#16191D"></i><p><b>--andon</b><span>#16191D</span><span><span><span class="w">แผ่น</span><span class="w">ป้าย</span><span class="w">สถานี</span></span></span><span>ink บนสีนี้ 1.05:1 · ขาว 17.63:1</span></p></div><div><i style="background:#2A2F36"></i><p><b>--lamp-off</b><span>#2A2F36</span><span><span><span class="w">หลอด</span><span class="w">ที่</span><span class="w">ไม่</span><span class="w">ติด</span></span></span><span>ink บนสีนี้ 1.37:1 · ขาว 13.48:1</span></p></div><div><i style="background:#FFFFFF"></i><p><b>--on-andon</b><span>#FFFFFF</span><span><span><span class="w">ตัว</span><span class="w">อักษร</span><span class="w">บน</span><span class="w">ป้าย</span></span></span><span>ink บนสีนี้ 18.47:1 · ขาว 1.00:1</span></p></div><div><i style="background:#BAC1C9"></i><p><b>--on-andon-2</b><span>#BAC1C9</span><span><span><span class="w">ตัว</span><span class="w">อักษร</span><span class="w">รอง</span><span class="w">บน</span><span class="w">ป้าย</span></span></span><span>ink บนสีนี้ 10.17:1 · ขาว 1.82:1</span></p></div><div><i style="background:#A3121A"></i><p><b>--stop</b><span>#A3121A</span><span><span><span class="w">วิกฤต</span> <span class="w">·</span> <span class="w">คำ</span><span class="w">สัญญาณ</span><span class="w">อันตราย</span></span></span><span>ink บนสีนี้ 2.34:1 · ขาว 7.90:1</span></p></div><div><i style="background:#E8890C"></i><p><b>--amber</b><span>#E8890C</span><span><span><span class="w">เกินเกณฑ์</span> <span class="w">(</span><span class="w">ทึบ</span><span class="w">)</span> <span class="w">·</span> <span class="w">คาดว่าจะเกิน</span> <span class="w">(</span><span class="w">กรอบ</span><span class="w">)</span></span></span><span>ink บนสีนี้ 7.05:1 · ขาว 2.62:1</span></p></div><div><i style="background:#111418"></i><p><b>--on-amber</b><span>#111418</span><span></span><span>ink บนสีนี้ 1.00:1 · ขาว 18.47:1</span></p></div><div><i style="background:#1E6B3A"></i><p><b>--done</b><span>#1E6B3A</span><span><span><span class="w">ส่ง</span><span class="w">แล้ว</span> <span class="w">/</span> <span class="w">เสร็จ</span> <span class="w">(</span><span class="w">เครื่องหมาย</span><span class="w">เล็ก</span><span class="w">)</span></span></span><span>ink บนสีนี้ 2.83:1 · ขาว 6.52:1</span></p></div><div><i style="background:#005387"></i><p><b>--iso-blue</b><span>#005387</span><span><span><span class="w">ใน</span><span class="w">ป้าย</span> <span class="w">ISO</span> <span class="w">เท่านั้น</span></span></span><span>ink บนสีนี้ 2.28:1 · ขาว 8.12:1</span></p></div><div><i style="background:#F9A800"></i><p><b>--iso-yellow</b><span>#F9A800</span><span><span><span class="w">ใน</span><span class="w">ป้าย</span> <span class="w">ISO</span> <span class="w">/</span> <span class="w">คำ</span><span class="w">สัญญาณ</span><span class="w">ข้อ</span><span class="w">ควร</span><span class="w">ระวัง</span></span></span><span>ink บนสีนี้ 9.35:1 · ขาว 1.98:1</span></p></div><div><i style="background:#B71E1E"></i><p><b>--iso-red</b><span>#B71E1E</span><span><span><span class="w">ใน</span><span class="w">ป้าย</span> <span class="w">ISO</span> <span class="w">เท่านั้น</span></span></span><span>ink บนสีนี้ 2.83:1 · ขาว 6.53:1</span></p></div></div></section>
+
+<section><h2>ตัวอักษร</h2><p class="d">IBM Plex Sans Thai Looped 400/600 เท่านั้น (87 KB) · มือถือไม่ต่ำกว่า 18 · desk ไม่ต่ำกว่า 15 · ตัดบรรทัดเฉพาะระหว่างคำ (Intl.Segmenter + รายการคำประสม)</p><div class="ty"><div><span>36 · t4 · 600</span><p style="font-size:36px;font-weight:600;line-height:1.35"><span><span class="w">ขั้น</span> <span class="w">2</span> <span class="w">จาก</span> <span class="w">6</span></span></p></div><div><span>30 · นาฬิกากระดาน</span><p style="font-size:30px;font-weight:600;line-height:1.35">10:42</p></div><div><span>24 · t3 · 600</span><p style="font-size:24px;font-weight:600;line-height:1.35"><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></p></div><div><span>24 · t3 · 400 ข้อความขั้น</span><p style="font-size:24px;font-weight:400;line-height:1.35"><span><span class="w">ปิด</span><span class="w">เบรกเกอร์</span> <span class="w">CP-3</span> <span class="w">ที่</span><span class="w">ตู้ควบคุม</span></span></p></div><div><span>18 · t2 · มือถือขั้นต่ำ</span><p style="font-size:18px;font-weight:400;line-height:1.35"><span><span class="w">ทำ</span><span class="w">แล้ว</span> <span class="w">1</span> <span class="w">จาก</span> <span class="w">6 ขั้น</span> <span class="w">·</span> <span class="w">ยัง</span><span class="w">ไม่</span><span class="w">ได้</span><span class="w">ทำ</span><span class="w">ขั้น</span> <span class="w">2</span><span class="w">–</span><span class="w">6</span></span></p></div><div><span>18 · กระดาน ≥1600 บรรทัดตัดสินใจ</span><p style="font-size:18px;font-weight:600;line-height:1.35"><span><span class="w">ระบบ</span><span class="w">ล็อกนิรภัย</span><span class="w">แจ้ง</span><span class="w">ว่า</span><span class="w">ประตู</span><span class="w">เปิด</span><span class="w">อยู่</span></span></p></div><div><span>15 · t1 desk</span><p style="font-size:15px;font-weight:400;line-height:1.35"><span><span class="w">MC-018</span> <span class="w">·</span> <span class="w">สถานี</span> <span class="w">4</span> <span class="w">·</span> <span class="w">ความ</span><span class="w">รุนแรง</span><span class="w">วิกฤต</span></span></p></div></div></section>
+
+<section><h2>ระยะ</h2><p class="d">4 / 8 / 12 / 16 / 24 / 32 / 48 · มุม 8 px (ป้าย 4 px) · แยกด้วยพื้นสองระดับและระยะ ไม่ใช้กรอบ ยกเว้นช่องกรอก</p><div class="sp"><div><span style="width:40px">4</span><i style="width:4px"></i></div><div><span style="width:40px">8</span><i style="width:8px"></i></div><div><span style="width:40px">12</span><i style="width:12px"></i></div><div><span style="width:40px">16</span><i style="width:16px"></i></div><div><span style="width:40px">24</span><i style="width:24px"></i></div><div><span style="width:40px">32</span><i style="width:32px"></i></div><div><span style="width:40px">48</span><i style="width:48px"></i></div></div></section>
+
+<section><h2>ไอคอน</h2><p class="d">Lucide 1.49.0 (ISC License, Copyright (c) Lucide Icons and Contributors) · เส้น 2 px ปลายมน · มีคำกำกับเสมอ · ไม่มีสามเหลี่ยมเตือนนอกป้าย ISO</p><div class="ics"><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>check<br><small class="muted">check</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /> <path d="m12 5 7 7-7 7" /></svg><span>arrow<br><small class="muted">arrow-right</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7" /> <path d="M19 12H5" /></svg><span>back<br><small class="muted">arrow-left</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v16" /> <path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" /></svg><span>book<br><small class="muted">book-open</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5h10" /> <path d="M11 12h10" /> <path d="M11 19h10" /> <path d="M4 4h1v5" /> <path d="M4 9h2" /> <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" /></svg><span>steps<br><small class="muted">list-ordered</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 4 4-4 4" /> <path d="M20 7H4" /> <path d="m8 21-4-4 4-4" /> <path d="M4 17h16" /></svg><span>handover<br><small class="muted">arrow-right-left</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m16 9-5.5 5.5L8 12" /></svg><span>close<br><small class="muted">square-check</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" /> <path d="m14.5 8.5-5 5" /> <path d="m9.5 8.5 5 5" /></svg><span>disagree<br><small class="muted">message-square-x</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" /> <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14" /> <path d="M8 6v8" /></svg><span>report<br><small class="muted">megaphone</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1" /> <circle cx="19" cy="12" r="1" /> <circle cx="5" cy="12" r="1" /></svg><span>more<br><small class="muted">ellipsis</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg><span>undo<br><small class="muted">undo-2</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg><span>chev<br><small class="muted">chevron-right</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg><span>lock<br><small class="muted">lock</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg><span>unlock<br><small class="muted">lock-open</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="M12 6v6l4 2" /></svg><span>clock<br><small class="muted">clock</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /> <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /> <path d="M8 16H3v5" /></svg><span>retry<br><small class="muted">refresh-cw</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01" /> <path d="M8.5 16.429a5 5 0 0 1 7 0" /> <path d="M5 12.859a10 10 0 0 1 5.17-2.69" /> <path d="M19 12.859a10 10 0 0 0-2.007-1.523" /> <path d="M2 8.82a15 15 0 0 1 4.177-2.643" /> <path d="M22 8.82a15 15 0 0 0-11.288-3.764" /> <path d="m2 2 20 20" /></svg><span>wifi<br><small class="muted">wifi-off</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></svg><span>phone<br><small class="muted">phone</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" /></svg><span>bottle<br><small class="muted">funnel</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5" /> <path d="M21 12H9" /> <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /></svg><span>out<br><small class="muted">log-out</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 21h8" /> <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /></svg><span>pen<br><small class="muted">pen-line</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /> <circle cx="9" cy="9" r="2" /> <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg><span>image<br><small class="muted">image</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /> <path d="M3 3v5h5" /> <path d="M12 7v5l4 2" /></svg><span>history<br><small class="muted">history</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2" /> <line x1="12" x2="15" y1="14" y2="11" /> <circle cx="12" cy="14" r="8" /></svg><span>timer<br><small class="muted">timer</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="5" /> <path d="M20 21a8 8 0 0 0-16 0" /></svg><span>user<br><small class="muted">user-round</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7" /> <path d="M12 19V5" /></svg><span>up<br><small class="muted">arrow-up</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14" /> <path d="m19 12-7 7-7-7" /></svg><span>down<br><small class="muted">arrow-down</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg><span>sort<br><small class="muted">chevron-down</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <line x1="12" x2="12" y1="8" y2="12" /> <line x1="12" x2="12.01" y1="16" y2="16" /></svg><span>alert<br><small class="muted">circle-alert</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></svg><span>info<br><small class="muted">info</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="m16 9-5.5 5.5L8 12" /></svg><span>ok<br><small class="muted">circle-check</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6" /> <path d="M10 14 21 3" /> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg><span>external<br><small class="muted">external-link</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg><span>page<br><small class="muted">file-text</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /> <circle cx="12" cy="10" r="3" /></svg><span>pin<br><small class="muted">map-pin</small></span></div><div><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /> <path d="M16 3.128a4 4 0 0 1 0 7.744" /> <path d="M22 21v-2a4 4 0 0 0-3-3.87" /> <circle cx="9" cy="7" r="4" /></svg><span>people<br><small class="muted">users</small></span></div></div></section>
+
+<section><h2>ความสำคัญ</h2><p class="d">รูปทรง + คำ อ่านได้ในภาพขาวดำ · สีแดงเฉพาะวิกฤต</p><p style="display:flex;gap:24px"><span class="prio p4"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" style="fill:var(--stop);stroke:var(--stop)"/></svg><span>วิกฤต</span></span> <span class="prio p3"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" style="fill:var(--amber);stroke:var(--ink)"/></svg><span>สูง</span></span> <span class="prio p2"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" fill="none" style="stroke:var(--ink)"/></svg><span>ปานกลาง</span></span> <span class="prio p1"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" style="stroke:var(--ink)"/></svg><span>ต่ำ</span></span></p></section>
+
+<section><h2>ป้าย ISO และคำสัญญาณ</h2><p class="d">เฉพาะขั้นที่วิศวกรกำหนด (Step.kind) · คอลัมน์คงที่ 48 px · M021 + ป้ายพลังงานที่ขั้นตัดพลังงาน · ไม่มีป้ายที่ขั้นคืนพลังงาน · วาดตามเรขาคณิต ISO 3864 แทน artwork ทางการ</p>
+<div class="isos"><svg width="48" height="48" viewBox="0 0 100 100" role="img" aria-label="ISO 7010 M021 ตัดการเชื่อมต่อก่อนซ่อม"><circle cx="50" cy="50" r="48" style="fill:var(--iso-blue)"/><g fill="#fff"><rect x="14" y="40" width="26" height="20" rx="2"/><rect x="4" y="44" width="10" height="4"/><rect x="4" y="52" width="10" height="4"/><rect x="58" y="34" width="26" height="32" rx="2"/><rect x="84" y="46" width="8" height="8"/><rect x="40" y="47" width="8" height="6"/></g><path d="M44 66l12-32" stroke="#fff" stroke-width="5"/></svg><svg width="48" height="42" viewBox="0 0 100 88" role="img" aria-label="ISO 7010 W012 อันตรายจากไฟฟ้า"><path d="M50 4L96 84H4z" style="fill:var(--iso-yellow);stroke:#000" stroke-width="7" stroke-linejoin="round"/><path d="M55 26L36 58h13l-6 20 22-34H52l8-18z" fill="#000"/></svg><svg width="48" height="42" viewBox="0 0 100 88" role="img" aria-label="ISO 7010 W017 พื้นผิวร้อน"><path d="M50 4L96 84H4z" style="fill:var(--iso-yellow);stroke:#000" stroke-width="7" stroke-linejoin="round"/><g fill="none" stroke="#000" stroke-width="4.5" stroke-linecap="round"><path d="M38 52c-5-6 5-10 0-17M50 52c-5-6 5-10 0-17M62 52c-5-6 5-10 0-17"/></g><rect x="28" y="60" width="44" height="7" fill="#000"/></svg><span class="sig sig-danger"><span class="w">อันตราย</span></span><span class="sig sig-warn"><span><span class="w">คำ</span><span class="w">เตือน</span></span></span><span class="sig sig-caution"><span><span class="w">ข้อ</span><span class="w">ควร</span><span class="w">ระวัง</span></span></span></div></section>
+
+<section><h2>ปุ่ม (มือถือ ≥ 56 px · desk ≥ 48 px)</h2><p class="d">ปุ่มหลักหนึ่งปุ่มต่อจอ · กดไม่ได้ = ช่องว่างมีกุญแจ ไม่ใช่ปุ่มสีเทา · ระหว่างส่ง ปุ่มกดไม่ได้และบอกว่ากำลังส่ง (REQ-G-10)</p>
+<div class="row2 ph" style="width:auto;flex-wrap:wrap">
+ <div><span class="lbl2">หลัก</span><button class="btn pri" type="button">ทำขั้นนี้แล้ว ถัดไป<svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /> <path d="m12 5 7 7-7 7" /></svg></button></div>
+ <div><span class="lbl2">รอง</span><button class="btn" type="button"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7" /> <path d="M19 12H5" /></svg>กลับไปขั้น 2</button></div>
+ <div><span class="lbl2">กดไม่ได้</span><button class="btn pri off" type="button" aria-disabled="true"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>ถัดไปได้เมื่อ 11:12</button></div>
+ <div><span class="lbl2">กำลังส่ง</span><button class="btn pri" type="button" aria-busy="true" style="opacity:.75"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /> <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /> <path d="M8 16H3v5" /></svg>กำลังส่ง…</button></div></div></section>
+
+<section><h2>ตัวเลือก</h2><p class="d">แบบเดียวทุกจอ: วงแหวนหมึก 2 px + เครื่องหมายทึบ · ไม่ใช้พื้นดำ · ไม่มีค่าเริ่มต้นในคำถามที่ต้องตอบ</p>
+<div class="row2"><div class="ph g2"><button class="ch" type="button" role="radio" aria-checked="false"><span class="mk"><i></i></span><span><span><span class="w">แก้</span><span class="w">แล้ว</span></span></span></button><button class="ch" type="button" role="radio" aria-checked="true"><span class="mk"><i></i></span><span><span class="w">ไม่พบอาการ</span></span></button><button class="ch" type="button" role="checkbox" aria-checked="false"><span class="mk"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg></span><span><span><span class="w">รั่ว</span> <span class="w">/</span> <span class="w">ซึม</span></span></span></button><button class="ch" type="button" role="checkbox" aria-checked="true"><span class="mk"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg></span><span><span><span class="w">เสียง</span><span class="w">ผิดปกติ</span></span></span></button></div>
+<div class="ph g1"><button class="ch" type="button" role="radio" aria-checked="false" aria-disabled="true"><span class="mk"><i></i></span><span><span><span class="w">ปลดกุญแจ</span><span class="w">ของ</span><span class="w">ฉัน</span><span class="w">แล้ว</span> <span class="w">เครื่อง</span><span class="w">คืน</span><span class="w">สู่</span><span class="w">การ</span><span class="w">ผลิต</span></span><small><span><span class="w">ทะเบียน</span><span class="w">ไม่มี</span><span class="w">กุญแจ</span><span class="w">ของ</span><span class="w">คุณ</span><span class="w">ที่</span><span class="w">เครื่อง</span><span class="w">นี้</span></span></small></span></button><button class="ch" type="button" role="radio" aria-checked="true"><span class="mk"><i></i></span><span><span><span class="w">ยัง</span><span class="w">ล็อก</span><span class="w">อยู่</span> <span class="w">(</span><span class="w">ระบุ</span><span class="w">จุด</span><span class="w">และ</span><span class="w">เหตุ</span><span class="w">)</span></span><small><span><span class="w">จุด</span> <span class="w">CP-3</span> <span class="w">·</span> <span class="w">กุญแจ</span> <span class="w">ก-03</span> <span class="w">·</span> <span class="w">ใส่</span> <span class="w">10:31 น.</span></span></small></span></button></div></div></section>
+
+<section><h2>แถบสถานะและ callout</h2><p class="d">callout แบบเดียว: พื้นขาว ไอคอนนำหน้าบอกความหมาย คำสำคัญตัวหนา ไม่มีแถบสีด้านซ้าย · ข้อมูลไม่สดใช้แถบหมึกเข้ม ไม่ใช้สีอำพัน</p>
+<div class="row2"><div class="ph" style="display:grid;gap:8px"><div class="synthetic" role="note"><span><b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง</span></div>
+ <div class="lockbar" style="margin:0"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg><span><b>ล็อกอยู่ CP-3</b> · กุญแจ <b>ก-03</b> ของคุณ · ใส่ 10:31 น.</span></div>
+ <div class="stopbox"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg><p><b>กุญแจ ก-03 ของคุณยังล็อก CP-3 อยู่</b><br>ทำขั้น 6 ก่อน จึงเลือก "ปลดกุญแจแล้ว" ได้</p></div></div>
+<div class="ph" style="display:grid;gap:8px">
+ <div class="callout "><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01" /> <path d="M8.5 16.429a5 5 0 0 1 7 0" /> <path d="M5 12.859a10 10 0 0 1 5.17-2.69" /> <path d="M19 12.859a10 10 0 0 0-2.007-1.523" /> <path d="M2 8.82a15 15 0 0 1 4.177-2.643" /> <path d="M22 8.82a15 15 0 0 0-11.288-3.764" /> <path d="m2 2 20 20" /></svg><div><b>เก็บในเครื่อง ยังไม่ส่ง (1)</b> · ส่งเองเมื่อกลับมาออนไลน์</div></div>
+ <div class="callout ok"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="m16 9-5.5 5.5L8 12" /></svg><div><b>ส่งแล้ว 10:43</b> · ปิดงาน MC-012 · WO-000101</div></div>
+ <div class="callout bad"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <line x1="12" x2="12" y1="8" y2="12" /> <line x1="12" x2="12.01" y1="16" y2="16" /></svg><div><b>ระบบซ่อมบำรุงไม่ตอบ</b> · เก็บไว้ในเครื่องแล้ว · ลองใหม่ทุก 30 วินาที</div></div>
+ <p class="callout" style="background:var(--ink);color:var(--surface)"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01" /> <path d="M8.5 16.429a5 5 0 0 1 7 0" /> <path d="M5 12.859a10 10 0 0 1 5.17-2.69" /> <path d="M19 12.859a10 10 0 0 0-2.007-1.523" /> <path d="M2 8.82a15 15 0 0 1 4.177-2.643" /> <path d="M22 8.82a15 15 0 0 0-11.288-3.764" /> <path d="m2 2 20 20" /></svg><span><b>ข้อมูลเมื่อ 10:42 · ระบบไม่ตอบ</b> · แสดงข้อมูลล่าสุดไว้</span></p></div></div></section>
+
+<section><h2>ว่าง · กำลังโหลด · ผิดพลาด</h2><p class="d">ไม่มีหน้าว่างเปล่า และไม่ฉลองเมื่อไม่มีงาน · กำลังโหลดแสดงโครงหน้าแทนวงหมุน · ผิดพลาดบอกว่าอะไรหาย และทำอะไรต่อได้</p>
+<div class="row2"><div class="ph"><span class="lbl2">ว่าง</span><div class="card"><b>ยังไม่มีงานที่ส่งถึงคุณ</b><p class="muted">ระบบแจ้งเมื่อมีงานใหม่</p></div></div>
+<div class="ph"><span class="lbl2">กำลังโหลด</span><div class="card"><div class="sk" style="width:60%"></div><div class="sk"></div><div class="sk" style="width:80%"></div></div></div>
+<div class="ph"><span class="lbl2">ผิดพลาด</span><div class="card"><b>โหลดหน้า 143 ไม่ได้</b><p>Wi-Fi ในเซลล์หลุด · ขั้นที่ทำแล้วยังอยู่ในเครื่องนี้</p><button class="btn pri" type="button" style="margin-top:8px"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /> <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /> <path d="M8 16H3v5" /></svg>ลองใหม่</button></div></div></div></section>
+
+<section><h2>ป้ายสถานะ (chip)</h2><p class="d">แบบเดียว: พื้นอ่อน ไม่มีกรอบ · คำเป็นตัวบอกความหมาย ไม่ใช่สีอย่างเดียว</p>
+<p style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">กำลังทำ</span><span class="chip"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2" /> <line x1="12" x2="15" y1="14" y2="11" /> <circle cx="12" cy="14" r="8" /></svg>เกินเวลา</span><span class="chip"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 4 4-4 4" /> <path d="M20 7H4" /> <path d="m8 21-4-4 4-4" /> <path d="M4 17h16" /></svg>ส่งต่อ</span><span class="tag draft">ร่าง ยังไม่อนุมัติ</span><span class="chip">ต้องตรวจใหม่</span><span class="unap">ตัวอย่าง ยังไม่อนุมัติ</span><span class="chip">จำลอง</span></p></section>
+</main>
+</body>
+</html>

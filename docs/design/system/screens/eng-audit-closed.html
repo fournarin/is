@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icons: Lucide 1.49.0, ISC License, Copyright (c) Lucide Icons and Contributors (lucide.dev). Fonts: IBM Plex Sans Thai Looped, SIL OFL 1.1. -->
+<title>ค้นใบงาน · WO-000042</title>
+<style>
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-Regular.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-SemiBold.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"Plex Mono";src:url(../fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400}
+:root{
+  /* surfaces: one canvas, one raised work surface, one sunk tone. Outlines are for inputs only. */
+  --canvas:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF0;   /* refresh (Q13): paler canvas, calmer sunk */
+  --ink:#111418;      /* text + the one action colour        16.2:1 canvas, 18.5:1 surface */
+  --ink-2:#3D434B;    /* secondary text                       8.7:1 canvas, 7.9:1 sunk */
+  --line:#7D858E;     /* input outlines only (non-text 3.3:1)  */
+  --hair:#E3E6EA;     /* 1 px separators inside a surface     */
+  /* the andon display: dark, lit only by state */
+  --andon:#16191D; --lamp-off:#2A2F36; --on-andon:#FFFFFF; --on-andon-2:#BAC1C9;
+  /* state colours - nothing else may use them */
+  --stop:#A3121A;     /* critical priority. white on it 7.9:1 */
+  --amber:#E8890C;    /* over threshold (solid) / forecast (outline). ink on it 7.05:1 */
+  --on-amber:#111418; /* text on amber or ISO yellow: always dark, in either theme */
+  --done:#1E6B3A;     /* small "done/confirmed" marks only */
+  /* ISO 3864 colours - only inside drawn ISO 7010 signs */
+  --iso-blue:#005387; --iso-yellow:#F9A800; --iso-red:#B71E1E;
+  --r:12px; --r-sm:8px;
+  /* one elevation, for sheets and drawers only; everything else is flat with hairlines */
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+  /* type scale: 15 / 18 / 24 / 36 (one more, 30, only for the board clock and station numbers) */
+  --t1:15px; --t2:18px; --t3:24px; --t4:36px;
+  --sans:"Plex Looped",sans-serif; --mono:"Plex Mono",ui-monospace,monospace;
+}
+/* one light theme everywhere, wall included (owner Q14: the dark wall read as busy and confusing) */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-weight:400;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+.w{white-space:nowrap}
+h1,h2,.ttl{text-wrap:balance} p,li,dd{text-wrap:pretty}   /* Chrome 114+/117+; ignored by 109 */
+.code{font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}
+b,strong,h1,h2,h3,h4{font-weight:600}   /* the font has 400 and 600 only; never let the browser synthesise 700/900 */
+/* the one callout: white surface, a leading Lucide icon whose colour carries the meaning, a bold word. No stripes. */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:var(--r);background:var(--surface);line-height:1.5}
+.callout>.ic{flex:none;margin-top:3px;color:var(--ink-2)}
+.callout.bad>.ic{color:var(--stop)} .callout.ok>.ic{color:var(--done)} .callout.lock>.ic{color:var(--ink)}
+.callout>div{flex:1;min-width:0}
+.callout .act{margin-top:12px}
+.muted{color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.ic{flex:none;display:block}
+.synthetic{display:flex;justify-content:space-between;gap:8px;background:var(--sunk);padding:4px 16px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.synthetic b{font-weight:600;color:var(--ink)}
+
+/* motion: 150-200 ms fades and slides for what opens; nothing for people who asked for none */
+@keyframes rise{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slide{from{transform:translateX(32px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* bottom sheet (phones): details behind a tap. The summary becomes the dimmed backdrop, so a tap
+   outside closes it with no script; the panel rises from the bottom with the one elevation. */
+.bs>summary{list-style:none;cursor:pointer}
+.bs>summary::-webkit-details-marker{display:none}
+.bs[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.45);color:transparent;animation:fade var(--dur) var(--ease)}
+.bs[open]>summary *{visibility:hidden}
+.bs>.panel{display:none}
+.bs[open]>.panel{display:block;position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;overflow:auto;
+  padding:8px 16px 24px;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:var(--lift);animation:rise var(--dur) var(--ease)}
+.bs>.panel::before{content:"";display:block;width:40px;height:4px;margin:4px auto 12px;border-radius:2px;background:var(--hair)}
+/* drawer (desk): the same content from the right edge */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(480px,92vw);overflow:auto;padding:24px;
+  background:var(--surface);box-shadow:var(--lift);animation:slide var(--dur) var(--ease)}
+/* hover preview (desk): a row's detail without opening anything; keyboard focus shows it too */
+.peek{display:none}
+.has-peek{position:relative}
+.has-peek:hover>.peek,.has-peek:focus-within>.peek{display:block;position:absolute;z-index:30;left:0;top:calc(100% + 4px);
+  width:min(520px,80vw);padding:12px 16px;border-radius:var(--r);background:var(--surface);box-shadow:var(--lift);
+  font-size:var(--t1);line-height:1.5;animation:fade var(--dur) var(--ease)}
+
+/* priority: shape + word, same on every screen. Colour only on the top level. */
+.prio{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;font-size:var(--t1);line-height:1.3}
+.prio svg{flex:none;display:block}
+/* ISO 3864-2 signal word panels: only beside an ISO 7010 sign */
+.sig{display:inline-block;padding:2px 12px;border-radius:4px;font-weight:600;line-height:1.35}
+.sig-danger{background:var(--stop);color:#fff} .sig-warn{background:var(--amber);color:var(--on-amber)} .sig-caution{background:var(--iso-yellow);color:var(--on-amber)}
+
+body{font-size:var(--t1);line-height:1.5}
+.synthetic{padding:4px 24px}
+.app{padding:0 24px 32px}
+.hdr{display:flex;align-items:center;gap:24px;min-height:56px}
+.hdr h1{font-size:var(--t2);font-weight:600;line-height:1.3}
+.hdr .sub{color:var(--ink-2);line-height:1.35}
+.hdr nav{display:flex;gap:8px;align-self:stretch;flex-wrap:wrap}
+.hdr nav a{display:flex;align-items:center;min-height:48px;padding:0 12px;text-decoration:none;font-weight:600;color:var(--ink-2);box-shadow:inset 0 -3px 0 transparent;white-space:nowrap}
+.hdr nav a[aria-current=page]{color:var(--ink);box-shadow:inset 0 -3px 0 var(--ink)}
+.hdr .sp{flex:1}
+.hdr .clk{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.hdr .clk b{font-size:var(--t3);font-weight:600;line-height:1}
+.hdr .clk span{color:var(--ink-2);line-height:1.35;text-align:right}
+.hdr .me{display:flex;align-items:center;gap:12px;white-space:nowrap;line-height:1.3}
+.hdr .me small{display:block;color:var(--ink-2);font-size:var(--t1)}
+.b{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;border:0;border-radius:var(--r);
+  background:var(--surface);color:var(--ink);font:inherit;font-weight:600;line-height:1.3;white-space:nowrap;text-decoration:none;cursor:pointer}
+.b.pri{background:var(--ink);color:var(--surface)} .b.sec{background:var(--sunk)}
+.b.off{background:transparent;color:var(--ink-2);box-shadow:inset 0 0 0 2px var(--sunk);cursor:not-allowed}
+.surface{background:var(--surface);border-radius:var(--r)}
+.lead{color:var(--ink-2);margin-top:4px}
+.pg-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 24px;margin:16px 0 8px}
+.pg-h h2{font-size:var(--t3);font-weight:600;line-height:1.3}
+.pg-h p{color:var(--ink-2)}
+.chip,.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:4px;background:var(--sunk);color:var(--ink);font-weight:600;line-height:1.4;white-space:nowrap}
+.tag.draft{background:var(--ink);color:var(--surface)}
+.tag.ok{background:var(--sunk);color:var(--ink)}
+.dt{width:100%;border-collapse:collapse}
+.dt th{font-weight:400;color:var(--ink-2);text-align:left;padding:8px 12px;border-bottom:1px solid var(--hair);white-space:nowrap;vertical-align:bottom}
+.dt td{padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+.dt tr:last-child td{border-bottom:0}
+.dt td.n,.dt th.n{text-align:right;font-variant-numeric:tabular-nums}
+.dt b{font-weight:600}
+.muted{color:var(--ink-2)}
+/* callouts come from base.callout(); no coloured stripes */
+.note b{font-weight:600}
+.empty{color:var(--ink-2);padding:8px 0}
+@media (max-width:699px){
+  :root{--t1:18px}
+  .synthetic{padding:4px 16px} .app{padding:0 16px 24px}
+  .hdr{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;padding:8px 0;align-items:center}
+  .hdr{row-gap:8px} .hdr nav{grid-column:1/-1;grid-row:2;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:-16px;padding-right:32px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)}
+  .hdr nav a{padding:0 12px 0 0;min-height:56px}
+  .b{min-height:56px}
+  .kv div{grid-template-columns:1fr;gap:0} .search{flex-wrap:wrap} .search input{min-height:56px;min-width:0}
+  .hdr .sp,.hdr .clk span,.hdr .me>span{display:none}
+  .dt thead{display:none} .dt,.dt tbody,.dt tr,.dt td{display:block} .dt tr{padding:8px 0;border-bottom:1px solid var(--hair)}
+  .dt td{border:0;padding:2px 16px} .dt td.n{text-align:left}
+  .dt td[data-l]::before{content:attr(data-l) " ";color:var(--ink-2);font-weight:400}
+}
+
+.draftbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin:12px 0 0}
+.draftbar h2{font-size:var(--t3);font-weight:600;line-height:1.3}
+.draftbar .meta{color:var(--ink-2)}
+.gate{display:flex;align-items:center;gap:16px 24px;margin-top:12px;padding:12px 16px;background:var(--surface);border-radius:var(--r);
+  position:sticky;top:0;z-index:4;box-shadow:0 0 0 8px var(--canvas)}
+.gate .what{flex:1;min-width:0}
+.gate ul{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:2px}
+.gate li{display:flex;align-items:center;gap:6px}
+.gate li .ic{color:var(--stop)}
+.gate .side{color:var(--ink-2);text-align:right;line-height:1.4}
+.gate .side b{color:var(--ink)}
+.rv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;margin-top:12px}
+.steps{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.st{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;padding:12px 16px}
+.st+.st{box-shadow:inset 0 1px 0 var(--hair)}
+.st .n{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:4px;background:var(--sunk);font-weight:600}
+.st.sel{background:var(--canvas)}
+.st.sel .n{background:var(--ink);color:var(--surface)}
+.st .th{font-weight:600;line-height:1.45}
+.st .en{color:var(--ink-2);line-height:1.45;margin-top:2px}
+.st .l1{display:flex;align-items:flex-start;gap:12px}
+.st .l1>.th,.st .l1>.edit{flex:1;min-width:0}
+.st .src{flex:none;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:4px 8px;max-width:45%;color:var(--ink-2)}
+@media (max-width:899px){.st .l1{display:block}.st .src{max-width:none;justify-content:flex-start;margin-top:6px}}
+.chip.guess{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.ev-st{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--ink-2)}
+.ev-st.ok .ic{color:var(--done)} .ev-st.bad{color:var(--ink)} .ev-st.bad .ic{color:var(--stop)}
+.cmp{font-weight:600;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.cmp.x{text-decoration-color:var(--stop)}
+textarea.edit{display:block;width:100%;min-height:56px;margin-top:2px;padding:8px 12px;border:1.5px solid var(--line);border-radius:4px;
+  font:inherit;font-weight:600;line-height:1.45;color:var(--ink);background:var(--surface);resize:none;field-sizing:content}
+.ev{background:var(--surface);border-radius:var(--r);padding:16px;position:sticky;top:120px}
+.ev .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ev .bar .b[aria-pressed=true]{background:var(--ink);color:var(--surface)}
+.ev .bar .sp{flex:1}
+.ev h3{font-size:var(--t2);font-weight:600;line-height:1.35;margin-top:12px}
+.ev .doc{color:var(--ink-2)}
+.ev .page{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:16px;margin-top:12px}
+.ev pre{white-space:pre-wrap;font:inherit;line-height:1.6;margin:0;padding:12px 16px;background:var(--canvas);border-radius:4px}
+.ev mark{background:var(--sunk);color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink)}
+.ev .thumb{display:block;text-decoration:none;color:var(--ink-2)}
+.ev .thumb img{display:block;width:160px;border-radius:4px;box-shadow:0 0 0 1px var(--hair)}
+.keys{display:flex;align-items:center;gap:6px;margin-top:12px;color:var(--ink-2)}
+kbd{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 4px;border-radius:4px;background:var(--sunk);color:var(--ink);font:inherit;font-weight:600}
+kbd .ic{display:block}
+.pts-ed{margin-top:8px;display:grid;gap:8px}
+.pt-row{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;box-shadow:inset 0 -1px 0 var(--hair)}
+.pt-row textarea{grid-column:1/-1;min-height:48px;padding:10px 12px;border:1.5px solid var(--line);border-radius:4px;font:inherit;line-height:1.45;background:var(--surface);color:var(--ink);resize:none;field-sizing:content;min-width:0}
+.pt-row input{min-height:48px;min-width:0;padding:0 12px;border:1.5px solid var(--line);border-radius:4px;font:inherit;background:var(--surface);color:var(--ink)}
+.pt-row .en-s{display:flex;flex-wrap:wrap;gap:8px}
+.pt-row .en-s .b{min-height:48px;padding:0 10px;background:var(--canvas)} .pt-row .en-s .b[aria-pressed=true]{background:var(--ink);color:var(--surface)}
+.ev .callout{margin-top:12px;background:var(--canvas)}
+.kind{margin-top:16px;padding-top:12px;box-shadow:inset 0 1px 0 var(--hair)}
+.kind h4{font-weight:600}
+.seg{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.seg .b{background:var(--canvas)}
+.seg .b[aria-pressed=true]{background:var(--ink);color:var(--surface)}
+.kind .pts{margin-top:8px;color:var(--ink-2)}
+.kind .pts b{color:var(--ink)}
+.kind .pts .ic{display:inline-block;vertical-align:-3px}
+.dialog{display:none;position:fixed;inset:0;z-index:20;background:rgba(17,20,24,.45);align-items:center;justify-content:center}
+.dialog .box{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;background:var(--surface);border-radius:var(--r);padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.dialog h3{font-size:var(--t2);font-weight:600;margin-bottom:4px}
+.dialog dl div{display:grid;grid-template-columns:170px 1fr;gap:8px;padding:8px 0;box-shadow:inset 0 1px 0 var(--hair)}
+.dialog dt{color:var(--ink-2)}
+.dialog .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.dialog .tick{display:flex;gap:12px;align-items:center;margin-top:12px;font-weight:600}
+.dialog .tick i{width:22px;height:22px;border:2px solid var(--ink);border-radius:4px;flex:none}
+.v-unsaved .dialog.unsaved,.v-confirm .dialog.confirm{display:flex}
+/* Q14: one calm list, not four bento cards - a group per kind, hairlines between */
+.gaps{max-width:960px;background:var(--surface);border-radius:var(--r);padding:0 24px}
+.gap{padding:16px 0}
+.gap+.gap{box-shadow:inset 0 1px 0 var(--hair)}
+.gap h3{display:flex;align-items:baseline;gap:8px;font-size:var(--t2);font-weight:600;line-height:1.35}
+.gap h3 b{min-width:32px;font-family:var(--mono);font-weight:400}
+.gap p.d{color:var(--ink-2);margin:4px 0 8px}
+.gap li{padding:8px 0;box-shadow:inset 0 1px 0 var(--hair);line-height:1.45}
+.gap li>span{display:block;color:var(--ink-2)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.filters .b[aria-pressed=true]{background:var(--ink);color:var(--surface)}
+.search{display:flex;gap:8px;margin:12px 0 16px;flex-wrap:wrap}
+.search input{flex:1;max-width:420px;min-width:0;min-height:48px;padding:0 16px;border:1.5px solid var(--line);border-radius:var(--r);font:inherit;background:var(--surface)}
+.two{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;align-items:start}
+.kv div{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:10px 16px}
+.kv div+div{box-shadow:inset 0 1px 0 var(--hair)} .kv dt{color:var(--ink-2)}
+.def{margin-top:8px;color:var(--ink-2);max-width:880px}
+.dt th .ic{display:inline-block;vertical-align:-3px}
+@media (min-width:1600px){.rv{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}}
+@media (max-width:1199px){.gate{flex-wrap:wrap}.gate .side{text-align:left}}
+@media (max-width:899px){.rv,.two{grid-template-columns:1fr}.ev{position:static}.gate{position:static;box-shadow:none}.pt-row{grid-template-columns:1fr}.ev .page{grid-template-columns:1fr}.ev .thumb{display:none}.gaps{padding:0 16px}}
+@media (max-width:699px){.dialog dl div{grid-template-columns:1fr;gap:0}.pt-row input,.pt-row textarea,.pt-row .en-s .b{min-height:56px}
+  .dt tr.q-row{display:grid;grid-template-columns:1fr auto;gap:2px 12px}
+  .dt tr.q-row td.go{grid-column:2;grid-row:1/3;align-self:start;padding-top:8px}}
+</style>
+</head>
+<body>
+<div class="synthetic" role="note"><span><b>ข้อมูลจำลอง</b> · สัญญาณ ชื่อเครื่อง และชื่อคนในหน้านี้ไม่ใช่ข้อมูลจากโรงงานจริง</span></div><div class="app"><header class="hdr"><div><h1><span><span class="w">ค้น</span><span class="w">ใบงาน</span></span></h1></div><nav aria-label="หน้าหลัก"><a href="eng-review-queue.html"><span><span class="w">ตรวจ</span><span class="w">ร่าง</span></span></a><a href="eng-gaps.html"><span><span class="w">ยัง</span><span class="w">ไม่มี</span><span class="w">ขั้นตอน</span></span></a><a href="eng-loops.html"><span><span class="w">ปรับ</span><span class="w">ค่า</span></span></a><a href="eng-health.html"><span><span class="w">สุขภาพ</span><span class="w">เครื่อง</span></span></a><a href="eng-notes.html"><span><span class="w">บันทึก</span><span class="w">ช่าง</span></span></a><a href="eng-audit.html" aria-current=page><span><span class="w">ค้น</span><span class="w">ใบงาน</span></span></a></nav><span class="sp"></span><div class="clk" aria-label="เวลาโรงงาน"><span>อัปเดต 10:42:00<br>วันนี้ 15 พ.ย.</span><b>10:42</b></div><div class="me"><span><span class="w">ปราณี</span><small><span class="w">วิศวกร</span></small></span><a class="b" href="sign-in.html">ออก</a></div></header><p class="lead"><span><span class="w">ใบงาน</span><span class="w">ตาม</span><span class="w">ที่</span><span class="w">ออก</span><span class="w">จริง</span> <span class="w">·</span> <span class="w">ใคร</span><span class="w">ทำ</span> <span class="w">·</span> <span class="w">ผล</span><span class="w">และ</span><span class="w">โน้ต</span></span></p>
+<div class="search"><input type="search" value="WO-000042" aria-label="เลขใบงาน"><button class="b pri" type="button">ค้น</button><a class="b sec" href="tech-print.html">พิมพ์ A4</a></div>
+<div class="two"><section class="surface"><dl class="kv">
+  <div><dt>ใบงาน</dt><dd><b class="code">WO-000042</b> · <span class="tag"><span><span class="w">ปิด</span><span class="w">แล้ว</span></span></span> · ออก <span><span class="w">12</span> <span class="w">พ</span><span class="w">.</span><span class="w">ค</span><span class="w">.</span> <span class="w">2026</span> <span class="w">08:20 น.</span></span></dd></div>
+  <div><dt>เครื่อง · สถานี</dt><dd><span class="code">MC-012</span> · <span><span class="w">สถานี</span> <span class="w">3</span> <span class="w">·</span> <span class="w">ติดตั้งหลังคา</span></span></dd></div>
+  <div><dt>อาการ</dt><dd><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span></dd></div>
+  <div><dt>ขั้นตอนที่ออก</dt><dd><span class="tag ok"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="m16 9-5.5 5.5L8 12" /></svg><span><span class="w">อนุมัติ</span><span class="w">แล้ว</span></span></span> ฉบับที่ 2 · <span><span class="w">ปราณี</span> <span class="w">(</span><span class="w">วิศวกร</span><span class="w">)</span></span> <span><span class="w">3</span> <span class="w">เม</span><span class="w">.</span><span class="w">ย</span><span class="w">.</span> <span class="w">2026</span> <span class="w">15:05 น.</span></span></dd></div>
+  <div><dt>ผล</dt><dd><b><span><span class="w">แก้</span><span class="w">แล้ว</span></span></b> · รอ 240 นาที (<span><span class="w">รอ</span><span class="w">อะไหล่</span></span>)</dd></div>
+  <div><dt>กุญแจตอนปิด</dt><dd><span><span class="w">ปลดกุญแจ</span><span class="w">ของ</span><span class="w">ฉัน</span><span class="w">แล้ว</span> <span class="w">เครื่อง</span><span class="w">คืน</span><span class="w">สู่</span><span class="w">การ</span><span class="w">ผลิต</span></span></dd></div>
+  <div><dt>โน้ต</dt><dd>“<span><span class="w">เปลี่ยน</span><span class="w">พัดลม</span> <span class="w">J2</span> <span class="w">อุณหภูมิ</span><span class="w">ลง</span><span class="w">เหลือ</span> <span class="w">64 °C</span></span>”</dd></div></dl></section>
+<section class="surface"><table class="dt"><thead><tr><th>ช่าง</th><th>ช่วงเวลา</th><th>ทำ</th><th>โน้ตส่งต่อ</th></tr></thead><tbody><tr><td><span class="w">สมชาย</span></td><td data-l="ช่วงเวลา"><span><span class="w">12</span> <span class="w">พ</span><span class="w">.</span><span class="w">ค</span><span class="w">.</span> <span class="w">2026</span> <span class="w">08</span><span class="w">:</span><span class="w">31</span></span>–09:05 น.</td><td data-l="ทำ">ขั้น 1-3</td><td><span><span class="w">ส่ง</span><span class="w">ต่อ</span><span class="w">:</span> <span class="w">ต้อง</span><span class="w">รอ</span><span class="w">อะไหล่</span><span class="w">พัดลม</span></span></td></tr><tr><td><span class="w">ธนพล</span></td><td data-l="ช่วงเวลา"><span><span class="w">12</span> <span class="w">พ</span><span class="w">.</span><span class="w">ค</span><span class="w">.</span> <span class="w">2026</span> <span class="w">13</span><span class="w">:</span><span class="w">10</span></span>–13:52 น.</td><td data-l="ทำ">ขั้น 4-6</td><td>-</td></tr></tbody></table></section></div>
+<p class="muted" style="margin-top:12px">ใบงานตัวอย่าง (จำลอง) · ฉบับที่ 2 ถูกแทนด้วยฉบับที่ 3 เมื่อ 2 พ.ย. 2026</p></div>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icons: Lucide 1.49.0, ISC License, Copyright (c) Lucide Icons and Contributors (lucide.dev). Fonts: IBM Plex Sans Thai Looped, SIL OFL 1.1. -->
+<title>Wi-Fi ของเครื่องนี้หลุด</title>
+<style>
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-Regular.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"Plex Looped";src:url(../fonts/IBMPlexSansThaiLooped-SemiBold.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"Plex Mono";src:url(../fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400}
+:root{
+  /* surfaces: one canvas, one raised work surface, one sunk tone. Outlines are for inputs only. */
+  --canvas:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF0;   /* refresh (Q13): paler canvas, calmer sunk */
+  --ink:#111418;      /* text + the one action colour        16.2:1 canvas, 18.5:1 surface */
+  --ink-2:#3D434B;    /* secondary text                       8.7:1 canvas, 7.9:1 sunk */
+  --line:#7D858E;     /* input outlines only (non-text 3.3:1)  */
+  --hair:#E3E6EA;     /* 1 px separators inside a surface     */
+  /* the andon display: dark, lit only by state */
+  --andon:#16191D; --lamp-off:#2A2F36; --on-andon:#FFFFFF; --on-andon-2:#BAC1C9;
+  /* state colours - nothing else may use them */
+  --stop:#A3121A;     /* critical priority. white on it 7.9:1 */
+  --amber:#E8890C;    /* over threshold (solid) / forecast (outline). ink on it 7.05:1 */
+  --on-amber:#111418; /* text on amber or ISO yellow: always dark, in either theme */
+  --done:#1E6B3A;     /* small "done/confirmed" marks only */
+  /* ISO 3864 colours - only inside drawn ISO 7010 signs */
+  --iso-blue:#005387; --iso-yellow:#F9A800; --iso-red:#B71E1E;
+  --r:12px; --r-sm:8px;
+  /* one elevation, for sheets and drawers only; everything else is flat with hairlines */
+  --lift:0 12px 32px rgba(17,20,24,.18),0 1px 0 rgba(17,20,24,.06);
+  --dur:180ms; --ease:cubic-bezier(.2,.8,.2,1);
+  /* type scale: 15 / 18 / 24 / 36 (one more, 30, only for the board clock and station numbers) */
+  --t1:15px; --t2:18px; --t3:24px; --t4:36px;
+  --sans:"Plex Looped",sans-serif; --mono:"Plex Mono",ui-monospace,monospace;
+}
+/* one light theme everywhere, wall included (owner Q14: the dark wall read as busy and confusing) */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-weight:400;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+.w{white-space:nowrap}
+h1,h2,.ttl{text-wrap:balance} p,li,dd{text-wrap:pretty}   /* Chrome 114+/117+; ignored by 109 */
+.code{font-family:var(--mono);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0}
+b,strong,h1,h2,h3,h4{font-weight:600}   /* the font has 400 and 600 only; never let the browser synthesise 700/900 */
+/* the one callout: white surface, a leading Lucide icon whose colour carries the meaning, a bold word. No stripes. */
+.callout{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:var(--r);background:var(--surface);line-height:1.5}
+.callout>.ic{flex:none;margin-top:3px;color:var(--ink-2)}
+.callout.bad>.ic{color:var(--stop)} .callout.ok>.ic{color:var(--done)} .callout.lock>.ic{color:var(--ink)}
+.callout>div{flex:1;min-width:0}
+.callout .act{margin-top:12px}
+.muted{color:var(--ink-2)}
+:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.ic{flex:none;display:block}
+.synthetic{display:flex;justify-content:space-between;gap:8px;background:var(--sunk);padding:4px 16px;font-size:var(--t1);line-height:1.4;color:var(--ink-2)}
+.synthetic b{font-weight:600;color:var(--ink)}
+
+/* motion: 150-200 ms fades and slides for what opens; nothing for people who asked for none */
+@keyframes rise{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slide{from{transform:translateX(32px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* bottom sheet (phones): details behind a tap. The summary becomes the dimmed backdrop, so a tap
+   outside closes it with no script; the panel rises from the bottom with the one elevation. */
+.bs>summary{list-style:none;cursor:pointer}
+.bs>summary::-webkit-details-marker{display:none}
+.bs[open]>summary{position:fixed;inset:0;z-index:40;background:rgba(11,13,16,.45);color:transparent;animation:fade var(--dur) var(--ease)}
+.bs[open]>summary *{visibility:hidden}
+.bs>.panel{display:none}
+.bs[open]>.panel{display:block;position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:86vh;overflow:auto;
+  padding:8px 16px 24px;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:var(--lift);animation:rise var(--dur) var(--ease)}
+.bs>.panel::before{content:"";display:block;width:40px;height:4px;margin:4px auto 12px;border-radius:2px;background:var(--hair)}
+/* drawer (desk): the same content from the right edge */
+.drawer{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(480px,92vw);overflow:auto;padding:24px;
+  background:var(--surface);box-shadow:var(--lift);animation:slide var(--dur) var(--ease)}
+/* hover preview (desk): a row's detail without opening anything; keyboard focus shows it too */
+.peek{display:none}
+.has-peek{position:relative}
+.has-peek:hover>.peek,.has-peek:focus-within>.peek{display:block;position:absolute;z-index:30;left:0;top:calc(100% + 4px);
+  width:min(520px,80vw);padding:12px 16px;border-radius:var(--r);background:var(--surface);box-shadow:var(--lift);
+  font-size:var(--t1);line-height:1.5;animation:fade var(--dur) var(--ease)}
+
+/* priority: shape + word, same on every screen. Colour only on the top level. */
+.prio{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:600;font-size:var(--t1);line-height:1.3}
+.prio svg{flex:none;display:block}
+/* ISO 3864-2 signal word panels: only beside an ISO 7010 sign */
+.sig{display:inline-block;padding:2px 12px;border-radius:4px;font-weight:600;line-height:1.35}
+.sig-danger{background:var(--stop);color:#fff} .sig-warn{background:var(--amber);color:var(--on-amber)} .sig-caution{background:var(--iso-yellow);color:var(--on-amber)}
+
+:root{--t1:18px}   /* REQ-G-06: nothing on a phone below 18 px */
+body{font-size:var(--t2);line-height:1.6}
+.wrap{padding:0 16px 48px}
+.top{display:flex;align-items:center;gap:8px;padding:8px 16px;min-height:64px}
+.top .clock{margin-left:4px}
+.top .who{flex:1;min-width:0;font-size:var(--t2);line-height:1.3;font-weight:600}
+.top .who small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+.clock{text-align:right;white-space:nowrap;line-height:1.2}
+.clock b{display:block;font-size:var(--t3);font-weight:600}
+.clock span{font-size:var(--t1);color:var(--ink-2)}
+.back{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:56px;padding:0 12px 0 8px;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:600;line-height:1.3;text-decoration:none}
+.stile{flex:none;width:40px;height:48px;display:flex;align-items:center;justify-content:center;background:var(--andon);color:var(--on-andon);
+  font-size:var(--t3);font-weight:600;line-height:1}
+.anc{flex:1;min-width:0;font-size:var(--t2);font-weight:600;line-height:1.3}
+.anc small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+
+/* the andon plate: the sign over the station, with the line under it (8 lamps, this one lit) */
+.aplate{margin:0 -16px;padding:16px 16px 12px;background:var(--andon);color:var(--on-andon)}
+.pl{display:flex;align-items:center;gap:16px}
+.pl .no{flex:none;width:72px;height:72px;background:var(--surface);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.pl .no small{font-size:var(--t1);font-weight:600;line-height:1.2}
+.pl .no b{font-size:var(--t4);font-weight:600;line-height:1}
+.pl .nm{flex:1;min-width:0}
+.pl .st{display:block;font-size:var(--t3);font-weight:600;line-height:1.3}
+.pl .mc{display:block;font-size:var(--t1);line-height:1.5;color:var(--on-andon-2)}
+.pl .mc .code{color:var(--on-andon)}
+.pos{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:12px}
+.pos li{height:24px;display:flex;align-items:center;justify-content:center;background:var(--lamp-off);color:var(--on-andon-2);font-size:var(--t1);font-weight:600;line-height:1}
+.pos li.me{background:var(--surface);color:var(--ink)}
+.btn-dk{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:4px 16px;border-radius:var(--r);
+  background:var(--lamp-off);color:var(--on-andon);font-size:var(--t1);font-weight:600;line-height:1.35;text-align:center;text-decoration:none}
+
+/* surfaces and buttons */
+.card{background:var(--surface);border-radius:var(--r);padding:16px}
+.btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:56px;padding:8px 16px;border:0;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:600;line-height:1.3;text-align:center;text-decoration:none}
+.btn.pri{background:var(--ink);color:var(--surface);min-height:64px}
+.btn.off{background:transparent;color:var(--ink-2);box-shadow:inset 0 0 0 2px var(--sunk);cursor:not-allowed}
+.btn.left{justify-content:flex-start;text-align:left}
+.btn .t small{display:block;font-size:var(--t1);font-weight:400;color:var(--ink-2)}
+.miss{margin-top:8px;font-size:var(--t1);line-height:1.5;font-weight:600}
+.rows{background:var(--surface);border-radius:var(--r);overflow:hidden}
+.rows .rw{border-radius:0}
+.rows{padding:4px 0}
+.rows .rw{position:relative}
+.rows .rw+.rw{margin-top:8px}
+.rows .rw+.rw::before{content:"";position:absolute;left:16px;right:0;top:-4px;height:1px;background:var(--hair)}
+.rw{display:flex;align-items:center;gap:16px;min-height:64px;padding:8px 16px;border-radius:var(--r);background:var(--surface);text-decoration:none;color:var(--ink)}
+.rw .t{flex:1;min-width:0;font-size:var(--t2);font-weight:600;line-height:1.3}
+.rw .t small{display:block;font-size:var(--t1);font-weight:400;line-height:1.45;color:var(--ink-2)}
+.sec{margin-top:32px}
+.sec>h2{display:flex;align-items:baseline;gap:8px;font-size:var(--t1);font-weight:600;line-height:1.35;color:var(--ink-2);margin-bottom:8px}
+.sec>h2 .r{margin-left:auto;color:var(--ink)}
+.prov{margin-top:24px;font-size:var(--t1);line-height:1.6;color:var(--ink-2)}
+.prov b{font-weight:600;color:var(--ink)}
+
+/* questions and choice tiles. One selection style everywhere: a 2 px ink ring + a filled mark. */
+.q{margin-top:24px}
+.qh{display:flex;align-items:baseline;gap:12px;font-size:var(--t2);font-weight:600;line-height:1.35;margin-bottom:8px}
+.qh .n{flex:none;color:var(--ink-2)}
+.qh .tag{margin-left:auto;font-size:var(--t1);font-weight:400;color:var(--ink-2);white-space:nowrap}
+.qh .tag.req{font-weight:600;color:var(--ink)}
+.ch{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 16px;text-align:left;border:0;border-radius:var(--r);
+  background:var(--surface);font-size:var(--t2);font-weight:400;line-height:1.35}
+.ch .mk{flex:none;width:24px;height:24px;border:2px solid var(--ink-2);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ch[role=checkbox] .mk{border-radius:4px}
+.ch .mk i,.ch .mk .ic{display:none}
+.ch .mk i{width:12px;height:12px;border-radius:50%;background:var(--ink)}
+.ch[aria-checked=true]{box-shadow:inset 0 0 0 2px var(--ink);font-weight:600}
+.ch[aria-checked=true] .mk{border-color:var(--ink)}
+.ch[aria-checked=true][role=radio] .mk i{display:block}
+.ch[aria-checked=true][role=checkbox] .mk{background:var(--ink);color:var(--surface)}
+.ch[aria-checked=true][role=checkbox] .mk .ic{display:block}
+.card .ch:not([aria-checked=true]):not([aria-disabled=true]){background:var(--canvas)}
+.ch>span{text-wrap:balance}
+.ch small{display:block;font-size:var(--t1);font-weight:400;line-height:1.45;color:var(--ink-2)}
+.ch[aria-disabled=true]{background:var(--sunk);color:var(--ink-2);cursor:not-allowed}
+.ch[aria-disabled=true] .mk{border-color:var(--line)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g1{display:grid;gap:8px}
+.lbl{font-size:var(--t1);line-height:1.5;color:var(--ink-2)}
+textarea{display:block;width:100%;min-height:104px;padding:12px 16px;border:1.5px solid var(--line);border-radius:var(--r);
+  font:inherit;font-size:var(--t2);line-height:1.6;resize:vertical;background:var(--surface);color:var(--ink)}
+
+/* lock ownership: a dark strip, the same andon voice as the plate */
+.lockbar{display:flex;align-items:center;gap:12px;margin:0 -16px;padding:8px 16px;background:var(--andon);color:var(--on-andon);font-size:var(--t1);line-height:1.45}
+.lockbar b{font-weight:600}
+.stopbox{display:flex;gap:12px;padding:16px;border-radius:var(--r);background:var(--surface);font-size:var(--t2);line-height:1.55}
+.stopbox>.ic{color:var(--stop);margin-top:2px}
+.stopbox b{font-weight:600}
+.state-note{font-size:var(--t1);line-height:1.5;color:var(--ink-2);margin-bottom:8px}
+.state-note b{color:var(--ink);font-weight:600}
+/* desk widths: a phone screen opened on a desk keeps its phone column, centred on the canvas */
+@media (min-width:900px){.top,.wrap{max-width:600px;margin-left:auto;margin-right:auto}.synthetic{justify-content:center}}
+
+.lock-up{display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 96px);max-width:440px;margin:0 auto;padding:24px 0 32px}
+.lock-up .card{padding:0;background:none}
+.lock-up .card .callout{margin:0 0 8px;padding:0}
+.mark{display:grid;grid-template-columns:repeat(8,16px);gap:4px}
+.mark i{height:16px;background:var(--sunk)} .mark i.on{background:var(--ink)}
+.brand{margin-top:16px}
+.brand h1{font-size:var(--t4);font-weight:600;line-height:1.2}
+.brand p{color:var(--ink-2)}
+.f{margin-top:16px}
+.f label{display:block;font-weight:600;margin-bottom:6px}
+.f input{display:block;width:100%;min-height:56px;padding:0 16px;border:1.5px solid var(--line);border-radius:var(--r);font:inherit;background:var(--surface);color:var(--ink)}
+.pw{display:flex;gap:8px}
+.pw input{flex:1;min-width:0}
+.pw .btn{width:auto;min-width:88px;background:var(--sunk)}
+.go2{margin-top:24px}
+.quiet{margin-top:16px;color:var(--ink-2);line-height:1.5}
+.quiet b{color:var(--ink)}
+.down{margin-top:16px}
+.down h1{display:flex;align-items:center;gap:12px;font-size:var(--t3);font-weight:600;line-height:1.35}
+.down .why{margin-top:4px;line-height:1.55;color:var(--ink-2)}
+.last{margin-top:12px;background:var(--surface);border-radius:var(--r);padding:0 16px}
+.last div{display:grid;grid-template-columns:112px 1fr;gap:12px;padding:12px 0;line-height:1.5}
+.last div+div{box-shadow:inset 0 1px 0 var(--hair)}
+.last dt{color:var(--ink-2)} .last dd{font-weight:600}
+.queue{margin-top:24px;font-weight:600;line-height:1.5}
+.wrap .callout,.lock-up .callout{margin-top:12px}
+@media (min-width:700px){.lock-up .card{padding:24px 28px 28px;margin-top:20px;background:var(--surface)}.lock-up .card .f:first-of-type{margin-top:0}.lock-up{padding:16px 0}}
+@media (max-height:700px){.lock-up{justify-content:flex-start;min-height:0;padding-top:16px}.brand{margin-top:12px}}
+</style>
+</head>
+<body>
+<div class="synthetic" role="note"><span><b>ข้อมูลจำลอง</b> · ไม่ใช่สัญญาณจริง</span></div>
+<header class="top"><div class="who">เชื่อมต่อไม่ได้<small><span class="w">พิมพ์ชนก</span> · ช่าง</small></div><div class="clock" aria-label="เวลาโรงงาน"><b>10:42</b><span>วันนี้ 15 พ.ย.</span></div></header>
+<main class="wrap">
+  <div class="down" role="alert"><h1><svg class="ic" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h.01" /> <path d="M8.5 16.429a5 5 0 0 1 7 0" /> <path d="M5 12.859a10 10 0 0 1 5.17-2.69" /> <path d="M19 12.859a10 10 0 0 0-2.007-1.523" /> <path d="M2 8.82a15 15 0 0 1 4.177-2.643" /> <path d="M22 8.82a15 15 0 0 0-11.288-3.764" /> <path d="m2 2 20 20" /></svg><span><span><span class="w">Wi-Fi</span> <span class="w">ของ</span><span class="w">เครื่อง</span><span class="w">นี้</span><span class="w">หลุด</span></span></span></h1><p class="why"><span><span class="w">ระบบ</span><span class="w">ยัง</span><span class="w">ทำงาน</span><span class="w">อยู่</span> <span class="w">·</span> <span class="w">ย้าย</span><span class="w">จุด</span><span class="w">หรือ</span><span class="w">เปิด</span> <span class="w">Wi-Fi</span> <span class="w">ใหม่</span></span></p></div>
+  <div class="go2" style="margin-top:16px"><button class="btn pri" type="button"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /> <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /> <path d="M8 16H3v5" /></svg>ลองเชื่อมต่อใหม่</button></div>
+  <div class="callout ok"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="m16 9-5.5 5.5L8 12" /></svg><div><b>งานของคุณไม่หาย</b> · ปิดงาน <span><span class="w">MC-012</span></span> เก็บในเครื่องนี้แล้ว ส่งเองเมื่อเชื่อมต่อได้</div></div>
+  <dl class="last"><div><dt>ข้อมูลล่าสุด</dt><dd>10:42 น. วันนี้ 15 พ.ย.</dd></div><div><dt>งานที่ถืออยู่</dt><dd><span><span class="w">มอเตอร์</span><span class="w">สายพาน</span><span class="w">ร้อน</span><span class="w">เกินกำหนด</span></span> · ขั้น 2 จาก 6</dd></div></dl>
+  <div style="margin-top:12px"><a class="btn" href="tech-step.html"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7" /> <path d="M19 12H5" /></svg>ทำงานต่อด้วยข้อมูลล่าสุด</a></div>
+  <p class="queue">ระบบนี้เป็นคิวงาน ไม่ใช่ช่องทางฉุกเฉิน · ถ้าด่วน ใช้ andon หรือวิทยุ</p>
+  <p class="quiet">เบอร์ห้องซ่อมบำรุง: ยังไม่ได้ตั้งค่า</p>
+</main>
+</body>
+</html>
