@@ -1,0 +1,62 @@
+Copyright (c) 2026 Narinthon Yangngam. All rights reserved.
+
+This repository is published so that it can be read and assessed as an
+Individual Study at the Faculty of Engineering, Chulalongkorn University.
+Making it public does not grant a licence to use it. Every right not stated
+below is reserved by the copyright holder.
+
+
+1. What anyone may do
+
+   a. View the repository on GitHub, and make the copies GitHub's Terms of
+      Service allow (viewing and forking within GitHub).
+   b. Quote short excerpts, with attribution, in academic review, critique
+      or citation.
+
+2. What the course's instructors and examiners may also do
+
+   Clone, build and run the software, privately, for the sole purpose of
+   assessing this Individual Study.
+
+3. What is prohibited without prior written permission
+
+   a. Copying, reproducing or redistributing the repository or any part of
+      it - source code, documentation, figures, measurements, configuration
+      or test fixtures - in any form or medium, except as allowed in 1 and 2.
+   b. Modifying it, translating it or making derivative works from it.
+   c. Using any part of it in a product, service, plant, production line or
+      other operational environment, commercial or non-commercial.
+   d. Using any part of it to train, fine-tune or evaluate a machine-learning
+      model, or including it in a dataset.
+   e. Selling, renting, sublicensing or relicensing it.
+   f. Removing or altering this notice or any copyright notice in it.
+
+   Requests for permission go to the copyright holder through
+   https://github.com/fournarin. Permission is only valid in writing.
+
+4. Not for use on equipment
+
+   This software is a research prototype. It has not been validated or
+   certified for safety. Its repair instructions, schedules, predictions
+   and test manuals (including the synthetic manuals in fixtures/) must not
+   be used to direct maintenance or any other work on real equipment.
+
+5. Third-party material
+
+   Dependencies are installed from their own registries and stay under
+   their own licences; nothing here relicenses them. Product and company
+   names mentioned belong to their owners and are used only to describe or
+   identify. No plant document or plant data is included in this repository.
+
+6. No warranty, no liability
+
+   THE SOFTWARE AND DOCUMENTATION ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+   ANY KIND, EXPRESS OR IMPLIED, INCLUDING FITNESS FOR A PARTICULAR PURPOSE
+   AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR
+   ANY CLAIM, DAMAGES, INJURY OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR
+   ITS USE.
+
+7. Termination
+
+   Any use that breaks these terms ends every permission granted above,
+   immediately and without notice.

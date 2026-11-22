@@ -239,3 +239,13 @@ several others are enforced structurally rather than by review.
 Code, comments, commit messages and pull requests are in English. The
 repository is the artefact that gets handed over, and its history is part of
 what is delivered.
+
+## Licence
+
+All rights reserved. The repository is public so that it can be read and
+assessed; it is not open source. Viewing on GitHub and short quotations with
+attribution are allowed, and the course's examiners may run it to assess the
+work. Anything else - copying, modifying, redistributing, using it in a plant
+or a product, or using it to train a model - needs written permission. The
+terms are in [LICENSE](LICENSE). It is a research prototype: nothing it
+produces is for use on real equipment.
