@@ -12,18 +12,19 @@ Individual Study project at Chulalongkorn University (one student, one term).
 **No plant data has been seen** - every figure below is on generated signals and
 synthetic and manufacturer manuals; see [limitations](#limitations).
 
-<table>
-<tr>
-<td width="70%"><img src="docs/images/shift-lead-board.png" alt="The shift lead's board: seven decisions waiting, the critical one first with the line-stop cost and the proposed technician"></td>
-<td width="30%"><img src="docs/images/technician-step.png" alt="A technician's step on a phone: a danger-marked isolation step with the manual page it comes from"></td>
-</tr>
-<tr>
-<td>Shift lead's board - the critical job first, with what waiting costs and who the round proposes.</td>
-<td>Technician's step - isolation marked as danger, cited to the manual page.</td>
-</tr>
-</table>
+<p align="center">
+  <a href="#why">Why</a> · <a href="#quick-start">Quick start</a> · <a href="#screens">Screens</a> · <a href="#architecture">Architecture</a> · <a href="#results">Results</a> · <a href="#documentation">Docs</a>
+</p>
 
-<sub>Design-system renders of the second-generation screens, on synthetic data.</sub>
+<img src="docs/images/engineer-review.png" alt="The engineer's review screen: a drafted repair procedure checked step by step against the manual page it cites, with the four reasons it cannot be approved yet">
+
+<sub>The engineer's review screen - each drafted step checked against the manual page it cites; approval stays locked until every mismatch is resolved. A design render on synthetic data: this screen is designed, not yet built.</sub>
+
+## Why
+
+| Cited, approved steps | Every ticket explains itself | Says when it doesn't know |
+|---|---|---|
+| Repair steps come from the manual with a page on every step, approved by an engineer. No LLM writes instructions at run time. | Why this job, why now, why ranked here - and the shift lead confirms every placement. | "Not found - see manual page X or ask an engineer" instead of a plausible guess. |
 
 ## Highlights
 
@@ -37,35 +38,84 @@ synthetic and manufacturer manuals; see [limitations](#limitations).
 - **Engineering** - 139 decision records, 1,763 Python tests, CI gates for
   format, types, import boundaries and real-PostgreSQL tests.
 
-## How it works
+## Quick start
 
-```mermaid
-flowchart TD
-    S1["Machine signals<br/>(SignalSource)"] --> L1
-    S2["PM schedule<br/>(origin = scheduled)"] --> L2
-    S3["A technician or supervisor<br/>reports it (origin = manual)"] --> L2
-    L1["<b>Layer 1 · Trigger</b><br/>detect: rules and thresholds<br/>predict: trend → time to threshold"] -- "Finding<br/>(detected / predicted + ETA)" --> L2
-    PB[("Playbook store<br/>drafted from manuals with RAG,<br/>approved by a person")] --> L2
-    L2["<b>Layer 2 · Content</b><br/>the ticket, with cited steps<br/>from an approved playbook"] --> L3
-    L3["<b>Layer 3 · Dispatch</b><br/>rank against the shift's load;<br/>a round proposes, the shift lead confirms"] --> L4
-    L4["<b>Layer 4 · Destination</b><br/>our screens · an existing CMMS · a file"] --> T
-    T(["Technician<br/>accept · close · propose a correction"]) -. "corrections" .-> PB
+On a machine with Docker and about 10 GB free:
+
+```bash
+cp .env.example .env     # then change POSTGRES_PASSWORD
+uv run python scripts/rehearse.py --fresh
 ```
 
-Each layer builds and tests on its own; layers 2 and 3 never wait on layer 1.
-Four rules shape the rest:
+This brings up the stack, seeds it, checks the screens and waits until there is
+work to show.
 
-1. **No LLM at run time.** A wrong torque value or lockout order is a risk to a
-   person, so the model drafts before the job for an engineer to approve, enforced
-   by an import rule and a network boundary
-   ([ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md),
-   [ADR-029](docs/adr/0029-where-the-models-run.md)).
-2. **Every step carries its source** - document, page, revision, approver; a
-   closed work order keeps a frozen `playbook_snapshot` of what it instructed.
-3. **Every ticket explains itself** - why this job, why now, why ranked here
-   ([ADR-005](docs/adr/0005-every-ticket-carries-its-reason.md)).
-4. **Thin evidence is said out loud** - "not found, see manual page X or ask an
-   engineer" beats a guess.
+| Service | URL |
+|---|---|
+| Web | http://localhost:3000 |
+| API | http://localhost:8000 (loopback only) |
+
+Full guides: [install](docs/install.md) · [demo walkthrough](docs/demo.md).
+Development:
+
+```bash
+uv sync
+uv run pytest -m "not db"                          # no database needed
+DATABASE_URL=postgresql://... uv run pytest -m db  # real PostgreSQL
+uv run ruff check . && uv run mypy && uv run lint-imports
+```
+
+## Screens
+
+Each role lands on its own work, not on a menu.
+
+| Route | Who | What |
+|---|---|---|
+| `/work` | technician | My jobs - steps with page citations, isolation points, close, handover, print |
+| `/report` | everyone | Report a fault (the only screen an operator has) |
+| `/board` | shift lead | Confirm or reassign what the dispatch round proposed, with the reason |
+| `/overview` | shift lead, engineer | The line - stations, machine health, what is coming |
+| `/review` | engineer | Approve drafted repair steps against the manual, one machine model at a time |
+| `/gaps` | engineer | Symptoms that reached a ticket with no approved steps |
+| `/loops` | engineer | What closed jobs and false alarms propose - shown, never applied automatically |
+| `/notes` | engineer | Technicians' closing notes, by symptom |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U["Browser<br/>phone · tablet · desktop"] --> W["web<br/>Next.js"]
+    W --> A["api<br/>FastAPI"]
+    A --> PG[("PostgreSQL<br/>work orders · playbooks<br/>job queue · full-text")]
+    A --> Q[("Qdrant<br/>vectors")]
+
+    SIG["Signals<br/>synthetic · CSV replay"] --> RT["worker-runtime<br/>rules · trend ETA · PM schedule<br/>dispatch rounds (CP-SAT)"]
+    RT --> PG
+    RT --> D["Destinations<br/>own screens · CMMS · file"]
+
+    M["Manuals<br/>content-addressed storage"] --> AU["worker-authoring<br/>ingest · index · draft"]
+    AU --> PG
+    AU --> Q
+    subgraph llm ["isolated network"]
+        L["llm-server<br/>Ollama"]
+    end
+    AU -.->|build time only| L
+```
+
+Eight Compose services, on-premise only. The **web** app is the only thing a browser reaches;
+the **api** listens on loopback. **worker-runtime** turns signals and the PM
+schedule into work orders and runs the dispatch rounds; **worker-authoring**
+indexes manuals and drafts playbooks for an engineer to approve. Only
+worker-authoring can reach the language model, on its own network - that is how
+"no LLM at run time" is enforced rather than promised
+([ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md),
+[ADR-029](docs/adr/0029-where-the-models-run.md)). The job queue is a PostgreSQL
+table, so a job and its result commit together. The current drafter is
+extractive, so `llm-server` is deployed but unused.
+
+**Stack:** Python · FastAPI · PostgreSQL (plain SQL, no ORM) · Qdrant + PostgreSQL
+full-text fused on ranks · OR-Tools CP-SAT · Next.js · Docker
+([ADR-008](docs/adr/0008-technology-stack.md)).
 
 ## Results
 
@@ -82,28 +132,6 @@ All produced by scripts in this repository and reproducible from a clean checkou
 | Second-generation screens | 78% fewer words on the shift lead's board (a UI count, not a usability result) | [before-after](docs/results/before-after.md) |
 | Whole system at one commit | every gate green; 1,763 Python + 60 web tests | [final-check](docs/results/final-check.md) |
 | Shift lead vs scheduler agreement | no figures yet - needs a trial with a person | [confirmations](docs/results/confirmations.md) |
-
-## Running it
-
-On a machine with Docker and about 10 GB free:
-
-```bash
-cp .env.example .env     # then change POSTGRES_PASSWORD
-uv run python scripts/rehearse.py --fresh
-```
-
-This brings up the stack, seeds it, checks the screens and waits until there is
-work to show. Web at `http://localhost:3000`, API at `http://localhost:8000`.
-Full guides: [install](docs/install.md) · [demo walkthrough](docs/demo.md).
-
-Development:
-
-```bash
-uv sync
-uv run pytest -m "not db"                          # no database needed
-DATABASE_URL=postgresql://... uv run pytest -m db  # real PostgreSQL
-uv run ruff check . && uv run mypy && uv run lint-imports
-```
 
 ## Limitations
 
@@ -122,23 +150,37 @@ uv run ruff check . && uv run mypy && uv run lint-imports
 - **Not yet tried by a technician.** One production-line engineer reviewed the
   first screens, which led to the rebuild; the new screens are 53 of 107
   requirements built ([ADR-014](docs/adr/0014-report-and-technician-trial-are-reserved-unconditionally.md)).
-- Backup and restore are documented but never run; a technician's closing note
-  reaches no screen.
+- Backup and restore are documented but never run.
 
-## Read next
+## Repository layout
 
-- [`docs/adr/`](docs/adr/README.md) - every design decision, append-only. Start
-  with [ADR-003](docs/adr/0003-no-llm-generated-repair-text-at-runtime.md) (no
-  LLM at run time), [ADR-020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md)
-  (predicting without failure labels) and
-  [ADR-011](docs/adr/0011-load-ratio-switches-dispatch-behaviour.md) (gate plus
-  score instead of one formula).
-- [`docs/design/`](docs/design/README.md) - requirements and reviews behind the
-  second-generation screens.
+```
+src/pdm/contracts/       data contracts as types (imports nothing else)
+src/pdm/signals/ triggers/   layer 1: signal sources, rules, trend prediction
+src/pdm/retrieval/ authoring/ llm/   build-time RAG and drafting
+src/pdm/playbooks/ work/ layer 2: approved playbooks, work orders, closing
+src/pdm/dispatch/        layer 3: load gate, score, CP-SAT, proposals
+src/pdm/sinks/           layer 4: own screens, CMMS adapter, file
+src/pdm/sim/ baselines/  discrete-event simulator and policy comparison
+src/pdm/api/ workers/    FastAPI app, worker-runtime, worker-authoring
+web/                     Next.js screens
+config/                  plant.yaml, policy.yaml, rules.yaml
+fixtures/corpus/         synthetic manuals with their own answer key
+docs/adr/                decision records, append-only
+```
 
-**Stack:** Python, FastAPI, PostgreSQL (plain SQL, job queue as a table), Qdrant +
-PostgreSQL full-text fused on ranks, OR-Tools CP-SAT, Next.js, Docker -
-on-premise only ([ADR-008](docs/adr/0008-technology-stack.md)).
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [docs/install.md](docs/install.md) | Installation, configuration, backup |
+| [docs/demo.md](docs/demo.md) | What to click, in what order, as whom |
+| [docs/contracts.md](docs/contracts.md) | `Signal`, `Finding`, `Playbook`, `WorkOrder` and the resource contracts |
+| [docs/invariants.md](docs/invariants.md) | The fifteen invariants the principles turn into |
+| [docs/results/](docs/results/README.md) | Every measurement, with the script that produced it |
+| [docs/adr/](docs/adr/README.md) | 139 design decisions - start with ADR-003, [ADR-011](docs/adr/0011-load-ratio-switches-dispatch-behaviour.md), [ADR-020](docs/adr/0020-predictions-from-trend-extrapolation-measured-on-synthetic-data.md) |
+| [docs/design/](docs/design/README.md) | Requirements and review rounds behind the second-generation screens |
+| [docs/trial-protocol.md](docs/trial-protocol.md) | How a technician trial is run |
 
 ## Licence
 
